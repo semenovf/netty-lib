@@ -1,21 +1,22 @@
 !.gitignore
 
 .settings/
+.vs/
 .build*/
 build*/
 .kdev4/
 .idea/
 .project
 .cproject
-debug/
-release/
 doxygen/
 nbproject/
+src/tmp/
 
-Makefile
-Makefile.*
-makefile
-makefile.*
+.coveralls.yml
+#Makefile
+#Makefile.*
+#makefile
+#makefile.*
 *.kdev4
 *.make
 *.mk
@@ -27,7 +28,7 @@ makefile.*
 ~*
 *~
 *.bak
-*.map
+#*.map
 *.sdf
 *.slo
 *.lo
@@ -51,3 +52,4 @@ moc_*.cpp
 qrc_*.cpp
 .sconsign.dblite
 Doxyget.err
+CMakeSettings.json
