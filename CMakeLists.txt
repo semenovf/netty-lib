@@ -25,7 +25,7 @@ endif()
 #include(${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
-if (BUILD_TESTS)
+if (BUILD_TESTS AND EXISTS tests)
     enable_testing()
     add_subdirectory(tests)
 endif()

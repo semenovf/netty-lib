@@ -22,3 +22,12 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/incl
 if (MSVC)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -DDLL_EXPORTS)
 endif(MSVC)
+
+if (UNIX)
+    # Avoid ld error:
+    # ------------------------------------------------------------------------------------------
+    # relocation R_X86_64_PC32 against symbol `_ZGVZN3pfs3net18get_error_categoryEvE8instance'
+    # can not be used when making a shared object; recompile with -fPIC
+    # ------------------------------------------------------------------------------------------
+    set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif(UNIX)
