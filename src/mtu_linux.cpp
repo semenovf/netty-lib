@@ -107,20 +107,7 @@ static int mtu_alternative1 (std::string const & interface, std::error_code & ec
     return result;
 }
 
-/**
- * Returns MTU (Maximum Transfer Unit) value of a device specified
- * by @a interface, or @c -1 if error occured. In last case @c ec will be set to
- * appropriate error code:
- *     * @c errc::permissions_denied if underlying system call(s) need specific
- *       privileges;
- *     * @c errc::name_too_long if @a interface name is too long than allowed by
- *       underlying system call(s);
- *     * @c errc::device_not_found if @a interface specifies bad device;
- *     * @c errc::system_error if system specific call returns error,
- *       check @c errno value.
- *
- */
-DLL_API int mtu (std::string const & interface, std::error_code & ec)
+DLL_API int mtu (std::string const & interface, std::error_code & ec) noexcept
 {
     auto result = -1;//mtu_alternative0(interface, ec);
 
