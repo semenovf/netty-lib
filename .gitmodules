@@ -1,0 +1,3 @@
+[submodule "3rdparty/pfs/common"]
+	path = 3rdparty/pfs/common
+	url = git@github.com:semenovf/common-lib.git
