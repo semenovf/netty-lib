@@ -12,12 +12,12 @@ project(net-lib CXX)
 
 if (UNIX)
     list(APPEND SOURCES
-        src/network_interface.cpp
-        src/network_interface_linux.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
 elseif (MSVC)
     list(APPEND SOURCES
-        src/network_interface.cpp
-        src/network_interface_win32.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_win32.cpp)
 else()
     message (FATAL_ERROR "Unsupported platform")
 endif()
