@@ -20,9 +20,9 @@ using error_code = std::error_code;
 enum class errc
 {
       success = 0
-    , check_errno        // More information can be obtained using errno (Linux) or 
+    , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
-    , check_WSAGetLastError = check_errno
+
     , device_not_found
     , permissions_denied
     , name_too_long
@@ -41,7 +41,7 @@ public:
         switch (ev) {
             case static_cast<int>(errc::success):
                 return std::string{"no error"};
-            case static_cast<int>(errc::check_errno):
+            case static_cast<int>(errc::system_error):
                 return std::string{"system specific error, check errno value"};
             case static_cast<int>(errc::device_not_found):
                 return std::string{"device not found"};

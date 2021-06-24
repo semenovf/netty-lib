@@ -39,10 +39,10 @@ enum class network_interface_status
     , up       // The interface is up and able to pass packets.
     , down     // The interface is down and not in a condition to pass packets.
     , testing  // The interface is in testing mode.
-    , pending  // For Windows: the interface is not actually in a condition 
-               // to pass packets (it is not up), but is in a pending state, 
-               // waiting for some external event. For on-demand interfaces, 
-               // this new state identifies the situation where the interface 
+    , pending  // For Windows: the interface is not actually in a condition
+               // to pass packets (it is not up), but is in a pending state,
+               // waiting for some external event. For on-demand interfaces,
+               // this new state identifies the situation where the interface
                // is waiting for events to place it in the `up` state.
 };
 
@@ -55,20 +55,20 @@ enum class network_interface_flag {
     , ip6_enabled = 0x0100
 };
 
-struct network_interface_data 
+struct network_interface_data
 {
-    // The index of the IPv4 interface with which these addresses 
-    // are associated. On Windows Server 2003 and Windows XP, 
+    // The index of the IPv4 interface with which these addresses
+    // are associated. On Windows Server 2003 and Windows XP,
     // this member is zero if IPv4 is not available on the interface.
     int ip4_index {0};
 
-    // The interface index for the IPv6 IP address. This member is zero 
+    // The interface index for the IPv6 IP address. This member is zero
     // if IPv6 is not available on the interface.
     // NOTE: This structure member is only available on Windows XP with SP1 and later.
     int ip6_index {0};
 
     // The maximum transmission unit (MTU) size, in bytes.
-    uint32_t mtu;
+    uint32_t mtu {0};
 
     string_type adapter_name;
 
@@ -78,8 +78,8 @@ struct network_interface_data
     // A description for the adapter.
     string_type description;
 
-    // Hardware address. 
-    // On Ethernet interfaces, this will be a MAC address in string representation, 
+    // Hardware address.
+    // On Ethernet interfaces, this will be a MAC address in string representation,
     // separated by colons.
     string_type hardware_address;
 
@@ -95,7 +95,7 @@ struct network_interface_data
 #   endif
 };
 
-class network_interface 
+class network_interface
 {
 private:
     network_interface_data _data;
@@ -175,15 +175,17 @@ public:
 
     /**
      * @brief Fetch network interfaces.
-     * 
-     * @param [out] ec error code (if any errors occured): 
+     *
+     * @param [out] ec error code (if any errors occured):
      *         - std::errc::not_enough_memory
      *         - std::errc::value_too_large
-     *         - pfs::net::errc::check_errno
+     *         - pfs::net::errc::system_error
      * @return Network interfaces
      */
     friend std::vector<network_interface> fetch_interfaces (std::error_code & ec);
 };
+
+std::vector<network_interface> fetch_interfaces (std::error_code & ec);
 
 template <typename Visitor>
 std::vector<network_interface> fetch_interfaces (std::error_code & ec, Visitor && visit)
@@ -201,6 +203,16 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec, Visitor &
     }
 
     return result;
+}
+
+inline uint32_t mtu (std::string const & interface_name, std::error_code & ec) noexcept
+{
+    auto ifaces = pfs::net::fetch_interfaces(ec, [& interface_name] (
+            pfs::net::network_interface const & iface) -> bool {
+        return interface_name == iface.readable_name();
+    });
+
+    return ifaces.empty() ? 0 : ifaces.front().mtu();
 }
 
 }} // namespace pfs::net

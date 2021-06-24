@@ -11,9 +11,11 @@ cmake_minimum_required (VERSION 3.5)
 project(net-lib CXX)
 
 if (UNIX)
-    list(APPEND SOURCES src/mtu_linux.cpp)
+    list(APPEND SOURCES
+        src/network_interface.cpp
+        src/network_interface_linux.cpp)
 elseif (MSVC)
-    list(APPEND SOURCES 
+    list(APPEND SOURCES
         src/network_interface.cpp
         src/network_interface_win32.cpp)
 else()
@@ -33,8 +35,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/incl
 target_include_directories(${PROJECT_NAME}-static PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Shared libraries need PIC
-# For SHARED and MODULE libraries the POSITION_INDEPENDENT_CODE target property is set to ON automatically
-# set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
+# For SHARED and MODULE libraries the POSITION_INDEPENDENT_CODE target property
+# is set to ON automatically, but need for OBJECT type
+set_property(TARGET ${PROJECT_NAME}_OBJLIB PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(${PROJECT_NAME}_OBJLIB PRIVATE pfs::common)
 target_link_libraries(${PROJECT_NAME} PUBLIC pfs::common)
@@ -42,7 +45,7 @@ target_link_libraries(${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
     # Important! For compatiblity between STATIC and SHARED libraries
-    target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE -DPFS_NET_DLL_EXPORTS) 
+    target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE -DPFS_NET_DLL_EXPORTS)
 
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DPFS_NET_DLL_EXPORTS -DUNICODE -D_UNICODE)
     target_compile_definitions(${PROJECT_NAME}-static PUBLIC -DPFS_NET_STATIC_LIB -DUNICODE -D_UNICODE)

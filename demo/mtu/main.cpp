@@ -18,7 +18,7 @@ int main (int argc, char * argv[])
             << "\nRun `" << argv[0] << " <interface>`"
 #if (defined(__linux) || defined(__linux__))
             << "\n\nAvailable interfaces can be listed by command `ip a`"
-#elif (defined(_WIN32) || defined(_WIN64))
+#elif _MSC_VER
             << "\n\nAvailable interfaces can be listed by command `netsh interface ipv4 show subinterfaces`"
 #endif
             << std::endl;
@@ -49,17 +49,13 @@ int main (int argc, char * argv[])
             << interface_name << "]: "
             << ec.message() << std::endl;
 
-        if (ec == pfs::net::make_error_code(pfs::net::errc::check_errno)) {
+        if (ec == pfs::net::make_error_code(pfs::net::errc::system_error)) {
             std::cerr << "ERROR: errno: " << errno << std::endl;
         }
         return EXIT_FAILURE;
     }
 
-    uint32_t mtu{0};
-
-    if (ifaces.size() > 0) {
-        mtu = ifaces.front().mtu();
-    } else {
+    if (ifaces.empty()) {
         std::cerr << "ERROR: interface ["
             << interface_name << "]: not found" << std::endl;
         return EXIT_FAILURE;
@@ -67,7 +63,7 @@ int main (int argc, char * argv[])
 
     std::cout << "MTU value for interface ["
         << interface_name << "]: "
-        << mtu << std::endl;
+        << pfs::net::mtu(interface_name, ec) << std::endl;
 
     return EXIT_SUCCESS;
 }

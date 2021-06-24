@@ -15,7 +15,7 @@
 #include <ws2ipdef.h>
 
 // Must be included after winsock2.h to avoid error C2375
-#include "pfs/windows.hpp" 
+#include "pfs/windows.hpp"
 
 namespace pfs {
 namespace net {
@@ -24,7 +24,7 @@ struct wsa_session
 {
     bool success = true;
 
-    wsa_session () 
+    wsa_session ()
     {
         WSADATA unused;
         auto rc = WSAStartup(MAKEWORD(2, 2), & unused);
@@ -35,7 +35,7 @@ struct wsa_session
         }
     }
 
-    ~wsa_session () 
+    ~wsa_session ()
     {
         WSACleanup();
     }
@@ -53,8 +53,8 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     PIP_ADAPTER_ADDRESSES addresses_ptr = & static_buffer[0];
 
     // Set the flags to pass to GetAdaptersAddresses
-    ULONG flags = GAA_FLAG_INCLUDE_PREFIX 
-        | GAA_FLAG_SKIP_DNS_SERVER 
+    ULONG flags = GAA_FLAG_INCLUDE_PREFIX
+        | GAA_FLAG_SKIP_DNS_SERVER
         | GAA_FLAG_SKIP_MULTICAST;
 
     // default to unspecified address family (both)
@@ -76,7 +76,7 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
             if (rc == ERROR_BUFFER_OVERFLOW) {
                 ec = std::make_error_code(std::errc::value_too_large);
             } else {
-                ec = make_error_code(errc::check_errno);        
+                ec = make_error_code(errc::system_error);
             }
 
             FREE(addresses_ptr);
@@ -84,7 +84,7 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
             return result;
         }
     } else if (rc != NO_ERROR) {
-        ec = make_error_code(errc::check_errno);
+        ec = make_error_code(errc::system_error);
         return result;
     }
 
@@ -106,8 +106,8 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
             if (rc == NO_ERROR) {
                 auto nwchars = static_cast<int>(wcslen(adapter_name));
                 iface.adapter_name = windows::utf8_encode(adapter_name, nwchars);
-            } 
-            
+            }
+
             if (iface.adapter_name.empty()) {
                 iface.adapter_name = ptr->AdapterName;
             }

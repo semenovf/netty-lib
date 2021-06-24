@@ -46,7 +46,7 @@ static int mtu_alternative0 (std::string const & interface, std::error_code & ec
     auto fd = socket(PF_INET, SOCK_DGRAM, 0);
 
     if (fd < 0) {
-        ec = make_error_code(errc::check_errno);
+        ec = make_error_code(errc::system_error);
         return -1;
     }
 
@@ -59,7 +59,7 @@ static int mtu_alternative0 (std::string const & interface, std::error_code & ec
                 ec = make_error_code(errc::device_not_found);
                 break;
             default:
-                ec = make_error_code(errc::check_errno);
+                ec = make_error_code(errc::system_error);
                 break;
         }
 
