@@ -13,10 +13,6 @@
 //      2021.06.21 Initial version
 //      2021.06.21 Use 2-way to get MTU: mtu_alternative0() and mtu_alternative1()
 ////////////////////////////////////////////////////////////////////////////////
-#if !(defined(__linux) || defined(__linux__))
-#   error "Expected Linux"
-#endif
-
 #include "pfs/net/mtu.hpp"
 #include <cstring>
 #include <fstream>
@@ -109,7 +105,7 @@ static int mtu_alternative1 (std::string const & interface, std::error_code & ec
 
 DLL_API int mtu (std::string const & interface, std::error_code & ec) noexcept
 {
-    auto result = -1;//mtu_alternative0(interface, ec);
+    auto result = mtu_alternative0(interface, ec);
 
     if (result < 0)
         result = mtu_alternative1(interface, ec);

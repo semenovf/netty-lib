@@ -1,12 +1,24 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2021 Vladislav Trifochkin
+//
+// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+//
+// References:
+//
+// Changelog:
+//      2021.06.21 Initial version.
+////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#ifndef DLL_API
-#   if defined(_WIN32) || defined(_WIN64)
-#       if defined(DLL_EXPORTS)
-#           define DLL_API __declspec(dllexport)
-#       else
-#           define DLL_API __declspec(dllimport)
+#ifndef PFS_NET_STATIC_LIB
+#   ifndef PFS_NET_DLL_API
+#       if defined(_WIN32) || defined(_WIN64)
+#           if defined(PFS_NET_DLL_EXPORTS)
+#               define PFS_NET_DLL_API __declspec(dllexport)
+#           else
+#               define PFS_NET_DLL_API __declspec(dllimport)
+#           endif
 #       endif
-#   else
-#       define DLL_API
 #   endif
-#endif // !DLL_API
+#else
+#   define PFS_NET_DLL_API
+#endif // !PFS_NET_STATIC_LIB

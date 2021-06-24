@@ -9,7 +9,11 @@
 
 @echo off
 
-setlocal  ENABLEEXTENSIONS
+:: ENABLEDELAYEDEXPANSION need to work such things properly:
+::      set "CMAKE_OPTIONS="!CMAKE_OPTIONS! ..."
+::      set "BUILD_DIR=!BUILD_DIR! ..." 
+
+setlocal ENABLEDELAYEDEXPANSION
 
 if "%BUILD_GENERATOR%" == "" (
     @echo Detecting build generator ...
@@ -43,33 +47,35 @@ if "%BUILD_GENERATOR%" == "" (
 
 @echo Build generator: %BUILD_GENERATOR%
 
-if /i "%BUILD_STRICT%" == "on" (
-    set "BUILD_STRICT=ON"
-) else (
-    set BUILD_STRICT=
+if /i not "%CMAKE_VERBOSE_MAKEFILE%" == "off" (
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DCMAKE_VERBOSE_MAKEFILE=ON"
 )
 
-if not "%BUILD_STRICT%" == "" (
-    set "CMAKE_OPTIONS=%CMAKE_OPTIONS% -DBUILD_STRICT=%BUILD_STRICT%"
+if /i "%BUILD_STRICT%" == "on" (
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DBUILD_STRICT=ON"
+)
+
+if /i "%BUILD_DEMO%" == "on" (
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DBUILD_DEMO=ON"
 )
 
 if not "%CXX_STANDARD%" == "" (
-    set "CMAKE_OPTIONS="%CMAKE_OPTIONS% -DCMAKE_CXX_STANDARD=%CXX_STANDARD%"
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DCMAKE_CXX_STANDARD=%CXX_STANDARD%"
 )
 
 if not "%C_COMPILER%" == "" (
-    set "CMAKE_OPTIONS="%CMAKE_OPTIONS% -DCMAKE_C_COMPILER=%C_COMPILER%"
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DCMAKE_C_COMPILER=%C_COMPILER%"
 )
 
 if not "%CXX_COMPILER%" == "" (
-    set "CMAKE_OPTIONS="%CMAKE_OPTIONS% -DCMAKE_CXX_COMPILER=%CXX_COMPILER%"
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DCMAKE_CXX_COMPILER=%CXX_COMPILER%"
 )
 
 if "%BUILD_TYPE%" == "" (
     set "BUILD_TYPE=Debug"
 )
 
-set "CMAKE_OPTIONS="%CMAKE_OPTIONS% -DCMAKE_BUILD_TYPE=%BUILD_TYPE%"
+set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DCMAKE_BUILD_TYPE=%BUILD_TYPE%"
 
 if not "%ENABLE_COVERAGE%" == "" (
     if /i "%ENABLE_COVERAGE%" == "on" (
@@ -80,24 +86,18 @@ if not "%ENABLE_COVERAGE%" == "" (
 )
 
 if not "%ENABLE_COVERAGE%" == "" (
-    set "CMAKE_OPTIONS=%CMAKE_OPTIONS% -DENABLE_COVERAGE=%ENABLE_COVERAGE%"
+    set "CMAKE_OPTIONS=!CMAKE_OPTIONS! -DENABLE_COVERAGE=%ENABLE_COVERAGE%"
 )
 
 if "%BUILD_DIR%" == "" (
-    set "BUILD_DIR=builds"
-
-    if "%CXX_COMPILER%" == "" (
-        set "BUILD_DIR=%BUILD_DIR%\default.cxx" 
-    ) else (
-        set "BUILD_DIR=%BUILD_DIR%\%CXX_COMPILER%.cxx" 
-    )
+    set "BUILD_DIR=builds\%BUILD_GENERATOR%"
 
     if not "%CXX_STANDARD%" == "" (
-        set "BUILD_DIR=%BUILD_DIR%%CXX_STANDARD%" 
+        set "BUILD_DIR=!BUILD_DIR!.%CXX_STANDARD%" 
     )
 
     if not "%ENABLE_COVERAGE%" == "" (
-        set "BUILD_DIR=%BUILD_DIR%.coverage" 
+        set "BUILD_DIR=!BUILD_DIR!.coverage" 
     )
 )
 
@@ -112,7 +112,7 @@ if exist .git (
 )
 
 if "%SOURCE_DIR%" == "" (
-    if exist src\\.git (
+    if exist src\.git (
         set "SOURCE_DIR=%cd%\src"
     ) else (
         echo ERROR: SOURCE_DIR must be specified >&2
@@ -120,14 +120,17 @@ if "%SOURCE_DIR%" == "" (
     )
 )
 
-mkdir "%BUILD_DIR%" ^
-    && cd "%BUILD_DIR%"
-    @REM && cmake -G ${BUILD_GENERATOR} $CMAKE_OPTIONS $SOURCE_DIR \
-    @REM && cmake --build . \
-    @REM && [ -n "$BUILD_TESTS" ] && ctest \
-    @REM && [ -n "$ENABLE_COVERAGE" ] && cmake --build . --target Coverage
+if not exist "%BUILD_DIR%" (
+    mkdir "%BUILD_DIR%"
+)
+
+cd "%BUILD_DIR%" ^
+    && cmake -G "%BUILD_GENERATOR%" %CMAKE_OPTIONS% "%SOURCE_DIR%" ^
+    && cmake --build .
+
+if "%BUILD_TESTS%" == "ON" ctest
+if "%ENABLE_COVERAGE%" == "ON" cmake --build . --target Coverage
 
 endlocal
 
-:eof
-exit /B 0
+exit /b 0

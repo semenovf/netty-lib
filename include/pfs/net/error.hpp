@@ -20,7 +20,9 @@ using error_code = std::error_code;
 enum class errc
 {
       success = 0
-    , check_errno
+    , check_errno        // More information can be obtained using errno (Linux) or 
+                         // WSAGetLastError (Windows)
+    , check_WSAGetLastError = check_errno
     , device_not_found
     , permissions_denied
     , name_too_long

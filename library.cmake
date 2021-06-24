@@ -4,30 +4,48 @@
 # This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
 #
 # Changelog:
-#      2021.06.21 Initial version
+#      2021.06.21 Initial version.
+#      2021.06.22 Fixed completely.
 ################################################################################
 cmake_minimum_required (VERSION 3.5)
-project(net-lib CXX C)
+project(net-lib CXX)
 
 if (UNIX)
     list(APPEND SOURCES src/mtu_linux.cpp)
-elseif(MSVC)
+elseif (MSVC)
+    list(APPEND SOURCES 
+        src/network_interface.cpp
+        src/network_interface_win32.cpp)
 else()
+    message (FATAL_ERROR "Unsupported platform")
 endif()
 
-add_library(${PROJECT_NAME} ${SOURCES})
+# Make object files for STATIC and SHARED targets
+add_library(${PROJECT_NAME}_OBJLIB OBJECT ${SOURCES})
+
+add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
+add_library(${PROJECT_NAME}-static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
 add_library(pfs::net ALIAS ${PROJECT_NAME})
+add_library(pfs::net::static ALIAS ${PROJECT_NAME}-static)
+
+target_include_directories(${PROJECT_NAME}_OBJLIB PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+target_include_directories(${PROJECT_NAME}-static PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+
+# Shared libraries need PIC
+# For SHARED and MODULE libraries the POSITION_INDEPENDENT_CODE target property is set to ON automatically
+# set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(${PROJECT_NAME}_OBJLIB PRIVATE pfs::common)
+target_link_libraries(${PROJECT_NAME} PUBLIC pfs::common)
+target_link_libraries(${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE -DDLL_EXPORTS)
-endif(MSVC)
+    # Important! For compatiblity between STATIC and SHARED libraries
+    target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE -DPFS_NET_DLL_EXPORTS) 
 
-if (UNIX)
-    # Avoid ld error:
-    # ------------------------------------------------------------------------------------------
-    # relocation R_X86_64_PC32 against symbol `_ZGVZN3pfs3net18get_error_categoryEvE8instance'
-    # can not be used when making a shared object; recompile with -fPIC
-    # ------------------------------------------------------------------------------------------
-    set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif(UNIX)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DPFS_NET_DLL_EXPORTS -DUNICODE -D_UNICODE)
+    target_compile_definitions(${PROJECT_NAME}-static PUBLIC -DPFS_NET_STATIC_LIB -DUNICODE -D_UNICODE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
+    target_link_libraries(${PROJECT_NAME}-static PRIVATE Ws2_32 Iphlpapi)
+endif(MSVC)

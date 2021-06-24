@@ -16,7 +16,7 @@ namespace net {
 
 /**
  * Returns MTU (Maximum Transfer Unit) value of a device specified
- * by @a interface, or @c -1 if error occured. In last case @c ec will be set to
+ * by @a iface, or @c -1 if error occured. In last case @c ec will be set to
  * appropriate error code:
  *     * @c errc::permissions_denied if underlying system call(s) need specific
  *       privileges;
@@ -26,18 +26,18 @@ namespace net {
  *     * @c errc::system_error if system specific call returns error,
  *       check @c errno value.
  */
-DLL_API int mtu (std::string const & interface, std::error_code & ec) noexcept;
+PFS_NET_DLL_API int mtu (std::string const & iface, std::error_code & ec) noexcept;
 
 /**
  * Returns MTU (Maximum Transfer Unit) value of a device specified
- * by @a interface.
+ * by @a iface.
  *
  * @throws std::system_error
  */
-inline int mtu (std::string const & interface)
+inline int mtu (std::string const & iface)
 {
     std::error_code ec;
-    auto result = mtu(interface, ec);
+    auto result = mtu(iface, ec);
 
     if (ec)
         throw std::system_error(ec);

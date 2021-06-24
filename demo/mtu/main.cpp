@@ -6,8 +6,9 @@
 // Changelog:
 //      2021.06.21 Initial version
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/mtu.hpp"
+#include "pfs/net/network_interface.hpp"
 #include <iostream>
+#include <string>
 #include <cerrno>
 
 int main (int argc, char * argv[])
@@ -15,18 +16,37 @@ int main (int argc, char * argv[])
     if (argc < 2) {
         std::cerr << "Too few arguments"
             << "\nRun `" << argv[0] << " <interface>`"
+#if (defined(__linux) || defined(__linux__))
             << "\n\nAvailable interfaces can be listed by command `ip a`"
+#elif (defined(_WIN32) || defined(_WIN64))
+            << "\n\nAvailable interfaces can be listed by command `netsh interface ipv4 show subinterfaces`"
+#endif
             << std::endl;
         return EXIT_FAILURE;
     }
 
     std::error_code ec;
-    auto interface = std::string(argv[1]);
-    auto mtu = pfs::net::mtu(interface, ec);
+    auto interface_name = argv[1];
+
+    auto ifaces = pfs::net::fetch_interfaces(ec, [& interface_name] (pfs::net::network_interface const & iface) -> bool {
+        std::cout << "Adapter name: "  << iface.adapter_name() << "\n";
+        std::cout << "\tReadable name: " << iface.readable_name() << "\n";
+        std::cout << "\tDescription  : " << iface.description() << "\n";
+        std::cout << "\tHW address   : " << iface.hardware_address() << "\n";
+        std::cout << "\tType         : " << std::to_string(iface.type()) << "\n";
+        std::cout << "\tStatus       : " << std::to_string(iface.status()) << "\n";
+        std::cout << "\tMTU          : " << iface.mtu() << "\n";
+        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag(pfs::net::network_interface_flag::ip4_enabled) << "\n";
+        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag(pfs::net::network_interface_flag::ip6_enabled) << "\n";
+        std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
+        std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
+        std::cout << "\n\n";
+        return interface_name == iface.readable_name();
+    });
 
     if (ec) {
         std::cerr << "ERROR: failed to get MTU value for interface ["
-            << interface << "]: "
+            << interface_name << "]: "
             << ec.message() << std::endl;
 
         if (ec == pfs::net::make_error_code(pfs::net::errc::check_errno)) {
@@ -35,20 +55,19 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
 
+    uint32_t mtu{0};
+
+    if (ifaces.size() > 0) {
+        mtu = ifaces.front().mtu();
+    } else {
+        std::cerr << "ERROR: interface ["
+            << interface_name << "]: not found" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     std::cout << "MTU value for interface ["
-        << interface << "]: "
+        << interface_name << "]: "
         << mtu << std::endl;
 
-//     using exit_status = modulus2::exit_status;
-//     pfs::iostream_logger logger;
-//     modulus2::dispatcher d{logger};
-//     timer_quit_plugin quit_plugin {2};
-//
-//     d.attach_plugin(quit_plugin);
-//
-//     if (d.exec() == exit_status::success) {
-//         std::cout << "Exit successfully\n";
-//     }
-//
     return EXIT_SUCCESS;
 }
