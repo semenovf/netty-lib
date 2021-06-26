@@ -41,7 +41,7 @@ int main (int argc, char * argv[])
         std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
         std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
         std::cout << "\n\n";
-        return interface_name == iface.readable_name();
+        return interface_name == iface.adapter_name();
     });
 
     if (ec) {
@@ -63,7 +63,7 @@ int main (int argc, char * argv[])
 
     std::cout << "MTU value for interface ["
         << interface_name << "]: "
-        << pfs::net::mtu(interface_name, ec) << std::endl;
+        << pfs::net::mtu(pfs::net::usename::adapter, interface_name, ec) << std::endl;
 
     return EXIT_SUCCESS;
 }

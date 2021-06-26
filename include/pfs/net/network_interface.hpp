@@ -205,11 +205,18 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec, Visitor &
     return result;
 }
 
-inline uint32_t mtu (std::string const & interface_name, std::error_code & ec) noexcept
+enum class usename {
+      adapter
+    , readable
+};
+
+inline uint32_t mtu (usename un, std::string const & interface_name, std::error_code & ec) noexcept
 {
-    auto ifaces = pfs::net::fetch_interfaces(ec, [& interface_name] (
+    auto ifaces = pfs::net::fetch_interfaces(ec, [un, & interface_name] (
             pfs::net::network_interface const & iface) -> bool {
-        return interface_name == iface.readable_name();
+        return un == usename::readable 
+            ? interface_name == iface.readable_name()
+            : interface_name == iface.adapter_name();
     });
 
     return ifaces.empty() ? 0 : ifaces.front().mtu();
