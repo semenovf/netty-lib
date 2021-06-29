@@ -146,7 +146,6 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
 
             case IF_TYPE_SOFTWARE_LOOPBACK:
                 iface.type = network_interface_type::loopback;
-                // iface->flags |= QNetworkInterface::IsLoopBack;
                 break;
 
             case IF_TYPE_ATM:

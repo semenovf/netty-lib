@@ -91,7 +91,7 @@ struct network_interface_data
     uint32_t flags {0};
 
 #   if (defined(__linux) || defined(__linux__))
-#   elif (defined(_WIN32) || defined(_WIN64))
+#   elif _MSC_VER
 #   endif
 };
 
@@ -168,9 +168,14 @@ public:
         return _data.status == network_interface_status::down;
     }
 
-    bool is_flag (network_interface_flag flag) const noexcept
+    bool is_flag_on (network_interface_flag flag) const noexcept
     {
         return _data.flags & static_cast<decltype(_data.flags)>(flag);
+    }
+
+    bool is_loopback () const noexcept
+    {
+        return _data.type == network_interface_type::loopback;
     }
 
     /**
@@ -210,16 +215,18 @@ enum class usename {
     , readable
 };
 
-inline uint32_t mtu (usename un, std::string const & interface_name, std::error_code & ec) noexcept
+inline std::vector<network_interface> fetch_interfaces_by_name (usename un
+    , std::string const & interface_name
+    , std::error_code & ec)
 {
     auto ifaces = pfs::net::fetch_interfaces(ec, [un, & interface_name] (
             pfs::net::network_interface const & iface) -> bool {
-        return un == usename::readable 
+        return un == usename::readable
             ? interface_name == iface.readable_name()
             : interface_name == iface.adapter_name();
     });
 
-    return ifaces.empty() ? 0 : ifaces.front().mtu();
+    return ifaces;
 }
 
 }} // namespace pfs::net
