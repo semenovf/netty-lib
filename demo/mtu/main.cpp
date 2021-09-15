@@ -40,6 +40,7 @@ int main (int argc, char * argv[])
         std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag(pfs::net::network_interface_flag::ip6_enabled) << "\n";
         std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
         std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
+        std::cout << "\tIPv4         : " << std::to_string(iface.ip4_addr()) << "\n";
         std::cout << "\n\n";
         return interface_name == iface.readable_name();
     });

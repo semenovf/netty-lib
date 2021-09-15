@@ -9,6 +9,7 @@
 #pragma once
 #include "exports.hpp"
 #include "error.hpp"
+#include "inet4_addr.hpp"
 #include <string>
 #include <vector>
 
@@ -70,6 +71,9 @@ struct network_interface_data
     // The maximum transmission unit (MTU) size, in bytes.
     uint32_t mtu {0};
 
+    // IPv4 address associated with interface
+    inet4_addr ip4;
+
     string_type adapter_name;
 
     // A user-friendly name for the adapter.
@@ -106,6 +110,11 @@ public:
     network_interface (network_interface && ) = default;
     network_interface & operator = (network_interface const & ) = default;
     network_interface & operator = (network_interface && ) = default;
+
+    inet4_addr ip4_addr () const noexcept
+    {
+        return _data.ip4;
+    }
 
     int ip4_index () const noexcept
     {

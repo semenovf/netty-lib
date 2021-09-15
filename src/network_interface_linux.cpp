@@ -13,7 +13,9 @@
 #include <cstring>
 #include <sys/types.h>
 #include <ifaddrs.h>
+#include <arpa/inet.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
@@ -95,6 +97,11 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
 
                 if (ioctl_helper(sock, SIOCGIFMTU, & ifr, ec))
                     iface->_data.mtu = ifr.ifr_mtu;
+
+                if (ioctl_helper(sock, SIOCGIFADDR, & ifr, ec)) {
+                    auto p = reinterpret_cast<struct sockaddr_in *>(& ifr.ifr_addr);
+                    iface->_data.ip4 = htonl(p->sin_addr.s_addr);
+                }
             } else {
                 iface = & result[it->second];
             }
@@ -106,4 +113,4 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     return result;
 }
 
-}} // pfs
+}} // pfs::net
