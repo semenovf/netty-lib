@@ -11,7 +11,7 @@
 #pragma once
 #ifndef PFS_NET_STATIC_LIB
 #   ifndef PFS_NET_DLL_API
-#       if defined(_WIN32) || defined(_WIN64)
+#       if _MSC_VER
 #           if defined(PFS_NET_DLL_EXPORTS)
 #               define PFS_NET_DLL_API __declspec(dllexport)
 #           else
