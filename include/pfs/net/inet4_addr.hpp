@@ -10,12 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <string>
-// #include <pfs/utility.hpp>
-// #include <pfs/string.hpp>
-// #include <pfs/algo/split.hpp>
-// #include <pfs/string.hpp>
-// #include <pfs/stringlist.hpp>
-// #include <pfs/integral.hpp>
 
 namespace pfs {
 namespace net {
@@ -27,9 +21,9 @@ namespace net {
  */
 class inet4_addr
 {
-// public:
-//     static const uint32_t invalid_addr_value = 0xFFFFFFFF;
-//     static const uint32_t any_addr_value     = 0x00000000;
+public:
+    static constexpr uint32_t briadcast_addr_value = 0xFFFFFFFF;
+    static constexpr uint32_t any_addr_value       = 0x00000000;
 
 private:
     std::uint32_t _addr {0};
@@ -179,6 +173,11 @@ public:
     *
     */
 std::string to_string (inet4_addr const & addr, std::string const & format, int base);
+
+inline bool operator < (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) < static_cast<std::uint32_t>(b);
+}
 
 }} // pfs::net
 

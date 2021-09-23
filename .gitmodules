@@ -1,3 +1,6 @@
 [submodule "3rdparty/pfs/common"]
 	path = 3rdparty/pfs/common
 	url = git@github.com:semenovf/common-lib.git
+[submodule "3rdparty/cereal"]
+	path = 3rdparty/cereal
+	url = https://github.com/USCiLab/cereal.git

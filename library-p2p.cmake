@@ -8,36 +8,38 @@
 #      2021.06.22 Fixed completely.
 ################################################################################
 cmake_minimum_required (VERSION 3.5)
-project(net-lib CXX)
+project(net-p2p-lib CXX)
 
-list(APPEND SOURCES ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)
+list(APPEND SOURCES ${CMAKE_CURRENT_LIST_DIR}/src/p2p/observer.cpp)
+list(APPEND _link_libraries pfs::net)
 
-if (UNIX)
-    list(APPEND SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
-elseif (MSVC)
-    list(APPEND SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_win32.cpp)
-else()
-    message (FATAL_ERROR "Unsupported platform")
+if (CEREAL_ENABLED)
+    list(APPEND _compile_definitions "-DCEREAL_ENABLED=1")
+    list(APPEND _link_libraries cereal)
 endif()
 
-list(APPEND _link_libraries pfs::common Threads::Threads)
+if (QT5_CORE_ENABLED)
+    list(APPEND _compile_definitions "-DQT5_CORE_ENABLED=1")
+    list(APPEND _link_libraries Qt5::Core)
+endif(QT5_CORE_ENABLED)
 
-if (MSVC)
-    list(APPEND _compile_definitions -DUNICODE -D_UNICODE)
-    list(APPEND _link_libraries Ws2_32 Iphlpapi)
-endif(MSVC)
+if (QT5_NETWORK_ENABLED)
+    list(APPEND SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/connection_qt5.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/discoverer_qt5.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/listener_qt5.cpp)
+
+    list(APPEND _compile_definitions "-DQT5_NETWORK_ENABLED=1")
+    list(APPEND _link_libraries Qt5::Network)
+endif(QT5_NETWORK_ENABLED)
 
 # Make object files for STATIC and SHARED targets
 add_library(${PROJECT_NAME}_OBJLIB OBJECT ${SOURCES})
 
 add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
 add_library(${PROJECT_NAME}-static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
-add_library(pfs::net ALIAS ${PROJECT_NAME})
-add_library(pfs::net::static ALIAS ${PROJECT_NAME}-static)
+add_library(pfs::net::p2p ALIAS ${PROJECT_NAME})
+add_library(pfs::net::p2p::static ALIAS ${PROJECT_NAME}-static)
 
 target_include_directories(${PROJECT_NAME}_OBJLIB PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
