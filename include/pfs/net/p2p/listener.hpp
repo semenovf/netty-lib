@@ -40,7 +40,7 @@ private:
 
 public: // signals
     pfs::emitter_mt<std::string const & /*error*/> failure;
-    pfs::emitter_mt<connection_type const &> connected;
+    pfs::emitter_mt<connection_type const &> accepted;
 
 public:
     listener ();

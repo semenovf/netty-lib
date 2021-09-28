@@ -8,8 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "backend_enum.hpp"
-#include "pfs/net/exports.hpp"
 #include "pfs/emitter.hpp"
+#include "pfs/net/exports.hpp"
+#include "pfs/net/inet4_addr.hpp"
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -28,10 +30,13 @@ class PFS_NET_LIB_DLL_EXPORT connection final
     class backend;
     std::unique_ptr<backend> _p;
 
-private:
-    connection (std::unique_ptr<backend> && p);
+public: // signals
+    emitter_mt<connection &> connected;
+    emitter_mt<connection &> disconnected;
+    pfs::emitter_mt<connection &, std::string const & /*error*/> failure;
 
 public:
+    connection ();
     ~connection ();
 
     connection (connection const &) = delete;
@@ -39,6 +44,11 @@ public:
 
     connection (connection &&);
     connection & operator = (connection &&);
+
+    /**
+     * Connects to host asynchronously (non-blocking).
+     */
+    void connect (inet4_addr const & addr, std::uint16_t port);
 };
 
 }}} // namespace pfs::net::p2p

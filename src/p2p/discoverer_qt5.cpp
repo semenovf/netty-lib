@@ -7,6 +7,7 @@
 //      2021.09.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/net/p2p/discoverer.hpp"
+#include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
@@ -72,7 +73,8 @@ private:
                 : _listener->joinMulticastGroup(group_addr4);
 
             if (!joining_result) {
-                _holder_ptr->failure("joining listener to multicast group failure");
+                _holder_ptr->failure(fmt::format("joining listener to multicast group failure: {}"
+                    , group_addr4.toString().toStdString()));
                 return false;
             }
         } else {
@@ -81,7 +83,8 @@ private:
                 : _listener->leaveMulticastGroup(group_addr4);
 
             if (!leaving_result) {
-                _holder_ptr->failure("leaving listener from multicast group failure");
+                _holder_ptr->failure(fmt::format("leaving listener from multicast group failure: {}"
+                    , group_addr4.toString().toStdString()));
                 return false;
             }
         }
@@ -233,7 +236,7 @@ public:
     {
         if (_started) {
             if (_opts.peer_addr4.isMulticast())
-                process_multicast_group(muticast_group_op::join);
+                process_multicast_group(muticast_group_op::leave);
 
             _listener.reset();
             _radio.reset();
@@ -272,7 +275,11 @@ discoverer<backend_enum::qt5> & discoverer<backend_enum::qt5>::operator = (disco
 
 template <>
 discoverer<backend_enum::qt5>::~discoverer ()
-{}
+{
+    // Explicitly disconnect all detectors to avoid sigfault while distruction
+    incoming_data_received.disconnect_all();
+    failure.disconnect_all();
+}
 
 template<>
 bool discoverer<backend_enum::qt5>::set_options (options && opts)

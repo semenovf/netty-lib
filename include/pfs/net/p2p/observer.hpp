@@ -41,17 +41,18 @@ public: // signals
     /**
      * Emitted when new address accepted.
      */
-    pfs::emitter_mt<inet4_addr const &, std::uint16_t> rookie_accepted;
+    emitter_mt<inet4_addr const &, std::uint16_t> rookie_accepted;
 
     /**
      * Emitted when address expired (update is timed out).
      */
-    pfs::emitter_mt<inet4_addr const &, std::uint16_t> expired;
+    emitter_mt<inet4_addr const &, std::uint16_t> expired;
 
     /**
      * Emitted when nearest expiration time point is changed.
+     * Should be used for restart expiration timer.
      */
-    pfs::emitter_mt<std::chrono::milliseconds> nearest_expiration_changed;
+    emitter_mt<std::chrono::milliseconds> nearest_expiration_changed;
 
 public:
     observer () {}

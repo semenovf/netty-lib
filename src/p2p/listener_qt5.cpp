@@ -16,10 +16,6 @@
 #include <QTcpSocket>
 #include <cassert>
 
-// #if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
-// #   include <QNetworkDatagram>
-// #endif
-
 namespace pfs {
 namespace net {
 namespace p2p {
@@ -116,9 +112,9 @@ public:
                     QTcpSocket * peer = _listener->nextPendingConnection();
 
                     while (peer) {
-                        // TODO emit new connection
-                        connection_type conn {pfs::make_unique<connection_type::backend>(peer)};
-                        _holder_ptr->connected(conn);
+                        connection_type conn;
+                        conn._p->accept(peer);
+                        _holder_ptr->accepted(conn);
 
                         peer = _listener->nextPendingConnection();
                     }
