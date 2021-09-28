@@ -5,15 +5,15 @@
 //
 // Changelog:
 //      2021.09.15 Initial version.
+//      2021.09.28 Reimplemented (using CRTP).
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/p2p/discoverer.hpp"
+#pragma once
+#include "../discoverer.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QUdpSocket>
-#include <iostream>
-#include <cassert>
 
 #if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
 #   include <QNetworkDatagram>
@@ -22,48 +22,47 @@
 namespace pfs {
 namespace net {
 namespace p2p {
+namespace qt5 {
 
-enum class muticast_group_op { join, leave };
-
-static bool is_remote_addr (QHostAddress const & addr)
+class discoverer : public basic_discoverer<discoverer>
 {
-    assert(!addr.isNull());
-
-    if (addr.isLoopback() || QNetworkInterface::allAddresses().contains(addr))
-        return false;
-
-    return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Backend implemenation
-////////////////////////////////////////////////////////////////////////////////
-// Options
-struct backend_options {
-    QHostAddress listener_addr4;
-    quint16 listener_port;
-    QNetworkInterface listener_interface;
-    QHostAddress peer_addr4;
-};
-
-template <>
-class discoverer<backend_enum::qt5>::backend
-{
+    using base_class = basic_discoverer<discoverer>;
     using udp_socket_type = std::unique_ptr<QUdpSocket>;
 
-    discoverer<backend_enum::qt5> * _holder_ptr {nullptr};
+    friend class basic_discoverer<discoverer>;
+
+    enum class muticast_group_op { join, leave };
+
+    // Options
+    struct internal_options {
+        QHostAddress listener_addr4;
+        quint16 listener_port;
+        QNetworkInterface listener_interface;
+        QHostAddress peer_addr4;
+    };
+
+    internal_options _opts;
     bool _started {false};
-    backend_options _opts;
     udp_socket_type _listener;
     udp_socket_type _radio;
 
 private:
+    static bool is_remote_addr (QHostAddress const & addr)
+    {
+        assert(!addr.isNull());
+
+        if (addr.isLoopback() || QNetworkInterface::allAddresses().contains(addr))
+            return false;
+
+        return true;
+    }
+
     bool process_multicast_group (muticast_group_op op)
     {
         QHostAddress group_addr4 {_opts.peer_addr4};
 
         if (_listener->state() != QUdpSocket::BoundState) {
-            _holder_ptr->failure("listener is not bound");
+            base_class::failure("listener is not bound");
             return false;
         }
 
@@ -73,7 +72,7 @@ private:
                 : _listener->joinMulticastGroup(group_addr4);
 
             if (!joining_result) {
-                _holder_ptr->failure(fmt::format("joining listener to multicast group failure: {}"
+                base_class::failure(fmt::format("joining listener to multicast group failure: {}"
                     , group_addr4.toString().toStdString()));
                 return false;
             }
@@ -83,7 +82,7 @@ private:
                 : _listener->leaveMulticastGroup(group_addr4);
 
             if (!leaving_result) {
-                _holder_ptr->failure(fmt::format("leaving listener from multicast group failure: {}"
+                base_class::failure(fmt::format("leaving listener from multicast group failure: {}"
                     , group_addr4.toString().toStdString()));
                 return false;
             }
@@ -117,69 +116,17 @@ private:
             inet4_addr sender_inet4_addr = sender_hostaddr.toIPv4Address(& ok);
 
             if (!ok) {
-                _holder_ptr->failure("bad remote address (expected IPv4)");
+                base_class::failure("bad remote address (expected IPv4)");
             } else {
-                _holder_ptr->incoming_data_received(sender_inet4_addr
+                base_class::incoming_data_received(sender_inet4_addr
                     , !is_remote_addr(sender_hostaddr)
                     , request);
             }
         }
     }
 
-public:
-    backend (discoverer<backend_enum::qt5> & holder)
-        : _holder_ptr(& holder)
-    {}
-
-    ~backend ()
-    {
-        if (_started)
-            stop();
-    }
-
-    bool set_options (options && opts)
-    {
-        if (_started) {
-            _holder_ptr->failure("unable to set options during operation");
-            return false;
-        }
-
-        if (opts.listener_addr4 == "*")
-            _opts.listener_addr4 = QHostAddress::AnyIPv4;
-        else
-            _opts.listener_addr4 = QHostAddress{QString::fromStdString(opts.listener_addr4)};
-
-        if (_opts.listener_addr4.isNull()) {
-            _holder_ptr->failure("bad listener address");
-            return false;
-        }
-
-        if (opts.peer_addr4 == "*")
-            _opts.peer_addr4 = QHostAddress{"255.255.255.255"};
-        else
-            _opts.peer_addr4 = QHostAddress{QString::fromStdString(opts.peer_addr4)};
-
-        if (_opts.peer_addr4.isNull()) {
-            _holder_ptr->failure("bad radio address");
-            return false;
-        }
-
-        _opts.listener_port = opts.listener_port;
-
-        if (!opts.listener_interface.empty() && opts.listener_interface != "*") {
-            _opts.listener_interface = QNetworkInterface::interfaceFromName(
-                QString::fromStdString(opts.listener_interface));
-
-            if (!_opts.listener_interface.isValid()) {
-                _holder_ptr->failure("bad listener interface specified");
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    bool start ()
+protected:
+    bool start_impl ()
     {
         auto rc = false;
 
@@ -192,7 +139,7 @@ public:
                     | QUdpSocket::ReuseAddressHint;
 
                 if (!_listener->bind(_opts.listener_addr4, _opts.listener_port, bind_mode)) {
-                    _holder_ptr->failure("listener socket binding failure");
+                    base_class::failure("listener socket binding failure");
                     break;
                 }
 
@@ -232,7 +179,7 @@ public:
         return rc;
     }
 
-    void stop ()
+    void stop_impl ()
     {
         if (_started) {
             if (_opts.peer_addr4.isMulticast())
@@ -244,71 +191,69 @@ public:
         }
     }
 
-    bool started () const noexcept
+    bool set_options_impl (options && opts)
+    {
+        if (_started) {
+            base_class::failure("unable to set options during operation");
+            return false;
+        }
+
+        if (opts.listener_addr4 == "*")
+            _opts.listener_addr4 = QHostAddress::AnyIPv4;
+        else
+            _opts.listener_addr4 = QHostAddress{QString::fromStdString(opts.listener_addr4)};
+
+        if (_opts.listener_addr4.isNull()) {
+            base_class::failure("bad listener address");
+            return false;
+        }
+
+        if (opts.peer_addr4 == "*")
+            _opts.peer_addr4 = QHostAddress{"255.255.255.255"};
+        else
+            _opts.peer_addr4 = QHostAddress{QString::fromStdString(opts.peer_addr4)};
+
+        if (_opts.peer_addr4.isNull()) {
+            base_class::failure("bad radio address");
+            return false;
+        }
+
+        _opts.listener_port = opts.listener_port;
+
+        if (!opts.listener_interface.empty() && opts.listener_interface != "*") {
+            _opts.listener_interface = QNetworkInterface::interfaceFromName(
+                QString::fromStdString(opts.listener_interface));
+
+            if (!_opts.listener_interface.isValid()) {
+                base_class::failure("bad listener interface specified");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool started_impl () const noexcept
     {
         return _started;
     }
 
-    void radiocast (std::string const & data)
+    void radiocast_impl (std::string const & data)
     {
         if (_radio) {
             _radio->writeDatagram(data.data(), data.size()
                 , _opts.peer_addr4, _opts.listener_port);
         }
     }
+
+public:
+    discoverer () = default;
+
+    ~discoverer ()
+    {
+        if (_started)
+            stop_impl();
+    }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-
-template <>
-discoverer<backend_enum::qt5>::discoverer ()
-    : _p(pfs::make_unique<backend>(*this))
-{}
-
-template <>
-discoverer<backend_enum::qt5>::discoverer (discoverer &&) = default;
-
-template <>
-discoverer<backend_enum::qt5> & discoverer<backend_enum::qt5>::operator = (discoverer &&) = default;
-
-template <>
-discoverer<backend_enum::qt5>::~discoverer ()
-{
-    // Explicitly disconnect all detectors to avoid sigfault while distruction
-    incoming_data_received.disconnect_all();
-    failure.disconnect_all();
-}
-
-template<>
-bool discoverer<backend_enum::qt5>::set_options (options && opts)
-{
-    return _p->set_options(std::move(opts));
-}
-
-template<>
-bool discoverer<backend_enum::qt5>::start ()
-{
-    return _p->start();
-}
-
-template<>
-void discoverer<backend_enum::qt5>::stop ()
-{
-    _p->stop();
-}
-
-template<>
-bool discoverer<backend_enum::qt5>::started () const noexcept
-{
-    return _p->started();
-}
-
-template<>
-void discoverer<backend_enum::qt5>::radiocast (std::string const & data)
-{
-    _p->radiocast(data);
-}
-
-}}} // namespace pfs::net::p2p
+}}}} // namespace pfs::net::p2p::qt5

@@ -7,13 +7,12 @@
 //      2021.09.13 Initial version
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/timer_pool.hpp"
-#include "pfs/net/p2p/connection.hpp"
-#include "pfs/net/p2p/connection_manager.hpp"
-#include "pfs/net/p2p/discoverer.hpp"
 #include "pfs/net/p2p/envelope.hpp"
 #include "pfs/net/p2p/hello.hpp"
-#include "pfs/net/p2p/listener.hpp"
 #include "pfs/net/p2p/observer.hpp"
+#include "pfs/net/p2p/qt5/discoverer.hpp"
+#include "pfs/net/p2p/qt5/endpoint.hpp"
+#include "pfs/net/p2p/qt5/listener.hpp"
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -27,9 +26,11 @@
 
 namespace p2p = pfs::net::p2p;
 using inet4_addr = pfs::net::inet4_addr;
-using discoverer_type = p2p::discoverer<p2p::backend_enum::qt5>;
+using discoverer_type = p2p::qt5::discoverer;
+using listener_type = p2p::qt5::listener;
 using observer_type = p2p::observer;
-using connection_type = p2p::connection<p2p::backend_enum::qt5>;
+// using origin_endpoint = p2p::qt5::origin_endpoint;
+// using peer_socket_type = p2p::peer_socket<p2p::backend_enum::qt5>;
 // using connection_manager_type = p2p::connection_manager<p2p::backend_enum::qt5>;
 
 static const std::string HELO_GREETING {"HELO"};
@@ -47,7 +48,7 @@ int main (int argc, char * argv[])
 
     discoverer_type discoverer;
     observer_type observer;
-    //connection_manager_type connection_manager;
+    listener_type listener;
 
     QTimer discovery_timer;
     discovery_timer.setTimerType(Qt::PreciseTimer);
@@ -60,14 +61,36 @@ int main (int argc, char * argv[])
         discoverer.radiocast(envelope.data());
     });
 
-    discoverer_type::options options;
-    options.listener_addr4 = "*";       // Bind to any address
-    options.listener_port = 42222;
-    options.listener_interface = "*";
-    options.peer_addr4 = "227.1.1.255"; // Multicast radio
+    {
+        discoverer_type::options options;
+        options.listener_addr4 = "*";       // Bind to any address
+        options.listener_port = 42222;
+        options.listener_interface = "*";
+        options.peer_addr4 = "227.1.1.255"; // Multicast radio
 
-    if (!discoverer.set_options(std::move(options)))
-        return EXIT_FAILURE;
+        if (!discoverer.set_options(std::move(options)))
+            return EXIT_FAILURE;
+    }
+
+    {
+        listener_type::options options;
+        options.listener_addr4 = "*";       // Bind to any address
+        options.listener_port = 42223;
+        options.listener_interface = "*";
+
+        if (!listener.set_options(std::move(options)))
+            return EXIT_FAILURE;
+    }
+
+    listener.accepted.connect([] {
+        std::cout
+            << p2p::current_timepoint().count()
+            << ": Listener: peer accepted" << std::endl;
+    });
+
+    listener.failure.connect([] (std::string const & s) {
+        std::cout << "Listener Error: " << s << std::endl;
+    });
 
     QObject::connect(& observer_timer, & QTimer::timeout, [& observer] {
         std::cout
@@ -82,20 +105,22 @@ int main (int argc, char * argv[])
             << std::to_string(rookie)
             << ":" << port << std::endl;
 
-        connection_type conn;
-        conn.connected.connect([] (connection_type & /*this_conn*/) {
-            std::cout << p2p::current_timepoint().count() << ": Connected" << std::endl;
-        });
-
-        conn.disconnected.connect([] (connection_type & /*this_conn*/) {
-            std::cout << p2p::current_timepoint().count() << ": Disconnected" << std::endl;
-        });
-
-        conn.failure.connect([] (connection_type & /*this_conn*/, std::string const & error) {
-            std::cout << p2p::current_timepoint().count() << ": " << error << std::endl;
-        });
-
-        conn.connect(rookie, port);
+//         // FIXME {{{ Need connection manager (or channel manager)
+//         connection_type conn;
+//         conn.connected.connect([] (connection_type & /*this_conn*/) {
+//             std::cout << p2p::current_timepoint().count() << ": Connected" << std::endl;
+//         });
+//
+//         conn.disconnected.connect([] (connection_type & /*this_conn*/) {
+//             std::cout << p2p::current_timepoint().count() << ": Disconnected" << std::endl;
+//         });
+//
+//         conn.failure.connect([] (connection_type & /*this_conn*/, std::string const & error) {
+//             std::cout << p2p::current_timepoint().count() << ": " << error << std::endl;
+//         });
+//
+//         conn.connect(rookie, port);
+//         // }}}
     });
 
     observer.nearest_expiration_changed.connect([& observer_timer] (std::chrono::milliseconds timepoint) {
@@ -147,7 +172,7 @@ int main (int argc, char * argv[])
     });
 
     discoverer.failure.connect([] (std::string const & s) {
-        std::cout << "Error: " << s << std::endl;
+        std::cout << "Discovery Error: " << s << std::endl;
     });
 
     assert(discoverer.failure.size() == 1);

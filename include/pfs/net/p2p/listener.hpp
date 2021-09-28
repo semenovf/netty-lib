@@ -7,21 +7,17 @@
 //      2021.09.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/net/exports.hpp"
-#include "connection.hpp"
-#include "backend_enum.hpp"
+#include "endpoint.hpp"
 #include "pfs/emitter.hpp"
 #include <chrono>
-#include <memory>
 #include <string>
-#include <utility>
 
 namespace pfs {
 namespace net {
 namespace p2p {
 
-template <backend_enum Backend>
-class PFS_NET_LIB_DLL_EXPORT listener final
+template <typename Derived>
+class basic_listener
 {
 public:
     struct options
@@ -32,32 +28,34 @@ public:
         std::string listener_interface {"*"};
     };
 
-private:
-    class backend;
-    std::unique_ptr<backend> _p;
-
-    using connection_type = connection<Backend>;
-
 public: // signals
     pfs::emitter_mt<std::string const & /*error*/> failure;
-    pfs::emitter_mt<connection_type const &> accepted;
+    pfs::emitter_mt<> accepted;
+
+protected:
+    basic_listener () {}
+    ~basic_listener () {}
 
 public:
-    listener ();
-    ~listener ();
+    bool set_options (options && opts)
+    {
+        return static_cast<Derived *>(this)->set_options_impl(std::move(opts));
+    }
 
-    listener (listener const &) = delete;
-    listener & operator = (listener const &) = delete;
+    bool start ()
+    {
+        return static_cast<Derived *>(this)->start_impl();
+    }
 
-    listener (listener &&);
-    listener & operator = (listener &&);
+    void stop ()
+    {
+        static_cast<Derived *>(this)->stop_impl();
+    }
 
-    bool set_options (options && opts);
-
-    bool start ();
-    void stop ();
-
-    bool started () const noexcept;
+    bool started () const noexcept
+    {
+        return static_cast<Derived *>(this)->started_impl();
+    }
 };
 
 }}} // namespace pfs::net::p2p

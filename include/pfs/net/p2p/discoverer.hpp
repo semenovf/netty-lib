@@ -7,9 +7,7 @@
 //      2021.09.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "backend_enum.hpp"
 #include "pfs/emitter.hpp"
-#include "pfs/net/exports.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include <chrono>
 #include <memory>
@@ -20,8 +18,8 @@ namespace pfs {
 namespace net {
 namespace p2p {
 
-template <backend_enum Backend>
-class PFS_NET_LIB_DLL_EXPORT discoverer final
+template <typename Derived>
+class basic_discoverer
 {
 public:
     struct options
@@ -37,10 +35,6 @@ public:
         std::string peer_addr4 {"*"};
     };
 
-private:
-    class backend;
-    std::unique_ptr<backend> _p;
-
 public: // signals
     pfs::emitter_mt<inet4_addr const & /*sender*/
         , bool /*is_sender_local*/
@@ -48,28 +42,39 @@ public: // signals
 
     pfs::emitter_mt<std::string const & /*error*/> failure;
 
+protected:
+    basic_discoverer () {}
+    ~basic_discoverer () {}
+
 public:
-    discoverer ();
-    ~discoverer ();
+    bool set_options (options && opts)
+    {
+        return static_cast<Derived *>(this)->set_options_impl(std::move(opts));
+    }
 
-    discoverer (discoverer const &) = delete;
-    discoverer & operator = (discoverer const &) = delete;
+    bool start ()
+    {
+        return static_cast<Derived *>(this)->start_impl();
+    }
 
-    discoverer (discoverer &&);
-    discoverer & operator = (discoverer &&);
+    void stop ()
+    {
+        static_cast<Derived *>(this)->stop_impl();
+    }
 
-    bool set_options (options && opts);
-
-    bool start ();
-    void stop ();
-
-    bool started () const noexcept;
+    bool started () const noexcept
+    {
+        return static_cast<Derived *>(this)->started_impl();
+    }
 
     /**
      * This slot emits the HELO packet.
      * Can be invoked by timer e.g.
      */
-    void radiocast (std::string const & data);
+    void radiocast (std::string const & data)
+    {
+        static_cast<Derived *>(this)->radiocast_impl(data);
+    }
 };
 
 }}} // namespace pfs::net::p2p

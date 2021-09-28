@@ -10,7 +10,6 @@
 cmake_minimum_required (VERSION 3.5)
 project(net-p2p-lib CXX)
 
-list(APPEND SOURCES ${CMAKE_CURRENT_LIST_DIR}/src/p2p/observer.cpp)
 list(APPEND _link_libraries pfs::net)
 
 if (CEREAL_ENABLED)
@@ -24,11 +23,6 @@ if (QT5_CORE_ENABLED)
 endif(QT5_CORE_ENABLED)
 
 if (QT5_NETWORK_ENABLED)
-    list(APPEND SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/connection_qt5.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/discoverer_qt5.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/listener_qt5.cpp)
-
     list(APPEND _compile_definitions "-DQT5_NETWORK_ENABLED=1")
     list(APPEND _link_libraries Qt5::Network)
 endif(QT5_NETWORK_ENABLED)

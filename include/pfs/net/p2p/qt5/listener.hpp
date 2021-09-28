@@ -5,58 +5,50 @@
 //
 // Changelog:
 //      2021.09.20 Initial version.
+//      2021.09.28 Reimplemented (using CRTP).
 ////////////////////////////////////////////////////////////////////////////////
-#include "connection_qt5.hpp"
-#include "pfs/net/p2p/listener.hpp"
-#include "pfs/memory.hpp"
-#include "pfs/fmt.hpp"
+#pragma once
+#include "../listener.hpp"
+// #include "pfs/fmt.hpp"
+// #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QTcpServer>
 #include <QTcpSocket>
-#include <cassert>
+//
+// #if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
+// #   include <QNetworkDatagram>
+// #endif
 
 namespace pfs {
 namespace net {
 namespace p2p {
+namespace qt5 {
 
-////////////////////////////////////////////////////////////////////////////////
-// Backend implemenation
-////////////////////////////////////////////////////////////////////////////////
-// Options
-struct backend_options {
-    QHostAddress listener_addr4;
-    quint16 listener_port;
-    QNetworkInterface listener_interface;
-};
-
-template <>
-class listener<backend_enum::qt5>::backend
+class listener : public basic_listener<listener>
 {
+    using base_class = basic_listener<listener>;
     using tcp_server_type = std::unique_ptr<QTcpServer>;
     using tcp_socket_type = std::unique_ptr<QTcpSocket>;
-    using connection_type = connection<backend_enum::qt5>;
+    //using connection_type = connection<backend_enum::qt5>;
 
-    listener<backend_enum::qt5> * _holder_ptr {nullptr};
+    friend class basic_listener<listener>;
+
+    struct internal_options {
+        QHostAddress listener_addr4;
+        quint16 listener_port;
+        QNetworkInterface listener_interface;
+    };
+
     bool _started {false};
-    backend_options _opts;
+    internal_options _opts;
     tcp_server_type _listener;
 
-public:
-    backend (listener<backend_enum::qt5> & holder)
-        : _holder_ptr(& holder)
-    {}
-
-    ~backend ()
-    {
-        if (_started)
-            stop();
-    }
-
-    bool set_options (options && opts)
+protected:
+    bool set_options_impl (options && opts)
     {
         if (_started) {
-            _holder_ptr->failure("unable to set options during operation");
+            base_class::failure("unable to set options during operation");
             return false;
         }
 
@@ -66,7 +58,7 @@ public:
             _opts.listener_addr4 = QHostAddress{QString::fromStdString(opts.listener_addr4)};
 
         if (_opts.listener_addr4.isNull()) {
-            _holder_ptr->failure("bad listener address");
+            base_class::failure("bad listener address");
             return false;
         }
 
@@ -77,7 +69,7 @@ public:
                 QString::fromStdString(opts.listener_interface));
 
             if (!_opts.listener_interface.isValid()) {
-                _holder_ptr->failure("bad listener interface specified");
+                base_class::failure("bad listener interface specified");
                 return false;
             }
         }
@@ -85,7 +77,7 @@ public:
         return true;
     }
 
-    bool start ()
+    bool start_impl ()
     {
         auto rc = false;
 
@@ -95,7 +87,7 @@ public:
                 _listener = pfs::make_unique<QTcpServer>();
 
                 if (!_listener->listen(_opts.listener_addr4, _opts.listener_port)) {
-                    _holder_ptr->failure(fmt::format("start listening failure: {}"
+                    base_class::failure(fmt::format("start listening failure: {}"
                         , _listener->errorString().toStdString()));
                     break;
                 }
@@ -103,7 +95,7 @@ public:
                 _listener->connect(& *_listener, & QTcpServer::acceptError, [this] (
                     QAbstractSocket::SocketError /*socketError*/) {
 
-                    _holder_ptr->failure(fmt::format("accept error: {}"
+                    base_class::failure(fmt::format("accept error: {}"
                         , _listener->errorString().toStdString()));
 
                 });
@@ -112,10 +104,7 @@ public:
                     QTcpSocket * peer = _listener->nextPendingConnection();
 
                     while (peer) {
-                        connection_type conn;
-                        conn._p->accept(peer);
-                        _holder_ptr->accepted(conn);
-
+                        base_class::accepted();
                         peer = _listener->nextPendingConnection();
                     }
                 });
@@ -134,7 +123,7 @@ public:
         return rc;
     }
 
-    void stop ()
+    void stop_impl ()
     {
         if (_started) {
             _listener.reset();
@@ -142,54 +131,19 @@ public:
         }
     }
 
-    bool started () const noexcept
+    bool started_impl () const noexcept
     {
         return _started;
     }
+
+public:
+    listener () = default;
+
+    ~listener ()
+    {
+        if (_started)
+            stop_impl();
+    }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-
-template <>
-listener<backend_enum::qt5>::listener ()
-    : _p(pfs::make_unique<backend>(*this))
-{}
-
-template <>
-listener<backend_enum::qt5>::listener (listener &&) = default;
-
-template <>
-listener<backend_enum::qt5> & listener<backend_enum::qt5>::operator = (listener &&) = default;
-
-template <>
-listener<backend_enum::qt5>::~listener ()
-{}
-
-template<>
-bool listener<backend_enum::qt5>::set_options (options && opts)
-{
-    return _p->set_options(std::move(opts));
-}
-
-template<>
-bool listener<backend_enum::qt5>::start ()
-{
-    return _p->start();
-}
-
-template<>
-void listener<backend_enum::qt5>::stop ()
-{
-    _p->stop();
-}
-
-template<>
-bool listener<backend_enum::qt5>::started () const noexcept
-{
-    return _p->started();
-}
-
-}}} // namespace pfs::net::p2p
-
+}}}} // namespace pfs::net::p2p::qt5
