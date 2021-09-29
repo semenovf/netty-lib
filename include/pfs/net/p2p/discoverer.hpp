@@ -46,6 +46,12 @@ protected:
     basic_discoverer () {}
     ~basic_discoverer () {}
 
+    basic_discoverer (basic_discoverer const &) = delete;
+    basic_discoverer & operator = (basic_discoverer const &) = delete;
+
+    basic_discoverer (basic_discoverer &&) = default;
+    basic_discoverer & operator = (basic_discoverer &&) = default;
+
 public:
     bool set_options (options && opts)
     {

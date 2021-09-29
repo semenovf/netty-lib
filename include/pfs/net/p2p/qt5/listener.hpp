@@ -9,16 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../listener.hpp"
-// #include "pfs/fmt.hpp"
-// #include "pfs/memory.hpp"
+#include "endpoint.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QTcpServer>
 #include <QTcpSocket>
-//
-// #if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
-// #   include <QNetworkDatagram>
-// #endif
 
 namespace pfs {
 namespace net {
@@ -101,11 +96,12 @@ protected:
                 });
 
                 _listener->connect(& *_listener, & QTcpServer::newConnection, [this] {
-                    QTcpSocket * peer = _listener->nextPendingConnection();
+                    QTcpSocket * socket = _listener->nextPendingConnection();
 
-                    while (peer) {
+                    while (socket) {
+                        peer_endpoint peer{socket};
                         base_class::accepted();
-                        peer = _listener->nextPendingConnection();
+                        socket = _listener->nextPendingConnection();
                     }
                 });
 
@@ -144,6 +140,12 @@ public:
         if (_started)
             stop_impl();
     }
+
+    listener (listener const &) = delete;
+    listener & operator = (listener const &) = delete;
+
+    listener (listener &&) = default;
+    listener & operator = (listener &&) = default;
 };
 
 }}}} // namespace pfs::net::p2p::qt5

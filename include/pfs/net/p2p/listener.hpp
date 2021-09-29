@@ -34,7 +34,17 @@ public: // signals
 
 protected:
     basic_listener () {}
-    ~basic_listener () {}
+    ~basic_listener ()
+    {
+        failure.disconnect_all();
+        accepted.disconnect_all();
+    }
+
+    basic_listener (basic_listener const &) = delete;
+    basic_listener & operator = (basic_listener const &) = delete;
+
+    basic_listener (basic_listener &&) = default;
+    basic_listener & operator = (basic_listener &&) = default;
 
 public:
     bool set_options (options && opts)

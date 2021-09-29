@@ -15,7 +15,7 @@ namespace pfs {
 namespace net {
 namespace p2p {
 
-template <class Derived>
+template <class Impl>
 class basic_origin_endpoint
 {
 public: // signals
@@ -35,7 +35,24 @@ protected:
 
     void connect (inet4_addr const & addr, std::uint16_t port)
     {
-        return static_cast<Derived *>(this)->connect_impl(addr, port);
+        return static_cast<Impl *>(this)->connect_impl(addr, port);
+    }
+};
+
+template <class Impl>
+class basic_peer_endpoint
+{
+public: // signals
+    emitter_mt<> disconnected;
+    emitter_mt<std::string const & /*error*/> failure;
+
+protected:
+    basic_peer_endpoint () {}
+
+    ~basic_peer_endpoint ()
+    {
+        disconnected.disconnect_all();
+        failure.disconnect_all();
     }
 };
 

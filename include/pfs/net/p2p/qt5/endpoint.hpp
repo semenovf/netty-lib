@@ -50,7 +50,11 @@ public:
         });
 
         QObject::connect(_socket
+#if QT_VERSION >= QT_VERSION_CHECK(5,15,0)
+            , & QTcpSocket::errorOccurred
+#else
             , static_cast<void (QTcpSocket::*)(QTcpSocket::SocketError)>(& QTcpSocket::error)
+#endif
             , [this] (QTcpSocket::SocketError) {
                 qDebug("---FAILURE---");
                 base_class::failure(_socket->errorString().toStdString());
@@ -86,26 +90,66 @@ public:
     }
 };
 
-//
-// template <backend_enum Backend>
-// class PFS_NET_LIB_DLL_EXPORT channel
-// {
-// //     socket      _origin;
-// //     peer_socket _peer;
-// //
-// // public:
-// //     channel ();
-// //     ~channel ();
-// //
-// //     channel (channel const &) = delete;
-// //     channel & operator = (channel const &) = delete;
-// //
-// //     channel (channel &&);
-// //     channel & operator = (channel &&);
-// //
-// //     void set_origin (socket && s);
-// //     void set_peer (peer_socket && s);
-// };
+class peer_endpoint : public basic_peer_endpoint<peer_endpoint>
+{
+    using base_class = basic_peer_endpoint<peer_endpoint>;
+
+    friend class basic_peer_endpoint<peer_endpoint>;
+
+    QTcpSocket * _socket {nullptr};
+
+public:
+    peer_endpoint (QTcpSocket * socket)
+        : base_class()
+        , _socket(socket)
+    {
+        QObject::connect(_socket, & QTcpSocket::disconnected, [this] {
+            qDebug("---DISCONNECTED---");
+            base_class::disconnected();
+        });
+
+        QObject::connect(_socket
+#if QT_VERSION >= QT_VERSION_CHECK(5,15,0)
+            , & QTcpSocket::errorOccurred
+#else
+            , static_cast<void (QTcpSocket::*)(QTcpSocket::SocketError)>(& QTcpSocket::error)
+#endif
+            , [this] (QTcpSocket::SocketError) {
+                qDebug("---FAILURE---");
+                base_class::failure(_socket->errorString().toStdString());
+        });
+    }
+
+    ~peer_endpoint ()
+    {
+        // The socket is created as a child of the server, which means that it
+        // is automatically deleted when the QTcpServer object is destroyed.
+        // It is still a good idea to delete the object explicitly when you are
+        // done with it, to avoid wasting memory.
+        if (_socket)
+            delete _socket;
+    }
+
+    peer_endpoint (peer_endpoint const &) = delete;
+    peer_endpoint & operator = (peer_endpoint const &) = delete;
+
+    peer_endpoint (peer_endpoint && other)
+        : _socket(other._socket)
+    {
+        other._socket = nullptr;
+    }
+
+    peer_endpoint & operator = (peer_endpoint && other)
+    {
+        if (this != & other) {
+            this->~peer_endpoint();
+            _socket = other._socket;
+            other._socket = nullptr;
+        }
+
+        return *this;
+    }
+};
 
 }}}} // namespace pfs::net::p2p::qt5
 

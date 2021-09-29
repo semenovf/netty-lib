@@ -254,6 +254,12 @@ public:
         if (_started)
             stop_impl();
     }
+
+    discoverer (discoverer const &) = delete;
+    discoverer & operator = (discoverer const &) = delete;
+
+    discoverer (discoverer &&) = default;
+    discoverer & operator = (discoverer &&) = default;
 };
 
 }}}} // namespace pfs::net::p2p::qt5

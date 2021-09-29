@@ -10,6 +10,31 @@
 cmake_minimum_required (VERSION 3.5)
 project(net-p2p-lib CXX)
 
+option(ENABLE_QT5 "Enable Qt5 library (network backend)" ON)
+option(ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
+option(ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
+option(ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
+
+if (ENABLE_QT5)
+    find_package(Qt5 COMPONENTS Core Network REQUIRED)
+
+    set(QT5_CORE_ENABLED ON CACHE BOOL "Qt5 Core enabled")
+    set(QT5_NETWORK_ENABLED ON CACHE BOOL "Qt5 Network enabled")
+endif(ENABLE_QT5)
+
+if (ENABLE_CEREAL)
+    set(CEREAL_ROOT ${CMAKE_SOURCE_DIR}/3rdparty/cereal)
+    add_library(cereal INTERFACE)
+
+    # Use mutexes to ensure thread safety
+    if (ENABLE_CEREAL_THREAD_SAFETY)
+        target_compile_definitions("-DCEREAL_THREAD_SAFE=1")
+    endif(ENABLE_CEREAL_THREAD_SAFETY)
+
+    target_include_directories(cereal INTERFACE ${CEREAL_ROOT}/include)
+    set(CEREAL_ENABLED ON CACHE BOOL "Cereal serialization library enabled")
+endif(ENABLE_CEREAL)
+
 list(APPEND _link_libraries pfs::net)
 
 if (CEREAL_ENABLED)
