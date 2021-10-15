@@ -9,11 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../discoverer.hpp"
+#include "hello_packet_serializer.hpp"
+#include "pfs/crc32.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QUdpSocket>
+#include <cassert>
 
 #if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
 #   include <QNetworkDatagram>
@@ -28,6 +31,7 @@ class discoverer : public basic_discoverer<discoverer>
 {
     using base_class = basic_discoverer<discoverer>;
     using udp_socket_type = std::unique_ptr<QUdpSocket>;
+    using packet_type = hello_packet;
 
     friend class basic_discoverer<discoverer>;
 
@@ -39,6 +43,8 @@ class discoverer : public basic_discoverer<discoverer>
         quint16 listener_port;
         QNetworkInterface listener_interface;
         QHostAddress peer_addr4;
+        std::chrono::milliseconds interval;
+        std::chrono::milliseconds expiration_timeout;
     };
 
     internal_options _opts;
@@ -97,18 +103,23 @@ private:
 
 #if QT_VERSION < QT_VERSION_CHECK(5,8,0)
             // using QUdpSocket::readDatagram (API since Qt 4)
-            QByteArray datagram;
+            QByteArray packet_data;
             QHostAddress sender_hostaddr;
-            datagram.resize(static_cast<int>(_listener->pendingDatagramSize()));
+            packet_data.resize(static_cast<int>(_listener->pendingDatagramSize()));
             _listener->readDatagram(datagram.data(), datagram.size(), & sender_hostaddr);
-            auto request = std::string(datagram.data(), datagram.size());
 #else
             // using QUdpSocket::receiveDatagram (API since Qt 5.8)
             QNetworkDatagram datagram = _listener->receiveDatagram();
-            QByteArray bytes = datagram.data();
-            auto request = std::string(bytes.data(), bytes.size());
+            QByteArray packet_data = datagram.data();
             auto sender_hostaddr = datagram.senderAddress();
 #endif
+
+            if (packet_data.size() != packet_type::PACKET_SIZE) {
+                base_class::failure(fmt::format("bad hello packet size: {}, expected {}"
+                    , packet_data.size()
+                    , packet_type::PACKET_SIZE));
+                return;
+            }
 
             bool ok {true};
 
@@ -117,10 +128,19 @@ private:
 
             if (!ok) {
                 base_class::failure("bad remote address (expected IPv4)");
-            } else {
-                base_class::incoming_data_received(sender_inet4_addr
-                    , !is_remote_addr(sender_hostaddr)
-                    , request);
+                return;
+            }
+
+            // Ignore self packets
+            if (is_remote_addr(sender_hostaddr)) {
+                auto parse_result = qt5::deserialize_hello(packet_data);
+
+                if (!parse_result.first.empty()) {
+                    base_class::failure(parse_result.first);
+                    return;
+                }
+
+                base_class::packet_received(sender_inet4_addr, parse_result.second);
             }
         }
     }
@@ -198,20 +218,17 @@ protected:
             return false;
         }
 
-        if (opts.listener_addr4 == "*")
+        if (opts.listener_addr4 == inet4_addr{})
             _opts.listener_addr4 = QHostAddress::AnyIPv4;
         else
-            _opts.listener_addr4 = QHostAddress{QString::fromStdString(opts.listener_addr4)};
+            _opts.listener_addr4 = QHostAddress{static_cast<quint32>(opts.listener_addr4)};
 
         if (_opts.listener_addr4.isNull()) {
             base_class::failure("bad listener address");
             return false;
         }
 
-        if (opts.peer_addr4 == "*")
-            _opts.peer_addr4 = QHostAddress{"255.255.255.255"};
-        else
-            _opts.peer_addr4 = QHostAddress{QString::fromStdString(opts.peer_addr4)};
+        _opts.peer_addr4 = QHostAddress{static_cast<quint32>(opts.peer_addr4)};
 
         if (_opts.peer_addr4.isNull()) {
             base_class::failure("bad radio address");
@@ -230,6 +247,9 @@ protected:
             }
         }
 
+        _opts.interval = opts.interval;
+        _opts.expiration_timeout = opts.expiration_timeout;
+
         return true;
     }
 
@@ -238,12 +258,32 @@ protected:
         return _started;
     }
 
-    void radiocast_impl (std::string const & data)
+    void radiocast_impl (uuid_t uuid, std::uint16_t port)
     {
         if (_radio) {
-            _radio->writeDatagram(data.data(), data.size()
-                , _opts.peer_addr4, _opts.listener_port);
+            hello_packet packet;
+            packet.uuid = uuid;
+            packet.port = port;
+
+            packet.crc32 = pfs::crc32_of_ptr(packet.greeting, sizeof(packet.greeting), 0);
+            packet.crc32 = pfs::crc32_all_of(packet.crc32, packet.uuid, packet.port);
+
+            auto bytes = qt5::serialize(packet);
+
+            assert(bytes.size() == hello_packet::PACKET_SIZE);
+
+            _radio->writeDatagram(bytes, _opts.peer_addr4, _opts.listener_port);
         }
+    }
+
+    std::chrono::milliseconds interval_impl () const noexcept
+    {
+        return _opts.interval;
+    }
+
+    std::chrono::milliseconds expiration_timeout_impl () const noexcept
+    {
+        return _opts.expiration_timeout;
     }
 
 public:

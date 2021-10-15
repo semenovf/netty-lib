@@ -174,6 +174,11 @@ public:
     */
 std::string to_string (inet4_addr const & addr, std::string const & format, int base);
 
+inline bool operator == (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) == static_cast<std::uint32_t>(b);
+}
+
 inline bool operator < (inet4_addr const & a, inet4_addr const & b)
 {
     return static_cast<std::uint32_t>(a) < static_cast<std::uint32_t>(b);

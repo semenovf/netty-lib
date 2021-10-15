@@ -7,7 +7,9 @@
 //      2021.09.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "utils.hpp"
 #include "pfs/emitter.hpp"
+#include "pfs/uuid.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include <chrono>
 #include <map>
@@ -18,20 +20,16 @@ namespace pfs {
 namespace net {
 namespace p2p {
 
-inline std::chrono::milliseconds current_timepoint ()
-{
-    using std::chrono::duration_cast;
-    using std::chrono::milliseconds;
-    using std::chrono::steady_clock;
-
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
-}
-
 class observer
 {
-    using key_type = std::pair<inet4_addr, std::uint16_t>;
+    struct item
+    {
+        inet4_addr addr;
+        std::uint16_t port;
+        std::chrono::milliseconds expiration_timepoint;
+    };
 
-    std::map<key_type, std::chrono::milliseconds> _services;
+    std::map<uuid_t, item> _peers;
     std::chrono::milliseconds _nearest_expiration_timepoint {std::chrono::milliseconds::max()};
 
     std::mutex _mtx;
@@ -40,12 +38,12 @@ public: // signals
     /**
      * Emitted when new address accepted.
      */
-    emitter_mt<inet4_addr const &, std::uint16_t> rookie_accepted;
+    emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> rookie_accepted;
 
     /**
      * Emitted when address expired (update is timed out).
      */
-    emitter_mt<inet4_addr const &, std::uint16_t> expired;
+    emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> expired;
 
     /**
      * Emitted when nearest expiration time point is changed.
@@ -65,7 +63,8 @@ public:
     /**
      * Update peer
      */
-    void update (inet4_addr const & addr
+    void update (uuid_t peer_uuid
+        , inet4_addr const & addr
         , std::uint16_t port
         , std::chrono::milliseconds expiration_timeout)
     {
@@ -74,14 +73,13 @@ public:
         auto now = current_timepoint();
         auto expiration_timepoint = now + expiration_timeout;
 
-        auto key = std::make_pair(addr, port);
-        auto it = _services.find(key);
+        auto it = _peers.find(peer_uuid);
 
-        if (it == _services.end()) {
-            _services.insert({key, expiration_timepoint});
-            rookie_accepted(addr, port);
+        if (it == _peers.end()) {
+            _peers.insert({peer_uuid, {addr, port, expiration_timepoint}});
+            rookie_accepted(peer_uuid, addr, port);
         } else {
-            it->second = expiration_timepoint;
+            it->second.expiration_timepoint = expiration_timepoint;
         }
 
         if (_nearest_expiration_timepoint > expiration_timepoint) {
@@ -100,27 +98,27 @@ public:
         auto now = current_timepoint();
         auto expiration_timepoint = std::chrono::milliseconds::max();
 
-        for (auto it = _services.cbegin(); it != _services.cend();) {
-            if (it->second <= now) {
-                auto addr = it->first.first;
-                auto port = it->first.second;
-                expired(addr, port);
+        for (auto it = _peers.cbegin(); it != _peers.cend();) {
+            if (it->second.expiration_timepoint <= now) {
+                auto addr = it->second.addr;
+                auto port = it->second.port;
+                expired(it->first, addr, port);
 
-                it = _services.erase(it);
+                it = _peers.erase(it);
             } else {
-                if (expiration_timepoint > it->second)
-                    expiration_timepoint = it->second;
+                if (expiration_timepoint > it->second.expiration_timepoint)
+                    expiration_timepoint = it->second.expiration_timepoint;
                 ++it;
             }
         }
 
         // Restart timer
         if (expiration_timepoint < std::chrono::milliseconds::max()) {
-            assert(!_services.empty());
+            assert(!_peers.empty());
             _nearest_expiration_timepoint = expiration_timepoint;
             nearest_expiration_changed(_nearest_expiration_timepoint);
         } else {
-            assert(_services.empty());
+            assert(_peers.empty());
             _nearest_expiration_timepoint = std::chrono::milliseconds::max();
         }
     }
