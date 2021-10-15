@@ -11,6 +11,7 @@
 #include "pfs/endian.hpp"
 #include "pfs/uuid.hpp"
 #include <cereal/archives/binary.hpp>
+#include <functional>
 #include <sstream>
 #include <vector>
 
@@ -138,11 +139,18 @@ struct ntoh
 };
 
 template <typename T>
-void load (cereal::BinaryInputArchive & ar, std::reference_wrapper<T> & ref)
+void load (cereal::BinaryInputArchive & ar, ntoh<T> & ref)
 {
     ar >> ref.d;
     ref.d = pfs::to_native_order(ref.d);
 }
+
+// template <typename T>
+// void load (cereal::BinaryInputArchive & ar, std::reference_wrapper<T> & ref)
+// {
+// //     ar >> ref.d;
+// //     ref.d = pfs::to_native_order(ref.d);
+// }
 
 template <std::size_t PacketSize>
 void load (cereal::BinaryInputArchive & ar, packet<PacketSize> & pkt)
