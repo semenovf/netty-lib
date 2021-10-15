@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/crc32.hpp"
+#include "pfs/endian.hpp"
 #include "pfs/uuid.hpp"
-#include "pfs/crc32.hpp"
-#include <cereal/archives/portable_binary.hpp>
+#include <cereal/archives/binary.hpp>
 #include <sstream>
 #include <vector>
 
@@ -115,69 +115,47 @@ typename packet<PacketSize>::seqnum_type split_into_packets (uuid_t sender_uuid
     return result;
 }
 
-template <std::size_t PacketSize, typename Archiver>
-void serialize (Archiver & ar, packet<PacketSize> const & pkt)
+template <std::size_t PacketSize>
+void save (cereal::BinaryOutputArchive & ar, packet<PacketSize> const & pkt)
 {
-    ar << pkt.startflag
-        << pkt.uuid
-        << pkt.sn
-        << pkt.partcount
-        << pkt.partindex
-        << pkt.payloadsize
+    ar << pfs::to_network_order(pkt.startflag)
+        << pfs::to_network_order(pkt.uuid)
+        << pfs::to_network_order(pkt.sn)
+        << pfs::to_network_order(pkt.partcount)
+        << pfs::to_network_order(pkt.partindex)
+        << pfs::to_network_order(pkt.payloadsize)
         << cereal::binary_data(pkt.payload, sizeof(pkt.payload))
-        << pkt.crc32
-        << pkt.endflag
-        ;
+        << pfs::to_network_order(pkt.crc32)
+        << pfs::to_network_order(pkt.endflag);
 }
 
-}}} // namespace pfs::net::p2p
 
-namespace cereal
+template <typename T>
+struct ntoh
 {
-    using pfs::net::p2p::packet;
+    T & d;
+    ntoh (T & ref) : d(ref) {}
+};
 
-    template <std::size_t PacketSize>
-    void save (BinaryOutputArchive & ar, packet<PacketSize> const & pkt)
-    {
-        ar << pkt.startflag
-            << pkt.uuid
-            << pkt.sn
-            << pkt.partcount
-            << pkt.partindex
-            << pkt.payloadsize
-            << cereal::binary_data(pkt.payload, sizeof(pkt.payload))
-            << pkt.crc32
-            << pkt.endflag;
+template <typename T>
+void load (cereal::BinaryInputArchive & ar, std::reference_wrapper<T> & ref)
+{
+    ar >> ref.d;
+    ref.d = pfs::to_native_order(ref.d);
+}
+
+template <std::size_t PacketSize>
+void load (cereal::BinaryInputArchive & ar, packet<PacketSize> & pkt)
+{
+    ar >> ntoh<decltype(pkt.startflag)>{pkt.startflag}
+        >> ntoh<decltype(pkt.uuid)>(pkt.uuid)
+        >> ntoh<decltype(pkt.sn)>(pkt.sn)
+        >> ntoh<decltype(pkt.partcount)>(pkt.partcount)
+        >> ntoh<decltype(pkt.partindex)>(pkt.partindex)
+        >> ntoh<decltype(pkt.payloadsize)>(pkt.payloadsize)
+        >> cereal::binary_data(pkt.payload, sizeof(pkt.payload))
+        >> ntoh<decltype(pkt.crc32)>(pkt.crc32)
+        >> ntoh<decltype(pkt.endflag)>(pkt.endflag);
     }
 
-    template <std::size_t PacketSize>
-    void load (BinaryInputArchive & ar, packet<PacketSize> & pkt)
-    {
-        using packet_type = packet<PacketSize>;
-
-        ar >> pkt.startflag
-            >> pkt.uuid
-            >> pkt.sn
-            >> pkt.partcount
-            >> pkt.partindex
-            >> pkt.payloadsize
-            >> cereal::binary_data(pkt.payload, sizeof(pkt.payload))
-            >> pkt.crc32 >> pkt.endflag;
-
-//     if (pkt.startflag != packet_type::START_FLAG)
-//         return std::make_pair("bad packet: bad START flag", packet_type{});
-//
-//     if (pkt.startflag != packet_type::END_FLAG)
-//         return std::make_pair("bad packet: bad END flag", packet_type{});
-//
-//     std::int32_t crc32 = pfs::crc32_all_of(0, pkt.uuid
-//         , pkt.sn, pkt.partcount, pkt.partindex);
-//
-//     crc32 = pfs::crc32_of_ptr(pkt.payload, packet_type::PAYLOAD_SIZE, crc32);
-//
-//     if (crc32 != pkt.crc32)
-//         return std::make_pair("bad CRC32", packet_type{});
-//
-//     return std::make_pair(std::string{}, std::move(pkt));
-    }
-} // namespace cereal
+}}} // namespace pfs::net::p2p
