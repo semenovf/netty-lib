@@ -8,7 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../basic_reader.hpp"
-#include "packet_serializer.hpp"
+#include "../envelope.hpp"
+#include "../packet.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include "pfs/crc32.hpp"
 #include "pfs/fmt.hpp"
@@ -20,20 +21,20 @@
 #include <cassert>
 #include <unordered_map>
 
+#if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
+#   include <QNetworkDatagram>
+#endif
+
 namespace pfs {
 namespace net {
 namespace p2p {
 namespace qt5 {
 
-template <std::size_t PacketSize>
-class udp_reader : public basic_reader<udp_reader<PacketSize>, PacketSize>
+class udp_reader : public basic_reader<udp_reader>
 {
-    using base_class = basic_reader<udp_reader<PacketSize>, PacketSize>;
+    using base_class = basic_reader<udp_reader>;
 
-    friend class basic_reader<udp_reader<PacketSize>, PacketSize>;
-
-public:
-    using packet_type = typename base_class::packet_type;
+    friend class basic_reader<udp_reader>;
 
 private:
     struct internal_options {
@@ -105,34 +106,32 @@ protected:
             auto sender_hostaddr = datagram.senderAddress();
 #endif
 
-            if (packet_data.size() != packet_type::PACKET_SIZE) {
-                base_class::failure(fmt::format("bad packet size: {}, expected {}"
-                    , packet_data.size()
-                    , packet_type::PACKET_SIZE));
-                return;
-            }
-
-            bool ok {true};
-
-            // IPv6 address (TODO implement support of IPv6)
-            inet4_addr sender_inet4_addr = sender_hostaddr.toIPv4Address(& ok);
-
-            if (!ok) {
-                base_class::failure("bad sender address (expected IPv4)");
-                return;
-            }
-
             // Ignore self packets
             if (is_remote_addr(sender_hostaddr)) {
-                auto parse_result = qt5::deserialize_packet<packet_type::PACKET_SIZE>(packet_data);
-
-                if (!parse_result.first.empty()) {
-                    base_class::failure(parse_result.first);
-                    return;
-                }
-
-                base_class::packet_received(parse_result.second);
+                base_class::datagram_received(packet_data.data(), packet_data.size());
             }
+
+//             if (packet_data.size() != packet_type::PACKET_SIZE) {
+//                 base_class::failure(fmt::format("bad packet size: {}, expected {}"
+//                     , packet_data.size()
+//                     , packet_type::PACKET_SIZE));
+//                 return;
+//             }
+//
+//             // Ignore self packets
+//             if (is_remote_addr(sender_hostaddr)) {
+//                 input_envelope<> ie {packet_data.data(), packet_data.size()};
+//                 packet_type pkt;
+//
+//                 auto result = ie.unseal(pkt);
+//
+//                 if (!result.first) {
+//                     base_class::failure(result.second);
+//                     return;
+//                 }
+//
+//                 base_class::packet_received(pkt);
+//             }
         }
     }
 

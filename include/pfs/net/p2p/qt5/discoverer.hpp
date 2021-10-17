@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2021 Vladislav Trifochkin
+// Copyright (c) 2021 Vladislav Trifochkin
 //
 // This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
 //
@@ -9,7 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../discoverer.hpp"
-#include "hello_packet_serializer.hpp"
+#include "../envelope.hpp"
+#include "../hello_packet.hpp"
 #include "pfs/crc32.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
@@ -133,14 +134,17 @@ private:
 
             // Ignore self packets
             if (is_remote_addr(sender_hostaddr)) {
-                auto parse_result = qt5::deserialize_hello(packet_data);
+                input_envelope<> ie {packet_data.data(), packet_data.size()};
+                hello_packet pkt;
 
-                if (!parse_result.first.empty()) {
-                    base_class::failure(parse_result.first);
+                auto result = ie.unseal(pkt);
+
+                if (!result.first) {
+                    base_class::failure(result.second);
                     return;
                 }
 
-                base_class::packet_received(sender_inet4_addr, parse_result.second);
+                base_class::packet_received(sender_inet4_addr, std::move(pkt));
             }
         }
     }
@@ -265,14 +269,15 @@ protected:
             packet.uuid = uuid;
             packet.port = port;
 
-            packet.crc32 = pfs::crc32_of_ptr(packet.greeting, sizeof(packet.greeting), 0);
-            packet.crc32 = pfs::crc32_all_of(packet.crc32, packet.uuid, packet.port);
+            packet.crc32 = crc32_of(packet);
 
-            auto bytes = qt5::serialize(packet);
+            output_envelope<> oe;
+            oe.seal(packet);
 
-            assert(bytes.size() == hello_packet::PACKET_SIZE);
+            assert(oe.data().size() == hello_packet::PACKET_SIZE);
 
-            _radio->writeDatagram(bytes, _opts.peer_addr4, _opts.listener_port);
+            _radio->writeDatagram(oe.data().data(), oe.data().size()
+                , _opts.peer_addr4, _opts.listener_port);
         }
     }
 

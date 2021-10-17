@@ -8,21 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "packet.hpp"
-// #include "pfs/uuid.hpp"
-// #include "pfs/emitter.hpp"
-// #include "pfs/net/inet4_addr.hpp"
-// #include <string>
+#include "pfs/emitter.hpp"
 
 namespace pfs {
 namespace net {
 namespace p2p {
 
-template <typename Impl, std::size_t PacketSize>
+template <typename Impl>
 class basic_writer
 {
-protected:
-    using packet_type = packet<PacketSize>;
-
 public: // signals
     pfs::emitter_mt<std::string const &> failure;
 
@@ -37,9 +31,10 @@ protected:
     basic_writer & operator = (basic_writer &&) = default;
 
 public:
-    void write (inet4_addr const & host, std::uint32_t port, packet_type const & packet)
+    std::streamsize write (inet4_addr const & host, std::uint32_t port
+        , char const * data, std::streamsize size)
     {
-        static_cast<Impl *>(this)->write_impl(host, port, packet);
+        return static_cast<Impl *>(this)->write_impl(host, port, data, size);
     }
 };
 

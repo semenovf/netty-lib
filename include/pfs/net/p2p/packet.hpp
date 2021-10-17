@@ -7,13 +7,12 @@
 //      2021.10.08 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "seqnum.hpp"
+#include "serializer.hpp"
 #include "pfs/crc32.hpp"
-#include "pfs/endian.hpp"
 #include "pfs/uuid.hpp"
-#include <cereal/archives/binary.hpp>
-#include <functional>
+#include "pfs/uuid_crc.hpp"
 #include <sstream>
-#include <vector>
 
 namespace pfs {
 namespace net {
@@ -30,27 +29,34 @@ namespace p2p {
 //  |          |__________________________________________________________________ UUID (16 bytes)
 //  |_____________________________________________________________________________ Start flag (1 byte)
 
+inline constexpr std::size_t CALCULATE_PACKET_BASE_SIZE ()
+{
+    return sizeof(std::uint8_t) // startflag
+        + 16                    // uuid
+        + sizeof(std::uint32_t) // sn
+        + sizeof(std::uint32_t) // partcount
+        + sizeof(std::uint32_t) // partindex
+        + sizeof(std::uint16_t) // payloadsize
+        + sizeof(std::int32_t)  // crc32
+        + sizeof(std::uint8_t); // endflag
+}
+
+inline constexpr std::size_t CALCULATE_PACKET_SIZE (std::size_t payload_size)
+{
+    return payload_size + CALCULATE_PACKET_BASE_SIZE();
+}
+
 template <std::size_t PacketSize>
 struct packet
 {
-    using seqnum_type = std::uint32_t;
-
     static constexpr std::uint8_t START_FLAG   = 0xBE;
     static constexpr std::uint8_t END_FLAG     = 0xED;
     static constexpr std::size_t  PACKET_SIZE  = PacketSize;
-    static constexpr std::size_t  PAYLOAD_SIZE = PACKET_SIZE
-        -  1  // startflag
-        - 16  // uuid
-        -  4  // sn
-        -  4  // partcount
-        -  4  // partindex
-        -  2  // payloadsize
-        -  4  // crc32
-        -  1; // endflag
+    static constexpr std::size_t  PAYLOAD_SIZE = PACKET_SIZE - CALCULATE_PACKET_BASE_SIZE();
 
     std::uint8_t  startflag {START_FLAG};
     uuid_t        uuid;                  // Sender UUID
-    seqnum_type   sn;
+    seqnum_t      sn;
     std::uint32_t partcount;             // Total count of parts
     std::uint32_t partindex;             // Part index (starts from 1)
     std::uint16_t payloadsize;
@@ -59,6 +65,12 @@ struct packet
                                          // startflag and endflag fields
     std::uint8_t  endflag {END_FLAG};
 };
+
+template <std::size_t PacketSize>
+constexpr std::uint8_t packet<PacketSize>::START_FLAG;
+
+template <std::size_t PacketSize>
+constexpr std::uint8_t packet<PacketSize>::END_FLAG;
 
 template <std::size_t PacketSize>
 constexpr std::size_t packet<PacketSize>::PACKET_SIZE;
@@ -77,18 +89,16 @@ inline std::int32_t crc32_of (packet<PacketSize> const & pkt)
     return pfs::crc32_of_ptr(pkt.payload, packet_type::PAYLOAD_SIZE, crc32);
 }
 
-template <std::size_t PacketSize, typename Recipient>
-typename packet<PacketSize>::seqnum_type split_into_packets (uuid_t sender_uuid
-    , typename packet<PacketSize>::seqnum_type initial_sn
+template <std::size_t PacketSize, typename Consumer>
+seqnum_t split_into_packets (uuid_t sender_uuid, seqnum_t initial_sn
     , char const * data, std::size_t len
-    , Recipient && recipient)
+    , Consumer && consumer)
 {
     using packet_type = packet<PacketSize>;
-    using seqnum_type = typename packet_type::seqnum_type;
 
     std::size_t remain_len = len;
     char const * remain_data = data;
-    seqnum_type result = initial_sn;
+    seqnum_t result = initial_sn;
     std::uint32_t partindex = 1;
     std::uint32_t partcount = len / packet_type::PAYLOAD_SIZE
         + (len % packet_type::PAYLOAD_SIZE ? 1 : 0);
@@ -106,11 +116,12 @@ typename packet<PacketSize>::seqnum_type split_into_packets (uuid_t sender_uuid
         std::memset(p.payload, 0, packet_type::PAYLOAD_SIZE);
         std::memcpy(p.payload, remain_data, p.payloadsize);
 
-        p.crc32 = crc32_of(p);
+        // This will be calculated later (in save() function)
+        // p.crc32 = crc32_of(p);
 
         remain_len -= p.payloadsize;
 
-        recipient(std::move(p));
+        consumer(std::move(p));
     }
 
     return result;
@@ -126,44 +137,38 @@ void save (cereal::BinaryOutputArchive & ar, packet<PacketSize> const & pkt)
         << pfs::to_network_order(pkt.partindex)
         << pfs::to_network_order(pkt.payloadsize)
         << cereal::binary_data(pkt.payload, sizeof(pkt.payload))
-        << pfs::to_network_order(pkt.crc32)
+        << pfs::to_network_order(crc32_of(pkt))
         << pfs::to_network_order(pkt.endflag);
 }
-
-
-template <typename T>
-struct ntoh
-{
-    T & d;
-    ntoh (T & ref) : d(ref) {}
-};
-
-template <typename T>
-void load (cereal::BinaryInputArchive & ar, ntoh<T> & ref)
-{
-    ar >> ref.d;
-    ref.d = pfs::to_native_order(ref.d);
-}
-
-// template <typename T>
-// void load (cereal::BinaryInputArchive & ar, std::reference_wrapper<T> & ref)
-// {
-// //     ar >> ref.d;
-// //     ref.d = pfs::to_native_order(ref.d);
-// }
 
 template <std::size_t PacketSize>
 void load (cereal::BinaryInputArchive & ar, packet<PacketSize> & pkt)
 {
-    ar >> ntoh<decltype(pkt.startflag)>{pkt.startflag}
-        >> ntoh<decltype(pkt.uuid)>(pkt.uuid)
-        >> ntoh<decltype(pkt.sn)>(pkt.sn)
-        >> ntoh<decltype(pkt.partcount)>(pkt.partcount)
-        >> ntoh<decltype(pkt.partindex)>(pkt.partindex)
-        >> ntoh<decltype(pkt.payloadsize)>(pkt.payloadsize)
+    ar >> ntoh_wrapper<decltype(pkt.startflag)>{pkt.startflag}
+        >> ntoh_wrapper<decltype(pkt.uuid)>(pkt.uuid)
+        >> ntoh_wrapper<decltype(pkt.sn)>(pkt.sn)
+        >> ntoh_wrapper<decltype(pkt.partcount)>(pkt.partcount)
+        >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex)
+        >> ntoh_wrapper<decltype(pkt.payloadsize)>(pkt.payloadsize)
         >> cereal::binary_data(pkt.payload, sizeof(pkt.payload))
-        >> ntoh<decltype(pkt.crc32)>(pkt.crc32)
-        >> ntoh<decltype(pkt.endflag)>(pkt.endflag);
-    }
+        >> ntoh_wrapper<decltype(pkt.crc32)>(pkt.crc32)
+        >> ntoh_wrapper<decltype(pkt.endflag)>(pkt.endflag);
+}
+
+template <std::size_t PacketSize>
+inline std::pair<bool, std::string>
+validate (packet<PacketSize> const & pkt)
+{
+    if (pkt.startflag != packet<PacketSize>::START_FLAG)
+        return std::make_pair(false, "invalid start flag");
+
+    if (pkt.endflag != packet<PacketSize>::END_FLAG)
+        return std::make_pair(false, "invalid end flag");
+
+    if (crc32_of<PacketSize>(pkt) != pkt.crc32)
+        return std::make_pair(false, "bad CRC32");
+
+    return std::make_pair(true, std::string{});
+}
 
 }}} // namespace pfs::net::p2p

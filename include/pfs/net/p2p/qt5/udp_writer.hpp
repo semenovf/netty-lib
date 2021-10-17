@@ -8,38 +8,26 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../basic_writer.hpp"
-#include "packet_serializer.hpp"
-// #include "pfs/net/inet4_addr"
-// #include "pfs/crc32.hpp"
-// #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
-// #include "pfs/optional.hpp"
-// #include <QDataStream>
-// #include <QHostAddress>
-// #include <QNetworkInterface>
 #include <QUdpSocket>
-// #include <memory>
-// #include <cassert>
-// #include <unordered_map>
 
 namespace pfs {
 namespace net {
 namespace p2p {
 namespace qt5 {
 
-template <std::size_t PacketSize>
-class udp_writer : public basic_writer<udp_writer<PacketSize>, PacketSize>
+class udp_writer : public basic_writer<udp_writer>
 {
-    using base_class = basic_writer<udp_writer<PacketSize>, PacketSize>;
-    using packet_type = typename base_class::packet_type;
+    using base_class = basic_writer<udp_writer>;
 
-    friend class basic_writer<udp_writer<PacketSize>, PacketSize>;
+    friend class basic_writer<udp_writer>;
 
 private:
     std::unique_ptr<QUdpSocket> _writer;
 
 protected:
-    void write_impl (inet4_addr const & addr, std::uint32_t port, packet_type const & packet)
+    std::streamsize write_impl (inet4_addr const & addr, std::uint32_t port
+        , char const * data, std::streamsize size)
     {
         if (!_writer) {
             _writer = pfs::make_unique<QUdpSocket>();
@@ -58,8 +46,8 @@ protected:
             });
         }
 
-        auto bytes = qt5::serialize(packet);
-        _writer->writeDatagram(bytes, addr, port);
+        return _writer->writeDatagram(data, size
+            , QHostAddress{static_cast<std::uint32_t>(addr)}, port);
     }
 
 public:

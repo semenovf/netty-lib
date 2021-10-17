@@ -17,12 +17,9 @@ namespace pfs {
 namespace net {
 namespace p2p {
 
-template <typename Impl, std::size_t PacketSize>
+template <typename Impl>
 class basic_reader
 {
-protected:
-    using packet_type = packet<PacketSize>;
-
 public:
     struct options
     {
@@ -33,7 +30,7 @@ public:
     };
 
 public: // signals
-    pfs::emitter_mt<packet_type const &> packet_received;
+    pfs::emitter_mt<char const *, std::streamsize> datagram_received;
     pfs::emitter_mt<std::string const &> failure;
 
 protected:

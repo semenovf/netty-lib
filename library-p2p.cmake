@@ -28,7 +28,7 @@ if (ENABLE_CEREAL)
 
     # Use mutexes to ensure thread safety
     if (ENABLE_CEREAL_THREAD_SAFETY)
-        target_compile_definitions("-DCEREAL_THREAD_SAFE=1")
+        target_compile_definitions(cereal PUBLIC "-DCEREAL_THREAD_SAFE=1")
     endif(ENABLE_CEREAL_THREAD_SAFETY)
 
     target_include_directories(cereal INTERFACE ${CEREAL_ROOT}/include)

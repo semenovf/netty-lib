@@ -18,7 +18,9 @@ if (ENABLE_COVERAGE)
     set(CMAKE_C_FLAGS "-g -O0 --coverage")
 endif()
 
-set(TEST_NAMES packet_serializer)
+set(TEST_NAMES
+    handshake
+    packet_serializer)
 
 foreach (name ${TEST_NAMES})
     if (${name}_SOURCES)

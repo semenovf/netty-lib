@@ -25,7 +25,7 @@ TEST_CASE("packet_serialization")
 {
     packet_t pkt;
     auto sender_uuid = pfs::from_string<uuid_t>("01FH7H6YJB8XK9XNNZYR0WYDJ1");
-    packet_t::seqnum_type initial_sn = 42;
+    p2p::seqnum_t initial_sn = 42;
     std::string payload {"Hello, World!"};
 
     auto next_sn = p2p::split_into_packets<128>(sender_uuid, initial_sn
@@ -40,8 +40,9 @@ TEST_CASE("packet_serialization")
     CHECK_EQ(oe.data().size(), 128);
 
     input_envelope_t ie {oe.data()};
-    ie.unseal(pkt);
+    auto result = ie.unseal(pkt);
 
+    CHECK(result.first);
     CHECK_EQ(pkt.startflag, packet_t::START_FLAG);
     CHECK_EQ(pkt.endflag, packet_t::END_FLAG);
     CHECK_EQ(pkt.crc32, p2p::crc32_of(pkt));

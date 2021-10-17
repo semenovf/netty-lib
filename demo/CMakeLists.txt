@@ -13,7 +13,7 @@ add_subdirectory(mtu)
 # endif(ENABLE_LIBZMQ)
 
 if (QT5_NETWORK_ENABLED)
-    add_subdirectory(handshake)
+#     add_subdirectory(handshake)
 #     add_subdirectory(channel)
 #     add_subdirectory(p2p)
 endif(QT5_NETWORK_ENABLED)

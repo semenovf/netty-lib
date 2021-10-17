@@ -10,6 +10,7 @@
 #include "pfs/crc32.hpp"
 #include <cereal/archives/binary.hpp>
 #include <sstream>
+#include <utility>
 
 namespace pfs {
 namespace net {
@@ -53,11 +54,22 @@ public:
         , _input_archive(_archiver_backend)
     {}
 
+    input_envelope (char const * data, std::streamsize size);
+
     template <typename T>
-    void unseal (T & payload)
+    std::pair<bool, std::string> unseal (T & payload)
     {
         _input_archive >> payload;
+        return validate(payload);
     }
 };
+
+template <>
+inline input_envelope<std::istringstream>::input_envelope(char const * data
+    , std::streamsize size)
+    : _input_archive(_archiver_backend)
+{
+    _archiver_backend.rdbuf()->pubsetbuf(const_cast<char *>(data), size);
+}
 
 }}} // namespace pfs::net::p2p
