@@ -195,7 +195,7 @@ TEST_CASE("handshake")
     peer p2;
 
     {
-        p1.uuid = pfs::from_string<uuid_t>("01FH7H6YJB8XK9XNNZYR0WYDJ1");
+        p1.uuid = "01FH7H6YJB8XK9XNNZYR0WYDJ1"_uuid;
         udp_reader::options opts;
         opts.listener_addr4 = PEER1_ADDR;
         opts.listener_port = PEER1_PORT;
@@ -208,7 +208,7 @@ TEST_CASE("handshake")
     }
 
     {
-        p2.uuid = pfs::from_string<uuid_t>("01FH7HB19B9T1CTKE5AXPTN74M");
+        p2.uuid = "01FH7HB19B9T1CTKE5AXPTN74M"_uuid;
         udp_reader::options opts;
         opts.listener_addr4 = PEER2_ADDR;
         opts.listener_port = PEER2_PORT;
@@ -232,4 +232,3 @@ TEST_CASE("handshake")
     peer1_worker.join();
     peer2_worker.join();
 }
-
