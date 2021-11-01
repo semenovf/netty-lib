@@ -13,7 +13,7 @@ namespace pfs {
 namespace net {
 namespace p2p {
 
-using seqnum_t = std::uint32_t;
+using sequence_number = std::uint32_t;
 
 }}} // namespace pfs::net::p2p
 

@@ -10,8 +10,9 @@
 cmake_minimum_required (VERSION 3.5)
 project(net-p2p-lib CXX)
 
-option(ENABLE_QT5 "Enable Qt5 library (network backend)" ON)
-option(ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
+option(ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
+#option(ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
+option(ENABLE_UDT "Enable UDT library (reliable UDP implementation)" ON)
 option(ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
 option(ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
 
@@ -21,6 +22,10 @@ if (ENABLE_QT5)
     set(QT5_CORE_ENABLED ON CACHE BOOL "Qt5 Core enabled")
     set(QT5_NETWORK_ENABLED ON CACHE BOOL "Qt5 Network enabled")
 endif(ENABLE_QT5)
+
+if (ENABLE_UDT)
+    set(UDT_ENABLED ON CACHE BOOL "UDT enabled")
+endif(ENABLE_UDT)
 
 if (ENABLE_CEREAL)
     set(CEREAL_ROOT ${CMAKE_SOURCE_DIR}/3rdparty/cereal)
@@ -51,6 +56,28 @@ if (QT5_NETWORK_ENABLED)
     list(APPEND _compile_definitions "-DQT5_NETWORK_ENABLED=1")
     list(APPEND _link_libraries Qt5::Network)
 endif(QT5_NETWORK_ENABLED)
+
+if (UDT_ENABLED)
+    list(APPEND SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/api.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/buffer.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/cache.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/ccc.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/channel.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/common.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/core.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/epoll.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/list.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/md5.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/packet.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/queue.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/lib/window.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/udp_socket.cpp)
+
+    list(APPEND _compile_definitions "-DPFS_NET_P2P__UDT_ENABLED=1")
+    list(APPEND _compile_definitions "-DPFS_NET_P2P__RELIABLE_TRANSPORT_ENABLED=1")
+endif()
 
 # Make object files for STATIC and SHARED targets
 add_library(${PROJECT_NAME}_OBJLIB OBJECT ${SOURCES})

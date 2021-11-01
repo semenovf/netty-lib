@@ -27,8 +27,6 @@ struct hello_packet
     std::int16_t crc16;
 };
 
-constexpr std::size_t hello_packet::PACKET_SIZE;
-
 inline std::int16_t crc16_of (hello_packet const & pkt)
 {
     auto crc16 = pfs::crc16_of_ptr(pkt.greeting, sizeof(pkt.greeting), 0);
@@ -58,21 +56,20 @@ void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
         >> ntoh_wrapper<decltype(pkt.crc16)>(pkt.crc16);
 }
 
-inline std::pair<bool, std::string>
-validate (hello_packet const & pkt)
+inline bool validate (hello_packet const & pkt)
 {
     if (!(pkt.greeting[0] == 'H'
             && pkt.greeting[1] == 'E'
             && pkt.greeting[2] == 'L'
             && pkt.greeting[3] == 'O')) {
 
-        return std::make_pair(false, "bad hello greeting");
+        return false;
     }
 
     if (crc16_of(pkt) != pkt.crc16)
-        return std::make_pair(false, "bad CRC16");
+        return false;
 
-    return std::make_pair(true, std::string{});
+    return true;
 }
 
 }}} // namespace pfs::net::p2p

@@ -294,7 +294,6 @@ private:
 
                 if (envelope.success()) {
                     if (ack == _self_sn) {
-                        output_envelope_t envlp;
                         _self_sn = ack;
 
                         // Change input callback

@@ -19,7 +19,8 @@ if (ENABLE_COVERAGE)
 endif()
 
 set(TEST_NAMES
-    handshake
+    algorithm
+    envelope
     packet_serializer)
 
 foreach (name ${TEST_NAMES})

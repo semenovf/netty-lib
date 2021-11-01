@@ -13,7 +13,7 @@
 #include "pfs/fmt.hpp"
 #include "pfs/net/p2p/envelope.hpp"
 #include "pfs/net/p2p/handshake_packet.hpp"
-#include "pfs/net/p2p/utils.hpp"
+#include "pfs/net/p2p/trace.hpp"
 
 #if defined(QT5_NETWORK_ENABLED)
 #   include "pfs/net/p2p/qt5/udp_reader.hpp"
@@ -180,9 +180,9 @@ public:
 
 void worker (peer & p)
 {
-    fmt::print("Peer started: {}\n", std::to_string(p.uuid));
+    fmt::print("Peer started: {}\n", std::to_string(p.uuid()));
 //     client.process_input();
-    fmt::print("Peer finished: {}\n", std::to_string(p.uuid));
+    fmt::print("Peer finished: {}\n", std::to_string(p.uuid()));
 }
 
 auto handshake_failure_callback = [] (std::string const & s) {

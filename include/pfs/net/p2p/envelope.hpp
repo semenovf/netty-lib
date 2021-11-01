@@ -36,6 +36,13 @@ public:
         _output_archive << std::forward<T>(payload);
     }
 
+    template <typename T>
+    output_envelope & operator << (T && payload)
+    {
+        _output_archive << std::forward<T>(payload);
+        return *this;
+    }
+
     std::string data () const
     {
         return _archiver_backend.str();
@@ -57,10 +64,17 @@ public:
     input_envelope (char const * data, std::streamsize size);
 
     template <typename T>
-    std::pair<bool, std::string> unseal (T & payload)
+    bool unseal (T & payload)
     {
         _input_archive >> payload;
         return validate(payload);
+    }
+
+    template <typename T>
+    input_envelope & operator >> (T & payload)
+    {
+        _input_archive >> payload;
+        return *this;
     }
 };
 

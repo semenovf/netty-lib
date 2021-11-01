@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <string>
+#include <functional>
 
 namespace pfs {
 namespace net {
@@ -179,9 +180,36 @@ inline bool operator == (inet4_addr const & a, inet4_addr const & b)
     return static_cast<std::uint32_t>(a) == static_cast<std::uint32_t>(b);
 }
 
+inline bool operator != (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) != static_cast<std::uint32_t>(b);
+}
+
 inline bool operator < (inet4_addr const & a, inet4_addr const & b)
 {
     return static_cast<std::uint32_t>(a) < static_cast<std::uint32_t>(b);
+}
+
+inline bool operator > (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) > static_cast<std::uint32_t>(b);
+}
+
+inline bool operator <= (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) <= static_cast<std::uint32_t>(b);
+}
+
+inline bool operator >= (inet4_addr const & a, inet4_addr const & b)
+{
+    return static_cast<std::uint32_t>(a) >= static_cast<std::uint32_t>(b);
+}
+
+// https://en.wikipedia.org/wiki/Multicast_address
+inline bool is_multicast (inet4_addr const & addr)
+{
+    return addr >= inet4_addr{224, 0, 0, 0}
+        && addr <= inet4_addr{239, 255, 255, 255};
 }
 
 }} // pfs::net
