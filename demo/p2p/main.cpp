@@ -33,12 +33,12 @@ namespace {
     const pfs::uuid_t UUID = pfs::generate_uuid();
 
     std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {100};
-    std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {500};
+    std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {2000};
     std::chrono::milliseconds const POLL_INTERVAL {10};
     //std::chrono::milliseconds const POLL_INTERVAL {1000};
 
     const p2p::inet4_addr TARGET_ADDR{227, 1, 1, 255};
-    const p2p::inet4_addr DISCOVERY_ADDR{TARGET_ADDR};
+    const p2p::inet4_addr DISCOVERY_ADDR{};
     const std::uint16_t DISCOVERY_PORT{4242u};
 }
 
@@ -91,13 +91,8 @@ void on_peer_expired (pfs::uuid_t uuid
 
 void worker (p2p::algorithm & peer)
 {
-    TRACE_1("Peer started: {}", std::to_string(peer.uuid()));
-
-    while (true) {
+    while (true)
         peer.loop();
-    }
-
-    TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
 }
 
 int main (int argc, char * argv[])

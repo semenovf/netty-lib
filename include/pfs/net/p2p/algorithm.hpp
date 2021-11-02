@@ -38,8 +38,6 @@ template <
     , std::size_t PacketSize>
 class algorithm
 {
-//     using discovery_listener_type    = DiscoveryListener;
-//     using listener_type              = Listener;
     using discovery_socket_type = DiscoveryUdpSocket;
     using socket_type           = ReliableUdpSocket;
     using poller_type           = Poller;
@@ -122,7 +120,10 @@ public:
     emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> peer_expired;
 
 public:
-    algorithm (uuid_t uuid) : _uuid(uuid)
+    algorithm (uuid_t uuid)
+        : _uuid(uuid)
+        , _connecting_poller("connecting")
+        , _poller("main")
     {
         _listener.failure.connect([this] (std::string const & error) {
             this->failure(error);
@@ -192,12 +193,27 @@ public:
         }
 
         if (success) {
-            TRACE_1("Discovery listener: {}:{}"
+            TRACE_2("Discovery listener backend: {}"
+                , _discovery.receiver.backend_string());
+            TRACE_2("General listener backend: {}"
+                , _listener.backend_string());
+
+            TRACE_1("Discovery listener: {}:{}. Status: {}"
                 , std::to_string(c.discovery_address())
-                , c.discovery_port());
-            TRACE_1("General listener: {}:{}"
+                , c.discovery_port()
+                , _discovery.receiver.state_string());
+            TRACE_1("General listener: {}:{}. Status: {}"
                 , std::to_string(_listener_address.addr)
-                , _listener_address.port);
+                , _listener_address.port
+                , _listener.state_string());
+
+            auto listener_options = _listener.dump_options();
+
+            TRACE_2("General listener options:", 0);
+
+            for (auto const & opt_item: listener_options) {
+                TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+            }
         }
 
         return success;
@@ -210,6 +226,12 @@ public:
     {
         poll();
         process_discovery();
+
+        if (!_sockets.empty()) {
+            TRACE_3("First socket ({}) state: {}"
+                , _sockets.front().sock.id()
+                , _sockets.front().sock.state_string());
+        }
 
 //         process_incoming_packets();
 //         send_outgoing_packets();
@@ -322,10 +344,12 @@ private:
                 assert(res.second);
 
                 if (is_connecting_socket) {
-                    TRACE_3("Connecting to: {} ({}:{})"
+                    TRACE_3("Connecting to: {} ({}:{}), id = {}. Status: {}"
                         , std::to_string(peer_uuid)
                         , std::to_string(pos->saddr.addr)
-                        , pos->saddr.port);
+                        , pos->saddr.port
+                        , pos->sock.id()
+                        , pos->sock.state_string());
 
                     _connecting_poller.add(pos->sock.id());
                 }
@@ -386,11 +410,12 @@ private:
     void poll ()
     {
         {
-            auto rc = _connecting_poller.wait(std::chrono::milliseconds{0});
+            //auto rc = _connecting_poller.wait(std::chrono::milliseconds{0});
+            auto rc = _connecting_poller.wait(std::chrono::milliseconds{1000});
+
+            TRACE_3("--- CONNECTING POLL ({}) ---", rc);
 
             if (rc > 0) {
-                TRACE_3("POLL: _connecting_poller: {}", rc);
-
                 _connecting_poller.process_events(
                     [this] (socket_id sid) {
                         process_connecting(sid);
@@ -405,10 +430,10 @@ private:
         {
             auto rc = _poller.wait(_poll_interval);
 
+            TRACE_3("--- POLL ({}) ---", rc);
+
             // Some events rised
             if (rc > 0) {
-                TRACE_3("POLL: _poller: BEGIN {}", rc);
-
                 _poller.process_events(
                     [this] (socket_id sid) {
                         if (sid == _listener.id()) {
@@ -425,8 +450,6 @@ private:
                         }
                     }
                 );
-
-                TRACE_3("POLL: _poller: END {}", rc);
             }
         }
     }
@@ -584,7 +607,7 @@ private:
         if (it != std::end(_expiration_timepoints))
             it->second = expiration_timepoint;
         else
-            _expiration_timepoints[sid] = now;
+            _expiration_timepoints[sid] = expiration_timepoint;
     }
 };
 

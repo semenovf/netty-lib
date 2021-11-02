@@ -40,7 +40,9 @@ public:
     int events {UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR};
 };
 
-poller::poller () : _p(new poller::impl{})
+poller::poller (std::string const & name)
+    : _p(new poller::impl{})
+    , _name(name)
 {}
 
 poller::poller (poller &&) = default;
@@ -54,6 +56,15 @@ poller::~poller ()
     }
 }
 
+void poller::failure_helper (std::string const & reason)
+{
+    failure(fmt::format("poller #{}: {}: {} ({})"
+        , _name
+        , reason
+        , UDT::getlasterror().getErrorMessage()
+        , UDT::getlasterror().getErrorCode()));
+}
+
 bool poller::initialize ()
 {
     bool success = true;
@@ -61,9 +72,7 @@ bool poller::initialize ()
 
     if (_p->eid < 0) {
         success = false;
-
-        failure(fmt::format("`epoll_create` failure: {}"
-            , UDT::getlasterror().getErrorMessage()));
+        failure_helper("creation failure");
     }
 
     return success;
@@ -71,23 +80,23 @@ bool poller::initialize ()
 
 void poller::add (UDTSOCKET u)
 {
-    TRACE_3("POLLER ADD: {}: {}", (void*)(this), u);
+    TRACE_3("POLLER #{}: ADD: {}", _name, u);
+
     auto rc = UDT::epoll_add_usock(_p->eid, u, & _p->events);
 
     if (rc < 0) {
-        failure(fmt::format("`epoll_add_usock` failure: {}"
-            , UDT::getlasterror().getErrorMessage()));
+        failure_helper("add socket failure");
     }
 }
 
 void poller::remove (UDTSOCKET u)
 {
-    TRACE_3("POLLER REMOVE: {}: {}", (void*)(this), u);
+    TRACE_3("POLLER #{}: REMOVE: {}", _name, u);
+
     auto rc = UDT::epoll_remove_usock(_p->eid, u);
 
     if (rc < 0) {
-        failure(fmt::format("`epoll_remove_usock` failure: {}"
-            , UDT::getlasterror().getErrorMessage()));
+        failure_helper("remove socket failure");
     }
 }
 
@@ -104,11 +113,13 @@ int poller::wait (std::chrono::milliseconds millis)
         , millis.count()
         , nullptr, nullptr);
 
+    if (rc > 0) {
+        TRACE_3("POLLER #{}: WAITed: count = {}", _name, rc);
+    }
+
     if (rc < 0) {
         if (UDT::getlasterror().getErrorCode() != UDT::ERRORINFO::ETIMEOUT) {
-            failure(fmt::format("`epoll_wait` failure: {} ({})"
-                , UDT::getlasterror().getErrorMessage()
-                , UDT::getlasterror().getErrorCode()));
+            failure_helper("wait failure");
         } else {
             rc = 0;
         }

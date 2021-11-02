@@ -30,6 +30,18 @@ class udp_socket
 {
     enum class muticast_group_op { join, leave };
 
+public:
+    // Must be same as `QAbstractSocket::SocketState`
+    enum state_enum {
+          UNCONNECTED = 0
+        , HOSTLOOKUP
+        , CONNECTING
+        , CONNECTED
+        , BOUND
+        , CLOSING
+        , LISTENING
+    };
+private:
     QUdpSocket _socket;
 
 public:
@@ -111,6 +123,16 @@ private:
     }
 
 public:
+    inline std::string backend_string () const noexcept
+    {
+        return "Qt5";
+    }
+
+    inline state_enum state () const
+    {
+        return static_cast<state_enum>(_socket.state());
+    }
+
     bool bind (inet4_addr const & addr, std::uint16_t port)
     {
         QUdpSocket::BindMode bind_mode = QUdpSocket::ShareAddress
@@ -201,6 +223,26 @@ public:
         return (_socket.error())
             ? _socket.errorString().toStdString()
             : std::string{};
+    }
+
+    static std::string state_string (state_enum status)
+    {
+        static std::array<char const *, std::size_t{LISTENING + 1}> __status_strings = {
+              "UNCONNECTED"
+            , "HOSTLOOKUP"
+            , "CONNECTING"
+            , "CONNECTED"
+            , "BOUND"
+            , "CLOSING"
+            , "LISTENING"
+        };
+
+        return std::string{__status_strings[status]};
+    }
+
+    inline std::string state_string () const noexcept
+    {
+        return state_string(state());
     }
 
 public:

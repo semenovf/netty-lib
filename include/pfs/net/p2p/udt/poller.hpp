@@ -31,12 +31,13 @@ private:
     class impl;
 
     std::unique_ptr<impl> _p;
+    std::string _name;
 
 public:
     pfs::emitter_mt<std::string const &> failure;
 
 public:
-    poller ();
+    poller (std::string const & name);
     ~poller ();
 
     poller (poller const &) = delete;
@@ -51,6 +52,9 @@ public:
     int wait (std::chrono::milliseconds millis);
 
     void process_events (input_callback_type && in, output_callback_type && out);
+
+private:
+    void failure_helper (std::string const & reason);
 };
 
 }}}} // namespace pfs::net::p2p::udt

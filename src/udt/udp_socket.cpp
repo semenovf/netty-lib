@@ -52,11 +52,11 @@ udp_socket::~udp_socket ()
     close();
 }
 
-udp_socket::status_enum udp_socket::state () const
+udp_socket::state_enum udp_socket::state () const
 {
     assert(_socket >= 0);
     auto status = UDT::getsockstate(_socket);
-    return static_cast<status_enum>(status);
+    return static_cast<state_enum>(status);
 }
 
 bool udp_socket::bind (inet4_addr const & addr, std::uint16_t port)
@@ -151,44 +151,62 @@ void udp_socket::close ()
     }
 }
 
-//     template <typename Callback>
-//     void process_incoming_data (Callback && callback)
-//     {
-//         while (_socket.hasPendingDatagrams()) {
-//
-// #if QT_VERSION < QT_VERSION_CHECK(5,8,0)
-//             // using QUdpSocket::readDatagram (API since Qt 4)
-//             QByteArray packet_data;
-//             QHostAddress sender_hostaddr;
-//             std::uint16_t sender_port;
-//             packet_data.resize(static_cast<int>(_socket.pendingDatagramSize()));
-//             _socket.readDatagram(datagram.data(), datagram.size()
-//                 , & sender_hostaddr, & sender_port);
-// #else
-//             // using QUdpSocket::receiveDatagram (API since Qt 5.8)
-//             QNetworkDatagram datagram = _socket.receiveDatagram();
-//             QByteArray packet_data = datagram.data();
-//             auto sender_hostaddr = datagram.senderAddress();
-//
-//             if (datagram.senderPort() < 0) {
-//                 failure("no sender port associated with datagram");
-//                 continue;
-//             }
-//
-//             auto sender_port = static_cast<std::uint16_t>(datagram.senderPort());
-// #endif
-//
-//             bool ok {true};
-//             inet4_addr sender_inet4_addr = sender_hostaddr.toIPv4Address(& ok);
-//
-//             if (!ok) {
-//                 failure("bad remote address (expected IPv4)");
-//                 continue;
-//             }
-//
-//             callback(sender_inet4_addr, sender_port, packet_data.data(), packet_data.size());
-//         }
-//     }
+std::vector<std::pair<std::string, std::string>> udp_socket::dump_options () const
+{
+    std::vector<std::pair<std::string, std::string>> result;
+    int opt_size {0};
+
+    // UDT_MSS - Maximum packet size (bytes). Including all UDT, UDP, and IP
+    // headers. Default 1500 bytes.
+    int mss {0};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_MSS, & mss, & opt_size));
+    result.push_back(std::make_pair("UDT_MSS", std::to_string(mss)
+        + ' ' + "bytes (max packet size)"));
+
+    // UDT_SNDSYN - Synchronization mode of data sending. True for blocking
+    // sending; false for non-blocking sending. Default true.
+    bool sndsyn {false};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_SNDSYN, & sndsyn, & opt_size));
+    result.push_back(std::make_pair("UDT_SNDSYN", sndsyn
+        ? "TRUE (sending blocking)"
+        : "FALSE (sending non-blocking)"));
+
+    // UDT_RCVSYN - Synchronization mode for receiving.	true for blocking
+    // receiving; false for non-blocking receiving. Default true.
+    bool rcvsyn {false};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_RCVSYN, & rcvsyn, & opt_size));
+    result.push_back(std::make_pair("UDT_RCVSYN", rcvsyn
+        ? "TRUE (receiving blocking)"
+        : "FALSE (receiving non-blocking)"));
+
+    // UDT_FC - Maximum window size (packets). Default 25600.
+    int fc {0};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_FC, & fc, & opt_size));
+    result.push_back(std::make_pair("UDT_FC", std::to_string(fc)
+        + ' ' + "packets (max window size)"));
+
+    // UDT_STATE - Current status of the UDT socket.
+    std::int32_t state {0};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_STATE, & state, & opt_size));
+    result.push_back(std::make_pair("UDT_STATE", state_string(state)));
+
+    // UDT_EVENT - The EPOLL events available to this socket.
+    std::int32_t event {0};
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_EVENT, & event, & opt_size));
+
+    std::string event_str;
+
+    if (event & UDT_EPOLL_IN)
+        event_str += (event_str.empty() ? std::string{} : " | ") + "UDT_EPOLL_IN";
+    if (event & UDT_EPOLL_OUT)
+        event_str += (event_str.empty() ? std::string{} : " | ") + "UDT_EPOLL_OUT";
+    if (event & UDT_EPOLL_ERR)
+        event_str += (event_str.empty() ? std::string{} : " | ") + "UDT_EPOLL_ERR";
+
+    result.push_back(std::make_pair("UDT_EVENT", event_str.empty() ? "<empty>" : event_str));
+
+    return result;
+}
 
 std::streamsize udp_socket::send (char const * data, std::streamsize len)
 {
@@ -200,6 +218,23 @@ std::streamsize udp_socket::send (char const * data, std::streamsize len)
 std::string udp_socket::error_string () const
 {
     return UDT::getlasterror().getErrorMessage();
+}
+
+std::string udp_socket::state_string (int state)
+{
+    switch (state) {
+        case INIT      : return "INIT";
+        case OPENED    : return "OPENED";
+        case LISTENING : return "LISTENING";
+        case CONNECTING: return "CONNECTING";
+        case CONNECTED : return "CONNECTED";
+        case BROKEN    : return "BROKEN";
+        case CLOSING   : return "CLOSING";
+        case CLOSED    : return "CLOSED";
+        case NONEXIST  : return "NONEXIST";
+    }
+
+    return std::string{"<INVALID STATE>"};
 }
 
 }}}} // namespace pfs::net::p2p::udt
