@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "serializer.hpp"
+#include "uuid.hpp"
 #include "pfs/crc16.hpp"
-#include "pfs/uuid.hpp"
 #include "pfs/uuid_crc.hpp"
 #include <cereal/archives/binary.hpp>
 
@@ -36,22 +36,22 @@ inline std::int16_t crc16_of (hello_packet const & pkt)
 
 void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
 {
-    ar << pkt.greeting[0]
+    ar  << pkt.greeting[0]
         << pkt.greeting[1]
         << pkt.greeting[2]
         << pkt.greeting[3]
-        << pfs::to_network_order(pkt.uuid)
+        << pkt.uuid
         << pfs::to_network_order(pkt.port)
         << pfs::to_network_order(crc16_of(pkt));
 }
 
 void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
 {
-    ar >> pkt.greeting[0]
+    ar  >> pkt.greeting[0]
         >> pkt.greeting[1]
         >> pkt.greeting[2]
         >> pkt.greeting[3]
-        >> ntoh_wrapper<decltype(pkt.uuid)>(pkt.uuid)
+        >> pkt.uuid
         >> ntoh_wrapper<decltype(pkt.port)>(pkt.port)
         >> ntoh_wrapper<decltype(pkt.crc16)>(pkt.crc16);
 }

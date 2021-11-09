@@ -12,20 +12,18 @@
 #include "pfs/net/inet4_addr.hpp"
 #include "pfs/net/p2p/algorithm.hpp"
 #include "pfs/net/p2p/qt5/udp_socket.hpp"
-#include "pfs/net/p2p/udt/poller.hpp"
-#include "pfs/net/p2p/udt/udp_socket.hpp"
+#include "pfs/net/p2p/udt/api.hpp"
 
 namespace p2p {
 using inet4_addr           = pfs::net::inet4_addr;
 using discovery_udp_socket = pfs::net::p2p::qt5::udp_socket;
-using reliable_udp_socket  = pfs::net::p2p::udt::udp_socket;
+using reliable_socket_api  = pfs::net::p2p::udt::api;
 using poller               = pfs::net::p2p::udt::poller;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
 
 using algorithm = pfs::net::p2p::algorithm<
       discovery_udp_socket
-    , reliable_udp_socket
-    , poller
+    , reliable_socket_api
     , DEFAULT_PACKET_SIZE>;
 } // namespace p2p
 
@@ -49,7 +47,7 @@ struct configurator
     std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
     std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
     std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
-    p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
+    p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{}; }
     std::uint16_t   listener_port () const noexcept { return 4224u; }
     int backlog () const noexcept { return 10; }
 };
@@ -101,6 +99,9 @@ int main (int argc, char * argv[])
 
     fmt::print("My name is {}\n", std::to_string(UUID));
 
+    if (!p2p::algorithm::startup())
+        return EXIT_FAILURE;
+
     p2p::algorithm peer {UUID};
     peer.failure.connect(on_failure);
     peer.rookie_accepted.connect(on_rookie_accepted);
@@ -114,6 +115,8 @@ int main (int argc, char * argv[])
     peer.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
 
     worker(peer);
+
+    p2p::algorithm::cleanup();
 
     return EXIT_SUCCESS;
 }

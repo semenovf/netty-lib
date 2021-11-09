@@ -7,7 +7,7 @@
 #      2021.06.21 Initial version.
 #      2021.06.22 Fixed completely.
 ################################################################################
-cmake_minimum_required (VERSION 3.5)
+cmake_minimum_required (VERSION 3.11)
 project(net-lib CXX)
 
 list(APPEND SOURCES ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)

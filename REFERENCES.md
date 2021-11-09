@@ -20,16 +20,22 @@
 7. [yojimbo - network library for client/server games written in C++](https://github.com/networkprotocol/yojimbo)
 8. [GameNetworkingSockets - basic transport layer for games](https://github.com/ValveSoftware/GameNetworkingSockets)
 9. [Best C/C++ Network Library](https://stackoverflow.com/questions/118945/best-c-c-network-library/118968#118968)
-10. [Tonk - Reliable UDP (rUDP) Network Library in C++](https://github.com/catid/tonk)
-11. [RUDP - asynchronous UDP based sockets](https://github.com/CBenoit/RUDP)
-12. [yahdlc - Yet Another HDLC](https://github.com/bang-olufsen/yahdlc)
-13. [hdlcpp - successor of the yahdlc](https://github.com/bang-olufsen/hdlcpp)
-14. [Simple algorithm for reliable communications](https://stackoverflow.com/questions/12137392/simple-algorithm-for-reliable-communications)
-15. [Reliable-UDP](https://github.com/dileepramesh/Reliable-UDP)
-16. [Reliable-UDP](https://github.com/andrewzk/Reliable-UDP)
-17. [Stream Control Transmission Protocol](https://datatracker.ietf.org/doc/html/rfc4960)
-18. [Multiplayer Book - code repository for Multiplayer Game Programming: Architecting Networked Games](https://github.com/MultiplayerBook/MultiplayerBook)
-19. [UDT: UDP-based Data Transfer Protocol](https://github.com/whtghst1/udt)
+10. [yahdlc - Yet Another HDLC](https://github.com/bang-olufsen/yahdlc)
+11. [hdlcpp - successor of the yahdlc](https://github.com/bang-olufsen/hdlcpp)
+12. [Simple algorithm for reliable communications](https://stackoverflow.com/questions/12137392/simple-algorithm-for-reliable-communications)
+13. [Stream Control Transmission Protocol](https://datatracker.ietf.org/doc/html/rfc4960)
+14. [Multiplayer Book - code repository for Multiplayer Game Programming: Architecting Networked Games](https://github.com/MultiplayerBook/MultiplayerBook)
+
+### Reliable UDP
+
+1. [UDT: UDP-based Data Transfer Protocol](https://github.com/whtghst1/udt)
+2. [Reliable-UDP](https://github.com/dileepramesh/Reliable-UDP)
+3. [Reliable-UDP](https://github.com/andrewzk/Reliable-UDP)
+4. [Tonk - Reliable UDP (rUDP) Network Library in C++](https://github.com/catid/tonk)
+5. [RUDP - asynchronous UDP based sockets](https://github.com/CBenoit/RUDP)
+7. [Reliable User Datagram Protocol](https://en.wikipedia.org/wiki/Reliable_User_Datagram_Protocol)
+8. [Plan 9 implementation of RUDP](https://9p.io/sources/plan9/sys/src/9/ip/rudp.c)
+9. [RELIABLE UDP PROTOCOL](https://tools.ietf.org/id/draft-ietf-sigtran-reliable-udp-00.txt)
 
 ## QUIC
 

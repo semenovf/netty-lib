@@ -8,9 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/endian.hpp"
 #include "pfs/net/p2p/udt/udp_socket.hpp"
-#include "lib/udt.h"
 #include <netinet/in.h>
 #include <cassert>
+
+#if PFS_NET_P2P__NEW_UDT_ENABLED
+#   include "newlib/udt.hpp"
+#else
+#   include "lib/udt.h"
+#endif
+
+#include "debug_CCC.hpp"
 
 namespace pfs {
 namespace net {
@@ -40,9 +47,15 @@ static UDTSOCKET create (inet4_addr const & addr
     UDT::setsockopt(socket, 0, UDT_SNDSYN, new bool(false), sizeof(bool)); // sending is non-blocking
     UDT::setsockopt(socket, 0, UDT_RCVSYN, new bool(false), sizeof(bool)); // receiving is non-blocking
     //UDT::setsockopt(_socket, 0, UDT_MSS, new int(9000), sizeof(int));
-    //UDT::setsockopt(_socket, 0, UDT_CC, new CCCFactory<CUDPBlast>, sizeof(CCCFactory<CUDPBlast>));
+    UDT::setsockopt(socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
     //UDT::setsockopt(_socket, 0, UDT_RCVBUF, new int(10000000), sizeof(int));
     //UDT::setsockopt(_socket, 0, UDP_RCVBUF, new int(10000000), sizeof(int));
+
+#if PFS_NET_P2P__NEW_UDT_ENABLED
+    // TODO Need external configurable of bellow options
+    UDT::setsockopt(socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
+    UDT::setsockopt(socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
+#endif
 
     return socket;
 }
@@ -115,6 +128,10 @@ udp_socket udp_socket::accept (inet4_addr * addr_ptr, std::uint16_t * port_ptr)
             *port_ptr = pfs::to_native_order(
                 static_cast<std::uint16_t>(addr_in4_ptr->sin_port));
         }
+
+        //UDT::setsockopt(result._socket, 0, UDT_LINGER
+        //    , new linger{1, 3}, sizeof(linger));
+
     } else {
         failure("`accept` failure: unsupported sockaddr family"
             " (AF_INET supported only)");
@@ -189,6 +206,14 @@ std::vector<std::pair<std::string, std::string>> udp_socket::dump_options () con
     std::int32_t state {0};
     assert(0 == UDT::getsockopt(_socket, 0, UDT_STATE, & state, & opt_size));
     result.push_back(std::make_pair("UDT_STATE", state_string(state)));
+
+    // UDT_LINGER - Linger time on close().
+    linger lng {0, 0};
+    int linger_sz = sizeof(linger);
+    assert(0 == UDT::getsockopt(_socket, 0, UDT_LINGER, & lng, & linger_sz));
+    result.push_back(std::make_pair("UDT_LINGER"
+        , "{" + std::to_string(lng.l_onoff)
+        + ", " + std::to_string(lng.l_linger) + "}"));
 
     // UDT_EVENT - The EPOLL events available to this socket.
     std::int32_t event {0};

@@ -24,6 +24,12 @@ class poller
     using UDTSOCKET = decltype(udp_socket{}.id());
 
 public:
+    enum event_enum {
+          POLL_IN  = 0x1
+        , POLL_OUT = 0x4
+        , POLL_ERR = 0x8
+    };
+
     using input_callback_type  = std::function<void(UDTSOCKET)>;
     using output_callback_type = std::function<void(UDTSOCKET)>;
 
@@ -47,7 +53,7 @@ public:
     poller & operator = (poller &&);
 
     bool initialize ();
-    void add (UDTSOCKET u);
+    void add (UDTSOCKET u, int events = POLL_IN | POLL_OUT | POLL_ERR);
     void remove (UDTSOCKET u);
     int wait (std::chrono::milliseconds millis);
 

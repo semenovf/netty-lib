@@ -6,10 +6,10 @@
 # Changelog:
 #      2021.06.21 Initial version.
 ################################################################################
-add_subdirectory(mtu)
+# add_subdirectory(mtu)
 
 # if (ENABLE_LIBZMQ)
 #     add_subdirectory(lazypirate)
 # endif(ENABLE_LIBZMQ)
 
-add_subdirectory(p2p)
+# add_subdirectory(p2p)

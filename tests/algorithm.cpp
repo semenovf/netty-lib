@@ -14,8 +14,7 @@
 #include "pfs/net/inet4_addr.hpp"
 #include "pfs/net/p2p/algorithm.hpp"
 #include "pfs/net/p2p/qt5/udp_socket.hpp"
-#include "pfs/net/p2p/udt/poller.hpp"
-#include "pfs/net/p2p/udt/udp_socket.hpp"
+#include "pfs/net/p2p/udt/api.hpp"
 #include <atomic>
 #include <thread>
 
@@ -64,14 +63,12 @@ static char loremipsum[] =
 namespace p2p {
 using inet4_addr           = pfs::net::inet4_addr;
 using discovery_udp_socket = pfs::net::p2p::qt5::udp_socket;
-using reliable_udp_socket  = pfs::net::p2p::udt::udp_socket;
-using poller               = pfs::net::p2p::udt::poller;
+using reliable_socket_api  = pfs::net::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
 
 using algorithm = pfs::net::p2p::algorithm<
       discovery_udp_socket
-    , reliable_udp_socket
-    , poller
+    , reliable_socket_api
     , DEFAULT_PACKET_SIZE>;
 } // namespace p2p
 
@@ -171,6 +168,8 @@ struct configurator2
 
 TEST_CASE("HELO")
 {
+    REQUIRE(p2p::algorithm::startup());
+
     std::thread peer1_worker;
     std::thread peer2_worker;
 
@@ -208,4 +207,6 @@ TEST_CASE("HELO")
 
     peer1_worker.join();
     peer2_worker.join();
+
+    p2p::algorithm::cleanup();
 }

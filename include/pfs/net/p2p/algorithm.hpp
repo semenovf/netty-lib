@@ -13,13 +13,14 @@
 #include "packet.hpp"
 #include "timing.hpp"
 #include "trace.hpp"
+#include "uuid.hpp"
 #include "pfs/ring_buffer.hpp"
-#include "pfs/uuid.hpp"
 #include "pfs/emitter.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include <list>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <cassert>
 
 namespace pfs {
@@ -33,14 +34,13 @@ constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT {10000};
 
 template <
       typename DiscoveryUdpSocket
-    , typename ReliableUdpSocket
-    , typename Poller
+    , typename ReliableSocketAPI
     , std::size_t PacketSize>
 class algorithm
 {
     using discovery_socket_type = DiscoveryUdpSocket;
-    using socket_type           = ReliableUdpSocket;
-    using poller_type           = Poller;
+    using socket_type           = typename ReliableSocketAPI::socket_type;
+    using poller_type           = typename ReliableSocketAPI::poller_type;
     using packet_type           = packet<PacketSize>;
 //     using packets_queue_type         = ring_buffer_mt<packet_type, 64>;
     using input_envelope_type   = input_envelope<>;
@@ -55,7 +55,7 @@ class algorithm
 
     struct socket_info
     {
-        uuid_t         uuid; // For writers (connected sockets) only
+        uuid_t         uuid; // Valid for writers (connected sockets as opposite to accepted) only
         socket_type    sock;
         socket_address saddr;
     };
@@ -101,6 +101,8 @@ private:
     // packets_queue_type _input_queue;
     // packets_queue_type _output_queue;
 
+    std::vector<socket_id> _expired_sockets;
+
 public:
     pfs::emitter_mt<std::string const &> failure;
 
@@ -118,6 +120,17 @@ public:
      * Emitted when address expired (update is timed out).
      */
     emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> peer_expired;
+
+public:
+    static bool startup ()
+    {
+        return ReliableSocketAPI::startup();
+    }
+
+    static void cleanup ()
+    {
+        return ReliableSocketAPI::cleanup();
+    }
 
 public:
     algorithm (uuid_t uuid)
@@ -209,7 +222,7 @@ public:
 
             auto listener_options = _listener.dump_options();
 
-            TRACE_2("General listener options:", 0);
+            TRACE_2("General listener options: id: {}", _listener.id());
 
             for (auto const & opt_item: listener_options) {
                 TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
@@ -224,14 +237,9 @@ public:
      */
     void loop ()
     {
+        delete_expired_sockets();
         poll();
         process_discovery();
-
-        if (!_sockets.empty()) {
-            TRACE_3("First socket ({}) state: {}"
-                , _sockets.front().sock.id()
-                , _sockets.front().sock.state_string());
-        }
 
 //         process_incoming_packets();
 //         send_outgoing_packets();
@@ -265,6 +273,20 @@ public:
     }
 
 private:
+    void mark_socket_as_expired (socket_id sid)
+    {
+        _expired_sockets.push_back(sid);
+    }
+
+    void delete_expired_sockets ()
+    {
+        for (auto sid: _expired_sockets) {
+            close_socket(sid);
+        }
+
+        _expired_sockets.clear();
+    }
+
     socket_iterator index_socket (socket_info && sockinfo)
     {
         auto pos = _sockets.insert(_sockets.end(), std::move(sockinfo));
@@ -284,13 +306,23 @@ private:
 
         assert(status == socket_type::CONNECTED);
 
-        TRACE_3("Connected to: {} ({}:{})"
+        TRACE_2("Connected to: {} ({}:{}), id: {}. Status: {}"
             , std::to_string(pos->uuid)
             , std::to_string(pos->saddr.addr)
-            , pos->saddr.port);
+            , pos->saddr.port
+            , sid
+            , pos->sock.state_string());
+
+        auto options = pos->sock.dump_options();
+
+        TRACE_2("Connected socket options: id: {}", sid);
+
+        for (auto const & opt_item: options) {
+            TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+        }
 
         _connecting_poller.remove(pos->sock.id());
-        _poller.add(pos->sock.id());
+        _poller.add(pos->sock.id(), poller_type::POLL_IN | poller_type::POLL_ERR);
 
         writer_ready(pos->uuid, pos->saddr.addr, pos->saddr.port);
         update_expiration_timepoint(pos->sock.id());
@@ -344,7 +376,7 @@ private:
                 assert(res.second);
 
                 if (is_connecting_socket) {
-                    TRACE_3("Connecting to: {} ({}:{}), id = {}. Status: {}"
+                    TRACE_3("Connecting to: {} ({}:{}), id: {}. Status: {}"
                         , std::to_string(peer_uuid)
                         , std::to_string(pos->saddr.addr)
                         , pos->saddr.port
@@ -370,18 +402,27 @@ private:
 
         auto pos = index_socket(std::move(sockinfo));
 
-        TRACE_3("ACCEPT: {} ({}:{}) (status={})"
-            , pos->sock.id()
+        TRACE_2("ACCEPT: {}:{}, id: {}. Status: {}"
             , std::to_string(pos->saddr.addr)
             , pos->saddr.port
-            , pos->sock.state());
+            , pos->sock.id()
+            , pos->sock.state_string());
 
-        // TODO UNCOMMENT
-        //_poller.add(pos->sock.id());
+        auto options = pos->sock.dump_options();
+
+        TRACE_2("Accepted socket options: id: {}", pos->sock.id());
+
+        for (auto const & opt_item: options) {
+            TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+        }
+
+        _poller.add(pos->sock.id(), poller_type::POLL_IN | poller_type::POLL_ERR);
     }
 
-    void close_socket (socket_id sid, bool is_expired)
+    void close_socket (socket_id sid)
     {
+        TRACE_1("CLOSING SOCKET: id: {}", sid);
+
         auto it = _index_by_socket_id.find(sid);
         assert(it != std::end(_index_by_socket_id));
 
@@ -391,29 +432,30 @@ private:
         auto addr = pos->saddr.addr;
         auto port = pos->saddr.port;
 
-        TRACE_1("CLOSE SOCKET: {} ({}:{})"
-            , std::to_string(uuid)
-            , std::to_string(addr)
-            , port);
-
+        // Remove from pollers before closing socket to avoid infinite error
         _connecting_poller.remove(sid);
         _poller.remove(sid);
-        _writers.erase(uuid);
-        _index_by_socket_id.erase(sid);
-        _sockets.erase(pos); // Socket implicitly closed in socket destructor
 
-        if (is_expired) {
+        pos->sock.close();
+
+        TRACE_1("CLOSE SOCKET: {} ({}:{}), id: {}"
+            , std::to_string(uuid)
+            , std::to_string(addr)
+            , port
+            , sid);
+
+        auto writers_erased = _writers.erase(uuid);
+        _index_by_socket_id.erase(sid);
+        _sockets.erase(pos);
+
+        if (writers_erased > 0)
             peer_expired(uuid, addr, port);
-        }
     }
 
     void poll ()
     {
         {
-            //auto rc = _connecting_poller.wait(std::chrono::milliseconds{0});
-            auto rc = _connecting_poller.wait(std::chrono::milliseconds{1000});
-
-            TRACE_3("--- CONNECTING POLL ({}) ---", rc);
+            auto rc = _connecting_poller.wait(std::chrono::milliseconds{0});
 
             if (rc > 0) {
                 _connecting_poller.process_events(
@@ -429,8 +471,6 @@ private:
 
         {
             auto rc = _poller.wait(_poll_interval);
-
-            TRACE_3("--- POLL ({}) ---", rc);
 
             // Some events rised
             if (rc > 0) {
@@ -485,9 +525,29 @@ private:
         if (it != std::end(_index_by_socket_id)) {
             auto & sockinfo = *it->second;
 
-            TRACE_3("PROCESS SOCKET EVENT: {}: state={}", sid, sockinfo.sock.state());
+//             TRACE_3("PROCESS SOCKET EVENT ({}): id: {}. Status: {}"
+//                 , is_input_event ? "INPUT" : "OUTPUT"
+//                 , sid
+//                 , sockinfo.sock.state_string());
+
+            // Expected only connected sockets (writers and accepted) here.
+            if (sockinfo.sock.state() != socket_type::CONNECTED) {
+                TRACE_3("MARK SOCKET AS EXPIRED: id: {}. Status: {}"
+                    , sid
+                    , sockinfo.sock.state_string());
+                mark_socket_as_expired(sid);
+            }
+
+            if (is_input_event) {
+            } else {
+                TRACE_3("PROCESS SOCKET EVENT (OUTPUT): id: {}. Status: {}"
+                    , sid
+                    , sockinfo.sock.state_string());
+            }
         } else {
-            failure(fmt::format("poll: socket not found by id: {}", sid));
+            failure(fmt::format("poll: socket not found by id: {}"
+                ", may be it was closed before removing from poller"
+                , sid));
         }
     }
 
@@ -576,7 +636,7 @@ private:
         for (auto it = _expiration_timepoints.begin(); it != _expiration_timepoints.end();) {
             if (it->second <= now) {
                 auto sid = it->first;
-                close_socket(sid, true);
+                mark_socket_as_expired(sid);
                 it = _expiration_timepoints.erase(it);
             } else {
                 ++it;

@@ -8,9 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "serializer.hpp"
+#include "uuid.hpp"
 #include "pfs/crc32.hpp"
-#include "pfs/uuid.hpp"
-#include "pfs/uuid_crc.hpp"
 #include <sstream>
 
 namespace pfs {
@@ -112,7 +111,7 @@ template <std::size_t PacketSize>
 void save (cereal::BinaryOutputArchive & ar, packet<PacketSize> const & pkt)
 {
     ar << pfs::to_network_order(pkt.startflag)
-        << pfs::to_network_order(pkt.uuid)
+//         << pkt.uuid
         << pfs::to_network_order(pkt.partcount)
         << pfs::to_network_order(pkt.partindex)
         << pfs::to_network_order(pkt.payloadsize)
@@ -124,7 +123,7 @@ template <std::size_t PacketSize>
 void load (cereal::BinaryInputArchive & ar, packet<PacketSize> & pkt)
 {
     ar >> ntoh_wrapper<decltype(pkt.startflag)>{pkt.startflag}
-        >> ntoh_wrapper<decltype(pkt.uuid)>(pkt.uuid)
+//         >> pkt.uuid
         >> ntoh_wrapper<decltype(pkt.partcount)>(pkt.partcount)
         >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex)
         >> ntoh_wrapper<decltype(pkt.payloadsize)>(pkt.payloadsize)

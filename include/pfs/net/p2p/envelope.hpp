@@ -7,7 +7,6 @@
 //      2021.09.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/crc32.hpp"
 #include <cereal/archives/binary.hpp>
 #include <sstream>
 #include <utility>

@@ -8,10 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/fmt.hpp"
 #include "pfs/net/p2p/udt/poller.hpp"
-#include "lib/core.h"
-#include "lib/udt.h"
 #include <set>
 #include <cassert>
+
+#if PFS_NET_P2P__NEW_UDT_ENABLED
+#   include "newlib/core.hpp"
+#   include "newlib/udt.hpp"
+#else
+#   include "lib/core.h"
+#   include "lib/udt.h"
+#endif
 
 #define PFS_NET__P2P_TRACE_LEVEL 3
 #include "pfs/net/p2p/trace.hpp"
@@ -37,7 +43,7 @@ public:
     // For all other situations, the parameter events is ignored and all events
     // will be watched.
     // For compatibility, set them all.
-    int events {UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR};
+    // int events {UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR};
 };
 
 poller::poller (std::string const & name)
@@ -78,11 +84,11 @@ bool poller::initialize ()
     return success;
 }
 
-void poller::add (UDTSOCKET u)
+void poller::add (UDTSOCKET u, int events)
 {
     TRACE_3("POLLER #{}: ADD: {}", _name, u);
 
-    auto rc = UDT::epoll_add_usock(_p->eid, u, & _p->events);
+    auto rc = UDT::epoll_add_usock(_p->eid, u, & events);
 
     if (rc < 0) {
         failure_helper("add socket failure");
@@ -112,10 +118,6 @@ int poller::wait (std::chrono::milliseconds millis)
         , & _p->writefds
         , millis.count()
         , nullptr, nullptr);
-
-    if (rc > 0) {
-        TRACE_3("POLLER #{}: WAITed: count = {}", _name, rc);
-    }
 
     if (rc < 0) {
         if (UDT::getlasterror().getErrorCode() != UDT::ERRORINFO::ETIMEOUT) {
