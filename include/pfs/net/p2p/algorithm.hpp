@@ -30,6 +30,7 @@ namespace p2p {
 namespace {
 constexpr std::chrono::milliseconds DEFAULT_DISCOVERY_INTERVAL { 5000};
 constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT {10000};
+constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {   64};
 }
 
 template <
@@ -42,7 +43,7 @@ class algorithm
     using socket_type           = typename ReliableSocketAPI::socket_type;
     using poller_type           = typename ReliableSocketAPI::poller_type;
     using packet_type           = packet<PacketSize>;
-//     using packets_queue_type         = ring_buffer_mt<packet_type, 64>;
+    using packets_queue_type    = ring_buffer_mt<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
     using socket_id             = decltype(socket_type{}.id());
@@ -98,8 +99,8 @@ private:
     // Default poller
     poller_type _poller;
 
-    // packets_queue_type _input_queue;
-    // packets_queue_type _output_queue;
+    packets_queue_type _output_queue;
+//     packets_queue_type _input_queue;
 
     std::vector<socket_id> _expired_sockets;
 
@@ -242,7 +243,7 @@ public:
         process_discovery();
 
 //         process_incoming_packets();
-//         send_outgoing_packets();
+        send_outgoing_packets();
 //         update_statistics();
     }
 
@@ -260,19 +261,33 @@ public:
         }
     }
 
-    std::streamsize send (uuid_t uuid, char const * data, std::streamsize len)
+    /**
+     * Split data to send into packets and enqueue them into output queue.
+     */
+    void enqueue (uuid_t uuid, char const * data, std::streamsize len)
     {
-        int bytes_written = 0;
-
         split_into_packets<packet_type::PACKET_SIZE>(_listener.uuid, data, len
-        , [this, uuid, & bytes_written] {
-            // TODO Implement
-        });
-
-        return bytes_written;
+            , [this, & uuid] (packet_type && p) {
+                _output_queue.emplace(std::make_pair(uuid, std::move(p)));
+            });
     }
 
 private:
+    socket_info * locate_writer (uuid_t const & uuid)
+    {
+        socket_info * result {nullptr};
+        auto pos = _writers.find(uuid);
+
+        if (pos != _writers.end()) {
+            result = & *pos->second;
+        } else {
+            failure(fmt::format("cannot locate writer by UUID: {}"
+                , std::to_string(uuid)));
+        }
+
+        return result;
+    }
+
     void mark_socket_as_expired (socket_id sid)
     {
         _expired_sockets.push_back(sid);
@@ -668,6 +683,55 @@ private:
             it->second = expiration_timepoint;
         else
             _expiration_timepoints[sid] = expiration_timepoint;
+    }
+
+    void send_outgoing_packets ()
+    {
+        std::size_t total_bytes_sent = 0;
+        std::pair<uuid_t, packet_type> item;
+
+        socket_info * last_sinfo_ptr = nullptr;
+
+        while (_output_queue.try_pop(item)) {
+            output_envelope_type out;
+            out.seal(item.second);
+
+            auto data = out.data();
+            auto size = data.size();
+
+            assert(size == packet_type::PACKET_SIZE);
+
+            auto need_locate = !last_sinfo_ptr
+                    || last_sinfo_ptr->uuid != item.first;
+
+            if (need_locate) {
+                last_sinfo_ptr = locate_writer(item.first);
+
+                if (!last_sinfo_ptr)
+                    continue;
+            }
+
+            assert(item.first == last_sinfo_ptr->uuid);
+
+            auto & sock = last_sinfo_ptr->sock;
+
+            auto bytes_sent = sock.send(data.data(), size);
+
+            if (bytes_sent > 0) {
+                total_bytes_sent += bytes_sent;
+            } else if (bytes_sent < 0) {
+                auto & saddr = last_sinfo_ptr->saddr;
+
+                failure(fmt::format("sending failure to {} ({}:{}): {}"
+                    , std::to_string(last_sinfo_ptr->uuid)
+                    , std::to_string(saddr.addr)
+                    , saddr.port
+                    , sock.error_string()));
+            } else {
+                // FIXME Need to handle this state (broken connection ?)
+                ;
+            }
+        }
     }
 };
 

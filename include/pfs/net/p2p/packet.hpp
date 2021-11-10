@@ -111,7 +111,7 @@ template <std::size_t PacketSize>
 void save (cereal::BinaryOutputArchive & ar, packet<PacketSize> const & pkt)
 {
     ar << pfs::to_network_order(pkt.startflag)
-//         << pkt.uuid
+        << pkt.uuid
         << pfs::to_network_order(pkt.partcount)
         << pfs::to_network_order(pkt.partindex)
         << pfs::to_network_order(pkt.payloadsize)
@@ -123,7 +123,7 @@ template <std::size_t PacketSize>
 void load (cereal::BinaryInputArchive & ar, packet<PacketSize> & pkt)
 {
     ar >> ntoh_wrapper<decltype(pkt.startflag)>{pkt.startflag}
-//         >> pkt.uuid
+        >> pkt.uuid
         >> ntoh_wrapper<decltype(pkt.partcount)>(pkt.partcount)
         >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex)
         >> ntoh_wrapper<decltype(pkt.payloadsize)>(pkt.payloadsize)
