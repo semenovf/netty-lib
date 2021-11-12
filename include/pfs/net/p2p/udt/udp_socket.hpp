@@ -80,11 +80,13 @@ public:
         return "UDT";
     }
 
-    bool bind (inet4_addr const & addr, std::uint16_t port);
-    bool listen (int backlog = 10);
     udp_socket accept (inet4_addr * addr, std::uint16_t * port);
-    bool connect (inet4_addr const & addr, std::uint16_t port);
+    bool bind (inet4_addr const & addr, std::uint16_t port);
     void close ();
+    bool connect (inet4_addr const & addr, std::uint16_t port);
+    bool listen (int backlog = 10);
+    std::streamsize recv (char * msg, std::streamsize len);
+    std::streamsize send (char const * data, std::streamsize len);
 
     std::string error_string () const;
 
@@ -92,9 +94,6 @@ public:
     {
         return state_string(state());
     }
-
-    //std::vector<char> recvmsg ();
-    std::streamsize send (char const * data, std::streamsize len);
 
     std::vector<std::pair<std::string, std::string>> dump_options () const;
 

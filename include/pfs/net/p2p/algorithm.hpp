@@ -17,6 +17,7 @@
 #include "pfs/ring_buffer.hpp"
 #include "pfs/emitter.hpp"
 #include "pfs/net/inet4_addr.hpp"
+#include <array>
 #include <list>
 #include <unordered_map>
 #include <utility>
@@ -31,6 +32,7 @@ namespace {
 constexpr std::chrono::milliseconds DEFAULT_DISCOVERY_INTERVAL { 5000};
 constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT {10000};
 constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {   64};
+constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 }
 
 template <
@@ -39,14 +41,19 @@ template <
     , std::size_t PacketSize>
 class algorithm
 {
+public:
+    using packet_type           = packet<PacketSize>;
+
+private:
     using discovery_socket_type = DiscoveryUdpSocket;
     using socket_type           = typename ReliableSocketAPI::socket_type;
     using poller_type           = typename ReliableSocketAPI::poller_type;
-    using packet_type           = packet<PacketSize>;
-    using packets_queue_type    = ring_buffer_mt<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
     using socket_id             = decltype(socket_type{}.id());
+    using input_queue_value     = std::array<char, packet_type::PACKET_SIZE>;
+    using input_queue_type      = ring_buffer_mt<std::pair<socket_id, input_queue_value>, DEFAULT_BUFFER_BULK_SIZE>;
+    using output_queue_type     = ring_buffer_mt<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
 
     struct socket_address
     {
@@ -99,8 +106,8 @@ private:
     // Default poller
     poller_type _poller;
 
-    packets_queue_type _output_queue;
-//     packets_queue_type _input_queue;
+    input_queue_type  _input_queue;
+    output_queue_type _output_queue;
 
     std::vector<socket_id> _expired_sockets;
 
@@ -121,6 +128,8 @@ public:
      * Emitted when address expired (update is timed out).
      */
     emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> peer_expired;
+
+    emitter_mt<inet4_addr const &, std::uint16_t, packet_type const &> packet_received;
 
 public:
     static bool startup ()
@@ -241,10 +250,8 @@ public:
         delete_expired_sockets();
         poll();
         process_discovery();
-
-//         process_incoming_packets();
+        process_incoming_packets();
         send_outgoing_packets();
-//         update_statistics();
     }
 
     void add_discovery_target (inet4_addr const & addr, std::uint16_t port)
@@ -266,9 +273,10 @@ public:
      */
     void enqueue (uuid_t uuid, char const * data, std::streamsize len)
     {
-        split_into_packets<packet_type::PACKET_SIZE>(_listener.uuid, data, len
+        split_into_packets<packet_type::PACKET_SIZE>(_uuid, data, len
             , [this, & uuid] (packet_type && p) {
-                _output_queue.emplace(std::make_pair(uuid, std::move(p)));
+                _output_queue.try_reserve_and_emplace(DEFAULT_BUFFER_INC
+                    , std::make_pair(uuid, std::move(p)));
             });
     }
 
@@ -321,7 +329,7 @@ private:
 
         assert(status == socket_type::CONNECTED);
 
-        TRACE_2("Connected to: {} ({}:{}), id: {}. Status: {}"
+        TRACE_2("Socket connected to: {} ({}:{}), id: {}. Status: {}"
             , std::to_string(pos->uuid)
             , std::to_string(pos->saddr.addr)
             , pos->saddr.port
@@ -417,7 +425,7 @@ private:
 
         auto pos = index_socket(std::move(sockinfo));
 
-        TRACE_2("ACCEPT: {}:{}, id: {}. Status: {}"
+        TRACE_2("Socket accepted: {}:{}, id: {}. Status: {}"
             , std::to_string(pos->saddr.addr)
             , pos->saddr.port
             , pos->sock.id()
@@ -436,7 +444,7 @@ private:
 
     void close_socket (socket_id sid)
     {
-        TRACE_1("CLOSING SOCKET: id: {}", sid);
+        TRACE_1("Socket closing: id: {}", sid);
 
         auto it = _index_by_socket_id.find(sid);
         assert(it != std::end(_index_by_socket_id));
@@ -453,7 +461,7 @@ private:
 
         pos->sock.close();
 
-        TRACE_1("CLOSE SOCKET: {} ({}:{}), id: {}"
+        TRACE_1("Socket closed: {} ({}:{}), id: {}"
             , std::to_string(uuid)
             , std::to_string(addr)
             , port
@@ -540,24 +548,31 @@ private:
         if (it != std::end(_index_by_socket_id)) {
             auto & sockinfo = *it->second;
 
-//             TRACE_3("PROCESS SOCKET EVENT ({}): id: {}. Status: {}"
-//                 , is_input_event ? "INPUT" : "OUTPUT"
-//                 , sid
-//                 , sockinfo.sock.state_string());
-
             // Expected only connected sockets (writers and accepted) here.
             if (sockinfo.sock.state() != socket_type::CONNECTED) {
-                TRACE_3("MARK SOCKET AS EXPIRED: id: {}. Status: {}"
+                TRACE_3("Mark socket as expired: id: {}. Status: {}"
                     , sid
                     , sockinfo.sock.state_string());
                 mark_socket_as_expired(sid);
             }
 
             if (is_input_event) {
+                do {
+                    std::array<char, packet_type::PACKET_SIZE> buf;
+                    std::streamsize rc = sockinfo.sock.recv(buf.data(), buf.size());
+
+                    if (rc > 0) {
+                        _input_queue.try_reserve_and_emplace(DEFAULT_BUFFER_INC
+                            , std::make_pair(sid, std::move(buf)));
+                    } else {
+                        break;
+                    }
+                } while (true);
             } else {
-                TRACE_3("PROCESS SOCKET EVENT (OUTPUT): id: {}. Status: {}"
-                    , sid
-                    , sockinfo.sock.state_string());
+                //TRACE_3("PROCESS SOCKET EVENT (OUTPUT): id: {}. Status: {}"
+                //    , sid
+                //    , sockinfo.sock.state_string());
+                ;
             }
         } else {
             failure(fmt::format("poll: socket not found by id: {}"
@@ -685,16 +700,39 @@ private:
             _expiration_timepoints[sid] = expiration_timepoint;
     }
 
+    void process_incoming_packets ()
+    {
+        typename input_queue_type::value_type item;
+
+        while (_input_queue.try_pop(item)) {
+            input_envelope_type in {item.second.data(), item.second.size()};
+            packet_type pkt;
+
+            auto it = _index_by_socket_id.find(item.first);
+            assert(it != std::end(_index_by_socket_id));
+            auto pos = it->second;
+
+            if (in.unseal(pkt)) {
+                packet_received(pos->saddr.addr, pos->saddr.port, pkt);
+            } else {
+                failure(fmt::format("bad packet received from: {}:{}"
+                    , std::to_string(pos->saddr.addr)
+                    , pos->saddr.port));
+            }
+        }
+    }
+
     void send_outgoing_packets ()
     {
         std::size_t total_bytes_sent = 0;
-        std::pair<uuid_t, packet_type> item;
-
+        typename output_queue_type::value_type item;
         socket_info * last_sinfo_ptr = nullptr;
 
         while (_output_queue.try_pop(item)) {
+            auto const & pkt = item.second;
+
             output_envelope_type out;
-            out.seal(item.second);
+            out.seal(pkt);
 
             auto data = out.data();
             auto size = data.size();
@@ -702,7 +740,7 @@ private:
             assert(size == packet_type::PACKET_SIZE);
 
             auto need_locate = !last_sinfo_ptr
-                    || last_sinfo_ptr->uuid != item.first;
+                || last_sinfo_ptr->uuid != item.first;
 
             if (need_locate) {
                 last_sinfo_ptr = locate_writer(item.first);

@@ -50,15 +50,12 @@ struct packet
     static constexpr std::size_t  PAYLOAD_SIZE = PACKET_SIZE - CALCULATE_PACKET_BASE_SIZE();
 
     std::uint8_t    startflag {START_FLAG};
-    uuid_t          uuid;                  // Sender UUID
-    std::uint32_t   partcount;             // Total count of parts
-    std::uint32_t   partindex;             // Part index (starts from 1)
+    uuid_t          uuid;                   // Sender UUID
+    std::uint32_t   partcount;              // Total count of parts
+    std::uint32_t   partindex;              // Part index (starts from 1)
     std::uint16_t   payloadsize;
     char            payload[PAYLOAD_SIZE];
     std::uint8_t    endflag {END_FLAG};
-
-//     static_assert(PAYLOAD_SIZE >= sizeof(?)
-//         , "PACKET_SIZE must be increased to meet minimum payload requirements (32)");
 };
 
 template <std::size_t PacketSize>
@@ -98,10 +95,8 @@ void split_into_packets (uuid_t sender_uuid
         std::memset(p.payload, 0, packet_type::PAYLOAD_SIZE);
         std::memcpy(p.payload, remain_data, p.payloadsize);
 
-        // This will be calculated later (in save() function)
-        // p.crc32 = crc32_of(p);
-
         remain_len -= p.payloadsize;
+        remain_data += p.payloadsize;
 
         consumer(std::move(p));
     }

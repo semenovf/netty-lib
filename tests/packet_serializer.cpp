@@ -17,7 +17,7 @@
 namespace p2p = pfs::net::p2p;
 
 using uuid_t            = pfs::uuid_t;
-using packet_t          = p2p::packet<128>;
+using packet_t          = p2p::packet<64>;
 using output_envelope_t = p2p::output_envelope<>;
 using input_envelope_t  = p2p::input_envelope<>;
 
@@ -27,19 +27,24 @@ TEST_CASE("packet_serialization")
     auto sender_uuid = "01FH7H6YJB8XK9XNNZYR0WYDJ1"_uuid;
     std::string payload {"Hello, World!"};
 
-    p2p::split_into_packets<128>(sender_uuid
+    p2p::split_into_packets<packet_t::PACKET_SIZE>(sender_uuid
         , payload.data(), payload.size(), [& pkt] (packet_t && p) {
-        pkt = std::move(p);
-    });
+            pkt = std::move(p);
+        });
 
     output_envelope_t oe;
     oe.seal(pkt);
 
-    CHECK_EQ(oe.data().size(), 128);
+    CHECK_EQ(oe.data().size(), packet_t::PACKET_SIZE);
 
     input_envelope_t ie {oe.data()};
 
     CHECK(ie.unseal(pkt));
     CHECK_EQ(pkt.startflag, packet_t::START_FLAG);
+    CHECK_EQ(pkt.uuid, sender_uuid);
+    CHECK_EQ(pkt.partcount, 1);
+    CHECK_EQ(pkt.partindex, 1);
+    CHECK_EQ(pkt.payloadsize, 13);
+    CHECK_EQ(payload, std::string(pkt.payload, pkt.payloadsize));
     CHECK_EQ(pkt.endflag, packet_t::END_FLAG);
 }

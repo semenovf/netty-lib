@@ -46,8 +46,9 @@ static UDTSOCKET create (inet4_addr const & addr
     UDT::setsockopt(socket, 0, UDT_REUSEADDR, new bool(true), sizeof(bool));
     UDT::setsockopt(socket, 0, UDT_SNDSYN, new bool(false), sizeof(bool)); // sending is non-blocking
     UDT::setsockopt(socket, 0, UDT_RCVSYN, new bool(false), sizeof(bool)); // receiving is non-blocking
+    //UDT::setsockopt(socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
+
     //UDT::setsockopt(_socket, 0, UDT_MSS, new int(9000), sizeof(int));
-    UDT::setsockopt(socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
     //UDT::setsockopt(_socket, 0, UDT_RCVBUF, new int(10000000), sizeof(int));
     //UDT::setsockopt(_socket, 0, UDP_RCVBUF, new int(10000000), sizeof(int));
 
@@ -131,6 +132,12 @@ udp_socket udp_socket::accept (inet4_addr * addr_ptr, std::uint16_t * port_ptr)
 
         //UDT::setsockopt(result._socket, 0, UDT_LINGER
         //    , new linger{1, 3}, sizeof(linger));
+
+    #if PFS_NET_P2P__NEW_UDT_ENABLED
+        // TODO Need external configurable of bellow options
+        UDT::setsockopt(result._socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
+        UDT::setsockopt(result._socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
+    #endif
 
     } else {
         failure("`accept` failure: unsupported sockaddr family"
@@ -233,11 +240,33 @@ std::vector<std::pair<std::string, std::string>> udp_socket::dump_options () con
     return result;
 }
 
+std::streamsize udp_socket::recv (char * data, std::streamsize len)
+{
+    // FIXME Need more smart implementation
+    return UDT::recvmsg(_socket, data, len);
+}
+
 std::streamsize udp_socket::send (char const * data, std::streamsize len)
 {
+    // FIXME Need more smart implementation
+
     int ttl_millis = -1;
     bool inorder = true;
-    return UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
+
+    // Return
+    // > 0             - on success;
+    // = 0             - if UDT_SNDTIMEO > 0 and the message cannot be sent
+    //                   before the timer expires;
+    //                   if len <= 0.
+    // UDT::ERROR (-1) - on error
+    auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
+
+    if (rc == UDT::ERROR) {
+//         if ()
+        return -1;
+    }
+
+    return rc;
 }
 
 std::string udp_socket::error_string () const

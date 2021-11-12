@@ -769,7 +769,7 @@ POST_CONNECT:
    s_UDTUnited.connect_complete(m_SocketID);
 
    // acknowledge any waiting epolls to write
-   TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+   //TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
    s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
 
    return 0;
@@ -1050,36 +1050,35 @@ int CUDT::send(const char* data, int len)
       }
    }
 
-   if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
-   {
-      if (m_iSndTimeOut >= 0)
-         throw CUDTException(6, 3, 0);
+    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
+        if (m_iSndTimeOut >= 0)
+            throw CUDTException(6, 3, 0);
 
-      return 0;
-   }
+        return 0;
+    }
 
-   int size = (m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize;
-   if (size > len)
-      size = len;
+    int size = (m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize;
 
-   // record total time used for sending
-   if (0 == m_pSndBuffer->getCurrBufSize())
-      m_llSndDurationCounter = CTimer::getTime();
+    if (size > len)
+        size = len;
 
-   // insert the user buffer into the sening list
-   m_pSndBuffer->addBuffer(data, size);
+    // record total time used for sending
+    if (0 == m_pSndBuffer->getCurrBufSize())
+        m_llSndDurationCounter = CTimer::getTime();
 
-   // insert this socket to snd list if it is not on the list yet
-   m_pSndQueue->m_pSndUList->update(this, false);
+    // insert the user buffer into the sening list
+    m_pSndBuffer->addBuffer(data, size);
 
-   if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
-   {
-      // write is not available any more
-       TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
-   }
+    // insert this socket to snd list if it is not on the list yet
+    m_pSndQueue->m_pSndUList->update(this, false);
 
-   return size;
+    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
+        // write is not available any more
+        //TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
+    }
+
+    return size;
 }
 
 int CUDT::recv(char* data, int len)
@@ -1149,25 +1148,24 @@ int CUDT::recv(char* data, int len)
       }
    }
 
-   // throw an exception if not connected
-   if (!m_bConnected)
-      throw CUDTException(2, 2, 0);
-   else if ((m_bBroken || m_bClosing) && (0 == m_pRcvBuffer->getRcvDataSize()))
-      throw CUDTException(2, 1, 0);
+    // throw an exception if not connected
+    if (!m_bConnected)
+        throw CUDTException(2, 2, 0);
+    else if ((m_bBroken || m_bClosing) && (0 == m_pRcvBuffer->getRcvDataSize()))
+        throw CUDTException(2, 1, 0);
 
-   int res = m_pRcvBuffer->readBuffer(data, len);
+    int res = m_pRcvBuffer->readBuffer(data, len);
 
-   if (m_pRcvBuffer->getRcvDataSize() <= 0)
-   {
-      // read is not available any more
-       TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
-   }
+    if (m_pRcvBuffer->getRcvDataSize() <= 0) {
+        // read is not available any more
+        //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
+    }
 
-   if ((res <= 0) && (m_iRcvTimeOut >= 0))
-      throw CUDTException(6, 3, 0);
+    if ((res <= 0) && (m_iRcvTimeOut >= 0))
+        throw CUDTException(6, 3, 0);
 
-   return res;
+    return res;
 }
 
 int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
@@ -1246,32 +1244,30 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
       }
    }
 
-   if ((m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize < len)
-   {
+   if ((m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize < len) {
       if (m_iSndTimeOut >= 0)
          throw CUDTException(6, 3, 0);
 
       return 0;
    }
 
-   // record total time used for sending
-   if (0 == m_pSndBuffer->getCurrBufSize())
-      m_llSndDurationCounter = CTimer::getTime();
+    // record total time used for sending
+    if (0 == m_pSndBuffer->getCurrBufSize())
+        m_llSndDurationCounter = CTimer::getTime();
 
-   // insert the user buffer into the sening list
-   m_pSndBuffer->addBuffer(data, len, msttl, inorder);
+    // insert the user buffer into the sening list
+    m_pSndBuffer->addBuffer(data, len, msttl, inorder);
 
-   // insert this socket to the snd list if it is not on the list yet
-   m_pSndQueue->m_pSndUList->update(this, false);
+    // insert this socket to the snd list if it is not on the list yet
+    m_pSndQueue->m_pSndUList->update(this, false);
 
-   if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
-   {
-      // write is not available any more
-       TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
-   }
+    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
+        // write is not available any more
+        //TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
+    }
 
-   return len;
+    return len;
 }
 
 int CUDT::recvmsg(char* data, int len)
@@ -1286,39 +1282,35 @@ int CUDT::recvmsg(char* data, int len)
    if (len <= 0)
       return 0;
 
-   CGuard recvguard(m_RecvLock);
+    CGuard recvguard(m_RecvLock);
 
-   if (m_bBroken || m_bClosing)
-   {
-      int res = m_pRcvBuffer->readMsg(data, len);
+    if (m_bBroken || m_bClosing) {
+        int res = m_pRcvBuffer->readMsg(data, len);
 
-      if (m_pRcvBuffer->getRcvMsgNum() <= 0)
-      {
-         // read is not available any more
-          TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
-         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
-      }
+        if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
+            // read is not available any more
+            // TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+            s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
+        }
 
-      if (0 == res)
-         throw CUDTException(2, 1, 0);
-      else
-         return res;
-   }
+        if (0 == res)
+            throw CUDTException(2, 1, 0);
+        else
+            return res;
+    }
 
-   if (!m_bSynRecving)
-   {
-      int res = m_pRcvBuffer->readMsg(data, len);
-      if (0 == res)
-         throw CUDTException(6, 2, 0);
-      else
-         return res;
-   }
+    if (!m_bSynRecving) {
+        int res = m_pRcvBuffer->readMsg(data, len);
+        if (0 == res)
+            throw CUDTException(6, 2, 0);
+        else
+            return res;
+    }
 
-   int res = 0;
-   bool timeout = false;
+    int res = 0;
+    bool timeout = false;
 
-   do
-   {
+   do {
       #ifndef WIN32
          pthread_mutex_lock(&m_RecvDataLock);
 
@@ -1362,17 +1354,16 @@ int CUDT::recvmsg(char* data, int len)
          throw CUDTException(2, 2, 0);
    } while ((0 == res) && !timeout);
 
-   if (m_pRcvBuffer->getRcvMsgNum() <= 0)
-   {
-      // read is not available any more
-       TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
-   }
+    if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
+        // read is not available any more
+        //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
+    }
 
-   if ((res <= 0) && (m_iRcvTimeOut >= 0))
-      throw CUDTException(6, 3, 0);
+    if ((res <= 0) && (m_iRcvTimeOut >= 0))
+        throw CUDTException(6, 3, 0);
 
-   return res;
+    return res;
 }
 
 int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
@@ -1459,14 +1450,13 @@ int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
       m_pSndQueue->m_pSndUList->update(this, false);
    }
 
-   if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize())
-   {
-      // write is not available any more
-       TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
-   }
+    if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
+        // write is not available any more
+        // TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
+    }
 
-   return size - tosend;
+    return size - tosend;
 }
 
 int64_t CUDT::recvfile(fstream& ofs, int64_t& offset, int64_t size, int block)
@@ -1535,14 +1525,13 @@ int64_t CUDT::recvfile(fstream& ofs, int64_t& offset, int64_t size, int block)
       }
    }
 
-   if (m_pRcvBuffer->getRcvDataSize() <= 0)
-   {
-      // read is not available any more
-       TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
-   }
+    if (m_pRcvBuffer->getRcvDataSize() <= 0) {
+        // read is not available any more
+        // TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
+    }
 
-   return size - torecv;
+    return size - torecv;
 }
 
 void CUDT::sample(CPerfMon* perf, bool clear)
@@ -1737,37 +1726,34 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
       uint64_t currtime;
       CTimer::rdtsc(currtime);
 
-      // There are new received packets to acknowledge, update related information.
-      if (CSeqNo::seqcmp(ack, m_iRcvLastAck) > 0)
-      {
-         int acksize = CSeqNo::seqoff(m_iRcvLastAck, ack);
+        // There are new received packets to acknowledge, update related information.
+        if (CSeqNo::seqcmp(ack, m_iRcvLastAck) > 0) {
+            int acksize = CSeqNo::seqoff(m_iRcvLastAck, ack);
 
-         m_iRcvLastAck = ack;
+            m_iRcvLastAck = ack;
 
-         m_pRcvBuffer->ackData(acksize);
+            m_pRcvBuffer->ackData(acksize);
 
-         // signal a waiting "recv" call if there is any data available
-         #ifndef WIN32
-            pthread_mutex_lock(&m_RecvDataLock);
-            if (m_bSynRecving)
-               pthread_cond_signal(&m_RecvDataCond);
-            pthread_mutex_unlock(&m_RecvDataLock);
-         #else
-            if (m_bSynRecving)
-               SetEvent(m_RecvDataCond);
-         #endif
+            // signal a waiting "recv" call if there is any data available
+            #ifndef WIN32
+                pthread_mutex_lock(&m_RecvDataLock);
+                if (m_bSynRecving)
+                pthread_cond_signal(&m_RecvDataCond);
+                pthread_mutex_unlock(&m_RecvDataLock);
+            #else
+                if (m_bSynRecving)
+                SetEvent(m_RecvDataCond);
+            #endif
 
-         // acknowledge any waiting epolls to read
-        TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
-         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
-      }
-      else if (ack == m_iRcvLastAck)
-      {
-         if ((currtime - m_ullLastAckTime) < ((m_iRTT + 4 * m_iRTTVar) * m_ullCPUFrequency))
+            // acknowledge any waiting epolls to read
+            // TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
+            s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
+        } else if (ack == m_iRcvLastAck) {
+            if ((currtime - m_ullLastAckTime) < ((m_iRTT + 4 * m_iRTTVar) * m_ullCPUFrequency))
+                break;
+        } else {
             break;
-      }
-      else
-         break;
+        }
 
       // Send out the ACK only if has not been received by the sender before
       if (CSeqNo::seqcmp(m_iRcvLastAck, m_iRcvLastAckAck) > 0)
@@ -1961,36 +1947,34 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
          m_ullSndLastAck2Time = now;
       }
 
-      // Got data ACK
-      ack = *(int32_t *)ctrlpkt.m_pcData;
+        // Got data ACK
+        ack = *(int32_t *)ctrlpkt.m_pcData;
 
-      // check the validation of the ack
-      if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0)
-      {
-         //this should not happen: attack or bug
-          TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
-         m_bBroken = true;
-         m_iBrokenCounter = 0;
-         break;
-      }
+        // check the validation of the ack
+        if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0) {
+            //this should not happen: attack or bug
+            TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            m_bBroken = true;
+            m_iBrokenCounter = 0;
+            break;
+        }
 
-      if (CSeqNo::seqcmp(ack, m_iSndLastAck) >= 0)
-      {
-         // Update Flow Window Size, must update before and together with m_iSndLastAck
-         m_iFlowWindowSize = *((int32_t *)ctrlpkt.m_pcData + 3);
-         m_iSndLastAck = ack;
-      }
+        if (CSeqNo::seqcmp(ack, m_iSndLastAck) >= 0) {
+            // Update Flow Window Size, must update before and together with m_iSndLastAck
+            m_iFlowWindowSize = *((int32_t *)ctrlpkt.m_pcData + 3);
+            m_iSndLastAck = ack;
+        }
 
-      // protect packet retransmission
-      CGuard::enterCS(m_AckLock);
+        // protect packet retransmission
+        CGuard::enterCS(m_AckLock);
 
-      int offset = CSeqNo::seqoff(m_iSndLastDataAck, ack);
-      if (offset <= 0)
-      {
-         // discard it if it is a repeated ACK
-         CGuard::leaveCS(m_AckLock);
-         break;
-      }
+        int offset = CSeqNo::seqoff(m_iSndLastDataAck, ack);
+
+        if (offset <= 0) {
+            // discard it if it is a repeated ACK
+            CGuard::leaveCS(m_AckLock);
+            break;
+        }
 
       // acknowledge the sending buffer
       m_pSndBuffer->ackData(offset);
@@ -2016,9 +2000,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
             SetEvent(m_SendBlockCond);
       #endif
 
-      // acknowledde any waiting epolls to write
-        TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
+        // acknowledde any waiting epolls to write
+        // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
 
       // insert this socket to snd list if it is not on the list yet
       m_pSndQueue->m_pSndUList->update(this, false);
@@ -2128,14 +2112,13 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
          }
       }
 
-      if (!secure)
-      {
-         //this should not happen: attack or bug
-          TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
-         m_bBroken = true;
-         m_iBrokenCounter = 0;
-         break;
-      }
+        if (!secure) {
+            //this should not happen: attack or bug
+            // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            m_bBroken = true;
+            m_iBrokenCounter = 0;
+            break;
+        }
 
       // the lost packet (retransmission) should be sent out immediately
       m_pSndQueue->m_pSndUList->update(this);
@@ -2186,19 +2169,19 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       }
 
    case 5: //101 - Shutdown
-      m_bShutdown = true;
-      m_bClosing = true;
+        m_bShutdown = true;
+        m_bClosing = true;
 
-      TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
-      m_bBroken = true;
-      m_iBrokenCounter = 60;
+        // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+        m_bBroken = true;
+        m_iBrokenCounter = 60;
 
-      // Signal the sender and recver if they are waiting for data.
-      releaseSynch();
+        // Signal the sender and recver if they are waiting for data.
+        releaseSynch();
 
-      CTimer::triggerEvent();
+        CTimer::triggerEvent();
 
-      break;
+        break;
 
    case 7: //111 - Msg drop request
       m_pRcvBuffer->dropMsg(ctrlpkt.getMsgSeq());
@@ -2467,43 +2450,36 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
 
    int32_t id = hs.m_iID;
 
-   // When a peer side connects in...
-   if ((1 == packet.getFlag()) && (0 == packet.getType()))
-   {
-      if ((hs.m_iVersion != m_iVersion) || (hs.m_iType != m_iSockType))
-      {
-         // mismatch, reject the request
-         hs.m_iReqType = 1002;
-         int size = CHandShake::m_iContentSize;
-         hs.serialize(packet.m_pcData, size);
-         packet.m_iID = id;
-         m_pSndQueue->sendto(addr, packet);
-      }
-      else
-      {
-         int result = s_UDTUnited.newConnection(m_SocketID, addr, &hs);
-         if (result == -1)
+    // When a peer side connects in...
+    if ((1 == packet.getFlag()) && (0 == packet.getType())) {
+        if ((hs.m_iVersion != m_iVersion) || (hs.m_iType != m_iSockType)) {
+            // mismatch, reject the request
             hs.m_iReqType = 1002;
-
-         // send back a response if connection failed or connection already existed
-         // new connection response should be sent in connect()
-         if (result != 1)
-         {
             int size = CHandShake::m_iContentSize;
             hs.serialize(packet.m_pcData, size);
             packet.m_iID = id;
             m_pSndQueue->sendto(addr, packet);
-         }
-         else
-         {
-            // a new connection has been created, enable epoll for write
-             TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
-            s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
-         }
-      }
-   }
+        } else {
+            int result = s_UDTUnited.newConnection(m_SocketID, addr, &hs);
+            if (result == -1)
+                hs.m_iReqType = 1002;
 
-   return hs.m_iReqType;
+            // send back a response if connection failed or connection already existed
+            // new connection response should be sent in connect()
+            if (result != 1) {
+                int size = CHandShake::m_iContentSize;
+                hs.serialize(packet.m_pcData, size);
+                packet.m_iID = id;
+                m_pSndQueue->sendto(addr, packet);
+            } else {
+                // a new connection has been created, enable epoll for write
+                // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+                s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
+            }
+        }
+    }
+
+    return hs.m_iReqType;
 }
 
 void CUDT::checkTimers()
@@ -2560,18 +2536,18 @@ void CUDT::checkTimers()
    }
 
     if (currtime > next_exp_time) {
+//         TRACE_D("*** CHECK BROKEN *** id: {}"
+//             ", m_iEXPCount({}) > m_iEXPMaxCounter({})"
+//             ", currtime - m_ullLastRspTime ({}) > m_ullEXPThreshold * m_ullCPUFrequency ({})"
+//             , m_SocketID
+//             , m_iEXPCount
+//             , m_iEXPMaxCounter
+//             , currtime - m_ullLastRspTime
+//             , m_ullEXPThreshold * m_ullCPUFrequency);
+
         // Haven't receive any information from the peer, is it dead?!
         // timeout: at least 16 expirations and must be greater than 10 seconds
         //if ((m_iEXPCount > 16) && (currtime - m_ullLastRspTime > 5000000 * m_ullCPUFrequency))
-        TRACE_D("*** CHECK BROKEN *** id: {}"
-            ", m_iEXPCount({}) > m_iEXPMaxCounter({})"
-            ", currtime - m_ullLastRspTime ({}) > m_ullEXPThreshold * m_ullCPUFrequency ({})"
-            , m_SocketID
-            , m_iEXPCount
-            , m_iEXPMaxCounter
-            , currtime - m_ullLastRspTime
-            , m_ullEXPThreshold * m_ullCPUFrequency);
-
         if ((m_iEXPCount > m_iEXPMaxCounter)
                 && (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency)) {
             //
@@ -2580,7 +2556,7 @@ void CUDT::checkTimers()
             // Application will detect this when it calls any UDT methods next time.
             //
             m_bClosing = true;
-            TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
             m_iBrokenCounter = 30;
 
@@ -2590,8 +2566,8 @@ void CUDT::checkTimers()
             releaseSynch();
 
             // app can call any UDT API to learn the connection_broken error
-            TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
-            TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
+            // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+            // TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR, true);
 
             CTimer::triggerEvent();
@@ -2631,38 +2607,36 @@ void CUDT::checkTimers()
 
 void CUDT::addEPoll(const int eid)
 {
-   CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);
-   m_sPollID.insert(eid);
-   CGuard::leaveCS(s_UDTUnited.m_EPoll.m_EPollLock);
+    CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);
+    m_sPollID.insert(eid);
+    CGuard::leaveCS(s_UDTUnited.m_EPoll.m_EPollLock);
 
-   if (!m_bConnected || m_bBroken || m_bClosing)
-      return;
+    if (!m_bConnected || m_bBroken || m_bClosing)
+        return;
 
-   if (((UDT_STREAM == m_iSockType) && (m_pRcvBuffer->getRcvDataSize() > 0)) ||
-      ((UDT_DGRAM == m_iSockType) && (m_pRcvBuffer->getRcvMsgNum() > 0)))
-   {
-       TRACE_D("*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
-   }
+    if (((UDT_STREAM == m_iSockType) && (m_pRcvBuffer->getRcvDataSize() > 0))
+            || ((UDT_DGRAM == m_iSockType) && (m_pRcvBuffer->getRcvMsgNum() > 0))) {
+        // TRACE_D("*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
+    }
 
-   if (m_iSndBufSize > m_pSndBuffer->getCurrBufSize())
-   {
-       TRACE_D("*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID);
-      s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
-   }
+    if (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()) {
+        // TRACE_D("*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID);
+        s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
+    }
 }
 
 void CUDT::removeEPoll(const int eid)
 {
-   // clear IO events notifications;
-   // since this happens after the epoll ID has been removed, they cannot be set again
-   set<int> remove;
-   remove.insert(eid);
-   TRACE_D("*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID);
-   TRACE_D("*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID);
-   s_UDTUnited.m_EPoll.update_events(m_SocketID, remove, UDT_EPOLL_IN | UDT_EPOLL_OUT, false);
+    // clear IO events notifications;
+    // since this happens after the epoll ID has been removed, they cannot be set again
+    set<int> remove;
+    remove.insert(eid);
+    // TRACE_D("*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID);
+    // TRACE_D("*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID);
+    s_UDTUnited.m_EPoll.update_events(m_SocketID, remove, UDT_EPOLL_IN | UDT_EPOLL_OUT, false);
 
-   CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);
-   m_sPollID.erase(eid);
-   CGuard::leaveCS(s_UDTUnited.m_EPoll.m_EPollLock);
+    CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);
+    m_sPollID.erase(eid);
+    CGuard::leaveCS(s_UDTUnited.m_EPoll.m_EPollLock);
 }
