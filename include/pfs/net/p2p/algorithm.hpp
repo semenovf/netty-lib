@@ -38,9 +38,12 @@ constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 template <
       typename DiscoveryUdpSocket
     , typename ReliableSocketAPI
-    , std::size_t PacketSize>
+    , std::size_t PacketSize
+    , std::size_t PriorityCount = 1>
 class algorithm
 {
+    static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
+
 public:
     using packet_type           = packet<PacketSize>;
 
@@ -106,8 +109,8 @@ private:
     // Default poller
     poller_type _poller;
 
-    input_queue_type  _input_queue;
-    output_queue_type _output_queue;
+    input_queue_type _input_queue;
+    std::array<output_queue_type, PriorityCount> _output_queues;
 
     std::vector<socket_id> _expired_sockets;
 
@@ -271,11 +274,17 @@ public:
     /**
      * Split data to send into packets and enqueue them into output queue.
      */
-    void enqueue (uuid_t uuid, char const * data, std::streamsize len)
+    void enqueue (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
     {
+        std::size_t prior = priority < 0
+            ? 0
+            : priority >= _output_queues.size()
+                ? _output_queues.size() - 1
+                : static_cast<std::size_t>(priority);
+
         split_into_packets<packet_type::PACKET_SIZE>(_uuid, data, len
-            , [this, & uuid] (packet_type && p) {
-                _output_queue.try_reserve_and_emplace(DEFAULT_BUFFER_INC
+            , [this, & uuid, prior] (packet_type && p) {
+                _output_queues[prior].try_reserve_and_emplace(DEFAULT_BUFFER_INC
                     , std::make_pair(uuid, std::move(p)));
             });
     }
@@ -727,47 +736,64 @@ private:
         std::size_t total_bytes_sent = 0;
         typename output_queue_type::value_type item;
         socket_info * last_sinfo_ptr = nullptr;
+        double coeff = 1.0;
 
-        while (_output_queue.try_pop(item)) {
-            auto const & pkt = item.second;
+        for (std::size_t prior = 0; prior < _output_queues.size(); prior++) {
 
-            output_envelope_type out;
-            out.seal(pkt);
+            // TODO Need more smart of coefficient calculation {{
+            std::size_t count = _output_queues[prior].size() * coeff;
 
-            auto data = out.data();
-            auto size = data.size();
-
-            assert(size == packet_type::PACKET_SIZE);
-
-            auto need_locate = !last_sinfo_ptr
-                || last_sinfo_ptr->uuid != item.first;
-
-            if (need_locate) {
-                last_sinfo_ptr = locate_writer(item.first);
-
-                if (!last_sinfo_ptr)
-                    continue;
+            if (_output_queues[prior].size() == 0) {
+                continue;
+            } else {
+                coeff *= 0.75;
             }
 
-            assert(item.first == last_sinfo_ptr->uuid);
+            if (count == 0 && _output_queues[prior].size() > 0)
+                count = 1; // _output_queues[prior].size();
+            // }}
 
-            auto & sock = last_sinfo_ptr->sock;
+            while (count-- && _output_queues[prior].try_pop(item)) {
+                auto const & pkt = item.second;
 
-            auto bytes_sent = sock.send(data.data(), size);
+                output_envelope_type out;
+                out.seal(pkt);
 
-            if (bytes_sent > 0) {
-                total_bytes_sent += bytes_sent;
-            } else if (bytes_sent < 0) {
-                auto & saddr = last_sinfo_ptr->saddr;
+                auto data = out.data();
+                auto size = data.size();
 
-                failure(fmt::format("sending failure to {} ({}:{}): {}"
-                    , std::to_string(last_sinfo_ptr->uuid)
-                    , std::to_string(saddr.addr)
-                    , saddr.port
-                    , sock.error_string()));
-            } else {
-                // FIXME Need to handle this state (broken connection ?)
-                ;
+                assert(size == packet_type::PACKET_SIZE);
+
+                auto need_locate = !last_sinfo_ptr
+                    || last_sinfo_ptr->uuid != item.first;
+
+                if (need_locate) {
+                    last_sinfo_ptr = locate_writer(item.first);
+
+                    if (!last_sinfo_ptr)
+                        continue;
+                }
+
+                assert(item.first == last_sinfo_ptr->uuid);
+
+                auto & sock = last_sinfo_ptr->sock;
+
+                auto bytes_sent = sock.send(data.data(), size);
+
+                if (bytes_sent > 0) {
+                    total_bytes_sent += bytes_sent;
+                } else if (bytes_sent < 0) {
+                    auto & saddr = last_sinfo_ptr->saddr;
+
+                    failure(fmt::format("sending failure to {} ({}:{}): {}"
+                        , std::to_string(last_sinfo_ptr->uuid)
+                        , std::to_string(saddr.addr)
+                        , saddr.port
+                        , sock.error_string()));
+                } else {
+                    // FIXME Need to handle this state (broken connection ?)
+                    ;
+                }
             }
         }
     }
