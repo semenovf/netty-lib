@@ -50,7 +50,7 @@ written by
 #include <cstring>
 #include <iterator>
 
-#define PFS_NET__P2P_TRACE_LEVEL 3
+#define PFS_NET_P2P__TRACE_LEVEL 3
 #include "pfs/net/p2p/trace.hpp"
 
 using namespace std;

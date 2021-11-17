@@ -8,7 +8,7 @@
 // Changelog:
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS_NET__P2P_TRACE_LEVEL 3
+#define PFS_NET_P2P__TRACE_LEVEL 3
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 #include "pfs/net/inet4_addr.hpp"

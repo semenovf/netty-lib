@@ -7,7 +7,7 @@
 //      2021.09.13 Initial version
 //      2021.11.01 New version using UDT.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS_NET__P2P_TRACE_LEVEL 3
+#define PFS_NET_P2P__TRACE_LEVEL 3
 #include "pfs/net/p2p/trace.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include "pfs/net/p2p/algorithm.hpp"

@@ -11,6 +11,7 @@
 #include "uuid.hpp"
 #include "pfs/crc32.hpp"
 #include <sstream>
+#include <cstring>
 
 namespace pfs {
 namespace net {

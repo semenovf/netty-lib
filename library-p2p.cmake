@@ -37,7 +37,7 @@ if (ENABLE_NEW_UDT)
 endif(ENABLE_NEW_UDT)
 
 if (ENABLE_CEREAL)
-    set(CEREAL_ROOT ${CMAKE_SOURCE_DIR}/3rdparty/cereal)
+    set(CEREAL_ROOT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/cereal)
     add_library(cereal INTERFACE)
 
     # Use mutexes to ensure thread safety
