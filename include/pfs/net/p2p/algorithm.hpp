@@ -37,15 +37,14 @@ constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 
 template <
       typename DiscoveryUdpSocket
-    , typename ReliableSocketAPI
-    , std::size_t PacketSize
+    , typename ReliableSocketAPI  // Meets the requirements for reliable and in-order data delivery
     , std::size_t PriorityCount = 1>
 class algorithm
 {
     static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
 
 public:
-    using packet_type           = packet<PacketSize>;
+    using packet_type = packet;
 
 private:
     using discovery_socket_type = DiscoveryUdpSocket;
@@ -54,9 +53,8 @@ private:
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
     using socket_id             = decltype(socket_type{}.id());
-    using input_queue_value     = std::array<char, packet_type::PACKET_SIZE>;
-    using input_queue_type      = ring_buffer_mt<std::pair<socket_id, input_queue_value>, DEFAULT_BUFFER_BULK_SIZE>;
-    using output_queue_type     = ring_buffer_mt<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
+    using input_queue_type      = ring_buffer<packet_type, DEFAULT_BUFFER_BULK_SIZE>;
+    using output_queue_type     = ring_buffer<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
 
     struct socket_address
     {
@@ -75,6 +73,7 @@ private:
     using socket_iterator  = typename socket_container::iterator;
 
 private:
+    std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
     uuid_t         _uuid;
     socket_type    _listener;
     socket_address _listener_address;
@@ -120,19 +119,19 @@ public:
     /**
      * Emitted when new writer socket ready (connected).
      */
-    emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> writer_ready;
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
 
     /**
      * Emitted when new address accepted by discoverer.
      */
-    emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> rookie_accepted;
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
 
     /**
      * Emitted when address expired (update is timed out).
      */
-    emitter_mt<uuid_t, inet4_addr const &, std::uint16_t> peer_expired;
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
 
-    emitter_mt<inet4_addr const &, std::uint16_t, packet_type const &> packet_received;
+    emitter_mt<uuid_t, std::string> message_received;
 
 public:
     static bool startup ()
@@ -191,6 +190,11 @@ public:
     uuid_t const & uuid () const noexcept
     {
         return _uuid;
+    }
+
+    void set_packet_size (std::size_t size)
+    {
+        _packet_size = size;
     }
 
     template <typename Configurator>
@@ -282,10 +286,9 @@ public:
                 ? _output_queues.size() - 1
                 : static_cast<std::size_t>(priority);
 
-        split_into_packets<packet_type::PACKET_SIZE>(_uuid, data, len
+        split_into_packets(_packet_size, _uuid, data, len
             , [this, & uuid, prior] (packet_type && p) {
-                _output_queues[prior].try_reserve_and_emplace(DEFAULT_BUFFER_INC
-                    , std::make_pair(uuid, std::move(p)));
+                _output_queues[prior].push(std::make_pair(uuid, std::move(p)));
             });
     }
 
@@ -567,12 +570,23 @@ private:
 
             if (is_input_event) {
                 do {
-                    std::array<char, packet_type::PACKET_SIZE> buf;
+                    std::array<char, packet_type::MAX_PACKET_SIZE> buf;
                     std::streamsize rc = sockinfo.sock.recv(buf.data(), buf.size());
 
                     if (rc > 0) {
-                        _input_queue.try_reserve_and_emplace(DEFAULT_BUFFER_INC
-                            , std::make_pair(sid, std::move(buf)));
+                        auto pos = it->second;
+                        input_envelope_type in {buf.data(), buf.size()};
+                        packet_type pkt;
+
+                        in.unseal(pkt);
+
+                        if (pkt.packetsize > packet_type::MAX_PACKET_SIZE) {
+                            failure(fmt::format("bad packet received from: {}:{}"
+                                , std::to_string(pos->saddr.addr)
+                                , pos->saddr.port));
+                        } else {
+                            _input_queue.push(std::move(pkt));
+                        }
                     } else {
                         break;
                     }
@@ -609,7 +623,8 @@ private:
                 input_envelope_type in {data, size};
                 hello_packet packet;
 
-                auto success = in.unseal(packet);
+                in.unseal(packet);
+                auto success = is_valid(packet);
 
                 if (success) {
                     if (packet.crc16 == crc16_of(packet)) {
@@ -711,22 +726,61 @@ private:
 
     void process_incoming_packets ()
     {
-        typename input_queue_type::value_type item;
+        while (!_input_queue.empty()) {
+            auto & pkt = _input_queue.front();
 
-        while (_input_queue.try_pop(item)) {
-            input_envelope_type in {item.second.data(), item.second.size()};
-            packet_type pkt;
+            // Most likely there are enough packages to complete the message
+            if (pkt.partcount <= _input_queue.size()) {
+                auto uuid = pkt.uuid;
+                auto expected_partcount = pkt.partcount;
+                decltype(pkt.partindex) expected_partindex = 1;
 
-            auto it = _index_by_socket_id.find(item.first);
-            assert(it != std::end(_index_by_socket_id));
-            auto pos = it->second;
+                std::string message;
+                message.reserve(pkt.partcount * packet::MAX_PAYLOAD_SIZE);
 
-            if (in.unseal(pkt)) {
-                packet_received(pos->saddr.addr, pos->saddr.port, pkt);
+                bool success = true;
+
+                while (success) {
+                    // Check data integrity
+                    success = uuid == pkt.uuid
+                        && pkt.partcount == expected_partcount
+                        && pkt.partindex == expected_partindex++;
+
+                    if (success) {
+                        message.append(pkt.payload, pkt.payloadsize);
+
+                        // Pop processed packet from queue.
+                        _input_queue.pop();
+
+                        // Message complete, break the loop
+                        if (pkt.partindex == pkt.partcount)
+                            break;
+
+                        if (!_input_queue.empty())
+                            pkt = _input_queue.front();
+                        else
+                            success = false; // Integrity violated
+                    }
+                };
+
+                if (success) {
+                    message_received(uuid, std::move(message));
+                } else {
+                    // Unexpected behavior!!!
+                    // Corrupted/incomplete sequence of packets received.
+                    // Need to skip till packet with pkt.partindex == 1.
+                    while (!_input_queue.empty() && pkt.partindex != 1) {
+                        _input_queue.pop();
+                        pkt = _input_queue.front();
+                    }
+
+                    failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
+                        " corrupted/incomplete sequence of"
+                        " packets received from: {}"
+                        , std::to_string(uuid)));
+                }
             } else {
-                failure(fmt::format("bad packet received from: {}:{}"
-                    , std::to_string(pos->saddr.addr)
-                    , pos->saddr.port));
+                break;
             }
         }
     }
@@ -753,7 +807,8 @@ private:
                 count = 1; // _output_queues[prior].size();
             // }}
 
-            while (count-- && _output_queues[prior].try_pop(item)) {
+            while (count-- && !_output_queues[prior].empty()) {
+                auto & item = _output_queues[prior].front();
                 auto const & pkt = item.second;
 
                 output_envelope_type out;
@@ -762,7 +817,9 @@ private:
                 auto data = out.data();
                 auto size = data.size();
 
-                assert(size == packet_type::PACKET_SIZE);
+                _output_queues[prior].pop();
+
+                assert(size <= packet_type::MAX_PACKET_SIZE);
 
                 auto need_locate = !last_sinfo_ptr
                     || last_sinfo_ptr->uuid != item.first;

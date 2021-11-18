@@ -133,16 +133,6 @@ void on_peer_expired (pfs::uuid_t uuid
         , port);
 }
 
-void on_packet_received (pfs::net::inet4_addr const & addr
-    , std::uint16_t port
-    , p2p::packet_type const & pkt)
-{
-    TRACE_1("Packet received from: {} ({}:{})"
-        , std::to_string(pkt.uuid)
-        , std::to_string(addr)
-        , port);
-}
-
 void worker (p2p::algorithm & peer)
 {
     while (true) {
@@ -175,7 +165,17 @@ int main (int argc, char * argv[])
     });
 
     peer.peer_expired.connect(on_peer_expired);
-    peer.packet_received.connect(on_packet_received);
+
+    peer.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
+        TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
+            , std::to_string(uuid)
+            , message.substr(0, 20)
+            , message.substr(message.size() - 20)
+            , message.size()
+            , std::strlen(loremipsum));
+
+        peer.enqueue(uuid, loremipsum, std::strlen(loremipsum));
+    });
 
     assert(peer.configure(configurator{}));
 

@@ -440,7 +440,7 @@ int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHan
    CGuard::leaveCS(ls->m_AcceptLock);
 
    // acknowledge users waiting for new connections on the listening socket
-   TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", listen);
+   //TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", listen);
    m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, true);
 
    CTimer::triggerEvent();
@@ -664,16 +664,16 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
             accepted = true;
          }
 
-         if (!accepted && (LISTENING == ls->m_Status))
-            pthread_cond_wait(&(ls->m_AcceptCond), &(ls->m_AcceptLock));
+            if (!accepted && (LISTENING == ls->m_Status))
+                pthread_cond_wait(&(ls->m_AcceptCond), &(ls->m_AcceptLock));
 
-         if (ls->m_pQueuedSockets->empty()) {
-             TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", listen);
-            m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, false);
-         }
+            if (ls->m_pQueuedSockets->empty()) {
+                //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", listen);
+                m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, false);
+            }
 
-         pthread_mutex_unlock(&(ls->m_AcceptLock));
-      }
+            pthread_mutex_unlock(&(ls->m_AcceptLock));
+        }
    #else
       while (!accepted)
       {
@@ -702,22 +702,21 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
             accepted = true;
          }
 
-         if (ls->m_pQueuedSockets->empty()) {
-            TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", listen);
-            m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, false);
-         }
-      }
+            if (ls->m_pQueuedSockets->empty()) {
+                //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", listen);
+                m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, false);
+            }
+        }
    #endif
 
-   if (u == CUDT::INVALID_SOCK)
-   {
-      // non-blocking receiving, no connection available
-      if (!ls->m_pUDT->m_bSynRecving)
-         throw CUDTException(6, 2, 0);
+    if (u == CUDT::INVALID_SOCK) {
+        // non-blocking receiving, no connection available
+        if (!ls->m_pUDT->m_bSynRecving)
+            throw CUDTException(6, 2, 0);
 
-      // listening socket is closed
-      throw CUDTException(5, 6, 0);
-   }
+        // listening socket is closed
+        throw CUDTException(5, 6, 0);
+    }
 
    if ((addr != NULL) && (addrlen != NULL))
    {

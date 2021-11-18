@@ -56,7 +56,7 @@ void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
         >> ntoh_wrapper<decltype(pkt.crc16)>(pkt.crc16);
 }
 
-inline bool validate (hello_packet const & pkt)
+inline bool is_valid (hello_packet const & pkt)
 {
     if (!(pkt.greeting[0] == 'H'
             && pkt.greeting[1] == 'E'

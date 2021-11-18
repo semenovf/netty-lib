@@ -63,10 +63,9 @@ public:
     input_envelope (char const * data, std::streamsize size);
 
     template <typename T>
-    bool unseal (T & payload)
+    void unseal (T & payload)
     {
         _input_archive >> payload;
-        return validate(payload);
     }
 
     template <typename T>
