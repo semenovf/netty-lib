@@ -35,11 +35,37 @@ constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {   64};
 constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 }
 
+class controller
+{
+public: // signals
+    pfs::emitter_mt<std::string const &> failure;
+
+    /**
+     * Emitted when new writer socket ready (connected).
+     */
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
+
+    /**
+     * Emitted when new address accepted by discoverer.
+     */
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
+
+    /**
+     * Emitted when address expired (update is timed out).
+     */
+    emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
+
+    emitter_mt<uuid_t, std::string> message_received;
+
+    emitter_mt<uuid_t, char const * /*data*/
+        , std::streamsize /*len*/, int /*priority*/> send;
+};
+
 template <
       typename DiscoverySocketAPI
     , typename ReliableSocketAPI  // Meets the requirements for reliable and in-order data delivery
     , std::size_t PriorityCount = 1>
-class algorithm
+class engine
 {
     static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
 
@@ -73,6 +99,7 @@ private:
     using socket_iterator  = typename socket_container::iterator;
 
 private:
+    controller *   _controller_ptr {nullptr};
     std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
     uuid_t         _uuid;
     socket_type    _listener;
@@ -114,26 +141,6 @@ private:
     std::vector<socket_id> _expired_sockets;
 
 public:
-    pfs::emitter_mt<std::string const &> failure;
-
-    /**
-     * Emitted when new writer socket ready (connected).
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
-
-    /**
-     * Emitted when new address accepted by discoverer.
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
-
-    /**
-     * Emitted when address expired (update is timed out).
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
-
-    emitter_mt<uuid_t, std::string> message_received;
-
-public:
     static bool startup ()
     {
         return DiscoverySocketAPI::startup()
@@ -147,29 +154,30 @@ public:
     }
 
 public:
-    algorithm (uuid_t uuid)
-        : _uuid(uuid)
+    engine (controller & controller_ref, uuid_t uuid)
+        : _controller_ptr(& controller_ref)
+        , _uuid(uuid)
         , _connecting_poller("connecting")
         , _poller("main")
     {
         _listener.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         _discovery.receiver.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         _discovery.transmitter.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         _connecting_poller.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         _poller.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         auto now = current_timepoint();
@@ -178,16 +186,16 @@ public:
             ? now - _discovery.transmit_interval : now;
     }
 
-    ~algorithm ()
+    ~engine ()
     {
         _poller.remove(_listener.id());
     }
 
-    algorithm (algorithm const &) = delete;
-    algorithm & operator = (algorithm const &) = delete;
+    engine (engine const &) = delete;
+    engine & operator = (engine const &) = delete;
 
-    algorithm (algorithm &&) = default;
-    algorithm & operator = (algorithm &&) = default;
+    engine (engine &&) = default;
+    engine & operator = (engine &&) = default;
 
     uuid_t const & uuid () const noexcept
     {
@@ -303,7 +311,7 @@ private:
         if (pos != _writers.end()) {
             result = & *pos->second;
         } else {
-            failure(fmt::format("cannot locate writer by UUID: {}"
+            _controller_ptr->failure(fmt::format("cannot locate writer by UUID: {}"
                 , std::to_string(uuid)));
         }
 
@@ -361,7 +369,7 @@ private:
         _connecting_poller.remove(pos->sock.id());
         _poller.add(pos->sock.id(), poller_type::POLL_IN | poller_type::POLL_ERR);
 
-        writer_ready(pos->uuid, pos->saddr.addr, pos->saddr.port);
+        _controller_ptr->writer_ready(pos->uuid, pos->saddr.addr, pos->saddr.port);
         update_expiration_timepoint(pos->sock.id());
     }
 
@@ -376,7 +384,7 @@ private:
         socket_info sockinfo;
 
         sockinfo.sock.failure.connect([this] (std::string const & error) {
-            this->failure(error);
+            _controller_ptr->failure(error);
         });
 
         if (sockinfo.sock.connect(addr, port)) {
@@ -486,7 +494,7 @@ private:
         _sockets.erase(pos);
 
         if (writers_erased > 0)
-            peer_expired(uuid, addr, port);
+            _controller_ptr->peer_expired(uuid, addr, port);
     }
 
     void poll ()
@@ -583,7 +591,7 @@ private:
                         in.unseal(pkt);
 
                         if (pkt.packetsize > packet_type::MAX_PACKET_SIZE) {
-                            failure(fmt::format("bad packet received from: {}:{}"
+                            _controller_ptr->failure(fmt::format("bad packet received from: {}:{}"
                                 , std::to_string(pos->saddr.addr)
                                 , pos->saddr.port));
                         } else {
@@ -600,7 +608,7 @@ private:
                 ;
             }
         } else {
-            failure(fmt::format("poll: socket not found by id: {}"
+            _controller_ptr->failure(fmt::format("poll: socket not found by id: {}"
                 ", may be it was closed before removing from poller"
                 , sid));
         }
@@ -636,11 +644,11 @@ private:
                             this->update_peer(packet.uuid, sender_addr, packet.port);
                         }
                     } else {
-                        this->failure(fmt::format("bad CRC16 for HELO packet received from: {}:{}"
+                        _controller_ptr->failure(fmt::format("bad CRC16 for HELO packet received from: {}:{}"
                             , std::to_string(sender_addr), sender_port));
                     }
                 } else {
-                    this->failure(fmt::format("bad HELO packet received from: {}:{}"
+                    _controller_ptr->failure(fmt::format("bad HELO packet received from: {}:{}"
                         , std::to_string(sender_addr), sender_port));
                 }
             });
@@ -671,7 +679,7 @@ private:
                     , size, item.addr, item.port);
 
                 if (bytes_written < 0) {
-                    failure(fmt::format("transmit failure to {}:{}: {}"
+                    _controller_ptr->failure(fmt::format("transmit failure to {}:{}: {}"
                         , std::to_string(item.addr)
                         , item.port
                         , _discovery.transmitter.error_string()));
@@ -706,7 +714,7 @@ private:
 
         if (it == std::end(_writers)) {
             connect_to_peer(peer_uuid, addr, port);
-            rookie_accepted(peer_uuid, addr, port);
+            _controller_ptr->rookie_accepted(peer_uuid, addr, port);
         } else {
             auto pos = it->second;
             update_expiration_timepoint(pos->sock.id());
@@ -766,7 +774,7 @@ private:
                 };
 
                 if (success) {
-                    message_received(uuid, std::move(message));
+                    _controller_ptr->message_received(uuid, std::move(message));
                 } else {
                     // Unexpected behavior!!!
                     // Corrupted/incomplete sequence of packets received.
@@ -776,7 +784,7 @@ private:
                         pkt = _input_queue.front();
                     }
 
-                    failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
+                    _controller_ptr->failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
                         " corrupted/incomplete sequence of"
                         " packets received from: {}"
                         , std::to_string(uuid)));
@@ -844,7 +852,7 @@ private:
                 } else if (bytes_sent < 0) {
                     auto & saddr = last_sinfo_ptr->saddr;
 
-                    failure(fmt::format("sending failure to {} ({}:{}): {}"
+                    _controller_ptr->failure(fmt::format("sending failure to {} ({}:{}): {}"
                         , std::to_string(last_sinfo_ptr->uuid)
                         , std::to_string(saddr.addr)
                         , saddr.port

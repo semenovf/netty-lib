@@ -19,7 +19,7 @@ if (PFS_NET__ENABLE_COVERAGE)
 endif()
 
 set(TEST_NAMES
-    algorithm
+    engine
     envelope
     packet_serializer)
 

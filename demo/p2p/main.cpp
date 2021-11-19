@@ -10,7 +10,7 @@
 #define PFS_NET_P2P__TRACE_LEVEL 3
 #include "pfs/net/p2p/trace.hpp"
 #include "pfs/net/inet4_addr.hpp"
-#include "pfs/net/p2p/algorithm.hpp"
+#include "pfs/net/p2p/engine.hpp"
 #include "pfs/net/p2p/qt5/api.hpp"
 #include "pfs/net/p2p/udt/api.hpp"
 
@@ -58,17 +58,18 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = pfs::net::inet4_addr;
+using controller           = pfs::net::p2p::controller;
 using discovery_socket_api = pfs::net::p2p::qt5::api;
 using reliable_socket_api  = pfs::net::p2p::udt::api;
 using poller               = pfs::net::p2p::udt::poller;
 static constexpr std::size_t PACKET_SIZE = 64;
 
-using algorithm = pfs::net::p2p::algorithm<
+using engine = pfs::net::p2p::engine<
       discovery_socket_api
     , reliable_socket_api
     , PACKET_SIZE>;
 
-using packet_type = algorithm::packet_type;
+using packet_type = engine::packet_type;
 } // namespace p2p
 
 namespace {
@@ -111,18 +112,6 @@ void on_rookie_accepted (pfs::uuid_t uuid
         , port);
 }
 
-// void on_writer_ready (pfs::uuid_t uuid
-//     , pfs::net::inet4_addr const & addr
-//     , std::uint16_t port)
-// {
-//     TRACE_1("WRITER READY: {} ({}:{})"
-//         , std::to_string(uuid)
-//         , std::to_string(addr)
-//         , port);
-//
-//     peer.enqueue()
-// }
-
 void on_peer_expired (pfs::uuid_t uuid
     , pfs::net::inet4_addr const & addr
     , std::uint16_t port)
@@ -133,7 +122,7 @@ void on_peer_expired (pfs::uuid_t uuid
         , port);
 }
 
-void worker (p2p::algorithm & peer)
+void worker (p2p::engine & peer)
 {
     while (true) {
         peer.loop();
@@ -146,14 +135,16 @@ int main (int argc, char * argv[])
 
     fmt::print("My name is {}\n", std::to_string(UUID));
 
-    if (!p2p::algorithm::startup())
+    if (!p2p::engine::startup())
         return EXIT_FAILURE;
 
-    p2p::algorithm peer {UUID};
-    peer.failure.connect(on_failure);
-    peer.rookie_accepted.connect(on_rookie_accepted);
+    p2p::controller controller;
+    p2p::engine peer {controller, UUID};
 
-    peer.writer_ready.connect([& peer] (pfs::uuid_t uuid
+    controller.failure.connect(on_failure);
+    controller.rookie_accepted.connect(on_rookie_accepted);
+    controller.peer_expired.connect(on_peer_expired);
+    controller.writer_ready.connect([& peer] (pfs::uuid_t uuid
             , pfs::net::inet4_addr const & addr
             , std::uint16_t port) {
         TRACE_1("WRITER READY: {} ({}:{})"
@@ -164,9 +155,7 @@ int main (int argc, char * argv[])
         peer.enqueue(uuid, loremipsum, std::strlen(loremipsum));
     });
 
-    peer.peer_expired.connect(on_peer_expired);
-
-    peer.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
+    controller.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
         TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , std::to_string(uuid)
             , message.substr(0, 20)
@@ -179,13 +168,11 @@ int main (int argc, char * argv[])
 
     assert(peer.configure(configurator{}));
 
-    // FIXME unable process multicast group
-    //REQUIRE(peer1.add_discovery_target(p2p::inet4_addr_t{224, 0, 0, 1}, 4243));
     peer.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
 
     worker(peer);
 
-    p2p::algorithm::cleanup();
+    p2p::engine::cleanup();
 
     return EXIT_SUCCESS;
 }

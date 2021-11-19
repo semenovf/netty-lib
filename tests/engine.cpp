@@ -12,7 +12,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 #include "pfs/net/inet4_addr.hpp"
-#include "pfs/net/p2p/algorithm.hpp"
+#include "pfs/net/p2p/engine.hpp"
 #include "pfs/net/p2p/qt5/api.hpp"
 #include "pfs/net/p2p/udt/api.hpp"
 #include <atomic>
@@ -62,11 +62,12 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = pfs::net::inet4_addr;
+using controller           = pfs::net::p2p::controller;
 using discovery_socket_api = pfs::net::p2p::qt5::api;
 using reliable_socket_api  = pfs::net::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
 
-using algorithm = pfs::net::p2p::algorithm<
+using engine = pfs::net::p2p::engine<
       discovery_socket_api
     , reliable_socket_api
     , DEFAULT_PACKET_SIZE>;
@@ -125,7 +126,7 @@ void on_peer_expired (pfs::uuid_t uuid
     QUIT_PEER1 = true;
 }
 
-void worker (p2p::algorithm & peer)
+void worker (p2p::engine & peer)
 {
     TRACE_1("Peer started: {}", std::to_string(peer.uuid()));
 
@@ -168,38 +169,36 @@ struct configurator2
 
 TEST_CASE("HELO")
 {
-    REQUIRE(p2p::algorithm::startup());
+    REQUIRE(p2p::engine::startup());
 
     std::thread peer1_worker;
     std::thread peer2_worker;
 
     peer1_worker = std::thread{[] {
-        p2p::algorithm peer1 {PEER1_UUID};
-        peer1.failure.connect(on_failure);
-        peer1.rookie_accepted.connect(on_rookie_accepted);
-        peer1.writer_ready.connect(on_writer_ready);
-        peer1.peer_expired.connect(on_peer_expired);
+        p2p::controller controller1;
+        p2p::engine peer1 {controller1, PEER1_UUID};
+        controller1.failure.connect(on_failure);
+        controller1.rookie_accepted.connect(on_rookie_accepted);
+        controller1.writer_ready.connect(on_writer_ready);
+        controller1.peer_expired.connect(on_peer_expired);
 
         REQUIRE(peer1.configure(configurator1{}));
 
-        // FIXME unable process multicast group
-        //REQUIRE(peer1.add_discovery_target(p2p::inet4_addr_t{224, 0, 0, 1}, 4243));
         peer1.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 4243u);
 
         worker(peer1);
     }};
 
     peer2_worker = std::thread{[] {
-        p2p::algorithm peer2 {PEER2_UUID};
-        peer2.failure.connect(on_failure);
-        peer2.rookie_accepted.connect(on_rookie_accepted);
-        peer2.writer_ready.connect(on_writer_ready);
-        peer2.peer_expired.connect(on_peer_expired);
+        p2p::controller controller2;
+        p2p::engine peer2 {controller2, PEER2_UUID};
+        controller2.failure.connect(on_failure);
+        controller2.rookie_accepted.connect(on_rookie_accepted);
+        controller2.writer_ready.connect(on_writer_ready);
+        controller2.peer_expired.connect(on_peer_expired);
 
         REQUIRE(peer2.configure(configurator2{}));
 
-        // FIXME unable process multicast group
-        //REQUIRE(peer2.add_discovery_target(p2p::inet4_addr_t{224, 0, 0, 1}, 4242));
         peer2.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 4242);
 
         worker(peer2);
@@ -208,5 +207,5 @@ TEST_CASE("HELO")
     peer1_worker.join();
     peer2_worker.join();
 
-    p2p::algorithm::cleanup();
+    p2p::engine::cleanup();
 }
