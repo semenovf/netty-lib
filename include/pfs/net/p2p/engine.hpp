@@ -180,6 +180,12 @@ public:
             _controller_ptr->failure(error);
         });
 
+        _controller_ptr->send.connect([this] (uuid_t uuid, char const * data
+                , std::streamsize len
+                , int priority) {
+            this->enqueue(uuid, data, len, priority);
+        });
+
         auto now = current_timepoint();
 
         _discovery.last_timepoint = now > _discovery.transmit_interval
@@ -285,6 +291,7 @@ public:
         }
     }
 
+private:
     /**
      * Split data to send into packets and enqueue them into output queue.
      */
@@ -302,7 +309,6 @@ public:
             });
     }
 
-private:
     socket_info * locate_writer (uuid_t const & uuid)
     {
         socket_info * result {nullptr};

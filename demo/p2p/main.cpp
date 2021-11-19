@@ -144,7 +144,7 @@ int main (int argc, char * argv[])
     controller.failure.connect(on_failure);
     controller.rookie_accepted.connect(on_rookie_accepted);
     controller.peer_expired.connect(on_peer_expired);
-    controller.writer_ready.connect([& peer] (pfs::uuid_t uuid
+    controller.writer_ready.connect([& controller] (pfs::uuid_t uuid
             , pfs::net::inet4_addr const & addr
             , std::uint16_t port) {
         TRACE_1("WRITER READY: {} ({}:{})"
@@ -152,10 +152,10 @@ int main (int argc, char * argv[])
             , std::to_string(addr)
             , port);
 
-        peer.enqueue(uuid, loremipsum, std::strlen(loremipsum));
+        controller.send(uuid, loremipsum, std::strlen(loremipsum), 0);
     });
 
-    controller.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
+    controller.message_received.connect([& controller] (pfs::uuid_t uuid, std::string message) {
         TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , std::to_string(uuid)
             , message.substr(0, 20)
@@ -163,7 +163,7 @@ int main (int argc, char * argv[])
             , message.size()
             , std::strlen(loremipsum));
 
-        peer.enqueue(uuid, loremipsum, std::strlen(loremipsum));
+        controller.send(uuid, loremipsum, std::strlen(loremipsum), 0);
     });
 
     assert(peer.configure(configurator{}));
