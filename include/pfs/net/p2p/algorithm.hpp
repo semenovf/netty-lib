@@ -36,7 +36,7 @@ constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 }
 
 template <
-      typename DiscoveryUdpSocket
+      typename DiscoverySocketAPI
     , typename ReliableSocketAPI  // Meets the requirements for reliable and in-order data delivery
     , std::size_t PriorityCount = 1>
 class algorithm
@@ -47,7 +47,7 @@ public:
     using packet_type = packet;
 
 private:
-    using discovery_socket_type = DiscoveryUdpSocket;
+    using discovery_socket_type = typename DiscoverySocketAPI::socket_type;
     using socket_type           = typename ReliableSocketAPI::socket_type;
     using poller_type           = typename ReliableSocketAPI::poller_type;
     using input_envelope_type   = input_envelope<>;
@@ -136,12 +136,14 @@ public:
 public:
     static bool startup ()
     {
-        return ReliableSocketAPI::startup();
+        return DiscoverySocketAPI::startup()
+            && ReliableSocketAPI::startup();
     }
 
     static void cleanup ()
     {
-        return ReliableSocketAPI::cleanup();
+        DiscoverySocketAPI::cleanup();
+        ReliableSocketAPI::cleanup();
     }
 
 public:

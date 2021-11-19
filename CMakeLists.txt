@@ -13,6 +13,7 @@ option(PFS_NET__BUILD_STRICT "Build with strict policies: C++ standard required,
 option(PFS_NET__BUILD_TESTS "Build tests" OFF)
 option(PFS_NET__BUILD_DEMO "Build examples/demo" OFF)
 option(PFS_NET__ENABLE_COVERAGE "Build tests with coverage support" OFF)
+option(PFS_NET__ENABLE_PROFILER "Build with profiling support" OFF)
 # option(ENABLE_NANOMSG "Enable NNG (network backend) library" OFF)
 # option(ENABLE_LIBZMQ "Enable ZeroMQ library (network backend)" OFF)
 
@@ -89,4 +90,16 @@ endif()
 
 if (PFS_NET__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/demo)
     add_subdirectory(demo)
+endif()
+
+if (PFS_NET__ENABLE_PROFILER)
+    message(STATUS "Profiler feature enabled")
+
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+        set(CMAKE_CXX_FLAGS "-pg")
+        set(CMAKE_C_FLAGS "-pg")
+    else()
+        message(FATAL_ERROR "Profiler feature requires GCC")
+    endif()
+
 endif()

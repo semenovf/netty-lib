@@ -13,7 +13,7 @@
 #include "doctest.h"
 #include "pfs/net/inet4_addr.hpp"
 #include "pfs/net/p2p/algorithm.hpp"
-#include "pfs/net/p2p/qt5/udp_socket.hpp"
+#include "pfs/net/p2p/qt5/api.hpp"
 #include "pfs/net/p2p/udt/api.hpp"
 #include <atomic>
 #include <thread>
@@ -62,12 +62,12 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = pfs::net::inet4_addr;
-using discovery_udp_socket = pfs::net::p2p::qt5::udp_socket;
+using discovery_socket_api = pfs::net::p2p::qt5::api;
 using reliable_socket_api  = pfs::net::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
 
 using algorithm = pfs::net::p2p::algorithm<
-      discovery_udp_socket
+      discovery_socket_api
     , reliable_socket_api
     , DEFAULT_PACKET_SIZE>;
 } // namespace p2p

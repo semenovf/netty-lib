@@ -8,6 +8,7 @@
 #      2021.05.20 Initial version.
 #      2021.11.07 Added PROJECT_OPT_PREFIX variable.
 #      2021.11.08 SOURCE_DIR recognition modified.
+#      2021.11.19 Added support for profiling.
 ################################################################################
 
 CMAKE_OPTIONS="${CMAKE_OPTIONS}"
@@ -104,11 +105,26 @@ if [ -n "$ENABLE_COVERAGE" ] ; then
     CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_COVERAGE=$ENABLE_COVERAGE"
 fi
 
-BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}
+if [ -n $ENABLE_PROFILER ] ; then
+    case $ENABLE_PROFILER in
+        [Oo][Nn])
+            ENABLE_PROFILER=ON
+            ;;
+        *)
+            unset ENABLE_PROFILER
+            ;;
+    esac
+fi
+
+if [ -n "$ENABLE_PROFILER" ] ; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_PROFILER=$ENABLE_PROFILER"
+fi
+
+BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}
 
 # We are inside source directory
 if [ -d .git ] ; then
-    if [ -z "$ENABLE_COVERAGE" ] ; then
+    if [ -z "$SOURCE_DIR" ] ; then
         SOURCE_DIR=`pwd`
     fi
     BUILD_DIR="../$BUILD_DIR"

@@ -4,21 +4,19 @@
 // This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
 //
 // Changelog:
-//      2021.11.06 Initial version.
+//      2021.11.19 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "poller.hpp"
 #include "udp_socket.hpp"
 
 namespace pfs {
 namespace net {
 namespace p2p {
-namespace udt {
+namespace qt5 {
 
 class api final
 {
 public:
-    using poller_type = poller;
     using socket_type = udp_socket;
 
 public:
@@ -27,8 +25,8 @@ public:
     api & operator = (api const &) = delete;
     api & operator = (api &&) = delete;
 
-    static bool startup ();
-    static void cleanup ();
+    static bool startup () { return true; }
+    static void cleanup () {}
 };
 
-}}}} // namespace pfs::net::p2p::udt
+}}}} // namespace pfs::net::p2p::qt5
