@@ -8,6 +8,7 @@
 //      2021.11.01 Complete basic version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "controller.hpp"
 #include "envelope.hpp"
 #include "hello_packet.hpp"
 #include "packet.hpp"
@@ -34,32 +35,6 @@ constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT {10000};
 constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {   64};
 constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 }
-
-class controller
-{
-public: // signals
-    pfs::emitter_mt<std::string const &> failure;
-
-    /**
-     * Emitted when new writer socket ready (connected).
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
-
-    /**
-     * Emitted when new address accepted by discoverer.
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
-
-    /**
-     * Emitted when address expired (update is timed out).
-     */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
-
-    emitter_mt<uuid_t, std::string> message_received;
-
-    emitter_mt<uuid_t, char const * /*data*/
-        , std::streamsize /*len*/, int /*priority*/> send;
-};
 
 template <
       typename DiscoverySocketAPI
