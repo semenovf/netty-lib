@@ -14,8 +14,9 @@
 #include "packet.hpp"
 #include "trace.hpp"
 #include "uuid.hpp"
-#include "pfs/ring_buffer.hpp"
+#include "pfs/fmt.hpp"
 #include "pfs/emitter.hpp"
+#include "pfs/ring_buffer.hpp"
 #include "pfs/net/inet4_addr.hpp"
 #include <array>
 #include <list>
