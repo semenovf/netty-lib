@@ -12,7 +12,6 @@
 #include "envelope.hpp"
 #include "hello_packet.hpp"
 #include "packet.hpp"
-#include "timing.hpp"
 #include "trace.hpp"
 #include "uuid.hpp"
 #include "pfs/ring_buffer.hpp"
@@ -267,6 +266,15 @@ public:
     }
 
 private:
+    inline std::chrono::milliseconds current_timepoint ()
+    {
+        using std::chrono::duration_cast;
+        using std::chrono::milliseconds;
+        using std::chrono::steady_clock;
+
+        return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
+    }
+
     /**
      * Split data to send into packets and enqueue them into output queue.
      */
