@@ -36,7 +36,7 @@ else()
 endif()
 
 portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common Threads::Threads)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
 
 if (MSVC)
     portable_target(LINK ${PROJECT_NAME} PUBLIC Ws2_32 Iphlpapi)
