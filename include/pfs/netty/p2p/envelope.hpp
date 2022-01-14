@@ -11,8 +11,7 @@
 #include <sstream>
 #include <utility>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 // NOTE!
@@ -84,4 +83,4 @@ inline input_envelope<std::istringstream>::input_envelope(char const * data
     _archiver_backend.rdbuf()->pubsetbuf(const_cast<char *>(data), size);
 }
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p

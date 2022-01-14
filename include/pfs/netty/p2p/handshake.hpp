@@ -15,13 +15,12 @@
 // #include "pfs/ring_buffer.hpp"
 // #include "pfs/uuid.hpp"
 // #include "pfs/emitter.hpp"
-// #include "pfs/net/inet4_addr.hpp"
+// #include "pfs/netty/inet4_addr.hpp"
 // #include <unordered_map>
 // #include <utility>
 // #include <cassert>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 // Three-Way Handshake Process
@@ -156,5 +155,5 @@ public:
     }
 };
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p
 

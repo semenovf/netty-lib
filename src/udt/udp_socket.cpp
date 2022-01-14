@@ -7,11 +7,11 @@
 //      2021.10.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/endian.hpp"
-#include "pfs/net/p2p/udt/udp_socket.hpp"
+#include "pfs/netty/p2p/udt/udp_socket.hpp"
 #include <netinet/in.h>
 #include <cassert>
 
-#if PFS_NET_P2P__NEW_UDT_ENABLED
+#if NETTY_P2P__NEW_UDT_ENABLED
 #   include "newlib/udt.hpp"
 #else
 #   include "lib/udt.h"
@@ -19,8 +19,7 @@
 
 #include "debug_CCC.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -52,7 +51,7 @@ static UDTSOCKET create (inet4_addr const & addr
     //UDT::setsockopt(_socket, 0, UDT_RCVBUF, new int(10000000), sizeof(int));
     //UDT::setsockopt(_socket, 0, UDP_RCVBUF, new int(10000000), sizeof(int));
 
-#if PFS_NET_P2P__NEW_UDT_ENABLED
+#if NETTY_P2P__NEW_UDT_ENABLED
     // TODO Need external configurable of bellow options
     UDT::setsockopt(socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
     UDT::setsockopt(socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
@@ -84,7 +83,7 @@ bool udp_socket::bind (inet4_addr const & addr, std::uint16_t port)
 
     if (UDT::ERROR == rc) {
         failure(fmt::format("bind {}:{} to socket failure: {}"
-            , std::to_string(addr)
+            , to_string(addr)
             , port
             , error_string()));
         return false;
@@ -133,7 +132,7 @@ udp_socket udp_socket::accept (inet4_addr * addr_ptr, std::uint16_t * port_ptr)
         //UDT::setsockopt(result._socket, 0, UDT_LINGER
         //    , new linger{1, 3}, sizeof(linger));
 
-    #if PFS_NET_P2P__NEW_UDT_ENABLED
+    #if NETTY_P2P__NEW_UDT_ENABLED
         // TODO Need external configurable of bellow options
         UDT::setsockopt(result._socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
         UDT::setsockopt(result._socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
@@ -158,7 +157,7 @@ bool udp_socket::connect (inet4_addr const & addr, std::uint16_t port)
 
     if (rc < 0) {
         failure(fmt::format("connection to {}:{} failure: {}"
-            , std::to_string(addr)
+            , to_string(addr)
             , port
             , error_string()));
         return false;
@@ -291,4 +290,4 @@ std::string udp_socket::state_string (int state)
     return std::string{"<INVALID STATE>"};
 }
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

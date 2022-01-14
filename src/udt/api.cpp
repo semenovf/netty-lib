@@ -6,16 +6,15 @@
 // Changelog:
 //      2021.11.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/p2p/udt/api.hpp"
+#include "pfs/netty/p2p/udt/api.hpp"
 
-#if PFS_NET_P2P__NEW_UDT_ENABLED
+#if NETTY_P2P__NEW_UDT_ENABLED
 #   include "newlib/udt.hpp"
 #else
 #   include "lib/udt.h"
 #endif
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -29,4 +28,4 @@ void api::cleanup ()
     UDT::cleanup();
 }
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

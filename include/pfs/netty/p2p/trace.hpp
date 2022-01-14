@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 
-#ifdef PFS_NET_P2P__TRACE_LEVEL
+#ifdef NETTY_P2P__TRACE_LEVEL
 #   include "pfs/fmt.hpp"
 #   include <chrono>
 #   include <string>
@@ -37,28 +37,24 @@ inline std::string stringify_trace_time ()
 }
 #endif
 
-#ifdef PFS_NET_P2P__TRACE_LEVEL
-#   if PFS_NET_P2P__TRACE_LEVEL >= 1
+#ifdef NETTY_P2P__TRACE_LEVEL
+#   if NETTY_P2P__TRACE_LEVEL >= 1
 #       define TRACE_1(format, ...) fmt::print("{}: -- TRACE(1): " format "\n" \
             , stringify_trace_time(), __VA_ARGS__)
-            //pfs::net::p2p::current_timepoint().count(), __VA_ARGS__)
 #   endif
-#   if PFS_NET_P2P__TRACE_LEVEL >= 2
+#   if NETTY_P2P__TRACE_LEVEL >= 2
 #       define TRACE_2(format, ...) fmt::print("{}: -- TRACE(2): " format "\n" \
             , stringify_trace_time(), __VA_ARGS__)
-            //pfs::net::p2p::current_timepoint().count(), __VA_ARGS__)
 #   endif
-#   if PFS_NET_P2P__TRACE_LEVEL >= 3
+#   if NETTY_P2P__TRACE_LEVEL >= 3
 #       define TRACE_3(format, ...) fmt::print("{}: -- TRACE(3): " format "\n" \
             , stringify_trace_time(), __VA_ARGS__)
-            //pfs::net::p2p::current_timepoint().count(), __VA_ARGS__)
 #   endif
 
 #   define TRACE_D(format, ...) fmt::print("{}: -- TRACE(D): {}:{}: " format "\n"\
         , stringify_trace_time()                                                 \
         , __FILE__, __LINE__                                                     \
         , __VA_ARGS__)
-            //pfs::net::p2p::current_timepoint().count(), __VA_ARGS__)
 
 #else
 #   define TRACE_1(format, ...)

@@ -7,12 +7,12 @@
 //      2021.09.13 Initial version
 //      2021.11.01 New version using UDT.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS_NET_P2P__TRACE_LEVEL 3
-#include "pfs/net/p2p/trace.hpp"
-#include "pfs/net/inet4_addr.hpp"
-#include "pfs/net/p2p/engine.hpp"
-#include "pfs/net/p2p/qt5/api.hpp"
-#include "pfs/net/p2p/udt/api.hpp"
+#define NETTY_P2P__TRACE_LEVEL 3
+#include "pfs/netty/p2p/trace.hpp"
+#include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/p2p/engine.hpp"
+#include "pfs/netty/p2p/qt5/api.hpp"
+#include "pfs/netty/p2p/udt/api.hpp"
 
 static char loremipsum[] =
 "1.Lorem ipsum dolor sit amet, consectetuer adipiscing elit,    \n\
@@ -57,14 +57,14 @@ static char loremipsum[] =
 40.videntur parum clari, fiant sollemnes in futurum.";
 
 namespace p2p {
-using inet4_addr           = pfs::net::inet4_addr;
-using controller           = pfs::net::p2p::controller;
-using discovery_socket_api = pfs::net::p2p::qt5::api;
-using reliable_socket_api  = pfs::net::p2p::udt::api;
-using poller               = pfs::net::p2p::udt::poller;
+using inet4_addr           = netty::inet4_addr;
+using controller           = netty::p2p::controller;
+using discovery_socket_api = netty::p2p::qt5::api;
+using reliable_socket_api  = netty::p2p::udt::api;
+using poller               = netty::p2p::udt::poller;
 static constexpr std::size_t PACKET_SIZE = 64;
 
-using engine = pfs::net::p2p::engine<
+using engine = netty::p2p::engine<
       discovery_socket_api
     , reliable_socket_api
     , PACKET_SIZE>;
@@ -103,22 +103,22 @@ void on_failure (std::string const & error)
 }
 
 void on_rookie_accepted (pfs::uuid_t uuid
-    , pfs::net::inet4_addr const & addr
+    , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
     TRACE_1("HELO: {} ({}:{})"
-        , std::to_string(uuid)
-        , std::to_string(addr)
+        , to_string(uuid)
+        , to_string(addr)
         , port);
 }
 
 void on_peer_expired (pfs::uuid_t uuid
-    , pfs::net::inet4_addr const & addr
+    , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
     TRACE_1("EXPIRED: {} ({}:{})"
-        , std::to_string(uuid)
-        , std::to_string(addr)
+        , to_string(uuid)
+        , to_string(addr)
         , port);
 }
 
@@ -145,11 +145,11 @@ int main (int argc, char * argv[])
     controller.rookie_accepted.connect(on_rookie_accepted);
     controller.peer_expired.connect(on_peer_expired);
     controller.writer_ready.connect([& controller] (pfs::uuid_t uuid
-            , pfs::net::inet4_addr const & addr
+            , netty::inet4_addr const & addr
             , std::uint16_t port) {
         TRACE_1("WRITER READY: {} ({}:{})"
-            , std::to_string(uuid)
-            , std::to_string(addr)
+            , to_string(uuid)
+            , to_string(addr)
             , port);
 
         controller.send(uuid, loremipsum, std::strlen(loremipsum), 0);
@@ -157,7 +157,7 @@ int main (int argc, char * argv[])
 
     controller.message_received.connect([& controller] (pfs::uuid_t uuid, std::string message) {
         TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
-            , std::to_string(uuid)
+            , to_string(uuid)
             , message.substr(0, 20)
             , message.substr(message.size() - 20)
             , message.size()

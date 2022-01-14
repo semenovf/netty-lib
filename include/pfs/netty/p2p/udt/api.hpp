@@ -10,8 +10,7 @@
 #include "poller.hpp"
 #include "udp_socket.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -31,4 +30,4 @@ public:
     static void cleanup ();
 };
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

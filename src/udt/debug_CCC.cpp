@@ -8,11 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "debug_CCC.hpp"
 
-#define PFS_NET_P2P__TRACE_LEVEL 3
-#include "pfs/net/p2p/trace.hpp"
+#define NETTY_P2P__TRACE_LEVEL 3
+#include "pfs/netty/p2p/trace.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -108,4 +107,4 @@ void debug_CCC::processCustomMsg (CPacket const *)
     TRACE_D("--- debug_CCC::processCustomMsg() ---", 0);
 }
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

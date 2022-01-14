@@ -12,7 +12,7 @@
 // Changelog:
 //      2021.06.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/network_interface.hpp"
+#include "pfs/netty/network_interface.hpp"
 #include <map>
 #include <cstring>
 #include <sys/types.h>
@@ -23,8 +23,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 static bool ioctl_helper (int fd
     , unsigned long request
@@ -152,4 +151,4 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     return result;
 }
 
-}} // pfs::net
+} // namespace netty

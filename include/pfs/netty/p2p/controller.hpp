@@ -8,24 +8,11 @@
 //      2021.11.19 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-// #include "envelope.hpp"
-// #include "hello_packet.hpp"
-// #include "packet.hpp"
-// #include "timing.hpp"
-// #include "trace.hpp"
 #include "uuid.hpp"
-// #include "pfs/ring_buffer.hpp"
 #include "pfs/emitter.hpp"
-#include "pfs/net/inet4_addr.hpp"
-// #include <array>
-// #include <list>
-// #include <unordered_map>
-// #include <utility>
-// #include <vector>
-// #include <cassert>
+#include "pfs/netty/inet4_addr.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 class controller
@@ -36,22 +23,22 @@ public: // signals
     /**
      * Emitted when new writer socket ready (connected).
      */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
+    pfs::emitter_mt<uuid_t, inet4_addr, std::uint16_t> writer_ready;
 
     /**
      * Emitted when new address accepted by discoverer.
      */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
+    pfs::emitter_mt<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
 
     /**
      * Emitted when address expired (update is timed out).
      */
-    emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
+    pfs::emitter_mt<uuid_t, inet4_addr, std::uint16_t> peer_expired;
 
-    emitter_mt<uuid_t, std::string> message_received;
+    pfs::emitter_mt<uuid_t, std::string> message_received;
 
-    emitter_mt<uuid_t, char const * /*data*/
+    pfs::emitter_mt<uuid_t, char const * /*data*/
         , std::streamsize /*len*/, int /*priority*/> send;
 };
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p

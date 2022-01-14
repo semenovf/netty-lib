@@ -10,18 +10,18 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 
-#ifndef PFS_NET_LIB_STATIC
-#   ifndef PFS_NET_LIB_DLL_EXPORT
+#ifndef NETTY__STATIC
+#   ifndef NETTY__EXPORT
 #       if _MSC_VER
-#           if defined(PFS_NET_LIB_EXPORTS)
-#               define PFS_NET_LIB_DLL_EXPORT __declspec(dllexport)
+#           if defined(NETTY__EXPORTS)
+#               define NETTY__EXPORT __declspec(dllexport)
 #           else
-#               define PFS_NET_LIB_DLL_EXPORT __declspec(dllimport)
+#               define NETTY__EXPORT __declspec(dllimport)
 #           endif
 #       else
-#           define PFS_NET_LIB_DLL_EXPORT
+#           define NETTY__EXPORT
 #       endif
 #   endif
 #else
-#   define PFS_NET_LIB_DLL_EXPORT
-#endif // !PFS_NET_LIB_STATIC
+#   define NETTY__EXPORT
+#endif // !NETTY__STATIC

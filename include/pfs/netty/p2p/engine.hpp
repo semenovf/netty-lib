@@ -17,7 +17,7 @@
 #include "pfs/fmt.hpp"
 #include "pfs/emitter.hpp"
 #include "pfs/ring_buffer.hpp"
-#include "pfs/net/inet4_addr.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include <array>
 #include <list>
 #include <unordered_map>
@@ -25,8 +25,7 @@
 #include <vector>
 #include <cassert>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 namespace {
@@ -54,8 +53,8 @@ private:
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
     using socket_id             = decltype(socket_type{}.id());
-    using input_queue_type      = ring_buffer<packet_type, DEFAULT_BUFFER_BULK_SIZE>;
-    using output_queue_type     = ring_buffer<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
+    using input_queue_type      = pfs::ring_buffer<packet_type, DEFAULT_BUFFER_BULK_SIZE>;
+    using output_queue_type     = pfs::ring_buffer<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
 
     struct socket_address
     {
@@ -220,11 +219,11 @@ public:
                 , _listener.backend_string());
 
             TRACE_1("Discovery listener: {}:{}. Status: {}"
-                , std::to_string(c.discovery_address())
+                , to_string(c.discovery_address())
                 , c.discovery_port()
                 , _discovery.receiver.state_string());
             TRACE_1("General listener: {}:{}. Status: {}"
-                , std::to_string(_listener_address.addr)
+                , to_string(_listener_address.addr)
                 , _listener_address.port
                 , _listener.state_string());
 
@@ -261,7 +260,7 @@ public:
 
             if (success) {
                 TRACE_2("Discovery receiver joined into multicast group: {}"
-                    , std::to_string(addr));
+                    , to_string(addr));
             }
         }
     }
@@ -342,8 +341,8 @@ private:
         assert(status == socket_type::CONNECTED);
 
         TRACE_2("Socket connected to: {} ({}:{}), id: {}. Status: {}"
-            , std::to_string(pos->uuid)
-            , std::to_string(pos->saddr.addr)
+            , to_string(pos->uuid)
+            , to_string(pos->saddr.addr)
             , pos->saddr.port
             , sid
             , pos->sock.state_string());
@@ -412,8 +411,8 @@ private:
 
                 if (is_connecting_socket) {
                     TRACE_3("Connecting to: {} ({}:{}), id: {}. Status: {}"
-                        , std::to_string(peer_uuid)
-                        , std::to_string(pos->saddr.addr)
+                        , to_string(peer_uuid)
+                        , to_string(pos->saddr.addr)
                         , pos->saddr.port
                         , pos->sock.id()
                         , pos->sock.state_string());
@@ -438,7 +437,7 @@ private:
         auto pos = index_socket(std::move(sockinfo));
 
         TRACE_2("Socket accepted: {}:{}, id: {}. Status: {}"
-            , std::to_string(pos->saddr.addr)
+            , to_string(pos->saddr.addr)
             , pos->saddr.port
             , pos->sock.id()
             , pos->sock.state_string());
@@ -474,8 +473,8 @@ private:
         pos->sock.close();
 
         TRACE_1("Socket closed: {} ({}:{}), id: {}"
-            , std::to_string(uuid)
-            , std::to_string(addr)
+            , to_string(uuid)
+            , to_string(addr)
             , port
             , sid);
 
@@ -582,7 +581,7 @@ private:
 
                         if (pkt.packetsize > packet_type::MAX_PACKET_SIZE) {
                             _controller_ptr->failure(fmt::format("bad packet received from: {}:{}"
-                                , std::to_string(pos->saddr.addr)
+                                , to_string(pos->saddr.addr)
                                 , pos->saddr.port));
                         } else {
                             _input_queue.push(std::move(pkt));
@@ -635,11 +634,11 @@ private:
                         }
                     } else {
                         _controller_ptr->failure(fmt::format("bad CRC16 for HELO packet received from: {}:{}"
-                            , std::to_string(sender_addr), sender_port));
+                            , to_string(sender_addr), sender_port));
                     }
                 } else {
                     _controller_ptr->failure(fmt::format("bad HELO packet received from: {}:{}"
-                        , std::to_string(sender_addr), sender_port));
+                        , to_string(sender_addr), sender_port));
                 }
             });
     }
@@ -670,7 +669,7 @@ private:
 
                 if (bytes_written < 0) {
                     _controller_ptr->failure(fmt::format("transmit failure to {}:{}: {}"
-                        , std::to_string(item.addr)
+                        , to_string(item.addr)
                         , item.port
                         , _discovery.transmitter.error_string()));
                 }
@@ -843,8 +842,8 @@ private:
                     auto & saddr = last_sinfo_ptr->saddr;
 
                     _controller_ptr->failure(fmt::format("sending failure to {} ({}:{}): {}"
-                        , std::to_string(last_sinfo_ptr->uuid)
-                        , std::to_string(saddr.addr)
+                        , to_string(last_sinfo_ptr->uuid)
+                        , to_string(saddr.addr)
                         , saddr.port
                         , sock.error_string()));
                 } else {
@@ -856,4 +855,4 @@ private:
     }
 };
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p

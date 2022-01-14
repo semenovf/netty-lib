@@ -120,7 +120,8 @@ if [ -n "$ENABLE_PROFILER" ] ; then
     CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_PROFILER=$ENABLE_PROFILER"
 fi
 
-BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}
+#BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}
+BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}${BUILD_DIR_SUFFIX:-}
 
 # We are inside source directory
 if [ -d .git ] ; then

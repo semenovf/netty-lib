@@ -13,8 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 using string_type = std::string;
 
@@ -193,7 +192,7 @@ public:
      * @param [out] ec error code (if any errors occured):
      *         - std::errc::not_enough_memory
      *         - std::errc::value_too_large
-     *         - pfs::net::errc::system_error
+     *         - netty::errc::system_error
      * @return Network interfaces
      */
     friend std::vector<network_interface> fetch_interfaces (std::error_code & ec);
@@ -228,8 +227,8 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     , std::string const & interface_name
     , std::error_code & ec)
 {
-    auto ifaces = pfs::net::fetch_interfaces(ec, [un, & interface_name] (
-            pfs::net::network_interface const & iface) -> bool {
+    auto ifaces = fetch_interfaces(ec, [un, & interface_name] (
+            network_interface const & iface) -> bool {
         return un == usename::readable
             ? interface_name == iface.readable_name()
             : interface_name == iface.adapter_name();
@@ -238,9 +237,7 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     return ifaces;
 }
 
-}} // namespace pfs::net
+std::string to_string (network_interface_type type);
+std::string to_string (network_interface_status status);
 
-namespace std {
-    std::string to_string (pfs::net::network_interface_type type);
-    std::string to_string (pfs::net::network_interface_status status);
-}
+} // namespace netty

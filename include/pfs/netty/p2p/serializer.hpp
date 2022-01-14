@@ -11,8 +11,7 @@
 #include <cereal/archives/binary.hpp>
 #include <utility>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 template <typename T>
@@ -29,5 +28,5 @@ void load (cereal::BinaryInputArchive & ar, ntoh_wrapper<T> & r)
     *r.p = pfs::to_native_order(*r.p);
 }
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p
 

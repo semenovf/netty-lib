@@ -11,10 +11,10 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 #include "pfs/uuid.hpp"
-#include "pfs/net/p2p/envelope.hpp"
-#include "pfs/net/p2p/packet.hpp"
+#include "pfs/netty/p2p/envelope.hpp"
+#include "pfs/netty/p2p/packet.hpp"
 
-namespace p2p = pfs::net::p2p;
+namespace p2p = netty::p2p;
 
 namespace {
     constexpr std::size_t PACKET_SIZE = 64;

@@ -15,8 +15,7 @@
 #include <cassert>
 #include <cstring>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 // [SSSS][uuuuuuuuuuuuuuuu][PPPPPPPP][pppppppp][ssss][--PAYLOAD--]
@@ -102,4 +101,4 @@ inline void load (cereal::BinaryInputArchive & ar, packet & pkt)
         >> cereal::binary_data(pkt.payload, sizeof(pkt.payload));
 }
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p

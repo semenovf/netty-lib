@@ -8,118 +8,90 @@
 #      2021.06.22 Fixed completely.
 ################################################################################
 cmake_minimum_required (VERSION 3.5)
-project(net-p2p-lib CXX)
+project(netty-p2p-lib CXX)
 
-option(ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
-option(ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
-option(ENABLE_UDT "Enable UDT library (reliable UDP implementation)" OFF)
-option(ENABLE_NEW_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
-option(ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
-option(ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
+option(NETTY_P2P__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
+option(NETTY_P2P__ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
+option(NETTY_P2P__ENABLE_UDT "Enable UDT library (reliable UDP implementation)" OFF)
+option(NETTY_P2P__ENABLE_NEW_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
+option(NETTY_P2P__ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
+option(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
 
-if (ENABLE_QT5)
+portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty::p2p)
+
+if (NETTY_P2P__ENABLE_QT5)
     find_package(Qt5 COMPONENTS Core Network REQUIRED)
 
-    set(QT5_CORE_ENABLED ON CACHE BOOL "Qt5 Core enabled")
-    set(QT5_NETWORK_ENABLED ON CACHE BOOL "Qt5 Network enabled")
-endif(ENABLE_QT5)
+    set(NETTY_P2P__QT5_CORE_ENABLED ON CACHE BOOL "Qt5 Core enabled")
+    set(NETTY_P2P__QT5_NETWORK_ENABLED ON CACHE BOOL "Qt5 Network enabled")
+endif(NETTY_P2P__ENABLE_QT5)
 
-if (ENABLE_UDT)
-    set(UDT_ENABLED ON CACHE BOOL "UDT enabled")
-    set(UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/lib")
-    list(APPEND _compile_definitions "-DPFS_NET_P2P__UDT_ENABLED=1")
-endif(ENABLE_UDT)
+if (NETTY_P2P__ENABLE_UDT)
+    set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "UDT enabled")
+    set(NETTY_P2P__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/lib")
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__UDT_ENABLED=1")
+endif(NETTY_P2P__ENABLE_UDT)
 
-if (ENABLE_NEW_UDT)
-    set(UDT_ENABLED ON CACHE BOOL "modified UDT enabled")
-    set(UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/newlib")
-    list(APPEND _compile_definitions "-DPFS_NET_P2P__NEW_UDT_ENABLED=1")
-endif(ENABLE_NEW_UDT)
+if (NETTY_P2P__ENABLE_NEW_UDT)
+    set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "modified UDT enabled")
+    set(NETTY_P2P__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/newlib")
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__NEW_UDT_ENABLED=1")
+endif(NETTY_P2P__ENABLE_NEW_UDT)
 
-if (ENABLE_CEREAL)
-    set(CEREAL_ROOT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/cereal)
+if (NETTY_P2P__ENABLE_CEREAL)
+    set(NETTY_P2P__CEREAL_ROOT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/cereal)
     add_library(cereal INTERFACE)
 
     # Use mutexes to ensure thread safety
-    if (ENABLE_CEREAL_THREAD_SAFETY)
-        target_compile_definitions(cereal PUBLIC "-DCEREAL_THREAD_SAFE=1")
-    endif(ENABLE_CEREAL_THREAD_SAFETY)
+    if (NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY)
+        target_compile_definitions(cereal PUBLIC "CEREAL_THREAD_SAFE=1")
+    endif(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY)
 
-    target_include_directories(cereal INTERFACE ${CEREAL_ROOT}/include)
-    set(CEREAL_ENABLED ON CACHE BOOL "Cereal serialization library enabled")
-endif(ENABLE_CEREAL)
+    target_include_directories(cereal INTERFACE ${NETTY_P2P__CEREAL_ROOT}/include)
+    set(NETTY_P2P__CEREAL_ENABLED ON CACHE BOOL "Cereal serialization library enabled")
+endif(NETTY_P2P__ENABLE_CEREAL)
 
-list(APPEND _link_libraries pfs::net)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
 
-if (CEREAL_ENABLED)
-    list(APPEND _compile_definitions "-DCEREAL_ENABLED=1")
-    list(APPEND _link_libraries cereal)
+if (NETTY_P2P__CEREAL_ENABLED)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__CEREAL_ENABLED=1")
+    portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
 endif()
 
-if (QT5_CORE_ENABLED)
-    list(APPEND _compile_definitions "-DQT5_CORE_ENABLED=1")
-    list(APPEND _link_libraries Qt5::Core)
-endif(QT5_CORE_ENABLED)
+if (NETTY_P2P__QT5_CORE_ENABLED)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
+    portable_target(LINK ${PROJECT_NAME} PUBLIC Qt5::Core)
+endif(NETTY_P2P__QT5_CORE_ENABLED)
 
-if (QT5_NETWORK_ENABLED)
-    list(APPEND _compile_definitions "-DQT5_NETWORK_ENABLED=1")
-    list(APPEND _link_libraries Qt5::Network)
-endif(QT5_NETWORK_ENABLED)
+if (NETTY_P2P__QT5_NETWORK_ENABLED)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
+    portable_target(LINK ${PROJECT_NAME} PUBLIC Qt5::Network)
+endif(NETTY_P2P__QT5_NETWORK_ENABLED)
 
-if (UDT_ENABLED OR ENABLE_NEW_UDT)
+if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
     # UDT sources
-    list(APPEND SOURCES
-        ${UDT_ROOT}/api.cpp
-        ${UDT_ROOT}/buffer.cpp
-        ${UDT_ROOT}/cache.cpp
-        ${UDT_ROOT}/ccc.cpp
-        ${UDT_ROOT}/channel.cpp
-        ${UDT_ROOT}/common.cpp
-        ${UDT_ROOT}/core.cpp
-        ${UDT_ROOT}/epoll.cpp
-        ${UDT_ROOT}/list.cpp
-        ${UDT_ROOT}/md5.cpp
-        ${UDT_ROOT}/packet.cpp
-        ${UDT_ROOT}/queue.cpp
-        ${UDT_ROOT}/window.cpp)
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${NETTY_P2P__UDT_ROOT}/api.cpp
+        ${NETTY_P2P__UDT_ROOT}/buffer.cpp
+        ${NETTY_P2P__UDT_ROOT}/cache.cpp
+        ${NETTY_P2P__UDT_ROOT}/ccc.cpp
+        ${NETTY_P2P__UDT_ROOT}/channel.cpp
+        ${NETTY_P2P__UDT_ROOT}/common.cpp
+        ${NETTY_P2P__UDT_ROOT}/core.cpp
+        ${NETTY_P2P__UDT_ROOT}/epoll.cpp
+        ${NETTY_P2P__UDT_ROOT}/list.cpp
+        ${NETTY_P2P__UDT_ROOT}/md5.cpp
+        ${NETTY_P2P__UDT_ROOT}/packet.cpp
+        ${NETTY_P2P__UDT_ROOT}/queue.cpp
+        ${NETTY_P2P__UDT_ROOT}/window.cpp)
 
-    list(APPEND SOURCES
+    portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/api.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udp_socket.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
 
-    list(APPEND _compile_definitions "-DPFS_NET_P2P__RELIABLE_TRANSPORT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__RELIABLE_TRANSPORT_ENABLED=1")
 endif()
 
-# Make object files for STATIC and SHARED targets
-add_library(${PROJECT_NAME}_OBJLIB OBJECT ${SOURCES})
-
-add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
-add_library(${PROJECT_NAME}-static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
-add_library(pfs::net::p2p ALIAS ${PROJECT_NAME})
-add_library(pfs::net::p2p::static ALIAS ${PROJECT_NAME}-static)
-
-target_include_directories(${PROJECT_NAME}_OBJLIB PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-target_include_directories(${PROJECT_NAME}-static PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-
-# Shared libraries need PIC
-# For SHARED and MODULE libraries the POSITION_INDEPENDENT_CODE target property
-# is set to ON automatically, but need for OBJECT type
-set_property(TARGET ${PROJECT_NAME}_OBJLIB PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-target_link_libraries(${PROJECT_NAME}_OBJLIB PRIVATE ${_link_libraries})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${_link_libraries})
-target_link_libraries(${PROJECT_NAME}-static PUBLIC ${_link_libraries})
-
-target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE ${_compile_definitions})
-target_compile_definitions(${PROJECT_NAME} PUBLIC ${_compile_definitions})
-target_compile_definitions(${PROJECT_NAME}-static PUBLIC ${_compile_definitions})
-
-if (MSVC)
-    # Important! For compatiblity between STATIC and SHARED libraries
-    target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE -DPFS_NET_LIB_EXPORTS)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DPFS_NET_LIB_EXPORTS)
-    target_compile_definitions(${PROJECT_NAME}-static PUBLIC -DPFS_NET_LIB_STATIC)
-endif(MSVC)
+portable_target(EXPORTS ${PROJECT_NAME} NETTY__EXPORTS NETTY__STATIC)

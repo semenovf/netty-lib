@@ -8,13 +8,13 @@
 // Changelog:
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS_NET_P2P__TRACE_LEVEL 3
+#define NETTY_P2P__TRACE_LEVEL 3
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "pfs/net/inet4_addr.hpp"
-#include "pfs/net/p2p/engine.hpp"
-#include "pfs/net/p2p/qt5/api.hpp"
-#include "pfs/net/p2p/udt/api.hpp"
+#include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/p2p/engine.hpp"
+#include "pfs/netty/p2p/qt5/api.hpp"
+#include "pfs/netty/p2p/udt/api.hpp"
 #include <atomic>
 #include <thread>
 
@@ -61,13 +61,13 @@ static char loremipsum[] =
 40.videntur parum clari, fiant sollemnes in futurum.";
 
 namespace p2p {
-using inet4_addr           = pfs::net::inet4_addr;
-using controller           = pfs::net::p2p::controller;
-using discovery_socket_api = pfs::net::p2p::qt5::api;
-using reliable_socket_api  = pfs::net::p2p::udt::api;
+using inet4_addr           = netty::inet4_addr;
+using controller           = netty::p2p::controller;
+using discovery_socket_api = netty::p2p::qt5::api;
+using reliable_socket_api  = netty::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
 
-using engine = pfs::net::p2p::engine<
+using engine = netty::p2p::engine<
       discovery_socket_api
     , reliable_socket_api
     , DEFAULT_PACKET_SIZE>;
@@ -92,22 +92,22 @@ void on_failure (std::string const & error)
 }
 
 void on_rookie_accepted (pfs::uuid_t uuid
-    , pfs::net::inet4_addr const & addr
+    , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
     TRACE_1("HELO: {} ({}:{})"
-        , std::to_string(uuid)
-        , std::to_string(addr)
+        , to_string(uuid)
+        , to_string(addr)
         , port);
 }
 
 void on_writer_ready (pfs::uuid_t uuid
-    , pfs::net::inet4_addr const & addr
+    , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
     TRACE_1("WRITER READY: {} ({}:{})"
-        , std::to_string(uuid)
-        , std::to_string(addr)
+        , to_string(uuid)
+        , to_string(addr)
         , port);
 
     if (uuid == PEER2_UUID)
@@ -115,12 +115,12 @@ void on_writer_ready (pfs::uuid_t uuid
 }
 
 void on_peer_expired (pfs::uuid_t uuid
-    , pfs::net::inet4_addr const & addr
+    , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
     TRACE_1("EXPIRED: {} ({}:{})"
-        , std::to_string(uuid)
-        , std::to_string(addr)
+        , to_string(uuid)
+        , to_string(addr)
         , port);
 
     QUIT_PEER1 = true;
@@ -128,7 +128,7 @@ void on_peer_expired (pfs::uuid_t uuid
 
 void worker (p2p::engine & peer)
 {
-    TRACE_1("Peer started: {}", std::to_string(peer.uuid()));
+    TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
     while (true) {
         peer.loop();

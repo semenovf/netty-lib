@@ -13,8 +13,7 @@
 #include "pfs/uuid_crc.hpp"
 #include <cereal/archives/binary.hpp>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 struct hello_packet
@@ -72,4 +71,4 @@ inline bool is_valid (hello_packet const & pkt)
     return true;
 }
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p

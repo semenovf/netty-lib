@@ -8,11 +8,10 @@
 // Changelog:
 //      2017.07.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/inet4_addr.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include <cassert>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 static std::string const DEFAULT_FORMAT = "%a.%b.%c.%d";
 
@@ -189,4 +188,4 @@ std::string to_string (inet4_addr const & addr, std::string const & format, int 
     return r;
 }
 
-}} // namespace pfs::net
+} // namespace netty

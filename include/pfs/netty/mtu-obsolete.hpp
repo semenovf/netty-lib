@@ -11,8 +11,7 @@
 #include "error.hpp"
 #include <string>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 /**
  * Returns MTU (Maximum Transfer Unit) value of a device specified
@@ -26,7 +25,7 @@ namespace net {
  *     * @c errc::system_error if system specific call returns error,
  *       check @c errno value.
  */
-PFS_NET_DLL_API int mtu (std::string const & iface, std::error_code & ec) noexcept;
+NETTY__EXPORT int mtu (std::string const & iface, std::error_code & ec) noexcept;
 
 /**
  * Returns MTU (Maximum Transfer Unit) value of a device specified
@@ -45,4 +44,4 @@ inline int mtu (std::string const & iface)
     return result;
 }
 
-}} // namespace pfs::net
+} // namespace netty

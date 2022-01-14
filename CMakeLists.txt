@@ -5,94 +5,44 @@
 #
 # Changelog:
 #      2021.06.21 Initial version
+#      2022.01.14 Updated according new template.
 ################################################################################
 cmake_minimum_required (VERSION 3.11)
-project(net-lib-ALL CXX)
+project(netty-lib-ALL CXX)
 
-option(PFS_NET__BUILD_STRICT "Build with strict policies: C++ standard required, C++ extension is OFF etc" ON)
-option(PFS_NET__BUILD_TESTS "Build tests" OFF)
-option(PFS_NET__BUILD_DEMO "Build examples/demo" OFF)
-option(PFS_NET__ENABLE_COVERAGE "Build tests with coverage support" OFF)
-option(PFS_NET__ENABLE_PROFILER "Build with profiling support" OFF)
-# option(ENABLE_NANOMSG "Enable NNG (network backend) library" OFF)
-# option(ENABLE_LIBZMQ "Enable ZeroMQ library (network backend)" OFF)
+option(NETTY__BUILD_STRICT "Build with strict policies: C++ standard required, C++ extension is OFF etc" ON)
+option(NETTY__BUILD_TESTS "Build tests" OFF)
+option(NETTY__BUILD_DEMO "Build examples/demo" OFF)
+option(NETTY__ENABLE_COVERAGE "Build tests with coverage support" OFF)
+option(NETTY__ENABLE_PROFILER "Build with profiling support" OFF)
+
+if (NOT PORTABLE_TARGET__ENABLED)
+    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/3rdparty/portable-target/cmake/v2)
+    include(PortableTarget)
+    portable_target(SET ENABLE_TRACE ON)
+endif()
 
 message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "C++ compiler version: ${CMAKE_CXX_COMPILER_VERSION}")
 
-if (PFS_NET__BUILD_STRICT)
+if (NETTY__BUILD_STRICT)
     set(CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF) # use -std=c++XX rather than -std=gnu++XX
-endif()
-
-# if (ENABLE_NANOMSG)
-#     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared library")
-#     set(NNG_TESTS OFF CACHE BOOL "Build and run tests.")
-#     set(NNG_TOOLS OFF CACHE BOOL "Build extra tools.")
-#     set(NNG_ENABLE_NNGCAT OFF CACHE BOOL "Enable building nngcat utility.")
-#     set(NNG_ENABLE_COVERAGE OFF CACHE BOOL "Enable coverage reporting.")
-#     set(NNG_ELIDE_DEPRECATED OFF CACHE BOOL "Elide deprecated functionality.")
-#     set(NNG_ENABLE_STATS OFF CACHE BOOL "Enable statistics.")
-#
-#     # Protocols.
-#     set(NNG_PROTO_BUS0 ON CACHE BOOL "Enable BUSv0 protocol.")
-#     set(NNG_PROTO_PAIR0 ON CACHE BOOL "Enable PAIRv0 protocol.")
-#     set(NNG_PROTO_PAIR1 ON CACHE BOOL "Enable PAIRv1 protocol.")
-#     set(NNG_PROTO_PUSH0 ON CACHE BOOL "Enable PUSHv0 protocol.")
-#     set(NNG_PROTO_PULL0 ON CACHE BOOL "Enable PULLv0 protocol.")
-#     set(NNG_PROTO_PUB0 ON CACHE BOOL "Enable PUBv0 protocol.")
-#     set(NNG_PROTO_SUB0 ON CACHE BOOL "Enable SUBv0 protocol.")
-#     set(NNG_PROTO_REQ0 ON CACHE BOOL "Enable REQv0 protocol.")
-#     set(NNG_PROTO_REP0 ON CACHE BOOL "Enable REPv0 protocol.")
-#     set(NNG_PROTO_RESPONDENT0 ON CACHE BOOL "Enable RESPONDENTv0 protocol.")
-#     set(NNG_PROTO_SURVEYOR0 ON CACHE BOOL "Enable SURVEYORv0 protocol.")
-#
-#     # TLS support.
-#     # Enabling TLS is required to enable support for the TLS transport
-#     # and WSS. It does require a 3rd party TLS engine to be selected.
-#     set(NNG_ENABLE_TLS OFF CACHE BOOL "Enable TLS support.")
-#
-#     # HTTP API support.
-#     set(NNG_ENABLE_HTTP OFF CACHE BOOL "Enable HTTP API.")
-#
-#     # Transport Options.
-#     set(NNG_TRANSPORT_INPROC OFF CACHE BOOL "Enable inproc transport.")
-#     set(NNG_TRANSPORT_IPC OFF CACHE BOOL "Enable IPC transport.")
-#     set(NNG_TRANSPORT_TCP ON CACHE BOOL "Enable TCP transport.")
-#     set(NNG_TRANSPORT_TLS OFF CACHE BOOL "Enable TLS transport.")
-#     set(NNG_TRANSPORT_WS OFF CACHE BOOL "Enable WebSocket transport.")
-#     set(NNG_TRANSPORT_ZEROTIER OFF CACHE BOOL "Enable ZeroTier transport (requires libzerotiercore).")
-#
-#     add_subdirectory(3rdparty/nng)
-# endif(ENABLE_NANOMSG)
-
-# if (ENABLE_LIBZMQ)
-#     set(WITH_PERF_TOOL OFF CACHE BOOL "")
-#     set(ZMQ_BUILD_TESTS OFF CACHE BOOL "")
-#     set(ENABLE_CPACK OFF CACHE BOOL "")
-#     add_subdirectory(3rdparty/libzmq)
-#
-#     set(CPPZMQ_BUILD_TESTS OFF CACHE BOOL "")
-#     add_subdirectory(3rdparty/cppzmq)
-# endif(ENABLE_LIBZMQ)
-
-if (NOT TARGET pfs::common)
-    include(${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
 
-if (PFS_NET__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
+if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-if (PFS_NET__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/demo)
+if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/demo)
     add_subdirectory(demo)
 endif()
 
-if (PFS_NET__ENABLE_PROFILER)
+if (NETTY__ENABLE_PROFILER)
     message(STATUS "Profiler feature enabled")
 
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -101,5 +51,4 @@ if (PFS_NET__ENABLE_PROFILER)
     else()
         message(FATAL_ERROR "Profiler feature requires GCC")
     endif()
-
 endif()

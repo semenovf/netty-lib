@@ -4,3 +4,6 @@
 [submodule "3rdparty/cereal"]
 	path = 3rdparty/cereal
 	url = https://github.com/USCiLab/cereal.git
+[submodule "3rdparty/portable-target"]
+	path = 3rdparty/portable-target
+	url = git@github.com:semenovf/portable-target.git

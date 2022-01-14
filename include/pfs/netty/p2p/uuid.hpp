@@ -15,25 +15,24 @@
 #include <utility>
 #include <cassert>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 using uuid_t = pfs::uuid_t;
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p
 
 namespace cereal {
 
-void save (cereal::BinaryOutputArchive & ar, pfs::net::p2p::uuid_t const & uuid)
+void save (cereal::BinaryOutputArchive & ar, netty::p2p::uuid_t const & uuid)
 {
     auto a = pfs::to_array(uuid, pfs::endian::network);
     ar << cereal::binary_data(a.data(), a.size());
 }
 
-void load (cereal::BinaryInputArchive & ar, pfs::net::p2p::uuid_t & uuid)
+void load (cereal::BinaryInputArchive & ar, netty::p2p::uuid_t & uuid)
 {
-    decltype(pfs::to_array(pfs::net::p2p::uuid_t{}, pfs::endian::network)) a;
+    decltype(pfs::to_array(netty::p2p::uuid_t{}, pfs::endian::network)) a;
     ar >> cereal::binary_data(a.data(), a.size());
     uuid = pfs::make_uuid(a, pfs::endian::network);
 }

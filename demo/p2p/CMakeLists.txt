@@ -10,4 +10,4 @@
 project(p2p)
 
 add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} pfs::net::p2p pfs::net)
+target_link_libraries(${PROJECT_NAME} pfs::netty::p2p pfs::netty)

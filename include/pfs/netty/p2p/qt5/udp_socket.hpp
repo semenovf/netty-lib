@@ -7,7 +7,7 @@
 //      2021.10.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/net/inet4_addr.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include "pfs/emitter.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
@@ -21,8 +21,7 @@
 #   include <QNetworkDatagram>
 #endif
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace qt5 {
 
@@ -75,7 +74,7 @@ private:
 
         if (!group_addr.isMulticast()) {
             failure(fmt::format("bad multicast address: {}"
-                , std::to_string(addr)));
+                , to_string(addr)));
             return false;
         }
 
@@ -256,5 +255,4 @@ public:
     udp_socket & operator = (udp_socket &&) = default;
 };
 
-}}}} // namespace pfs::net::p2p::qt5
-
+}}} // namespace netty::p2p::qt5

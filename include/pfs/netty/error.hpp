@@ -9,8 +9,7 @@
 #pragma once
 #include <system_error>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Error codes, category, exception class
@@ -71,5 +70,4 @@ inline std::system_error make_exception (errc e)
     return std::system_error(make_error_code(e));
 }
 
-}} // namespace pfs::net
-
+} // namespace netty

@@ -7,11 +7,11 @@
 //      2021.10.28 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/fmt.hpp"
-#include "pfs/net/p2p/udt/poller.hpp"
+#include "pfs/netty/p2p/udt/poller.hpp"
 #include <set>
 #include <cassert>
 
-#if PFS_NET_P2P__NEW_UDT_ENABLED
+#if NETTY_P2P__NEW_UDT_ENABLED
 #   include "newlib/core.hpp"
 #   include "newlib/udt.hpp"
 #else
@@ -19,11 +19,10 @@
 #   include "lib/udt.h"
 #endif
 
-#define PFS_NET_P2P__TRACE_LEVEL 3
-#include "pfs/net/p2p/trace.hpp"
+#define NETTY_P2P__TRACE_LEVEL 3
+#include "pfs/netty/p2p/trace.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -147,4 +146,4 @@ void poller::process_events (input_callback_type && input_callback
     }
 }
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

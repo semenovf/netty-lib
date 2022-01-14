@@ -9,8 +9,7 @@
 #pragma once
 #include "udp_socket.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace qt5 {
 
@@ -29,4 +28,4 @@ public:
     static void cleanup () {}
 };
 
-}}}} // namespace pfs::net::p2p::qt5
+}}} // namespace netty::p2p::qt5

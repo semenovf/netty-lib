@@ -12,8 +12,7 @@
 #include <string>
 #include <functional>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 /**
  * @brief Satisfies Concepts:
@@ -212,10 +211,6 @@ inline bool is_multicast (inet4_addr const & addr)
         && addr <= inet4_addr{239, 255, 255, 255};
 }
 
-}} // pfs::net
-
-namespace std {
-
 /**
  * @brief Converts IPv4 address to string with format "%a.%b.%c.%d" and base 10.
  *
@@ -223,9 +218,9 @@ namespace std {
  * @return String representation of IPv4 address. If @a addr is not valid
  *         result will be an empty string.
  */
-inline std::string to_string (pfs::net::inet4_addr const & addr)
+inline std::string to_string (inet4_addr const & addr)
 {
-    return pfs::net::to_string(addr, std::string{}, 10);
+    return to_string(addr, std::string{}, 10);
 }
 
-} // std
+} // netty

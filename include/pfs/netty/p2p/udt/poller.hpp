@@ -14,8 +14,7 @@
 #include <memory>
 #include <string>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -63,4 +62,4 @@ private:
     void failure_helper (std::string const & reason);
 };
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

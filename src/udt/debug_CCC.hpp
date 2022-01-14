@@ -8,14 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/fmt.hpp"
 
-#if PFS_NET_P2P__NEW_UDT_ENABLED
+#if NETTY_P2P__NEW_UDT_ENABLED
 #   include "newlib/ccc.hpp"
 #else
 #   include "lib/ccc.h"
 #endif
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -32,4 +31,4 @@ public:
     void processCustomMsg (CPacket const *) override;
 };
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

@@ -7,15 +7,14 @@
 //      2021.10.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/net/inet4_addr.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include "pfs/emitter.hpp"
 #include "pfs/fmt.hpp"
 #include <string>
 #include <utility>
 #include <vector>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 namespace udt {
 
@@ -101,4 +100,4 @@ public: // static
     static std::string state_string (int state);
 };
 
-}}}} // namespace pfs::net::p2p::udt
+}}} // namespace netty::p2p::udt

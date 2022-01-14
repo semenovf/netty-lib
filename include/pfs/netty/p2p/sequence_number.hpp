@@ -9,12 +9,11 @@
 #pragma once
 #include <cstdint>
 
-namespace pfs {
-namespace net {
+namespace netty {
 namespace p2p {
 
 using sequence_number = std::uint32_t;
 
-}}} // namespace pfs::net::p2p
+}} // namespace netty::p2p
 
 
