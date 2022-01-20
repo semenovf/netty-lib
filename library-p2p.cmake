@@ -10,6 +10,7 @@
 cmake_minimum_required (VERSION 3.5)
 project(netty-p2p-lib CXX)
 
+option(NETTY_P2P__STATIC_ONLY "Build static only" OFF)
 option(NETTY_P2P__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
 option(NETTY_P2P__ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
 option(NETTY_P2P__ENABLE_UDT "Enable UDT library (reliable UDP implementation)" OFF)
@@ -17,13 +18,18 @@ option(NETTY_P2P__ENABLE_NEW_UDT "Enable modified UDT library (reliable UDP impl
 option(NETTY_P2P__ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
 option(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
 
-portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty::p2p)
+if (NETTY_P2P__STATIC_ONLY)
+    portable_target(LIBRARY ${PROJECT_NAME} STATIC ALIAS pfs::netty::p2p)
+else()
+    portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty::p2p)
+endif()
 
 if (NETTY_P2P__ENABLE_QT5)
     find_package(Qt5 COMPONENTS Core Network REQUIRED)
 
-    set(NETTY_P2P__QT5_CORE_ENABLED ON CACHE BOOL "Qt5 Core enabled")
-    set(NETTY_P2P__QT5_NETWORK_ENABLED ON CACHE BOOL "Qt5 Network enabled")
+    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PRIVATE Core Network)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
 endif(NETTY_P2P__ENABLE_QT5)
 
 if (NETTY_P2P__ENABLE_UDT)
@@ -48,25 +54,12 @@ if (NETTY_P2P__ENABLE_CEREAL)
     endif(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY)
 
     target_include_directories(cereal INTERFACE ${NETTY_P2P__CEREAL_ROOT}/include)
-    set(NETTY_P2P__CEREAL_ENABLED ON CACHE BOOL "Cereal serialization library enabled")
+
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__CEREAL_ENABLED=1")
+    portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
 portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
-
-if (NETTY_P2P__CEREAL_ENABLED)
-    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__CEREAL_ENABLED=1")
-    portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
-endif()
-
-if (NETTY_P2P__QT5_CORE_ENABLED)
-    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
-    portable_target(LINK ${PROJECT_NAME} PUBLIC Qt5::Core)
-endif(NETTY_P2P__QT5_CORE_ENABLED)
-
-if (NETTY_P2P__QT5_NETWORK_ENABLED)
-    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
-    portable_target(LINK ${PROJECT_NAME} PUBLIC Qt5::Network)
-endif(NETTY_P2P__QT5_NETWORK_ENABLED)
 
 if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
     # UDT sources

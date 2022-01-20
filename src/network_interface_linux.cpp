@@ -16,12 +16,18 @@
 #include <map>
 #include <cstring>
 #include <sys/types.h>
-#include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+
+#if defined(ANDROID) && defined(__ANDROID_API__) && __ANDROID_API__ < 24
+#   include "ifaddrs_android.h"
+#   include "ifaddrs_android.c"
+#else
+#   include <ifaddrs.h>
+#endif
 
 namespace netty {
 

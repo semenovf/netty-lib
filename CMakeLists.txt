@@ -15,6 +15,7 @@ option(NETTY__BUILD_TESTS "Build tests" OFF)
 option(NETTY__BUILD_DEMO "Build examples/demo" OFF)
 option(NETTY__ENABLE_COVERAGE "Build tests with coverage support" OFF)
 option(NETTY__ENABLE_PROFILER "Build with profiling support" OFF)
+option(NETTY__BUILD_P2P "Build netty-p2p library" ON)
 
 if (NOT PORTABLE_TARGET__ENABLED)
     list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/3rdparty/portable-target/cmake/v2)
@@ -31,7 +32,10 @@ if (NETTY__BUILD_STRICT)
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
-include(${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
+
+if (NETTY__BUILD_P2P)
+    include(${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
+endif()
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
     enable_testing()

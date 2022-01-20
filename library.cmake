@@ -12,14 +12,19 @@ cmake_minimum_required (VERSION 3.11)
 project(netty-lib CXX)
 
 # option(NETTY__ENABLE_NANOMSG "Enable NNG (network backend) library" OFF)
-# option(NETTY__ENABLE_LIBZMQ "Enable ZeroMQ library (network backend)" OFF)
+option(NETTY__STATIC_ONLY "Build static only" OFF)
 
 if (NOT TARGET pfs::common)
     portable_target(INCLUDE_PROJECT
         ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
 endif()
 
-portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty)
+if (NETTY__STATIC_ONLY)
+    portable_target(LIBRARY ${PROJECT_NAME} STATIC ALIAS pfs::netty)
+else()
+    portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty)
+endif()
+
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)
 
