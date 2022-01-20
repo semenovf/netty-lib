@@ -8,12 +8,9 @@
 // Changelog:
 //      2021.06.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/network_interface.hpp"
+#include "pfs/netty/network_interface.hpp"
 
-namespace std {
-
-using pfs::net::network_interface_type;
-using pfs::net::network_interface_status;
+namespace netty {
 
 std::string to_string (network_interface_type type)
 {
@@ -68,4 +65,4 @@ std::string to_string (network_interface_status status)
     return std::string{"unknown"};
 }
 
-} // namespace std
+} // namespace netty

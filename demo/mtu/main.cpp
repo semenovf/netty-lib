@@ -6,7 +6,7 @@
 // Changelog:
 //      2021.06.21 Initial version
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/network_interface.hpp"
+#include "pfs/netty/network_interface.hpp"
 #include <iostream>
 #include <string>
 #include <cerrno>
@@ -28,18 +28,19 @@ int main (int argc, char * argv[])
     std::error_code ec;
     auto interface_name = argv[1];
 
-    auto ifaces = pfs::net::fetch_interfaces(ec, [& interface_name] (pfs::net::network_interface const & iface) -> bool {
+    auto ifaces = netty::fetch_interfaces(ec, [& interface_name] (netty::network_interface const & iface) -> bool {
         std::cout << "Adapter name: "  << iface.adapter_name() << "\n";
         std::cout << "\tReadable name: " << iface.readable_name() << "\n";
         std::cout << "\tDescription  : " << iface.description() << "\n";
         std::cout << "\tHW address   : " << iface.hardware_address() << "\n";
-        std::cout << "\tType         : " << std::to_string(iface.type()) << "\n";
-        std::cout << "\tStatus       : " << std::to_string(iface.status()) << "\n";
+        std::cout << "\tType         : " << to_string(iface.type()) << "\n";
+        std::cout << "\tStatus       : " << to_string(iface.status()) << "\n";
         std::cout << "\tMTU          : " << iface.mtu() << "\n";
-        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag_on(pfs::net::network_interface_flag::ip4_enabled) << "\n";
-        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag_on(pfs::net::network_interface_flag::ip6_enabled) << "\n";
+        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag_on(netty::network_interface_flag::ip4_enabled) << "\n";
+        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag_on(netty::network_interface_flag::ip6_enabled) << "\n";
         std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
         std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
+        std::cout << "\tIPv4         : " << to_string(iface.ip4_addr()) << "\n";
         std::cout << "\n\n";
         return interface_name == iface.adapter_name();
     });
@@ -49,7 +50,7 @@ int main (int argc, char * argv[])
             << interface_name << "]: "
             << ec.message() << std::endl;
 
-        if (ec == pfs::net::make_error_code(pfs::net::errc::system_error)) {
+        if (ec == netty::make_error_code(netty::errc::system_error)) {
             std::cerr << "ERROR: errno: " << errno << std::endl;
         }
         return EXIT_FAILURE;
@@ -57,9 +58,9 @@ int main (int argc, char * argv[])
 
 
     {
-        using pfs::net::fetch_interfaces_by_name;
+        using netty::fetch_interfaces_by_name;
 
-        auto ifaces = fetch_interfaces_by_name(pfs::net::usename::adapter
+        auto ifaces = fetch_interfaces_by_name(netty::usename::adapter
             , interface_name
             , ec);
 

@@ -12,17 +12,18 @@
 // Changelog:
 //      2021.06.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/network_interface.hpp"
+#include "pfs/netty/network_interface.hpp"
 #include <map>
 #include <cstring>
 #include <sys/types.h>
 #include <ifaddrs.h>
+#include <arpa/inet.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 static bool ioctl_helper (int fd
     , unsigned long request
@@ -106,6 +107,11 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
                 if (ioctl_helper(sock, SIOCGIFMTU, & ifr, ec))
                     iface->_data.mtu = ifr.ifr_mtu;
 
+                if (ioctl_helper(sock, SIOCGIFADDR, & ifr, ec)) {
+                    auto p = reinterpret_cast<struct sockaddr_in *>(& ifr.ifr_addr);
+                    iface->_data.ip4 = htonl(p->sin_addr.s_addr);
+                }
+
                 if (ioctl_helper(sock, SIOCGIFFLAGS, & ifr, ec)) {
                     // Interface is a loopback interface
                     if (ifr.ifr_flags & IFF_LOOPBACK)
@@ -133,7 +139,6 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
                     // IFF_LOWER_UP      Driver signals L1 up (since Linux 2.6.17)
                     // IFF_DORMANT       Driver signals dormant (since Linux 2.6.17)
                     // IFF_ECHO          Echo sent packets (since Linux 2.6.25)
-
                 }
             } else {
                 iface = & result[it->second];
@@ -146,4 +151,4 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     return result;
 }
 
-}} // pfs
+} // namespace netty

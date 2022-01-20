@@ -13,7 +13,7 @@
 //      2021.06.21 Initial version
 //      2021.06.21 Use 2-way to get MTU: mtu_alternative0() and mtu_alternative1()
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/mtu.hpp"
+#include "pfs/netty/mtu-obsolete.hpp"
 #include <cstring>
 #include <fstream>
 #include <sys/ioctl.h>
@@ -22,8 +22,7 @@
 #include <net/if.h>
 #include <unistd.h>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 //
 // See `man 7 netdevice`.
@@ -103,7 +102,7 @@ static int mtu_alternative1 (std::string const & interface, std::error_code & ec
     return result;
 }
 
-DLL_API int mtu (std::string const & interface, std::error_code & ec) noexcept
+NETTY__EXPORT int mtu (std::string const & interface, std::error_code & ec) noexcept
 {
     auto result = mtu_alternative0(interface, ec);
 
@@ -113,4 +112,4 @@ DLL_API int mtu (std::string const & interface, std::error_code & ec) noexcept
     return result;
 }
 
-}} // namespace pfs::net
+} // namespace netty

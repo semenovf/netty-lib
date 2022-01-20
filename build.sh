@@ -5,10 +5,18 @@
 # Unified build script for Linux distributions
 #
 # Changelog:
-#      2021.05.20 Initial version
+#      2021.05.20 Initial version.
+#      2021.11.07 Added PROJECT_OPT_PREFIX variable.
+#      2021.11.08 SOURCE_DIR recognition modified.
+#      2021.11.19 Added support for profiling.
 ################################################################################
 
-CMAKE_OPTIONS=
+CMAKE_OPTIONS="${CMAKE_OPTIONS}"
+
+if [ -z "$PROJECT_OPT_PREFIX" ] ; then
+    echo "ERROR: PROJECT_OPT_PREFIX is mandatory." >&2
+    exit 1
+fi
 
 if [ -z "$BUILD_GENERATOR" ] ; then
     if command -v ninja > /dev/null ; then
@@ -31,7 +39,7 @@ if [ -n $BUILD_STRICT ] ; then
 fi
 
 if [ -n "$BUILD_STRICT" ] ; then
-    CMAKE_OPTIONS="$CMAKE_OPTIONS -DBUILD_STRICT=$BUILD_STRICT"
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}BUILD_STRICT=$BUILD_STRICT"
 fi
 
 if [ -n "$CXX_STANDARD" ] ; then
@@ -64,7 +72,7 @@ if [ -n $BUILD_TESTS ] ; then
 fi
 
 if [ -n "$BUILD_TESTS" ] ; then
-    CMAKE_OPTIONS="$CMAKE_OPTIONS -DBUILD_TESTS=$BUILD_TESTS"
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}BUILD_TESTS=$BUILD_TESTS"
 fi
 
 if [ -n $BUILD_DEMO ] ; then
@@ -79,7 +87,7 @@ if [ -n $BUILD_DEMO ] ; then
 fi
 
 if [ -n "$BUILD_DEMO" ] ; then
-    CMAKE_OPTIONS="$CMAKE_OPTIONS -DBUILD_DEMO=$BUILD_DEMO"
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}BUILD_DEMO=$BUILD_DEMO"
 fi
 
 if [ -n $ENABLE_COVERAGE ] ; then
@@ -94,22 +102,40 @@ if [ -n $ENABLE_COVERAGE ] ; then
 fi
 
 if [ -n "$ENABLE_COVERAGE" ] ; then
-    CMAKE_OPTIONS="$CMAKE_OPTIONS -DENABLE_COVERAGE=$ENABLE_COVERAGE"
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_COVERAGE=$ENABLE_COVERAGE"
 fi
 
-BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}
+if [ -n $ENABLE_PROFILER ] ; then
+    case $ENABLE_PROFILER in
+        [Oo][Nn])
+            ENABLE_PROFILER=ON
+            ;;
+        *)
+            unset ENABLE_PROFILER
+            ;;
+    esac
+fi
+
+if [ -n "$ENABLE_PROFILER" ] ; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_PROFILER=$ENABLE_PROFILER"
+fi
+
+#BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}
+BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}${BUILD_DIR_SUFFIX:-}
 
 # We are inside source directory
 if [ -d .git ] ; then
-    if [ -z "$ENABLE_COVERAGE" ] ; then
+    if [ -z "$SOURCE_DIR" ] ; then
         SOURCE_DIR=`pwd`
     fi
-    cd ..
+    BUILD_DIR="../$BUILD_DIR"
 fi
 
 if [ -z "$SOURCE_DIR" ] ; then
-    if [ -d src/.git ] ; then
-        SOURCE_DIR=`pwd`/src
+    # We are inside subdirectory (usually from scripts directory)
+    if [ -d ../.git ] ; then
+        SOURCE_DIR=`pwd`/..
+        BUILD_DIR="../../$BUILD_DIR"
     else
         echo "ERROR: SOURCE_DIR must be specified" >&2
         exit 1
@@ -118,7 +144,7 @@ fi
 
 mkdir -p ${BUILD_DIR} \
     && cd ${BUILD_DIR} \
-    && cmake -G ${BUILD_GENERATOR} $CMAKE_OPTIONS $SOURCE_DIR \
+    && cmake -G "${BUILD_GENERATOR}" $CMAKE_OPTIONS $SOURCE_DIR \
     && cmake --build . \
     && [ -n "$BUILD_TESTS" ] && ctest \
     && [ -n "$ENABLE_COVERAGE" ] && cmake --build . --target Coverage

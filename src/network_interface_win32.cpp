@@ -8,7 +8,7 @@
 // Changelog:
 //      2021.06.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/net/network_interface.hpp"
+#include "pfs/netty/network_interface.hpp"
 #include <vector>
 #include <winsock2.h>
 #include <iphlpapi.h>
@@ -17,8 +17,7 @@
 // Must be included after winsock2.h to avoid error C2375
 #include "pfs/windows.hpp"
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 struct wsa_session
 {
@@ -290,4 +289,4 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     return result;
 }
 
-}} // namespace pfs::net
+} // namespace netty

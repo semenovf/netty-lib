@@ -9,16 +9,18 @@
 //      2021.06.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#ifndef PFS_NET_STATIC_LIB
-#   ifndef PFS_NET_DLL_API
+#ifndef NETTY__STATIC
+#   ifndef NETTY__EXPORT
 #       if _MSC_VER
-#           if defined(PFS_NET_DLL_EXPORTS)
-#               define PFS_NET_DLL_API __declspec(dllexport)
+#           if defined(NETTY__EXPORTS)
+#               define NETTY__EXPORT __declspec(dllexport)
 #           else
-#               define PFS_NET_DLL_API __declspec(dllimport)
+#               define NETTY__EXPORT __declspec(dllimport)
 #           endif
+#       else
+#           define NETTY__EXPORT
 #       endif
 #   endif
 #else
-#   define PFS_NET_DLL_API
-#endif // !PFS_NET_STATIC_LIB
+#   define NETTY__EXPORT
+#endif // !NETTY__STATIC

@@ -9,11 +9,11 @@
 #pragma once
 #include "exports.hpp"
 #include "error.hpp"
+#include "inet4_addr.hpp"
 #include <string>
 #include <vector>
 
-namespace pfs {
-namespace net {
+namespace netty {
 
 using string_type = std::string;
 
@@ -70,6 +70,9 @@ struct network_interface_data
     // The maximum transmission unit (MTU) size, in bytes.
     uint32_t mtu {0};
 
+    // IPv4 address associated with interface
+    inet4_addr ip4;
+
     string_type adapter_name;
 
     // A user-friendly name for the adapter.
@@ -106,6 +109,11 @@ public:
     network_interface (network_interface && ) = default;
     network_interface & operator = (network_interface const & ) = default;
     network_interface & operator = (network_interface && ) = default;
+
+    inet4_addr ip4_addr () const noexcept
+    {
+        return _data.ip4;
+    }
 
     int ip4_index () const noexcept
     {
@@ -184,7 +192,7 @@ public:
      * @param [out] ec error code (if any errors occured):
      *         - std::errc::not_enough_memory
      *         - std::errc::value_too_large
-     *         - pfs::net::errc::system_error
+     *         - netty::errc::system_error
      * @return Network interfaces
      */
     friend std::vector<network_interface> fetch_interfaces (std::error_code & ec);
@@ -219,8 +227,8 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     , std::string const & interface_name
     , std::error_code & ec)
 {
-    auto ifaces = pfs::net::fetch_interfaces(ec, [un, & interface_name] (
-            pfs::net::network_interface const & iface) -> bool {
+    auto ifaces = fetch_interfaces(ec, [un, & interface_name] (
+            network_interface const & iface) -> bool {
         return un == usename::readable
             ? interface_name == iface.readable_name()
             : interface_name == iface.adapter_name();
@@ -229,9 +237,7 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     return ifaces;
 }
 
-}} // namespace pfs::net
+std::string to_string (network_interface_type type);
+std::string to_string (network_interface_status status);
 
-namespace std {
-    std::string to_string (pfs::net::network_interface_type type);
-    std::string to_string (pfs::net::network_interface_status status);
-}
+} // namespace netty

@@ -4,6 +4,12 @@
 # This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
 #
 # Changelog:
-#      2021.06.21 Initial version
+#      2021.06.21 Initial version.
 ################################################################################
 add_subdirectory(mtu)
+
+# if (ENABLE_LIBZMQ)
+#     add_subdirectory(lazypirate)
+# endif(ENABLE_LIBZMQ)
+
+add_subdirectory(p2p)

@@ -6,49 +6,91 @@
 # Changelog:
 #      2021.06.21 Initial version.
 #      2021.06.22 Fixed completely.
+#      2022.01.14 Refactored for use `portable_target`.
 ################################################################################
-cmake_minimum_required (VERSION 3.5)
-project(net-lib CXX)
+cmake_minimum_required (VERSION 3.11)
+project(netty-lib CXX)
+
+# option(NETTY__ENABLE_NANOMSG "Enable NNG (network backend) library" OFF)
+# option(NETTY__ENABLE_LIBZMQ "Enable ZeroMQ library (network backend)" OFF)
+
+if (NOT TARGET pfs::common)
+    portable_target(INCLUDE_PROJECT
+        ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
+endif()
+
+portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty)
+portable_target(SOURCES ${PROJECT_NAME}
+    ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)
 
 if (UNIX)
-    list(APPEND SOURCES
+    portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
 elseif (MSVC)
-    list(APPEND SOURCES
+    portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_win32.cpp)
 else()
     message (FATAL_ERROR "Unsupported platform")
 endif()
 
-# Make object files for STATIC and SHARED targets
-add_library(${PROJECT_NAME}_OBJLIB OBJECT ${SOURCES})
-
-add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
-add_library(${PROJECT_NAME}-static STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_OBJLIB>)
-add_library(pfs::net ALIAS ${PROJECT_NAME})
-add_library(pfs::net::static ALIAS ${PROJECT_NAME}-static)
-
-target_include_directories(${PROJECT_NAME}_OBJLIB PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-target_include_directories(${PROJECT_NAME}-static PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-
-# Shared libraries need PIC
-# For SHARED and MODULE libraries the POSITION_INDEPENDENT_CODE target property
-# is set to ON automatically, but need for OBJECT type
-set_property(TARGET ${PROJECT_NAME}_OBJLIB PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-target_link_libraries(${PROJECT_NAME}_OBJLIB PRIVATE pfs::common)
-target_link_libraries(${PROJECT_NAME} PUBLIC pfs::common)
-target_link_libraries(${PROJECT_NAME}-static PUBLIC pfs::common)
+portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
 
 if (MSVC)
-    # Important! For compatiblity between STATIC and SHARED libraries
-    target_compile_definitions(${PROJECT_NAME}_OBJLIB PRIVATE -DPFS_NET_DLL_EXPORTS)
-
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DPFS_NET_DLL_EXPORTS -DUNICODE -D_UNICODE)
-    target_compile_definitions(${PROJECT_NAME}-static PUBLIC -DPFS_NET_STATIC_LIB -DUNICODE -D_UNICODE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
-    target_link_libraries(${PROJECT_NAME}-static PRIVATE Ws2_32 Iphlpapi)
+    portable_target(LINK ${PROJECT_NAME} PUBLIC Ws2_32 Iphlpapi)
 endif(MSVC)
+
+portable_target(EXPORTS ${PROJECT_NAME} NETTY__EXPORTS NETTY__STATIC)
+
+# if (NETTY__ENABLE_NANOMSG)
+#     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared library")
+#     set(NNG_TESTS OFF CACHE BOOL "Build and run tests.")
+#     set(NNG_TOOLS OFF CACHE BOOL "Build extra tools.")
+#     set(NNG_ENABLE_NNGCAT OFF CACHE BOOL "Enable building nngcat utility.")
+#     set(NNG_ENABLE_COVERAGE OFF CACHE BOOL "Enable coverage reporting.")
+#     set(NNG_ELIDE_DEPRECATED OFF CACHE BOOL "Elide deprecated functionality.")
+#     set(NNG_ENABLE_STATS OFF CACHE BOOL "Enable statistics.")
+#
+#     # Protocols.
+#     set(NNG_PROTO_BUS0 ON CACHE BOOL "Enable BUSv0 protocol.")
+#     set(NNG_PROTO_PAIR0 ON CACHE BOOL "Enable PAIRv0 protocol.")
+#     set(NNG_PROTO_PAIR1 ON CACHE BOOL "Enable PAIRv1 protocol.")
+#     set(NNG_PROTO_PUSH0 ON CACHE BOOL "Enable PUSHv0 protocol.")
+#     set(NNG_PROTO_PULL0 ON CACHE BOOL "Enable PULLv0 protocol.")
+#     set(NNG_PROTO_PUB0 ON CACHE BOOL "Enable PUBv0 protocol.")
+#     set(NNG_PROTO_SUB0 ON CACHE BOOL "Enable SUBv0 protocol.")
+#     set(NNG_PROTO_REQ0 ON CACHE BOOL "Enable REQv0 protocol.")
+#     set(NNG_PROTO_REP0 ON CACHE BOOL "Enable REPv0 protocol.")
+#     set(NNG_PROTO_RESPONDENT0 ON CACHE BOOL "Enable RESPONDENTv0 protocol.")
+#     set(NNG_PROTO_SURVEYOR0 ON CACHE BOOL "Enable SURVEYORv0 protocol.")
+#
+#     # TLS support.
+#     # Enabling TLS is required to enable support for the TLS transport
+#     # and WSS. It does require a 3rd party TLS engine to be selected.
+#     set(NNG_ENABLE_TLS OFF CACHE BOOL "Enable TLS support.")
+#
+#     # HTTP API support.
+#     set(NNG_ENABLE_HTTP OFF CACHE BOOL "Enable HTTP API.")
+#
+#     # Transport Options.
+#     set(NNG_TRANSPORT_INPROC OFF CACHE BOOL "Enable inproc transport.")
+#     set(NNG_TRANSPORT_IPC OFF CACHE BOOL "Enable IPC transport.")
+#     set(NNG_TRANSPORT_TCP ON CACHE BOOL "Enable TCP transport.")
+#     set(NNG_TRANSPORT_TLS OFF CACHE BOOL "Enable TLS transport.")
+#     set(NNG_TRANSPORT_WS OFF CACHE BOOL "Enable WebSocket transport.")
+#     set(NNG_TRANSPORT_ZEROTIER OFF CACHE BOOL "Enable ZeroTier transport (requires libzerotiercore).")
+#
+#     add_subdirectory(3rdparty/nng)
+# endif(NETTY__ENABLE_NANOMSG)
+
+# if (NETTY__ENABLE_LIBZMQ)
+#     set(WITH_PERF_TOOL OFF CACHE BOOL "")
+#     set(ZMQ_BUILD_TESTS OFF CACHE BOOL "")
+#     set(ENABLE_CPACK OFF CACHE BOOL "")
+#     add_subdirectory(3rdparty/libzmq)
+#
+#     set(CPPZMQ_BUILD_TESTS OFF CACHE BOOL "")
+#     add_subdirectory(3rdparty/cppzmq)
+# endif(NETTY__ENABLE_LIBZMQ)
