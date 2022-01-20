@@ -36,12 +36,12 @@ int main (int argc, char * argv[])
         std::cout << "\tType         : " << std::to_string(iface.type()) << "\n";
         std::cout << "\tStatus       : " << std::to_string(iface.status()) << "\n";
         std::cout << "\tMTU          : " << iface.mtu() << "\n";
-        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag(pfs::net::network_interface_flag::ip4_enabled) << "\n";
-        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag(pfs::net::network_interface_flag::ip6_enabled) << "\n";
+        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag_on(pfs::net::network_interface_flag::ip4_enabled) << "\n";
+        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag_on(pfs::net::network_interface_flag::ip6_enabled) << "\n";
         std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
         std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
         std::cout << "\n\n";
-        return interface_name == iface.readable_name();
+        return interface_name == iface.adapter_name();
     });
 
     if (ec) {
@@ -55,15 +55,24 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
 
-    if (ifaces.empty()) {
-        std::cerr << "ERROR: interface ["
-            << interface_name << "]: not found" << std::endl;
-        return EXIT_FAILURE;
-    }
 
-    std::cout << "MTU value for interface ["
-        << interface_name << "]: "
-        << pfs::net::mtu(interface_name, ec) << std::endl;
+    {
+        using pfs::net::fetch_interfaces_by_name;
+
+        auto ifaces = fetch_interfaces_by_name(pfs::net::usename::adapter
+            , interface_name
+            , ec);
+
+        if (ifaces.empty()) {
+            std::cerr << "ERROR: interface ["
+                << interface_name << "]: not found" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "MTU value for interface ["
+            << interface_name << "]: "
+            << ifaces[0].mtu() << std::endl;
+        }
 
     return EXIT_SUCCESS;
 }
