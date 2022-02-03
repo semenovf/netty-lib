@@ -37,4 +37,4 @@ void load (cereal::BinaryInputArchive & ar, netty::p2p::uuid_t & uuid)
     uuid = pfs::make_uuid(a, pfs::endian::network);
 }
 
-} // namespace cereal {
+} // namespace cereal
