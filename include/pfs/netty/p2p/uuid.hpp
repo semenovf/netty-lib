@@ -24,13 +24,13 @@ using uuid_t = pfs::uuid_t;
 
 namespace cereal {
 
-void save (cereal::BinaryOutputArchive & ar, netty::p2p::uuid_t const & uuid)
+inline void save (cereal::BinaryOutputArchive & ar, netty::p2p::uuid_t const & uuid)
 {
     auto a = pfs::to_array(uuid, pfs::endian::network);
     ar << cereal::binary_data(a.data(), a.size());
 }
 
-void load (cereal::BinaryInputArchive & ar, netty::p2p::uuid_t & uuid)
+inline void load (cereal::BinaryInputArchive & ar, netty::p2p::uuid_t & uuid)
 {
     decltype(pfs::to_array(netty::p2p::uuid_t{}, pfs::endian::network)) a;
     ar >> cereal::binary_data(a.data(), a.size());
