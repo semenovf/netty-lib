@@ -27,7 +27,7 @@ endif()
 if (NETTY_P2P__ENABLE_QT5)
     find_package(Qt5 COMPONENTS Core Network REQUIRED)
 
-    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PRIVATE Core Network)
+    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PUBLIC Core Network)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
 endif(NETTY_P2P__ENABLE_QT5)
@@ -45,17 +45,10 @@ if (NETTY_P2P__ENABLE_NEW_UDT)
 endif(NETTY_P2P__ENABLE_NEW_UDT)
 
 if (NETTY_P2P__ENABLE_CEREAL)
-    set(NETTY_P2P__CEREAL_ROOT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/cereal)
-    add_library(cereal INTERFACE)
+    if (NOT TARGET cereal)
+        portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/cmake/Cereal.cmake)
+    endif()
 
-    # Use mutexes to ensure thread safety
-    if (NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY)
-        target_compile_definitions(cereal PUBLIC "CEREAL_THREAD_SAFE=1")
-    endif(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY)
-
-    target_include_directories(cereal INTERFACE ${NETTY_P2P__CEREAL_ROOT}/include)
-
-    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__CEREAL_ENABLED=1")
     portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
