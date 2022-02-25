@@ -48,7 +48,6 @@ if (NETTY_P2P__ENABLE_CEREAL)
     if (NOT TARGET cereal)
         portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/cmake/Cereal.cmake)
     endif()
-
     portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
