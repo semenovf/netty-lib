@@ -1,11 +1,12 @@
 
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021,2022 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `net-lib` library.
 //
 // Changelog:
 //      2021.11.19 Initial version.
+//      2022.02.15 Renamed from dispatcher to dispatcher.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "uuid.hpp"
@@ -15,7 +16,7 @@
 namespace netty {
 namespace p2p {
 
-class controller
+class dispatcher
 {
 public: // signals
     pfs::emitter_mt<std::string const &> failure;

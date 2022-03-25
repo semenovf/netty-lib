@@ -9,14 +9,16 @@
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define NETTY_P2P__TRACE_LEVEL 3
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
+// #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+// #include "doctest.h"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/p2p/engine.hpp"
 #include "pfs/netty/p2p/qt5/api.hpp"
 #include "pfs/netty/p2p/udt/api.hpp"
 #include <atomic>
 #include <thread>
+
+#include "pfs/../../src/udt/newlib/udt.hpp"
 
 static char loremipsum[] =
 "1.Lorem ipsum dolor sit amet, consectetuer adipiscing elit,    \n\
@@ -62,7 +64,7 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = netty::inet4_addr;
-using controller           = netty::p2p::controller;
+using dispatcher           = netty::p2p::dispatcher;
 using discovery_socket_api = netty::p2p::qt5::api;
 using reliable_socket_api  = netty::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
@@ -146,60 +148,82 @@ void worker (p2p::engine & peer)
 struct configurator1
 {
     p2p::inet4_addr discovery_address () const noexcept { { return p2p::inet4_addr{127, 0, 0, 1}; } }
-    std::uint16_t   discovery_port () const noexcept { return 4242u; }
+    std::uint16_t   discovery_port () const noexcept { return 5555u; }
     std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
     std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
     std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
     p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
-    std::uint16_t   listener_port () const noexcept { return 42224u; }
+    std::uint16_t   listener_port () const noexcept { return 5556u; }
     int backlog () const noexcept { return 10; }
 };
 
 struct configurator2
 {
     p2p::inet4_addr discovery_address () const noexcept { { return p2p::inet4_addr{127, 0, 0, 1}; } }
-    std::uint16_t   discovery_port () const noexcept { return 4243u; }
+    std::uint16_t   discovery_port () const noexcept { return 7777u; }
     std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
     std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
     std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
     p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
-    std::uint16_t   listener_port () const noexcept { return 42324u; }
+    std::uint16_t   listener_port () const noexcept { return 7778u; }
     int backlog () const noexcept { return 10; }
 };
 
-TEST_CASE("HELO")
+void terminate_handler ()
 {
-    REQUIRE(p2p::engine::startup());
+    fmt::print(stderr, "TERMINATED\n");
+
+    std::exception_ptr exptr = std::current_exception();
+    try {
+        std::rethrow_exception(exptr);
+    } catch (CUDTException ex) {
+        TRACE_1("!!! EXCEPTION: {} [{}]"
+        , ex.getErrorMessage()
+        , ex.getErrorCode());
+    }
+}
+
+// TEST_CASE("HELO")
+int main ()
+{
+    std::set_terminate(terminate_handler);
+
+//     try {
+
+    //REQUIRE(p2p::engine::startup());
+        p2p::engine::startup();
 
     std::thread peer1_worker;
     std::thread peer2_worker;
 
     peer1_worker = std::thread{[] {
-        p2p::controller controller1;
+        p2p::dispatcher controller1;
         p2p::engine peer1 {controller1, PEER1_UUID};
         controller1.failure.connect(on_failure);
         controller1.rookie_accepted.connect(on_rookie_accepted);
         controller1.writer_ready.connect(on_writer_ready);
         controller1.peer_expired.connect(on_peer_expired);
 
-        REQUIRE(peer1.configure(configurator1{}));
+        //REQUIRE(peer1.configure(configurator1{}));
+        peer1.configure(configurator1{});
 
-        peer1.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 4243u);
+        peer1.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 7777u);
 
         worker(peer1);
     }};
 
     peer2_worker = std::thread{[] {
-        p2p::controller controller2;
+        p2p::dispatcher controller2;
         p2p::engine peer2 {controller2, PEER2_UUID};
         controller2.failure.connect(on_failure);
         controller2.rookie_accepted.connect(on_rookie_accepted);
         controller2.writer_ready.connect(on_writer_ready);
         controller2.peer_expired.connect(on_peer_expired);
 
-        REQUIRE(peer2.configure(configurator2{}));
+        //REQUIRE(peer2.configure(configurator2{}));
+        peer2.configure(configurator2{});
 
-        peer2.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 4242);
+        peer2.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 5555u);
 
         worker(peer2);
     }};
@@ -208,4 +232,14 @@ TEST_CASE("HELO")
     peer2_worker.join();
 
     p2p::engine::cleanup();
+
+//         } catch (CUDTException ex) {
+//             TRACE_1("!!! EXCEPTION: {} [{}]"
+//             , ex.getErrorMessage()
+//             , ex.getErrorCode());
+//
+//             std::abort();
+//         }
+
+        return 0;
 }

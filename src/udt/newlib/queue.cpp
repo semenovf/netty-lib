@@ -50,6 +50,9 @@ written by
    #endif
 #endif
 
+#define NETTY_P2P__TRACE_LEVEL 3
+#include "pfs/netty/p2p/trace.hpp"
+
 using namespace std;
 
 CUnitQueue::CUnitQueue():
@@ -971,135 +974,127 @@ void CRcvQueue::init(int qsize, int payload, int version, int hsize, CChannel* c
    DWORD WINAPI CRcvQueue::worker(LPVOID param)
 #endif
 {
-   CRcvQueue* self = (CRcvQueue*)param;
+    CRcvQueue * self = reinterpret_cast<CRcvQueue *>(param);
 
-   sockaddr* addr = (AF_INET == self->m_UnitQueue.m_iIPversion) ? (sockaddr*) new sockaddr_in : (sockaddr*) new sockaddr_in6;
-   CUDT* u = NULL;
-   int32_t id;
+    sockaddr * addr = (AF_INET == self->m_UnitQueue.m_iIPversion)
+        ? reinterpret_cast<sockaddr *>(new sockaddr_in)
+        : reinterpret_cast<sockaddr *>(new sockaddr_in6);
 
-   while (!self->m_bClosing)
-   {
-      #ifdef NO_BUSY_WAITING
-         self->m_pTimer->tick();
-      #endif
+    CUDT * u = NULL;
+    int32_t id;
 
-      // check waiting list, if new socket, insert it to the list
-      while (self->ifNewEntry())
-      {
-         CUDT* ne = self->getNewEntry();
-         if (NULL != ne)
-         {
-            self->m_pRcvUList->insert(ne);
-            self->m_pHash->insert(ne->m_SocketID, ne);
-         }
-      }
+    TRACE_D("--- CRcvQueue::worker BEGIN {}", true);
 
-      // find next available slot for incoming packet
-      CUnit* unit = self->m_UnitQueue.getNextAvailUnit();
-      if (NULL == unit)
-      {
-         // no space, skip this packet
-         CPacket temp;
-         temp.m_pcData = new char[self->m_iPayloadSize];
-         temp.setLength(self->m_iPayloadSize);
-         self->m_pChannel->recvfrom(addr, temp);
-         delete [] temp.m_pcData;
-         goto TIMER_CHECK;
-      }
+    while (!self->m_bClosing) {
+#ifdef NO_BUSY_WAITING
+        self->m_pTimer->tick();
+#endif
 
-      unit->m_Packet.setLength(self->m_iPayloadSize);
+        // check waiting list, if new socket, insert it to the list
+        while (self->ifNewEntry()) {
+            CUDT *ne = self->getNewEntry();
 
-      // reading next incoming packet, recvfrom returns -1 is nothing has been received
-      if (self->m_pChannel->recvfrom(addr, unit->m_Packet) < 0)
-         goto TIMER_CHECK;
-
-      id = unit->m_Packet.m_iID;
-
-      // ID 0 is for connection request, which should be passed to the listening socket or rendezvous sockets
-      if (0 == id)
-      {
-         if (NULL != self->m_pListener)
-            self->m_pListener->listen(addr, unit->m_Packet);
-         else if (NULL != (u = self->m_pRendezvousQueue->retrieve(addr, id)))
-         {
-            // asynchronous connect: call connect here
-            // otherwise wait for the UDT socket to retrieve this packet
-            if (!u->m_bSynRecving)
-               u->connect(unit->m_Packet);
-            else
-               self->storePkt(id, unit->m_Packet.clone());
-         }
-      }
-      else if (id > 0)
-      {
-         if (NULL != (u = self->m_pHash->lookup(id)))
-         {
-            if (CIPAddress::ipcmp(addr, u->m_pPeerAddr, u->m_iIPversion))
-            {
-               if (u->m_bConnected && !u->m_bBroken && !u->m_bClosing)
-               {
-                  if (0 == unit->m_Packet.getFlag())
-                     u->processData(unit);
-                  else
-                     u->processCtrl(unit->m_Packet);
-
-                  u->checkTimers();
-                  self->m_pRcvUList->update(u);
-               }
+            if (NULL != ne) {
+                self->m_pRcvUList->insert(ne);
+                self->m_pHash->insert(ne->m_SocketID, ne);
             }
-         }
-         else if (NULL != (u = self->m_pRendezvousQueue->retrieve(addr, id)))
-         {
-            if (!u->m_bSynRecving)
-               u->connect(unit->m_Packet);
-            else
-               self->storePkt(id, unit->m_Packet.clone());
-         }
-      }
+        }
+
+        // find next available slot for incoming packet
+        CUnit *unit = self->m_UnitQueue.getNextAvailUnit();
+        if (NULL == unit) {
+            // no space, skip this packet
+            CPacket temp;
+            temp.m_pcData = new char[self->m_iPayloadSize];
+            temp.setLength(self->m_iPayloadSize);
+            self->m_pChannel->recvfrom(addr, temp);
+            delete [] temp.m_pcData;
+            goto TIMER_CHECK;
+        }
+
+        unit->m_Packet.setLength(self->m_iPayloadSize);
+
+        // reading next incoming packet, recvfrom returns -1 is nothing has been received
+        if (self->m_pChannel->recvfrom(addr, unit->m_Packet) < 0)
+            goto TIMER_CHECK;
+
+        id = unit->m_Packet.m_iID;
+
+        // ID 0 is for connection request, which should be passed to the listening socket or rendezvous sockets
+        if (0 == id) {
+            if (NULL != self->m_pListener)
+                self->m_pListener->listen(addr, unit->m_Packet);
+            else if (NULL != (u = self->m_pRendezvousQueue->retrieve(addr, id))) {
+                // asynchronous connect: call connect here
+                // otherwise wait for the UDT socket to retrieve this packet
+                if (!u->m_bSynRecving)
+                    u->connect(unit->m_Packet);
+                else
+                    self->storePkt(id, unit->m_Packet.clone());
+            }
+        } else if (id > 0) {
+            if (NULL != (u = self->m_pHash->lookup(id))) {
+                if (CIPAddress::ipcmp(addr, u->m_pPeerAddr, u->m_iIPversion)) {
+                    if (u->m_bConnected && !u->m_bBroken && !u->m_bClosing) {
+                        if (0 == unit->m_Packet.getFlag())
+                            u->processData(unit);
+                        else
+                            u->processCtrl(unit->m_Packet);
+
+                        u->checkTimers();
+                        self->m_pRcvUList->update(u);
+                    }
+                }
+            } else if (NULL != (u = self->m_pRendezvousQueue->retrieve(addr, id))) {
+                if (!u->m_bSynRecving) {
+                    u->connect(unit->m_Packet);
+                } else {
+                    self->storePkt(id, unit->m_Packet.clone());
+                }
+            }
+        }
 
 TIMER_CHECK:
-      // take care of the timing event for all UDT sockets
+        // take care of the timing event for all UDT sockets
 
-      uint64_t currtime;
-      CTimer::rdtsc(currtime);
+        uint64_t currtime;
+        CTimer::rdtsc(currtime);
 
-      CRNode* ul = self->m_pRcvUList->m_pUList;
-      uint64_t ctime = currtime - 100000 * CTimer::getCPUFrequency();
-      while ((NULL != ul) && (ul->m_llTimeStamp < ctime))
-      {
-         CUDT* u = ul->m_pUDT;
+        CRNode *ul = self->m_pRcvUList->m_pUList;
+        uint64_t ctime = currtime - 100000 * CTimer::getCPUFrequency();
+        while ((NULL != ul) && (ul->m_llTimeStamp < ctime)) {
+            CUDT *u = ul->m_pUDT;
 
-         if (u->m_bConnected && !u->m_bBroken && !u->m_bClosing)
-         {
-            u->checkTimers();
-            self->m_pRcvUList->update(u);
-         }
-         else
-         {
-            // the socket must be removed from Hash table first, then RcvUList
-            self->m_pHash->remove(u->m_SocketID);
-            self->m_pRcvUList->remove(u);
-            u->m_pRNode->m_bOnList = false;
-         }
+            if (u->m_bConnected && !u->m_bBroken && !u->m_bClosing) {
+                u->checkTimers();
+                self->m_pRcvUList->update(u);
+            } else {
+                // the socket must be removed from Hash table first, then RcvUList
+                self->m_pHash->remove(u->m_SocketID);
+                self->m_pRcvUList->remove(u);
+                u->m_pRNode->m_bOnList = false;
+            }
 
-         ul = self->m_pRcvUList->m_pUList;
-      }
+            ul = self->m_pRcvUList->m_pUList;
+        }
 
-      // Check connection requests status for all sockets in the RendezvousQueue.
-      self->m_pRendezvousQueue->updateConnStatus();
-   }
+        // Check connection requests status for all sockets in the RendezvousQueue.
+        self->m_pRendezvousQueue->updateConnStatus();
+    }
 
-   if (AF_INET == self->m_UnitQueue.m_iIPversion)
-      delete (sockaddr_in*)addr;
-   else
-      delete (sockaddr_in6*)addr;
+    if (AF_INET == self->m_UnitQueue.m_iIPversion)
+        delete (sockaddr_in *)addr;
+    else
+        delete (sockaddr_in6 *)addr;
 
-   #ifndef WIN32
-      return NULL;
-   #else
-      SetEvent(self->m_ExitCond);
-      return 0;
-   #endif
+    TRACE_D("--- CRcvQueue::worker END {}", true);
+
+#ifndef WIN32
+    return NULL;
+#else
+    SetEvent(self->m_ExitCond);
+    return 0;
+#endif
 }
 
 int CRcvQueue::recvfrom(int32_t id, CPacket& packet)
