@@ -64,7 +64,6 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = netty::inet4_addr;
-using dispatcher           = netty::p2p::dispatcher;
 using discovery_socket_api = netty::p2p::qt5::api;
 using reliable_socket_api  = netty::p2p::udt::api;
 static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
@@ -183,26 +182,21 @@ void terminate_handler ()
     }
 }
 
-// TEST_CASE("HELO")
 int main ()
 {
     std::set_terminate(terminate_handler);
 
-//     try {
-
-    //REQUIRE(p2p::engine::startup());
-        p2p::engine::startup();
+    p2p::engine::startup();
 
     std::thread peer1_worker;
     std::thread peer2_worker;
 
     peer1_worker = std::thread{[] {
-        p2p::dispatcher controller1;
-        p2p::engine peer1 {controller1, PEER1_UUID};
-        controller1.failure.connect(on_failure);
-        controller1.rookie_accepted.connect(on_rookie_accepted);
-        controller1.writer_ready.connect(on_writer_ready);
-        controller1.peer_expired.connect(on_peer_expired);
+        p2p::engine peer1 {PEER1_UUID};
+        peer1.failure.connect(on_failure);
+        peer1.rookie_accepted.connect(on_rookie_accepted);
+        peer1.writer_ready.connect(on_writer_ready);
+        peer1.peer_expired.connect(on_peer_expired);
 
         //REQUIRE(peer1.configure(configurator1{}));
         peer1.configure(configurator1{});
@@ -213,12 +207,11 @@ int main ()
     }};
 
     peer2_worker = std::thread{[] {
-        p2p::dispatcher controller2;
-        p2p::engine peer2 {controller2, PEER2_UUID};
-        controller2.failure.connect(on_failure);
-        controller2.rookie_accepted.connect(on_rookie_accepted);
-        controller2.writer_ready.connect(on_writer_ready);
-        controller2.peer_expired.connect(on_peer_expired);
+        p2p::engine peer2 {PEER2_UUID};
+        peer2.failure.connect(on_failure);
+        peer2.rookie_accepted.connect(on_rookie_accepted);
+        peer2.writer_ready.connect(on_writer_ready);
+        peer2.peer_expired.connect(on_peer_expired);
 
         //REQUIRE(peer2.configure(configurator2{}));
         peer2.configure(configurator2{});
@@ -233,13 +226,5 @@ int main ()
 
     p2p::engine::cleanup();
 
-//         } catch (CUDTException ex) {
-//             TRACE_1("!!! EXCEPTION: {} [{}]"
-//             , ex.getErrorMessage()
-//             , ex.getErrorCode());
-//
-//             std::abort();
-//         }
-
-        return 0;
+    return 0;
 }

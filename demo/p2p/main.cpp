@@ -58,7 +58,6 @@ static char loremipsum[] =
 
 namespace p2p {
 using inet4_addr           = netty::inet4_addr;
-using dispatcher           = netty::p2p::dispatcher;
 using discovery_socket_api = netty::p2p::qt5::api;
 using reliable_socket_api  = netty::p2p::udt::api;
 using poller               = netty::p2p::udt::poller;
@@ -129,7 +128,7 @@ void worker (p2p::engine & peer)
     }
 }
 
-int main (int argc, char * argv[])
+int main (int /*argc*/, char * argv[])
 {
     std::string program{argv[0]};
 
@@ -138,13 +137,12 @@ int main (int argc, char * argv[])
     if (!p2p::engine::startup())
         return EXIT_FAILURE;
 
-    p2p::dispatcher dispatcher;
-    p2p::engine peer {dispatcher, UUID};
+    p2p::engine peer {UUID};
 
-    dispatcher.failure.connect(on_failure);
-    dispatcher.rookie_accepted.connect(on_rookie_accepted);
-    dispatcher.peer_expired.connect(on_peer_expired);
-    dispatcher.writer_ready.connect([& dispatcher] (pfs::uuid_t uuid
+    peer.failure.connect(on_failure);
+    peer.rookie_accepted.connect(on_rookie_accepted);
+    peer.peer_expired.connect(on_peer_expired);
+    peer.writer_ready.connect([& peer] (pfs::uuid_t uuid
             , netty::inet4_addr const & addr
             , std::uint16_t port) {
         TRACE_1("WRITER READY: {} ({}:{})"
@@ -152,10 +150,10 @@ int main (int argc, char * argv[])
             , to_string(addr)
             , port);
 
-        dispatcher.send(uuid, loremipsum, std::strlen(loremipsum), 0);
+        peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
     });
 
-    dispatcher.message_received.connect([& dispatcher] (pfs::uuid_t uuid, std::string message) {
+    peer.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
         TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , to_string(uuid)
             , message.substr(0, 20)
@@ -163,7 +161,7 @@ int main (int argc, char * argv[])
             , message.size()
             , std::strlen(loremipsum));
 
-        dispatcher.send(uuid, loremipsum, std::strlen(loremipsum), 0);
+        peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
     });
 
     assert(peer.configure(configurator{}));
