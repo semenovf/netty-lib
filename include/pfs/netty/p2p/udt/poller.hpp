@@ -24,9 +24,9 @@ class poller
 
 public:
     enum event_enum {
-          POLL_IN  = 0x1
-        , POLL_OUT = 0x4
-        , POLL_ERR = 0x8
+          POLL_IN_EVENT  = 0x1
+        , POLL_OUT_EVENT = 0x4
+        , POLL_ERR_EVENT = 0x8
     };
 
     using input_callback_type  = std::function<void(UDTSOCKET)>;
@@ -52,7 +52,7 @@ public:
     poller & operator = (poller &&);
 
     bool initialize ();
-    void add (UDTSOCKET u, int events = POLL_IN | POLL_OUT | POLL_ERR);
+    void add (UDTSOCKET u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
     void remove (UDTSOCKET u);
     int wait (std::chrono::milliseconds millis);
 

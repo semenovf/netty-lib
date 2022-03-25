@@ -357,7 +357,7 @@ private:
         }
 
         _connecting_poller.remove(pos->sock.id());
-        _poller.add(pos->sock.id(), poller_type::POLL_IN | poller_type::POLL_ERR);
+        _poller.add(pos->sock.id(), poller_type::POLL_IN_EVENT | poller_type::POLL_ERR_EVENT);
 
         _controller_ptr->writer_ready(pos->uuid, pos->saddr.addr, pos->saddr.port);
         update_expiration_timepoint(pos->sock.id());
@@ -451,7 +451,7 @@ private:
             TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
         }
 
-        _poller.add(pos->sock.id(), poller_type::POLL_IN | poller_type::POLL_ERR);
+        _poller.add(pos->sock.id(), poller_type::POLL_IN_EVENT | poller_type::POLL_ERR_EVENT);
     }
 
     void close_socket (socket_id sid)
