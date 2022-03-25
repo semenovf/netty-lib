@@ -39,22 +39,22 @@ inline std::string stringify_trace_time ()
 
 #ifdef NETTY_P2P__TRACE_LEVEL
 #   if NETTY_P2P__TRACE_LEVEL >= 1
-#       define TRACE_1(format, ...) fmt::print("{}: -- TRACE(1): " format "\n" \
-            , stringify_trace_time(), __VA_ARGS__)
+#       define TRACE_1(format, ...) {fmt::print("{}: -- TRACE(1): " format "\n" \
+            , stringify_trace_time(), __VA_ARGS__); fflush(stdout);}
 #   endif
 #   if NETTY_P2P__TRACE_LEVEL >= 2
-#       define TRACE_2(format, ...) fmt::print("{}: -- TRACE(2): " format "\n" \
-            , stringify_trace_time(), __VA_ARGS__)
+#       define TRACE_2(format, ...) {fmt::print("{}: -- TRACE(2): " format "\n" \
+            , stringify_trace_time(), __VA_ARGS__); fflush(stdout);}
 #   endif
 #   if NETTY_P2P__TRACE_LEVEL >= 3
-#       define TRACE_3(format, ...) fmt::print("{}: -- TRACE(3): " format "\n" \
-            , stringify_trace_time(), __VA_ARGS__)
+#       define TRACE_3(format, ...) { fmt::print("{}: -- TRACE(3): " format "\n" \
+            , stringify_trace_time(), __VA_ARGS__); fflush(stdout);}
 #   endif
 
-#   define TRACE_D(format, ...) fmt::print("{}: -- TRACE(D): {}:{}: " format "\n"\
-        , stringify_trace_time()                                                 \
-        , __FILE__, __LINE__                                                     \
-        , __VA_ARGS__)
+#   define TRACE_D(format, ...) { fmt::print("{}: -- TRACE(D): {}:{}: " format "\n"\
+        , stringify_trace_time()                                                   \
+        , __FILE__, __LINE__                                                       \
+        , __VA_ARGS__); fflush(stdout);}
 
 #else
 #   define TRACE_1(format, ...)

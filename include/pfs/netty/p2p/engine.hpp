@@ -8,7 +8,7 @@
 //      2021.11.01 Complete basic version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "controller.hpp"
+#include "dispatcher.hpp"
 #include "envelope.hpp"
 #include "hello_packet.hpp"
 #include "packet.hpp"
@@ -73,7 +73,7 @@ private:
     using socket_iterator  = typename socket_container::iterator;
 
 private:
-    controller *   _controller_ptr {nullptr};
+    dispatcher *   _controller_ptr {nullptr};
     std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
     uuid_t         _uuid;
     socket_type    _listener;
@@ -128,7 +128,7 @@ public:
     }
 
 public:
-    engine (controller & controller_ref, uuid_t uuid)
+    engine (dispatcher & controller_ref, uuid_t uuid)
         : _controller_ptr(& controller_ref)
         , _uuid(uuid)
         , _connecting_poller("connecting")
@@ -168,6 +168,7 @@ public:
 
     ~engine ()
     {
+        TRACE_D("++++ DESTRUCTOR: ~engine: {}", true);
         _poller.remove(_listener.id());
     }
 
