@@ -40,6 +40,7 @@ written by
 #include "common.hpp"
 #include "epoll.hpp"
 #include "udt.hpp"
+#include "pfs/netty/p2p/trace.hpp"
 
 #ifdef LINUX
    #include <sys/epoll.h>
@@ -49,9 +50,6 @@ written by
 #include <cerrno>
 #include <cstring>
 #include <iterator>
-
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
 
 using namespace std;
 

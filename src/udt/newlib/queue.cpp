@@ -40,6 +40,7 @@ written by
 #include "common.hpp"
 #include "core.hpp"
 #include "queue.hpp"
+#include "pfs/netty/p2p/trace.hpp"
 #include <cstring>
 
 #ifdef WIN32
@@ -49,9 +50,6 @@ written by
       #include <wspiapi.h>
    #endif
 #endif
-
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
 
 using namespace std;
 

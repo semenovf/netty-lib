@@ -1,19 +1,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/inet4_addr.hpp"
-#include "pfs/emitter.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QUdpSocket>
+#include <functional>
 #include <string>
 #include <cassert>
 
@@ -44,7 +44,7 @@ private:
     QUdpSocket _socket;
 
 public:
-    pfs::emitter_mt<std::string const &> failure;
+    std::function<void (std::string const &)> failure;
 
 private:
     QNetworkInterface iface_by_address (std::string const & addr)

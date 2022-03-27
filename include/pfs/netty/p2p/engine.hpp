@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.20 Initial version.
@@ -14,7 +14,6 @@
 #include "trace.hpp"
 #include "uuid.hpp"
 #include "pfs/fmt.hpp"
-#include "pfs/emitter.hpp"
 #include "pfs/ring_buffer.hpp"
 #include "pfs/uuid.hpp"
 #include "pfs/netty/inet4_addr.hpp"
@@ -38,8 +37,7 @@ constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
 template <
       typename DiscoverySocketAPI
     , typename ReliableSocketAPI  // Meets the requirements for reliable and in-order data delivery
-    , std::size_t PriorityCount = 1
-    , template <typename ...Args> class Emitter = pfs::emitter_mt>
+    , std::size_t PriorityCount = 1>
 class engine
 {
     static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
@@ -114,31 +112,28 @@ private:
 
     std::vector<socket_id> _expired_sockets;
 
-public:
-    mutable Emitter<std::string const &> failure;
+public: // Callbacks
+    mutable std::function<void (std::string const &)> failure;
 
     /**
-     * Emitted when new writer socket ready (connected).
+     * Launched when new writer socket ready (connected).
      */
-    mutable Emitter<uuid_t, inet4_addr, std::uint16_t> writer_ready;
+    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> writer_ready;
 
     /**
-     * Emitted when new address accepted by discoverer.
+     * Launched when new address accepted by discoverer.
      */
-    mutable Emitter<uuid_t, inet4_addr, std::uint16_t> rookie_accepted;
+    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> rookie_accepted;
 
     /**
-     * Emitted when address expired (update is timed out).
+     * Launched when address expired (update is timed out).
      */
-    mutable Emitter<uuid_t, inet4_addr, std::uint16_t> peer_expired;
+    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> peer_expired;
 
     /**
      * Message received.
      */
-    mutable Emitter<uuid_t, std::string> message_received;
-
-    mutable Emitter<uuid_t, char const * /*data*/
-        , std::streamsize /*len*/, int /*priority*/> send;
+    mutable std::function<void (uuid_t, std::string)> data_received;
 
 public:
     static bool startup ()
@@ -159,31 +154,25 @@ public:
         , _connecting_poller("connecting")
         , _poller("main")
     {
-        _listener.failure.connect([this] (std::string const & error) {
+        _listener.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
+        };
 
-        _discovery.receiver.failure.connect([this] (std::string const & error) {
+        _discovery.receiver.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
+        };
 
-        _discovery.transmitter.failure.connect([this] (std::string const & error) {
+        _discovery.transmitter.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
+        };
 
-        _connecting_poller.failure.connect([this] (std::string const & error) {
+        _connecting_poller.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
+        };
 
-        _poller.failure.connect([this] (std::string const & error) {
+        _poller.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
-
-        this->send.connect([this] (uuid_t uuid, char const * data
-                , std::streamsize len
-                , int priority) {
-            this->enqueue(uuid, data, len, priority);
-        });
+        };
 
         auto now = current_timepoint();
 
@@ -193,7 +182,30 @@ public:
 
     ~engine ()
     {
-        _poller.remove(_listener.id());
+        _connecting_poller.release();
+        _poller.release();
+        _writers.clear();
+        _expiration_timepoints.clear();
+
+        for (auto & sock: _index_by_socket_id) {
+            TRACE_1("Socket closing: id: #{}", sock.first);
+
+            auto pos = sock.second;
+            auto uuid = pos->uuid;
+            auto addr = pos->saddr.addr;
+            auto port = pos->saddr.port;
+
+            pos->sock.close();
+
+            TRACE_1("Socket closed: #{} ({}:{}), id: {}"
+                , to_string(uuid)
+                , to_string(addr)
+                , port
+                , sock.first);
+        }
+
+        _index_by_socket_id.clear();
+        _sockets.clear();
     }
 
     engine (engine const &) = delete;
@@ -290,20 +302,10 @@ public:
         }
     }
 
-private:
-    inline std::chrono::milliseconds current_timepoint ()
-    {
-        using std::chrono::duration_cast;
-        using std::chrono::milliseconds;
-        using std::chrono::steady_clock;
-
-        return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
-    }
-
     /**
      * Split data to send into packets and enqueue them into output queue.
      */
-    void enqueue (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
+    void send (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
     {
         std::size_t prior = priority < 0
             ? 0
@@ -317,6 +319,16 @@ private:
             });
     }
 
+private:
+    inline std::chrono::milliseconds current_timepoint ()
+    {
+        using std::chrono::duration_cast;
+        using std::chrono::milliseconds;
+        using std::chrono::steady_clock;
+
+        return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
+    }
+
     socket_info * locate_writer (uuid_t const & uuid)
     {
         socket_info * result {nullptr};
@@ -325,7 +337,7 @@ private:
         if (pos != _writers.end()) {
             result = & *pos->second;
         } else {
-            this->failure(fmt::format("cannot locate writer by UUID: {}"
+            this->failure(fmt::format("cannot locate writer by UUID: #{}"
                 , std::to_string(uuid)));
         }
 
@@ -365,7 +377,7 @@ private:
 
         assert(status == socket_type::CONNECTED);
 
-        TRACE_2("Socket connected to: {} ({}:{}), id: {}. Status: {}"
+        TRACE_2("Socket connected to: #{} ({}:{}), id: {}. Status: {}"
             , to_string(pos->uuid)
             , to_string(pos->saddr.addr)
             , pos->saddr.port
@@ -397,9 +409,9 @@ private:
 
         socket_info sockinfo;
 
-        sockinfo.sock.failure.connect([this] (std::string const & error) {
+        sockinfo.sock.failure = [this] (std::string const & error) {
             this->failure(error);
-        });
+        };
 
         if (sockinfo.sock.connect(addr, port)) {
             auto status = sockinfo.sock.state();
@@ -435,7 +447,7 @@ private:
                 assert(res.second);
 
                 if (is_connecting_socket) {
-                    TRACE_3("Connecting to: {} ({}:{}), id: {}. Status: {}"
+                    TRACE_3("Connecting to: #{} ({}:{}), id: {}. Status: {}"
                         , to_string(peer_uuid)
                         , to_string(pos->saddr.addr)
                         , pos->saddr.port
@@ -497,7 +509,7 @@ private:
 
         pos->sock.close();
 
-        TRACE_1("Socket closed: {} ({}:{}), id: {}"
+        TRACE_1("Socket closed: #{} ({}:{}), id: {}"
             , to_string(uuid)
             , to_string(addr)
             , port
@@ -506,6 +518,7 @@ private:
         auto writers_erased = _writers.erase(uuid);
         _index_by_socket_id.erase(sid);
         _sockets.erase(pos);
+        _expiration_timepoints.erase(sid);
 
         if (writers_erased > 0)
             this->peer_expired(uuid, addr, port);
@@ -788,7 +801,7 @@ private:
                 };
 
                 if (success) {
-                    this->message_received(uuid, std::move(message));
+                    this->data_received(uuid, std::move(message));
                 } else {
                     // Unexpected behavior!!!
                     // Corrupted/incomplete sequence of packets received.
@@ -800,7 +813,7 @@ private:
 
                     this->failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
                         " corrupted/incomplete sequence of"
-                        " packets received from: {}"
+                        " packets received from: #{}"
                         , std::to_string(uuid)));
                 }
             } else {
@@ -817,7 +830,6 @@ private:
         double coeff = 1.0;
 
         for (std::size_t prior = 0; prior < _output_queues.size(); prior++) {
-
             // TODO Need more smart of coefficient calculation {{
             std::size_t count = _output_queues[prior].size() * coeff;
 
@@ -866,7 +878,7 @@ private:
                 } else if (bytes_sent < 0) {
                     auto & saddr = last_sinfo_ptr->saddr;
 
-                    this->failure(fmt::format("sending failure to {} ({}:{}): {}"
+                    this->failure(fmt::format("sending failure to #{} ({}:{}): {}"
                         , to_string(last_sinfo_ptr->uuid)
                         , to_string(saddr.addr)
                         , saddr.port

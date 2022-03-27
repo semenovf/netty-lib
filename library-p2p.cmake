@@ -1,7 +1,7 @@
 ################################################################################
 # Copyright (c) 2021 Vladislav Trifochkin
 #
-# This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+# This file is part of `netty-lib`.
 #
 # Changelog:
 #      2021.06.21 Initial version.
@@ -77,6 +77,10 @@ if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
 
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__RELIABLE_TRANSPORT_ENABLED=1")
+endif()
+
+if (NETTY_P2P__TRACE_LEVEL)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__TRACE_LEVEL=${NETTY_P2P__TRACE_LEVEL}")
 endif()
 
 portable_target(EXPORTS ${PROJECT_NAME} NETTY__EXPORTS NETTY__STATIC)

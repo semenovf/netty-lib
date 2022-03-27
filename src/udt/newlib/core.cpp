@@ -42,6 +42,7 @@ modified by
 *****************************************************************************/
 #include "queue.hpp"
 #include "core.hpp"
+#include "pfs/netty/p2p/trace.hpp"
 
 #ifndef WIN32
    #include <unistd.h>
@@ -60,11 +61,7 @@ modified by
 #include <cmath>
 #include <sstream>
 
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
-
 using namespace std;
-
 
 CUDTUnited CUDT::s_UDTUnited;
 

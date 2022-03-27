@@ -3,7 +3,7 @@
 //
 // License: see LICENSE file
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.20 Initial version.

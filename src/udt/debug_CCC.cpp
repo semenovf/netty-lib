@@ -1,14 +1,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.11.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "debug_CCC.hpp"
-
-#define NETTY_P2P__TRACE_LEVEL 3
 #include "pfs/netty/p2p/trace.hpp"
 
 namespace netty {

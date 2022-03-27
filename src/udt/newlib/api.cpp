@@ -50,8 +50,6 @@ written by
 #include <cstring>
 #include "api.hpp"
 #include "core.hpp"
-
-#define NETTY_P2P__TRACE_LEVEL 3
 #include "pfs/netty/p2p/trace.hpp"
 
 using namespace std;
