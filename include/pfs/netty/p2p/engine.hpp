@@ -11,9 +11,9 @@
 #include "envelope.hpp"
 #include "hello_packet.hpp"
 #include "packet.hpp"
-#include "trace.hpp"
 #include "uuid.hpp"
 #include "pfs/fmt.hpp"
+#include "pfs/log.hpp"
 #include "pfs/ring_buffer.hpp"
 #include "pfs/uuid.hpp"
 #include "pfs/netty/inet4_addr.hpp"
@@ -43,17 +43,25 @@ class engine
     static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
 
 public:
+    using counter_type = std::uint64_t;
     using packet_type = packet;
+    using input_envelope_type   = input_envelope<>;
+    using output_envelope_type  = output_envelope<>;
 
 private:
+    struct output_queue_item
+    {
+        counter_type counter;
+        uuid_t          addressee;
+        packet_type     pkt;
+    };
+
     using discovery_socket_type = typename DiscoverySocketAPI::socket_type;
     using socket_type           = typename ReliableSocketAPI::socket_type;
     using poller_type           = typename ReliableSocketAPI::poller_type;
-    using input_envelope_type   = input_envelope<>;
-    using output_envelope_type  = output_envelope<>;
     using socket_id             = decltype(socket_type{}.id());
     using input_queue_type      = pfs::ring_buffer<packet_type, DEFAULT_BUFFER_BULK_SIZE>;
-    using output_queue_type     = pfs::ring_buffer<std::pair<uuid_t, packet_type>, DEFAULT_BUFFER_BULK_SIZE>;
+    using output_queue_type     = pfs::ring_buffer<output_queue_item, DEFAULT_BUFFER_BULK_SIZE>;
 
     struct socket_address
     {
@@ -72,6 +80,7 @@ private:
     using socket_iterator  = typename socket_container::iterator;
 
 private:
+    counter_type _counter {0};
     std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
     uuid_t         _uuid;
     socket_type    _listener;
@@ -135,6 +144,17 @@ public: // Callbacks
      */
     mutable std::function<void (uuid_t, std::string)> data_received;
 
+    /**
+     * Message dispatched
+     */
+    mutable std::function<void (counter_type)> data_dispatched;
+
+private:
+    counter_type inc_counter ()
+    {
+        return ++_counter;
+    }
+
 public:
     static bool startup ()
     {
@@ -188,7 +208,7 @@ public:
         _expiration_timepoints.clear();
 
         for (auto & sock: _index_by_socket_id) {
-            TRACE_1("Socket closing: id: #{}", sock.first);
+            LOG_TRACE_1("Socket closing: id: #{}", sock.first);
 
             auto pos = sock.second;
             auto uuid = pos->uuid;
@@ -197,8 +217,8 @@ public:
 
             pos->sock.close();
 
-            TRACE_1("Socket closed: #{} ({}:{}), id: {}"
-                , to_string(uuid)
+            LOG_TRACE_1("Socket closed: {} ({}:{}), id: {}"
+                , uuid
                 , to_string(addr)
                 , port
                 , sock.first);
@@ -250,26 +270,26 @@ public:
         }
 
         if (success) {
-            TRACE_2("Discovery listener backend: {}"
+            LOG_TRACE_2("Discovery listener backend: {}"
                 , _discovery.receiver.backend_string());
-            TRACE_2("General listener backend: {}"
+            LOG_TRACE_2("General listener backend: {}"
                 , _listener.backend_string());
 
-            TRACE_1("Discovery listener: {}:{}. Status: {}"
+            LOG_TRACE_1("Discovery listener: {}:{}. Status: {}"
                 , to_string(c.discovery_address())
                 , c.discovery_port()
                 , _discovery.receiver.state_string());
-            TRACE_1("General listener: {}:{}. Status: {}"
+            LOG_TRACE_1("General listener: {}:{}. Status: {}"
                 , to_string(_listener_address.addr)
                 , _listener_address.port
                 , _listener.state_string());
 
             auto listener_options = _listener.dump_options();
 
-            TRACE_2("General listener options: id: {}", _listener.id());
+            LOG_TRACE_2("General listener options: id: {}", _listener.id());
 
             for (auto const & opt_item: listener_options) {
-                TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+                LOG_TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
             }
         }
 
@@ -288,7 +308,7 @@ public:
         send_outgoing_packets();
     }
 
-    void add_discovery_target (inet4_addr const & addr, std::uint16_t port)
+    bool add_discovery_target (inet4_addr const & addr, std::uint16_t port)
     {
         _discovery.targets.emplace_back(socket_address{addr, port});
 
@@ -296,16 +316,23 @@ public:
             auto success = _discovery.receiver.join_multicast_group(addr);
 
             if (success) {
-                TRACE_2("Discovery receiver joined into multicast group: {}"
+                LOG_TRACE_2("Discovery receiver joined into multicast group: {}"
                     , to_string(addr));
+            } else {
+                return false;
             }
         }
+
+        return true;
     }
 
     /**
      * Split data to send into packets and enqueue them into output queue.
+     *
+     * @return Unique identifier of the message (internal counter within the
+     *         engine session).
      */
-    void send (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
+    counter_type send (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
     {
         std::size_t prior = priority < 0
             ? 0
@@ -313,10 +340,14 @@ public:
                 ? _output_queues.size() - 1
                 : static_cast<std::size_t>(priority);
 
+        auto counter = inc_counter();
+
         split_into_packets(_packet_size, _uuid, data, len
-            , [this, & uuid, prior] (packet_type && p) {
-                _output_queues[prior].push(std::make_pair(uuid, std::move(p)));
+            , [this, & uuid, prior, counter] (packet_type && p) {
+                _output_queues[prior].push(output_queue_item{counter, uuid, std::move(p)});
             });
+
+        return counter;
     }
 
 private:
@@ -337,8 +368,8 @@ private:
         if (pos != _writers.end()) {
             result = & *pos->second;
         } else {
-            this->failure(fmt::format("cannot locate writer by UUID: #{}"
-                , std::to_string(uuid)));
+            this->failure(fmt::format("cannot locate writer by UUID: {}"
+                , uuid));
         }
 
         return result;
@@ -377,8 +408,8 @@ private:
 
         assert(status == socket_type::CONNECTED);
 
-        TRACE_2("Socket connected to: #{} ({}:{}), id: {}. Status: {}"
-            , to_string(pos->uuid)
+        LOG_TRACE_2("Socket connected to: {} ({}:{}), id: {}. Status: {}"
+            , pos->uuid
             , to_string(pos->saddr.addr)
             , pos->saddr.port
             , sid
@@ -386,10 +417,10 @@ private:
 
         auto options = pos->sock.dump_options();
 
-        TRACE_2("Connected socket options: id: {}", sid);
+        LOG_TRACE_2("Connected socket options: id: {}", sid);
 
         for (auto const & opt_item: options) {
-            TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+            LOG_TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
         }
 
         _connecting_poller.remove(pos->sock.id());
@@ -447,8 +478,8 @@ private:
                 assert(res.second);
 
                 if (is_connecting_socket) {
-                    TRACE_3("Connecting to: #{} ({}:{}), id: {}. Status: {}"
-                        , to_string(peer_uuid)
+                    LOG_TRACE_3("Connecting to: {} ({}:{}), id: {}. Status: {}"
+                        , peer_uuid
                         , to_string(pos->saddr.addr)
                         , pos->saddr.port
                         , pos->sock.id()
@@ -473,7 +504,7 @@ private:
 
         auto pos = index_socket(std::move(sockinfo));
 
-        TRACE_2("Socket accepted: {}:{}, id: {}. Status: {}"
+        LOG_TRACE_2("Socket accepted: {}:{}, id: {}. Status: {}"
             , to_string(pos->saddr.addr)
             , pos->saddr.port
             , pos->sock.id()
@@ -481,10 +512,10 @@ private:
 
         auto options = pos->sock.dump_options();
 
-        TRACE_2("Accepted socket options: id: {}", pos->sock.id());
+        LOG_TRACE_2("Accepted socket options: id: {}", pos->sock.id());
 
         for (auto const & opt_item: options) {
-            TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
+            LOG_TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
         }
 
         _poller.add(pos->sock.id(), poller_type::POLL_IN_EVENT | poller_type::POLL_ERR_EVENT);
@@ -492,7 +523,7 @@ private:
 
     void close_socket (socket_id sid)
     {
-        TRACE_1("Socket closing: id: {}", sid);
+        LOG_TRACE_1("Socket closing: id: {}", sid);
 
         auto it = _index_by_socket_id.find(sid);
         assert(it != std::end(_index_by_socket_id));
@@ -509,8 +540,8 @@ private:
 
         pos->sock.close();
 
-        TRACE_1("Socket closed: #{} ({}:{}), id: {}"
-            , to_string(uuid)
+        LOG_TRACE_1("Socket closed: {} ({}:{}), id: {}"
+            , uuid
             , to_string(addr)
             , port
             , sid);
@@ -599,7 +630,7 @@ private:
 
             // Expected only connected sockets (writers and accepted) here.
             if (sockinfo.sock.state() != socket_type::CONNECTED) {
-                TRACE_3("Mark socket as expired: id: {}. Status: {}"
+                LOG_TRACE_3("Mark socket as expired: id: {}. Status: {}"
                     , sid
                     , sockinfo.sock.state_string());
                 mark_socket_as_expired(sid);
@@ -813,8 +844,8 @@ private:
 
                     this->failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
                         " corrupted/incomplete sequence of"
-                        " packets received from: #{}"
-                        , std::to_string(uuid)));
+                        " packets received from: {}"
+                        , uuid));
                 }
             } else {
                 break;
@@ -845,7 +876,7 @@ private:
 
             while (count-- && !_output_queues[prior].empty()) {
                 auto & item = _output_queues[prior].front();
-                auto const & pkt = item.second;
+                auto const & pkt = item.pkt;
 
                 output_envelope_type out;
                 out.seal(pkt);
@@ -858,16 +889,16 @@ private:
                 assert(size <= packet_type::MAX_PACKET_SIZE);
 
                 auto need_locate = !last_sinfo_ptr
-                    || last_sinfo_ptr->uuid != item.first;
+                    || last_sinfo_ptr->uuid != item.addressee;
 
                 if (need_locate) {
-                    last_sinfo_ptr = locate_writer(item.first);
+                    last_sinfo_ptr = locate_writer(item.addressee);
 
                     if (!last_sinfo_ptr)
                         continue;
                 }
 
-                assert(item.first == last_sinfo_ptr->uuid);
+                assert(item.addressee == last_sinfo_ptr->uuid);
 
                 auto & sock = last_sinfo_ptr->sock;
 
@@ -875,11 +906,16 @@ private:
 
                 if (bytes_sent > 0) {
                     total_bytes_sent += bytes_sent;
+
+                    // Message sent complete
+                    if (pkt.partindex == pkt.partcount)
+                        data_dispatched(item.counter);
+
                 } else if (bytes_sent < 0) {
                     auto & saddr = last_sinfo_ptr->saddr;
 
-                    this->failure(fmt::format("sending failure to #{} ({}:{}): {}"
-                        , to_string(last_sinfo_ptr->uuid)
+                    this->failure(fmt::format("sending failure to {} ({}:{}): {}"
+                        , last_sinfo_ptr->uuid
                         , to_string(saddr.addr)
                         , saddr.port
                         , sock.error_string()));

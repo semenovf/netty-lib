@@ -21,7 +21,6 @@ enum class errc
       success = 0
     , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
-
     , device_not_found
     , permissions_denied
     , name_too_long

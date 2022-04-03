@@ -19,7 +19,7 @@
 #   include "lib/udt.h"
 #endif
 
-#include "pfs/netty/p2p/trace.hpp"
+#include "pfs/log.hpp"
 
 namespace netty {
 namespace p2p {
@@ -89,7 +89,7 @@ void poller::release ()
 
 void poller::add (UDTSOCKET u, int events)
 {
-    TRACE_3("POLLER #{}: ADD: {}", _name, u);
+    LOG_TRACE_3("POLLER #{}: ADD: {}", _name, u);
 
     auto rc = UDT::epoll_add_usock(_p->eid, u, & events);
 
@@ -100,7 +100,7 @@ void poller::add (UDTSOCKET u, int events)
 
 void poller::remove (UDTSOCKET u)
 {
-    TRACE_3("POLLER #{}: REMOVE: {}", _name, u);
+    LOG_TRACE_3("POLLER #{}: REMOVE: {}", _name, u);
 
     auto rc = UDT::epoll_remove_usock(_p->eid, u);
 

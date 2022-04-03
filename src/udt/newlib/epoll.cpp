@@ -40,7 +40,7 @@ written by
 #include "common.hpp"
 #include "epoll.hpp"
 #include "udt.hpp"
-#include "pfs/netty/p2p/trace.hpp"
+#include "pfs/log.hpp"
 
 #ifdef LINUX
    #include <sys/epoll.h>
