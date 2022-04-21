@@ -193,10 +193,10 @@ int main ()
 
     peer1_worker = std::thread{[] {
         p2p::engine peer1 {PEER1_UUID};
-        peer1.failure.connect(on_failure);
-        peer1.rookie_accepted.connect(on_rookie_accepted);
-        peer1.writer_ready.connect(on_writer_ready);
-        peer1.peer_expired.connect(on_peer_expired);
+        peer1.failure = on_failure;
+        peer1.rookie_accepted = on_rookie_accepted;
+        peer1.writer_ready = on_writer_ready;
+        peer1.peer_expired = on_peer_expired;
 
         //REQUIRE(peer1.configure(configurator1{}));
         peer1.configure(configurator1{});
@@ -208,10 +208,10 @@ int main ()
 
     peer2_worker = std::thread{[] {
         p2p::engine peer2 {PEER2_UUID};
-        peer2.failure.connect(on_failure);
-        peer2.rookie_accepted.connect(on_rookie_accepted);
-        peer2.writer_ready.connect(on_writer_ready);
-        peer2.peer_expired.connect(on_peer_expired);
+        peer2.failure = on_failure;
+        peer2.rookie_accepted = on_rookie_accepted;
+        peer2.writer_ready = on_writer_ready;
+        peer2.peer_expired = on_peer_expired;
 
         //REQUIRE(peer2.configure(configurator2{}));
         peer2.configure(configurator2{});

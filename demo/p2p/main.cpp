@@ -139,10 +139,10 @@ int main (int /*argc*/, char * argv[])
 
     p2p::engine peer {UUID};
 
-    peer.failure.connect(on_failure);
-    peer.rookie_accepted.connect(on_rookie_accepted);
-    peer.peer_expired.connect(on_peer_expired);
-    peer.writer_ready.connect([& peer] (pfs::uuid_t uuid
+    peer.failure = on_failure;
+    peer.rookie_accepted = on_rookie_accepted;
+    peer.peer_expired = on_peer_expired;
+    peer.writer_ready = [& peer] (pfs::uuid_t uuid
             , netty::inet4_addr const & addr
             , std::uint16_t port) {
         LOG_TRACE_1("WRITER READY: {} ({}:{})"
@@ -151,9 +151,9 @@ int main (int /*argc*/, char * argv[])
             , port);
 
         peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
-    });
+    };
 
-    peer.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
+    peer.data_received = [& peer] (pfs::uuid_t uuid, std::string message) {
         LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , to_string(uuid)
             , message.substr(0, 20)
@@ -162,7 +162,7 @@ int main (int /*argc*/, char * argv[])
             , std::strlen(loremipsum));
 
         peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
-    });
+    };
 
     assert(peer.configure(configurator{}));
 
