@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.06.21 Initial version
@@ -21,7 +21,6 @@ enum class errc
       success = 0
     , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
-
     , device_not_found
     , permissions_denied
     , name_too_long

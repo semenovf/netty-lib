@@ -1,14 +1,14 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2021 Vladislav Trifochkin
+// Copyright (c) 2019-2022 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.09.13 Initial version
 //      2021.11.01 New version using UDT.
 ////////////////////////////////////////////////////////////////////////////////
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
+#define PFS__TRACE_LEVEL 3
+#include "pfs/log.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/p2p/engine.hpp"
 #include "pfs/netty/p2p/qt5/api.hpp"
@@ -105,7 +105,7 @@ void on_rookie_accepted (pfs::uuid_t uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    TRACE_1("HELO: {} ({}:{})"
+    LOG_TRACE_1("HELO: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -115,7 +115,7 @@ void on_peer_expired (pfs::uuid_t uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    TRACE_1("EXPIRED: {} ({}:{})"
+    LOG_TRACE_1("EXPIRED: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -145,7 +145,7 @@ int main (int /*argc*/, char * argv[])
     peer.writer_ready.connect([& peer] (pfs::uuid_t uuid
             , netty::inet4_addr const & addr
             , std::uint16_t port) {
-        TRACE_1("WRITER READY: {} ({}:{})"
+        LOG_TRACE_1("WRITER READY: {} ({}:{})"
             , to_string(uuid)
             , to_string(addr)
             , port);
@@ -154,7 +154,7 @@ int main (int /*argc*/, char * argv[])
     });
 
     peer.message_received.connect([& peer] (pfs::uuid_t uuid, std::string message) {
-        TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
+        LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , to_string(uuid)
             , message.substr(0, 20)
             , message.substr(message.size() - 20)

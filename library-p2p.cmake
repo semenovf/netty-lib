@@ -1,7 +1,7 @@
 ################################################################################
 # Copyright (c) 2021 Vladislav Trifochkin
 #
-# This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+# This file is part of `netty-lib`.
 #
 # Changelog:
 #      2021.06.21 Initial version.
@@ -25,8 +25,6 @@ else()
 endif()
 
 if (NETTY_P2P__ENABLE_QT5)
-    find_package(Qt5 COMPONENTS Core Network REQUIRED)
-
     portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PUBLIC Core Network)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")

@@ -3,12 +3,12 @@
 //
 // License: see LICENSE file
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#define NETTY_P2P__TRACE_LEVEL 3
+#define PFS__TRACE_LEVEL 3
 // #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 // #include "doctest.h"
 #include "pfs/netty/inet4_addr.hpp"
@@ -96,7 +96,7 @@ void on_rookie_accepted (pfs::uuid_t uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    TRACE_1("HELO: {} ({}:{})"
+    LOG_TRACE_1("HELO: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -106,7 +106,7 @@ void on_writer_ready (pfs::uuid_t uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    TRACE_1("WRITER READY: {} ({}:{})"
+    LOG_TRACE_1("WRITER READY: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -119,7 +119,7 @@ void on_peer_expired (pfs::uuid_t uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    TRACE_1("EXPIRED: {} ({}:{})"
+    LOG_TRACE_1("EXPIRED: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -129,7 +129,7 @@ void on_peer_expired (pfs::uuid_t uuid
 
 void worker (p2p::engine & peer)
 {
-    TRACE_1("Peer started: {}", to_string(peer.uuid()));
+    LOG_TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
     while (true) {
         peer.loop();
@@ -141,7 +141,7 @@ void worker (p2p::engine & peer)
             break;
     }
 
-    TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
+    LOG_TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
 }
 
 struct configurator1
@@ -176,7 +176,7 @@ void terminate_handler ()
     try {
         std::rethrow_exception(exptr);
     } catch (CUDTException ex) {
-        TRACE_1("!!! EXCEPTION: {} [{}]"
+        LOG_TRACE_1("!!! EXCEPTION: {} [{}]"
         , ex.getErrorMessage()
         , ex.getErrorCode());
     }

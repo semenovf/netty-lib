@@ -321,7 +321,10 @@ static void interpretLink(struct nlmsghdr *p_hdr, struct ifaddrs **p_links, stru
     struct ifaddrs *l_entry = malloc(sizeof(struct ifaddrs) + l_nameSize + l_addrSize + l_dataSize);
 #endif
     memset(l_entry, 0, sizeof(struct ifaddrs));
-    l_entry->ifa_name = "";
+    // warning: ISO C++11 does not allow conversion from string literal
+    // to 'char *' [-Wwritable-strings]
+    //l_entry->ifa_name = "";
+    l_entry->ifa_name[0] = '\x0';
 
     char *l_name = ((char *)l_entry) + sizeof(struct ifaddrs);
     char *l_addr = l_name + l_nameSize;

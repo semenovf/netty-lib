@@ -42,6 +42,7 @@ modified by
 *****************************************************************************/
 #include "queue.hpp"
 #include "core.hpp"
+#include "pfs/log.hpp"
 
 #ifndef WIN32
    #include <unistd.h>
@@ -60,11 +61,7 @@ modified by
 #include <cmath>
 #include <sstream>
 
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
-
 using namespace std;
-
 
 CUDTUnited CUDT::s_UDTUnited;
 
@@ -641,7 +638,7 @@ void CUDT::connect(const sockaddr* serv_addr)
 
 int CUDT::connect(const CPacket& response) throw ()
 {
-    TRACE_D("*** CONNECT *** m_iSeqNo={}; m_iMsgNo={}; m_iTimeStamp={}; m_iID={}"
+    LOG_TRACE_3("*** CONNECT *** m_iSeqNo={}; m_iMsgNo={}; m_iTimeStamp={}; m_iID={}"
         , response.m_iSeqNo
         , response.m_iMsgNo
         , response.m_iTimeStamp
@@ -738,7 +735,7 @@ POST_CONNECT:
         m_pSndTimeWindow = pfs::make_unique<CPktTimeWindow>();
         m_pRcvTimeWindow = pfs::make_unique<CPktTimeWindow>(16, 64);
     } catch (...) {
-        TRACE_D("*** CONNECT *** CUDTException(3, 2, 0): m_iID={}", response.m_iID);
+        LOG_TRACE_3("*** CONNECT *** CUDTException(3, 2, 0): m_iID={}", response.m_iID);
         throw CUDTException(3, 2, 0);
     }
 
@@ -776,7 +773,7 @@ POST_CONNECT:
    s_UDTUnited.connect_complete(m_SocketID);
 
    // acknowledge any waiting epolls to write
-   //TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+   //LOG_TRACE_3("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
    s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
 
    return 0;
@@ -1081,7 +1078,7 @@ int CUDT::send(const char* data, int len)
 
     if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
         // write is not available any more
-        //TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        //LOG_TRACE_3("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
     }
 
@@ -1165,7 +1162,7 @@ int CUDT::recv(char* data, int len)
 
     if (m_pRcvBuffer->getRcvDataSize() <= 0) {
         // read is not available any more
-        //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        //LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
     }
 
@@ -1270,7 +1267,7 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
 
     if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
         // write is not available any more
-        //TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        //LOG_TRACE_3("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
     }
 
@@ -1296,7 +1293,7 @@ int CUDT::recvmsg(char* data, int len)
 
         if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
             // read is not available any more
-            // TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
         }
 
@@ -1363,7 +1360,7 @@ int CUDT::recvmsg(char* data, int len)
 
     if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
         // read is not available any more
-        //TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        //LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
     }
 
@@ -1459,7 +1456,7 @@ int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
 
     if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
         // write is not available any more
-        // TRACE_D("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
+        // LOG_TRACE_3("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
     }
 
@@ -1534,7 +1531,7 @@ int64_t CUDT::recvfile(fstream& ofs, int64_t& offset, int64_t size, int block)
 
     if (m_pRcvBuffer->getRcvDataSize() <= 0) {
         // read is not available any more
-        // TRACE_D("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
+        // LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
     }
 
@@ -1753,7 +1750,7 @@ void CUDT::sendCtrl(int pkttype, void* lparam, void* rparam, int size)
             #endif
 
             // acknowledge any waiting epolls to read
-            // TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
         } else if (ack == m_iRcvLastAck) {
             if ((currtime - m_ullLastAckTime) < ((m_iRTT + 4 * m_iRTTVar) * m_ullCPUFrequency))
@@ -1960,7 +1957,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         // check the validation of the ack
         if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0) {
             //this should not happen: attack or bug
-            TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
             m_iBrokenCounter = 0;
             break;
@@ -2008,7 +2005,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
       #endif
 
         // acknowledde any waiting epolls to write
-        // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+        // LOG_TRACE_3("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
 
       // insert this socket to snd list if it is not on the list yet
@@ -2121,7 +2118,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
         if (!secure) {
             //this should not happen: attack or bug
-            // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
             m_iBrokenCounter = 0;
             break;
@@ -2179,7 +2176,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         m_bShutdown = true;
         m_bClosing = true;
 
-        // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+        // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
         m_bBroken = true;
         m_iBrokenCounter = 60;
 
@@ -2480,7 +2477,7 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
                 m_pSndQueue->sendto(addr, packet);
             } else {
                 // a new connection has been created, enable epoll for write
-                // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+                // LOG_TRACE_3("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
                 s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
             }
         }
@@ -2543,7 +2540,7 @@ void CUDT::checkTimers()
    }
 
     if (currtime > next_exp_time) {
-//         TRACE_D("*** CHECK BROKEN *** id: {}"
+//         LOG_TRACE_3("*** CHECK BROKEN *** id: {}"
 //             ", m_iEXPCount({}) > m_iEXPMaxCounter({})"
 //             ", currtime - m_ullLastRspTime ({}) > m_ullEXPThreshold * m_ullCPUFrequency ({})"
 //             , m_SocketID
@@ -2563,7 +2560,7 @@ void CUDT::checkTimers()
             // Application will detect this when it calls any UDT methods next time.
             //
             m_bClosing = true;
-            // TRACE_D("*** SET BROKEN TRUE *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
             m_iBrokenCounter = 30;
 
@@ -2573,8 +2570,8 @@ void CUDT::checkTimers()
             releaseSynch();
 
             // app can call any UDT API to learn the connection_broken error
-            // TRACE_D("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
-            // TRACE_D("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+            // LOG_TRACE_3("*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR, true);
 
             CTimer::triggerEvent();
@@ -2623,12 +2620,12 @@ void CUDT::addEPoll(const int eid)
 
     if (((UDT_STREAM == m_iSockType) && (m_pRcvBuffer->getRcvDataSize() > 0))
             || ((UDT_DGRAM == m_iSockType) && (m_pRcvBuffer->getRcvMsgNum() > 0))) {
-        // TRACE_D("*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID);
+        // LOG_TRACE_3("*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
     }
 
     if (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()) {
-        // TRACE_D("*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID);
+        // LOG_TRACE_3("*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
     }
 }
@@ -2639,8 +2636,8 @@ void CUDT::removeEPoll(const int eid)
     // since this happens after the epoll ID has been removed, they cannot be set again
     set<int> remove;
     remove.insert(eid);
-    // TRACE_D("*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID);
-    // TRACE_D("*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID);
+    // LOG_TRACE_3("*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID);
+    // LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID);
     s_UDTUnited.m_EPoll.update_events(m_SocketID, remove, UDT_EPOLL_IN | UDT_EPOLL_OUT, false);
 
     CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);

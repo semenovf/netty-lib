@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.28 Initial version.
@@ -19,8 +19,7 @@
 #   include "lib/udt.h"
 #endif
 
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
+#include "pfs/log.hpp"
 
 namespace netty {
 namespace p2p {
@@ -55,10 +54,7 @@ poller & poller::operator = (poller &&) = default;
 
 poller::~poller ()
 {
-    if (_p->eid == CUDT::ERROR) {
-        UDT::epoll_release(_p->eid);
-        _p->eid = CUDT::ERROR;
-    }
+    release();
 }
 
 void poller::failure_helper (std::string const & reason)
@@ -83,9 +79,17 @@ bool poller::initialize ()
     return success;
 }
 
+void poller::release ()
+{
+    if (_p->eid != CUDT::ERROR) {
+        UDT::epoll_release(_p->eid);
+        _p->eid = CUDT::ERROR;
+    }
+}
+
 void poller::add (UDTSOCKET u, int events)
 {
-    TRACE_3("POLLER #{}: ADD: {}", _name, u);
+    LOG_TRACE_3("POLLER #{}: ADD: {}", _name, u);
 
     auto rc = UDT::epoll_add_usock(_p->eid, u, & events);
 
@@ -96,7 +100,7 @@ void poller::add (UDTSOCKET u, int events)
 
 void poller::remove (UDTSOCKET u)
 {
-    TRACE_3("POLLER #{}: REMOVE: {}", _name, u);
+    LOG_TRACE_3("POLLER #{}: REMOVE: {}", _name, u);
 
     auto rc = UDT::epoll_remove_usock(_p->eid, u);
 

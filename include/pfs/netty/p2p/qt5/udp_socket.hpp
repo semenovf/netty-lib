@@ -1,19 +1,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/inet4_addr.hpp"
-#include "pfs/emitter.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/memory.hpp"
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QUdpSocket>
+#include <functional>
 #include <string>
 #include <cassert>
 
@@ -44,24 +44,61 @@ private:
     QUdpSocket _socket;
 
 public:
-    pfs::emitter_mt<std::string const &> failure;
+    std::function<void (std::string const &)> failure;
 
 private:
+    // If `addr` is empty select first running and non-loopback interface
     QNetworkInterface iface_by_address (std::string const & addr)
     {
+        QNetworkInterface defaultInterface;
         QList<QNetworkInterface> ifaces(QNetworkInterface::allInterfaces());
         QString addrstr = QString::fromStdString(addr);
 
+        LOG_TRACE_3("Searching network interface by address: {}"
+            , addr.empty() ? "<empty>" : addr);
+        LOG_TRACE_3("Scan available network interfaces: {}", ifaces.size());
+
         for (int i = 0; i < ifaces.size(); i++) {
+            LOG_TRACE_3("    Network interface: {} [{}]"
+                , ifaces[i].humanReadableName().toStdString()
+                , ifaces[i].hardwareAddress().toStdString());
+
+            if (!defaultInterface.isValid()) {
+                auto flags = ifaces[i].flags();
+                auto canBeDefault = flags & QNetworkInterface::IsUp
+                    && flags & QNetworkInterface::IsRunning
+                    && !(flags & QNetworkInterface::IsLoopBack);
+
+                if (canBeDefault) {
+                    defaultInterface = ifaces[i];
+                }
+            }
+
             QList<QNetworkAddressEntry> address_entries(ifaces[i].addressEntries());
 
             for (int j = 0; j < address_entries.size(); j++) {
+                bool match = false;
+
                 if (address_entries[j].ip().toString() == addrstr)
+                    match = true;
+
+                LOG_TRACE_3("        Address entry {} {} {}"
+                    , address_entries[j].ip().toString().toStdString()
+                    , match ? "match" : "not match"
+                    , addr);
+
+                if (match)
                     return ifaces[i];
             }
         }
 
-        return QNetworkInterface{};
+        if (defaultInterface.isValid()) {
+            LOG_TRACE_3("No network interface matches, use default: {} [{}]"
+                , defaultInterface.humanReadableName().toStdString()
+                , defaultInterface.hardwareAddress().toStdString());
+        }
+
+        return defaultInterface;
     }
 
     bool process_multicast_group (inet4_addr const & addr
@@ -82,14 +119,19 @@ private:
 
         if (!network_iface.empty() && network_iface != "*") {
             iface = QNetworkInterface::interfaceFromName(QString::fromStdString(network_iface));
-
-            if (!iface.isValid()) {
-                failure("bad interface specified");
-                return false;
-            }
         } else {
             iface = iface_by_address(network_iface);
         }
+
+        if (!iface.isValid()) {
+            failure("bad interface specified");
+            return false;
+        }
+
+        LOG_TRACE_2("{} multicast interface: {} [{}]"
+            , op == muticast_group_op::join ? "Join" : "Leave"
+            , iface.humanReadableName().toStdString()
+            , iface.hardwareAddress().toStdString());
 
         if (_socket.state() != QUdpSocket::BoundState) {
             failure("listener is not bound");
@@ -142,11 +184,15 @@ public:
             : QHostAddress{static_cast<quint32>(addr)};
 
         if (!_socket.bind(hostaddr, port, bind_mode)) {
-            failure("listener socket binding failure");
+            failure(fmt::format("listener socket binding failure: {}:{}"
+                , to_string(addr), port));
             return false;
         }
 
         assert(_socket.state() == QUdpSocket::BoundState);
+
+        LOG_TRACE_1("listener socket in bound state: {}:{}"
+            , to_string(addr), port);
 
         return true;
     }
@@ -251,8 +297,8 @@ public:
     udp_socket (udp_socket const &) = delete;
     udp_socket & operator = (udp_socket const &) = delete;
 
-    udp_socket (udp_socket &&) = default;
-    udp_socket & operator = (udp_socket &&) = default;
+    udp_socket (udp_socket &&) = delete;
+    udp_socket & operator = (udp_socket &&) = delete;
 };
 
 }}} // namespace netty::p2p::qt5

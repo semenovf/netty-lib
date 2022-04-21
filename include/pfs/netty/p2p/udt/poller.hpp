@@ -1,14 +1,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.28 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "udp_socket.hpp"
-#include "pfs/emitter.hpp"
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -39,7 +38,7 @@ private:
     std::string _name;
 
 public:
-    pfs::emitter_mt<std::string const &> failure;
+    mutable std::function<void (std::string const &)> failure;
 
 public:
     poller (std::string const & name);
@@ -52,6 +51,7 @@ public:
     poller & operator = (poller &&);
 
     bool initialize ();
+    void release ();
     void add (UDTSOCKET u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
     void remove (UDTSOCKET u);
     int wait (std::chrono::milliseconds millis);

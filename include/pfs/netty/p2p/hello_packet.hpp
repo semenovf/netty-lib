@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2019-2021 Vladislav Trifochkin
 //
-// This file is part of [net-lib](https://github.com/semenovf/net-lib) library.
+// This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.09.13 Initial version.
@@ -33,7 +33,7 @@ inline std::int16_t crc16_of (hello_packet const & pkt)
     return crc16;
 }
 
-void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
+inline void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
 {
     ar  << pkt.greeting[0]
         << pkt.greeting[1]
@@ -44,7 +44,7 @@ void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
         << pfs::to_network_order(crc16_of(pkt));
 }
 
-void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
+inline void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
 {
     ar  >> pkt.greeting[0]
         >> pkt.greeting[1]

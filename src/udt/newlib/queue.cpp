@@ -40,6 +40,7 @@ written by
 #include "common.hpp"
 #include "core.hpp"
 #include "queue.hpp"
+#include "pfs/log.hpp"
 #include <cstring>
 
 #ifdef WIN32
@@ -49,9 +50,6 @@ written by
       #include <wspiapi.h>
    #endif
 #endif
-
-#define NETTY_P2P__TRACE_LEVEL 3
-#include "pfs/netty/p2p/trace.hpp"
 
 using namespace std;
 
@@ -983,7 +981,7 @@ void CRcvQueue::init(int qsize, int payload, int version, int hsize, CChannel* c
     CUDT * u = NULL;
     int32_t id;
 
-    TRACE_D("--- CRcvQueue::worker BEGIN {}", true);
+    LOG_TRACE_3("--- CRcvQueue::worker BEGIN {}", true);
 
     while (!self->m_bClosing) {
 #ifdef NO_BUSY_WAITING
@@ -1087,7 +1085,7 @@ TIMER_CHECK:
     else
         delete (sockaddr_in6 *)addr;
 
-    TRACE_D("--- CRcvQueue::worker END {}", true);
+    LOG_TRACE_3("--- CRcvQueue::worker END {}", true);
 
 #ifndef WIN32
     return NULL;
