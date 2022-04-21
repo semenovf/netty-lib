@@ -184,11 +184,6 @@ public:
                 , int priority) {
             this->enqueue(uuid, data, len, priority);
         });
-
-        auto now = current_timepoint();
-
-        _discovery.last_timepoint = now > _discovery.transmit_interval
-            ? now - _discovery.transmit_interval : now;
     }
 
     ~engine ()
@@ -260,6 +255,11 @@ public:
                 TRACE_2("   * {}: {}", opt_item.first, opt_item.second);
             }
         }
+
+        auto now = current_timepoint();
+
+        _discovery.last_timepoint = now > _discovery.transmit_interval
+            ? now - _discovery.transmit_interval : now;
 
         return success;
     }
