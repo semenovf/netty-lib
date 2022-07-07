@@ -17,7 +17,7 @@
 namespace p2p = netty::p2p;
 
 namespace {
-    constexpr std::size_t PACKET_SIZE = 64;
+    constexpr std::uint16_t PACKET_SIZE = 64;
 }
 
 using uuid_t            = pfs::uuid_t;
@@ -39,9 +39,11 @@ TEST_CASE("packet_serialization")
     output_envelope_t oe;
     oe.seal(pkt);
 
-    CHECK((oe.data().size() == packet_t::MAX_PACKET_SIZE));
+    auto data = oe.data();
 
-    input_envelope_t ie {oe.data()};
+    CHECK((data.size() == packet_t::MAX_PACKET_SIZE));
+
+    input_envelope_t ie {data};
 
     ie.unseal(pkt);
 

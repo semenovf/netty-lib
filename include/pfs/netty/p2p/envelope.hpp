@@ -48,19 +48,65 @@ public:
     }
 };
 
-template <typename ArchiverBackend = std::istringstream>
-class input_envelope
+class basic_input_envelope
 {
-    ArchiverBackend _archiver_backend;
+protected:
     cereal::BinaryInputArchive _input_archive;
 
-public:
-    input_envelope (std::string const & packet)
-        : _archiver_backend(packet)
-        , _input_archive(_archiver_backend)
+protected:
+    basic_input_envelope (std::istream & archiver_backend)
+        : _input_archive(archiver_backend)
     {}
 
-    input_envelope (char const * data, std::streamsize size);
+public:
+    template <typename T>
+    void unseal (T & payload)
+    {
+        _input_archive >> payload;
+    }
+    
+    template <typename T>
+    basic_input_envelope & operator >> (T & payload)
+    {
+        _input_archive >> payload;
+        return *this;
+    }
+};
+
+template <typename ArchiverBackend = std::istream>
+class input_envelope;
+
+template <>
+class input_envelope<std::istream>: public basic_input_envelope
+{
+    struct buffer : public std::streambuf
+    {
+        buffer (char const * s, std::size_t n)
+        {
+            auto * p = const_cast<char*>(s);
+            setg(p, p, p + n);
+        }
+    };
+
+private:
+    buffer _buf;
+    std::istream _archiver_backend;
+
+public:
+    input_envelope (std::string & packet)
+        : basic_input_envelope(_archiver_backend)
+        , _buf(packet.data(), packet.size())
+        , _archiver_backend(& _buf)
+    {
+        // NOTE. Avoid use of std::istream::rdbuf()->pubsetbuf(const_cast<char *>(data), size)
+        // This work with GCC, but not with MSVC.
+    }
+
+    input_envelope (char const * data, std::streamsize size)
+        : basic_input_envelope(_archiver_backend)
+        , _buf(data, size)
+        , _archiver_backend(&_buf)
+    {}
 
     template <typename T>
     void unseal (T & payload)
@@ -75,13 +121,5 @@ public:
         return *this;
     }
 };
-
-template <>
-inline input_envelope<std::istringstream>::input_envelope(char const * data
-    , std::streamsize size)
-    : _input_archive(_archiver_backend)
-{
-    _archiver_backend.rdbuf()->pubsetbuf(const_cast<char *>(data), size);
-}
 
 }} // namespace netty::p2p

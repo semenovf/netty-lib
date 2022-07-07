@@ -91,8 +91,8 @@ public: //API
    static int setsockopt(UDTSOCKET u, int level, UDTOpt optname, const void* optval, int optlen);
    static int send(UDTSOCKET u, const char* buf, int len, int flags);
    static int recv(UDTSOCKET u, char* buf, int len, int flags);
-   static int sendmsg(UDTSOCKET u, const char* buf, int len, int ttl = -1, bool inorder = false);
-   static int recvmsg(UDTSOCKET u, char* buf, int len);
+   static int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
+   static int recvmsg(UDTSOCKET u, char* buf, std::streamsize len);
    static int64_t sendfile(UDTSOCKET u, std::fstream& ifs, int64_t& offset, int64_t size, int block = 364000);
    static int64_t recvfile(UDTSOCKET u, std::fstream& ofs, int64_t& offset, int64_t size, int block = 7280000);
    static int select(int nfds, ud_set* readfds, ud_set* writefds, ud_set* exceptfds, const timeval* timeout);
@@ -146,7 +146,7 @@ private:
       // Returned value:
       //    Return 0 if connected, positive value if connection is in progress, otherwise error code.
 
-   int connect(const CPacket& pkt) throw ();
+   int connect(const CPacket& pkt);// throw ();
 
       // Functionality:
       //    Connect to a UDT entity listening at address "peer", which has sent "hs" request.
@@ -175,7 +175,7 @@ private:
       // Returned value:
       //    Actual size of data sent.
 
-   int send(const char* data, int len);
+   std::streamsize send(const char* data, std::streamsize len);
 
       // Functionality:
       //    Request UDT to receive data to a memory block "data" with size of "len".
@@ -393,7 +393,7 @@ private: // synchronization: mutexes and conditions
 private: // Generation and processing of packets
    void sendCtrl(int pkttype, void* lparam = NULL, void* rparam = NULL, int size = 0);
    void processCtrl(CPacket& ctrlpkt);
-   int packData(CPacket& packet, uint64_t& ts);
+   std::streamsize packData(CPacket& packet, uint64_t& ts);
    int processData(CUnit* unit);
    int listen(sockaddr* addr, CPacket& packet);
 

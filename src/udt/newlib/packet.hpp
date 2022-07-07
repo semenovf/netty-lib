@@ -85,7 +85,7 @@ public:
       // Returned value:
       //    None.
 
-   void setLength(int len);
+   void setLength (std::streamsize len);
 
       // Functionality:
       //    Pack a Control packet.

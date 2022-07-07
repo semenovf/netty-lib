@@ -52,6 +52,9 @@ modified by
    #include <cstring>
    #include <cstdlib>
 #else
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
    #include <winsock2.h>
    #include <ws2tcpip.h>
    #ifdef LEGACY_WIN32
@@ -60,6 +63,7 @@ modified by
 #endif
 #include <cmath>
 #include <sstream>
+#include <cassert>
 
 using namespace std;
 
@@ -396,9 +400,10 @@ void CUDT::getOpt (UDTOpt optName, void * optval, int & optlen)
 
     case UDT_SNDDATA:
         if (m_pSndBuffer)
-            *(int32_t*)optval = m_pSndBuffer->getCurrBufSize();
+            *static_cast<std::streamsize *>(optval) = m_pSndBuffer->getCurrBufSize();
         else
-            *(int32_t*)optval = 0;
+            *static_cast<std::streamsize *>(optval) = 0;
+
         optlen = sizeof(int32_t);
         break;
 
@@ -636,7 +641,7 @@ void CUDT::connect(const sockaddr* serv_addr)
       throw e;
 }
 
-int CUDT::connect(const CPacket& response) throw ()
+int CUDT::connect(const CPacket& response)// throw ()
 {
     LOG_TRACE_3("*** CONNECT *** m_iSeqNo={}; m_iMsgNo={}; m_iTimeStamp={}; m_iID={}"
         , response.m_iSeqNo
@@ -976,7 +981,7 @@ void CUDT::close()
    m_bOpened = false;
 }
 
-int CUDT::send(const char* data, int len)
+std::streamsize CUDT::send(const char* data, std::streamsize len)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);
@@ -1061,7 +1066,7 @@ int CUDT::send(const char* data, int len)
         return 0;
     }
 
-    int size = (m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize;
+    auto size = (m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize;
 
     if (size > len)
         size = len;
@@ -1618,9 +1623,11 @@ void CUDT::CCUpdate()
 
    if (m_llMaxBW <= 0)
       return;
+
    const double minSP = 1000000.0 / (double(m_llMaxBW) / m_iMSS) * m_ullCPUFrequency;
+
    if (m_ullInterval < minSP)
-       m_ullInterval = minSP;
+       m_ullInterval = static_cast<std::uint64_t>(minSP);
 }
 
 void CUDT::initSynch()
@@ -2222,10 +2229,10 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
    }
 }
 
-int CUDT::packData(CPacket& packet, uint64_t& ts)
+std::streamsize CUDT::packData (CPacket & packet, std::uint64_t & ts)
 {
-   int payload = 0;
-   bool probe = false;
+    std::streamsize payload = 0;
+    bool probe = false;
 
    uint64_t entertime;
    CTimer::rdtsc(entertime);
@@ -2243,7 +2250,7 @@ int CUDT::packData(CPacket& packet, uint64_t& ts)
       if (offset < 0)
          return 0;
 
-      int msglen;
+      std::streamsize msglen;
 
       payload = m_pSndBuffer->readData(&(packet.m_pcData), offset, packet.m_iMsgNo, msglen);
 
@@ -2251,7 +2258,8 @@ int CUDT::packData(CPacket& packet, uint64_t& ts)
       {
          int32_t seqpair[2];
          seqpair[0] = packet.m_iSeqNo;
-         seqpair[1] = CSeqNo::incseq(seqpair[0], msglen);
+         assert(msglen <= (std::numeric_limits<std::int32_t>::max)());
+         seqpair[1] = CSeqNo::incseq(seqpair[0], static_cast<std::int32_t>(msglen));
          sendCtrl(7, &packet.m_iMsgNo, seqpair, 8);
 
          // only one msg drop request is necessary

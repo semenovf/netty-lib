@@ -129,7 +129,7 @@ std::string to_string (inet4_addr const & addr, std::string const & format, int 
         f = & format;
     }
 
-    if (not (base == 10 || base == 8 || base == 16))
+    if (!(base == 10 || base == 8 || base == 16))
         base = 10;
 
     std::string::const_iterator it = f->cbegin();

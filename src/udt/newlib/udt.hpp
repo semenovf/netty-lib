@@ -47,17 +47,23 @@ modified by
    #include <sys/socket.h>
    #include <netinet/in.h>
 #else
-   #ifdef __MINGW__
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+
+#   ifdef __MINGW__
       #include <stdint.h>
       #include <ws2tcpip.h>
-   #endif
-   #include <windows.h>
+#   endif
+
+#   include <windows.h>
+#   include <winsock2.h>
 #endif
+
 #include <fstream>
 #include <set>
 #include <string>
 #include <vector>
-
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -206,8 +212,8 @@ struct CPerfMon
    int pktFlightSize;                   // number of packets on flight
    double msRTT;                        // RTT, in milliseconds
    double mbpsBandwidth;                // estimated bandwidth, in Mb/s
-   int byteAvailSndBuf;                 // available UDT sender buffer size
-   int byteAvailRcvBuf;                 // available UDT receiver buffer size
+   std::streamsize byteAvailSndBuf;     // available UDT sender buffer size
+   std::streamsize byteAvailRcvBuf;     // available UDT receiver buffer size
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -338,8 +344,8 @@ UDT_API int getsockopt(UDTSOCKET u, int level, SOCKOPT optname, void* optval, in
 UDT_API int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen);
 UDT_API int send(UDTSOCKET u, const char* buf, int len, int flags);
 UDT_API int recv(UDTSOCKET u, char* buf, int len, int flags);
-UDT_API int sendmsg(UDTSOCKET u, const char* buf, int len, int ttl = -1, bool inorder = false);
-UDT_API int recvmsg(UDTSOCKET u, char* buf, int len);
+UDT_API int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
+UDT_API int recvmsg(UDTSOCKET u, char* buf, std::streamsize len);
 UDT_API int64_t sendfile(UDTSOCKET u, std::fstream& ifs, int64_t& offset, int64_t size, int block = 364000);
 UDT_API int64_t recvfile(UDTSOCKET u, std::fstream& ofs, int64_t& offset, int64_t size, int block = 7280000);
 UDT_API int64_t sendfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 364000);

@@ -8,13 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/endian.hpp"
 #include "pfs/netty/p2p/udt/udp_socket.hpp"
-#include <netinet/in.h>
 #include <cassert>
 
 #if NETTY_P2P__NEW_UDT_ENABLED
 #   include "newlib/udt.hpp"
 #else
 #   include "lib/udt.h"
+#endif
+
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <netinet/in.h>
 #endif
 
 #include "debug_CCC.hpp"

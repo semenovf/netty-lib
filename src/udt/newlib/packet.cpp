@@ -144,6 +144,7 @@ written by
 
 #include "packet.hpp"
 #include <cstring>
+#include <cassert>
 
 const int CPacket::m_iPktHdrSize = 16;
 const int CHandShake::m_iContentSize = 48;
@@ -174,9 +175,10 @@ int CPacket::getLength() const
    return m_PacketVector[1].iov_len;
 }
 
-void CPacket::setLength(int len)
+void CPacket::setLength (std::streamsize len)
 {
-   m_PacketVector[1].iov_len = len;
+    assert(len <= (std::numeric_limits<int>::max)());
+    m_PacketVector[1].iov_len = static_cast<int>(len);
 }
 
 void CPacket::pack(int pkttype, void* lparam, void* rparam, int size)

@@ -59,7 +59,7 @@ public:
       // Returned value:
       //    None.
 
-   void addBuffer(const char* data, int len, int ttl = -1, bool order = false);
+   void addBuffer(const char* data, std::streamsize len, int ttl = -1, bool order = false);
 
       // Functionality:
       //    Read a block of data from file and insert it into the sending list.
@@ -69,7 +69,7 @@ public:
       // Returned value:
       //    actual size of data added from the file.
 
-   int addBufferFromFile(std::fstream& ifs, int len);
+   std::streamsize addBufferFromFile(std::fstream& ifs, std::streamsize len);
 
       // Functionality:
       //    Find data position to pack a DATA packet from the furthest reading point.
@@ -79,7 +79,7 @@ public:
       // Returned value:
       //    Actual length of data read.
 
-   int readData(char** data, int32_t& msgno);
+   std::streamsize readData(char** data, int32_t& msgno);
 
       // Functionality:
       //    Find data position to pack a DATA packet for a retransmission.
@@ -91,7 +91,7 @@ public:
       // Returned value:
       //    Actual length of data read.
 
-   int readData(char** data, const int offset, int32_t& msgno, int& msglen);
+   std::streamsize readData(char** data, const int offset, int32_t& msgno, std::streamsize & msglen);
 
       // Functionality:
       //    Update the ACK point and may release/unmap/return the user data according to the flag.
@@ -109,7 +109,7 @@ public:
       // Returned value:
       //    Current size of the data in the sending list.
 
-   int getCurrBufSize() const;
+   std::streamsize getCurrBufSize() const;
 
 private:
    void increase();
@@ -120,7 +120,7 @@ private:
    struct Block
    {
       char* m_pcData;                   // pointer to the data block
-      int m_iLength;                    // length of the block
+      std::size_t m_iLength;            // length of the block
 
       int32_t m_iMsgNo;                 // message number
       uint64_t m_OriginTime;            // original request time
@@ -146,7 +146,7 @@ private:
    int m_iSize;          // buffer size (number of packets)
    int m_iMSS;           // maximum seqment/packet size
 
-   int m_iCount;         // number of used blocks
+   std::streamsize m_iCount; // number of used blocks
 
 private:
     CSndBuffer (CSndBuffer const &) = delete;

@@ -31,7 +31,8 @@ TEST_CASE("Envelope") {
     int a1;
     double b1;
     p2p::uuid_t c1;
-    p2p::input_envelope in {out.data()};
+    auto data = out.data();
+    p2p::input_envelope in {data};
 
     in >> a1 >> b1 >> c1;
 

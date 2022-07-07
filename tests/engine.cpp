@@ -8,9 +8,12 @@
 // Changelog:
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS__TRACE_LEVEL 3
-// #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-// #include "doctest.h"
+#define PFS__LOG_LEVEL 3
+//#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+//#include "doctest.h"
+#include "pfs/error.hpp"
+#include "pfs/fmt.hpp"
+#include "pfs/log.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/p2p/engine.hpp"
 #include "pfs/netty/p2p/qt5/api.hpp"
@@ -131,14 +134,24 @@ void worker (p2p::engine & peer)
 {
     LOG_TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
-    while (true) {
-        peer.loop();
+    TRY {
+        while (true) {
+            peer.loop();
 
-        if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
-            break;
+            if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
+                break;
 
-        if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
-            break;
+            if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
+                break;
+        }
+    } CATCH (cereal::Exception ex) {
+#if PFS__EXCEPTIONS_ENABLED
+        LOGE("cereal::Exception", "{} (peer={})", ex.what(), peer.uuid());
+#endif
+    } CATCH (...) {
+#if PFS__EXCEPTIONS_ENABLED
+        LOGE("Unhandled exception", "peer={}", peer.uuid());
+#endif
     }
 
     LOG_TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
@@ -168,7 +181,7 @@ struct configurator2
     int backlog () const noexcept { return 10; }
 };
 
-void terminate_handler ()
+void term_handler ()
 {
     fmt::print(stderr, "TERMINATED\n");
 
@@ -184,7 +197,7 @@ void terminate_handler ()
 
 int main ()
 {
-    std::set_terminate(terminate_handler);
+    std::set_terminate(term_handler);
 
     p2p::engine::startup();
 

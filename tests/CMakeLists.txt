@@ -9,6 +9,8 @@
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
+if (NETTY__BUILD_P2P)
+
 set(TESTS
     engine
     envelope
@@ -20,3 +22,5 @@ foreach (t ${TESTS})
         SOURCES ${t}.cpp ${${t}_SOURCES}
         LINK pfs::netty::p2p)
 endforeach()
+
+endif(NETTY__BUILD_P2P)

@@ -7,6 +7,7 @@
 //      2021.10.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/fmt.hpp"
 #include <string>
@@ -17,7 +18,7 @@ namespace netty {
 namespace p2p {
 namespace udt {
 
-class udp_socket
+class NETTY__EXPORT udp_socket
 {
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;

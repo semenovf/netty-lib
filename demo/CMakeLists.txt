@@ -12,4 +12,6 @@ add_subdirectory(mtu)
 #     add_subdirectory(lazypirate)
 # endif(ENABLE_LIBZMQ)
 
-add_subdirectory(p2p)
+if (NETTY__BUILD_P2P)
+    add_subdirectory(p2p)
+endif(NETTY__BUILD_P2P)

@@ -46,7 +46,7 @@ struct packet
 };
 
 template <typename Consumer>
-void split_into_packets (std::size_t packet_size
+void split_into_packets (std::uint16_t packet_size
     , uuid_t sender_uuid
     , char const * data, std::streamsize len
     , Consumer && consumer)
@@ -54,8 +54,8 @@ void split_into_packets (std::size_t packet_size
     assert(packet_size <= packet::MAX_PACKET_SIZE
         && packet_size > packet::PACKET_HEADER_SIZE);
 
-    std::size_t payload_size = packet_size - packet::PACKET_HEADER_SIZE;
-    std::size_t remain_len   = len;
+    auto payload_size = packet_size - packet::PACKET_HEADER_SIZE;
+    auto remain_len   = len;
     char const * remain_data = data;
     std::uint32_t partindex  = 1;
     std::uint32_t partcount  = len / payload_size
@@ -70,7 +70,7 @@ void split_into_packets (std::size_t packet_size
         p.partindex   = partindex++;
         p.payloadsize = remain_len > payload_size
             ? payload_size
-            : remain_len;
+            : static_cast<std::uint16_t>(remain_len);
         std::memset(p.payload, 0, payload_size);
         std::memcpy(p.payload, remain_data, p.payloadsize);
 

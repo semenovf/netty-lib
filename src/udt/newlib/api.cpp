@@ -1866,7 +1866,7 @@ int CUDT::recv(UDTSOCKET u, char* buf, int len, int)
    }
 }
 
-int CUDT::sendmsg(UDTSOCKET u, const char* buf, int len, int ttl, bool inorder)
+int CUDT::sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
 {
    try
    {
@@ -1890,7 +1890,7 @@ int CUDT::sendmsg(UDTSOCKET u, const char* buf, int len, int ttl, bool inorder)
    }
 }
 
-int CUDT::recvmsg(UDTSOCKET u, char* buf, int len)
+int CUDT::recvmsg(UDTSOCKET u, char* buf, std::streamsize len)
 {
    try
    {
@@ -2267,12 +2267,12 @@ int recv(UDTSOCKET u, char* buf, int len, int flags)
    return CUDT::recv(u, buf, len, flags);
 }
 
-int sendmsg(UDTSOCKET u, const char* buf, int len, int ttl, bool inorder)
+int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
 {
    return CUDT::sendmsg(u, buf, len, ttl, inorder);
 }
 
-int recvmsg(UDTSOCKET u, char* buf, int len)
+int recvmsg(UDTSOCKET u, char* buf, std::streamsize len)
 {
    return CUDT::recvmsg(u, buf, len);
 }

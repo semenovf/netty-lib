@@ -320,7 +320,7 @@ md5_init(md5_state_t *pms)
 }
 
 void
-md5_append(md5_state_t *pms, const md5_byte_t *data, int nbytes)
+md5_append(md5_state_t *pms, const md5_byte_t *data, std::size_t nbytes)
 {
     const md5_byte_t *p = data;
     int left = nbytes;

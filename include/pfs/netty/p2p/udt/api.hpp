@@ -7,6 +7,7 @@
 //      2021.11.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/exports.hpp"
 #include "poller.hpp"
 #include "udp_socket.hpp"
 
@@ -26,8 +27,8 @@ public:
     api & operator = (api const &) = delete;
     api & operator = (api &&) = delete;
 
-    static bool startup ();
-    static void cleanup ();
+    static NETTY__EXPORT bool startup ();
+    static NETTY__EXPORT void cleanup ();
 };
 
 }}} // namespace netty::p2p::udt

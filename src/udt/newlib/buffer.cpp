@@ -117,9 +117,10 @@ CSndBuffer::~CSndBuffer()
    #endif
 }
 
-void CSndBuffer::addBuffer(const char* data, int len, int ttl, bool order)
+void CSndBuffer::addBuffer(const char* data, std::streamsize len, int ttl, bool order)
 {
-   int size = len / m_iMSS;
+   auto size = len / m_iMSS;
+
    if ((len % m_iMSS) != 0)
       size ++;
 
@@ -134,7 +135,8 @@ void CSndBuffer::addBuffer(const char* data, int len, int ttl, bool order)
    Block* s = m_pLastBlock;
    for (int i = 0; i < size; ++ i)
    {
-      int pktlen = len - i * m_iMSS;
+      auto  pktlen = len - i * m_iMSS;
+
       if (pktlen > m_iMSS)
          pktlen = m_iMSS;
 
@@ -163,9 +165,10 @@ void CSndBuffer::addBuffer(const char* data, int len, int ttl, bool order)
       m_iNextMsgNo = 1;
 }
 
-int CSndBuffer::addBufferFromFile(fstream& ifs, int len)
+std::streamsize CSndBuffer::addBufferFromFile(fstream& ifs, std::streamsize len)
 {
-   int size = len / m_iMSS;
+   auto size = len / m_iMSS;
+
    if ((len % m_iMSS) != 0)
       size ++;
 
@@ -174,13 +177,16 @@ int CSndBuffer::addBufferFromFile(fstream& ifs, int len)
       increase();
 
    Block* s = m_pLastBlock;
-   int total = 0;
+
+   std::streamsize total = 0;
+
    for (int i = 0; i < size; ++ i)
    {
       if (ifs.bad() || ifs.fail() || ifs.eof())
          break;
 
-      int pktlen = len - i * m_iMSS;
+      std::streamsize pktlen = len - i * m_iMSS;
+
       if (pktlen > m_iMSS)
          pktlen = m_iMSS;
 
@@ -214,14 +220,14 @@ int CSndBuffer::addBufferFromFile(fstream& ifs, int len)
    return total;
 }
 
-int CSndBuffer::readData(char** data, int32_t& msgno)
+std::streamsize CSndBuffer::readData(char** data, int32_t& msgno)
 {
    // No data to read
    if (m_pCurrBlock == m_pLastBlock)
       return 0;
 
    *data = m_pCurrBlock->m_pcData;
-   int readlen = m_pCurrBlock->m_iLength;
+   auto readlen = m_pCurrBlock->m_iLength;
    msgno = m_pCurrBlock->m_iMsgNo;
 
    m_pCurrBlock = m_pCurrBlock->m_pNext;
@@ -229,7 +235,7 @@ int CSndBuffer::readData(char** data, int32_t& msgno)
    return readlen;
 }
 
-int CSndBuffer::readData(char** data, const int offset, int32_t& msgno, int& msglen)
+std::streamsize CSndBuffer::readData(char** data, const int offset, int32_t& msgno, std::streamsize & msglen)
 {
    CGuard bufferguard(m_BufLock);
 
@@ -259,7 +265,7 @@ int CSndBuffer::readData(char** data, const int offset, int32_t& msgno, int& msg
    }
 
    *data = p->m_pcData;
-   int readlen = p->m_iLength;
+   auto readlen = p->m_iLength;
    msgno = p->m_iMsgNo;
 
    return readlen;
@@ -277,7 +283,7 @@ void CSndBuffer::ackData(int offset)
    CTimer::triggerEvent();
 }
 
-int CSndBuffer::getCurrBufSize() const
+std::streamsize CSndBuffer::getCurrBufSize () const
 {
    return m_iCount;
 }

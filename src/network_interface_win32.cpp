@@ -104,7 +104,7 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
 
             if (rc == NO_ERROR) {
                 auto nwchars = static_cast<int>(wcslen(adapter_name));
-                iface.adapter_name = windows::utf8_encode(adapter_name, nwchars);
+                iface.adapter_name = pfs::windows::utf8_encode(adapter_name, nwchars);
             }
 
             if (iface.adapter_name.empty()) {
@@ -114,12 +114,12 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
 
         {
             auto nwchars = static_cast<int>(wcslen(ptr->FriendlyName));
-            iface.readable_name = windows::utf8_encode(ptr->FriendlyName, nwchars);
+            iface.readable_name = pfs::windows::utf8_encode(ptr->FriendlyName, nwchars);
         }
 
         {
             auto nwchars = static_cast<int>(wcslen(ptr->Description));
-            iface.description = windows::utf8_encode(ptr->Description, nwchars);
+            iface.description = pfs::windows::utf8_encode(ptr->Description, nwchars);
         }
 
         switch (ptr->IfType) {

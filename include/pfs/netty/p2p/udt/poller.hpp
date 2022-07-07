@@ -7,6 +7,7 @@
 //      2021.10.28 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/exports.hpp"
 #include "udp_socket.hpp"
 #include <chrono>
 #include <functional>
@@ -17,7 +18,7 @@ namespace netty {
 namespace p2p {
 namespace udt {
 
-class poller
+class NETTY__EXPORT poller
 {
     using UDTSOCKET = decltype(udp_socket{}.id());
 
