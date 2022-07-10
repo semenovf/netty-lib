@@ -78,8 +78,8 @@ using engine = netty::p2p::engine<
 } // namespace p2p
 
 namespace {
-    pfs::uuid_t const PEER1_UUID = "01FH7H6YJB8XK9XNNZYR0WYDJ1"_uuid;
-    pfs::uuid_t const PEER2_UUID = "01FH7HB19B9T1CTKE5AXPTN74M"_uuid;
+    pfs::universal_id const PEER1_UUID = "01FH7H6YJB8XK9XNNZYR0WYDJ1"_uuid;
+    pfs::universal_id const PEER2_UUID = "01FH7HB19B9T1CTKE5AXPTN74M"_uuid;
 
     std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {100};
     std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {500};
@@ -95,7 +95,7 @@ void on_failure (std::string const & error)
     fmt::print(stderr, "!ERROR: {}\n", error);
 }
 
-void on_rookie_accepted (pfs::uuid_t uuid
+void on_rookie_accepted (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
@@ -105,7 +105,7 @@ void on_rookie_accepted (pfs::uuid_t uuid
         , port);
 }
 
-void on_writer_ready (pfs::uuid_t uuid
+void on_writer_ready (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
@@ -118,7 +118,7 @@ void on_writer_ready (pfs::uuid_t uuid
         QUIT_PEER2 = true;
 }
 
-void on_peer_expired (pfs::uuid_t uuid
+void on_peer_expired (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {

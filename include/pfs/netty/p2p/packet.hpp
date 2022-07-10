@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "serializer.hpp"
-#include "uuid.hpp"
+#include "universal_id.hpp"
 #include "pfs/crc32.hpp"
 #include <sstream>
 #include <cassert>
@@ -38,7 +38,7 @@ struct packet
     static constexpr std::size_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
     std::uint16_t   packetsize;  // Total packet size
-    uuid_t          uuid;        // Sender UUID
+    universal_id    uuid;        // Sender UUID
     std::uint32_t   partcount;   // Total count of parts
     std::uint32_t   partindex;   // Part index (starts from 1)
     std::uint16_t   payloadsize;
@@ -47,7 +47,7 @@ struct packet
 
 template <typename Consumer>
 void split_into_packets (std::uint16_t packet_size
-    , uuid_t sender_uuid
+    , universal_id sender_uuid
     , char const * data, std::streamsize len
     , Consumer && consumer)
 {

@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "pfs/uuid.hpp"
+#include "pfs/universal_id.hpp"
 #include "pfs/netty/p2p/envelope.hpp"
 #include "pfs/netty/p2p/packet.hpp"
 
@@ -20,7 +20,7 @@ namespace {
     constexpr std::uint16_t PACKET_SIZE = 64;
 }
 
-using uuid_t            = pfs::uuid_t;
+using universal_id      = pfs::universal_id;
 using packet_t          = p2p::packet;
 using output_envelope_t = p2p::output_envelope<>;
 using input_envelope_t  = p2p::input_envelope<>;

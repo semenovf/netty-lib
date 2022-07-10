@@ -143,6 +143,7 @@ written by
 //      the original sequence numbers in the field.
 
 #include "packet.hpp"
+#include <limits>
 #include <cstring>
 #include <cassert>
 

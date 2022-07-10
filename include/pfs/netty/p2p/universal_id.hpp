@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/endian.hpp"
-#include "pfs/uuid.hpp"
-#include "pfs/uuid_crc.hpp"
-#include "pfs/uuid_hash.hpp"
+#include "pfs/universal_id.hpp"
+#include "pfs/universal_id_crc.hpp"
+#include "pfs/universal_id_hash.hpp"
 #include <cereal/archives/binary.hpp>
 #include <utility>
 #include <cassert>
@@ -18,21 +18,21 @@
 namespace netty {
 namespace p2p {
 
-using uuid_t = pfs::uuid_t;
+using universal_id = pfs::universal_id;
 
 }} // namespace netty::p2p
 
 namespace cereal {
 
-inline void save (cereal::BinaryOutputArchive & ar, netty::p2p::uuid_t const & uuid)
+inline void save (cereal::BinaryOutputArchive & ar, netty::p2p::universal_id const & uuid)
 {
     auto a = pfs::to_array(uuid, pfs::endian::network);
     ar << cereal::binary_data(a.data(), a.size());
 }
 
-inline void load (cereal::BinaryInputArchive & ar, netty::p2p::uuid_t & uuid)
+inline void load (cereal::BinaryInputArchive & ar, netty::p2p::universal_id & uuid)
 {
-    decltype(pfs::to_array(netty::p2p::uuid_t{}, pfs::endian::network)) a;
+    decltype(pfs::to_array(netty::p2p::universal_id{}, pfs::endian::network)) a;
     ar >> cereal::binary_data(a.data(), a.size());
     uuid = pfs::make_uuid(a, pfs::endian::network);
 }

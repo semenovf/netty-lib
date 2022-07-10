@@ -11,11 +11,10 @@
 #include "envelope.hpp"
 #include "hello_packet.hpp"
 #include "packet.hpp"
-#include "uuid.hpp"
+#include "universal_id.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/log.hpp"
 #include "pfs/ring_buffer.hpp"
-#include "pfs/uuid.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include <array>
 #include <list>
@@ -52,8 +51,8 @@ private:
     struct output_queue_item
     {
         counter_type counter;
-        uuid_t          addressee;
-        packet_type     pkt;
+        universal_id addressee;
+        packet_type  pkt;
     };
 
     using discovery_socket_type = typename DiscoverySocketAPI::socket_type;
@@ -71,7 +70,7 @@ private:
 
     struct socket_info
     {
-        uuid_t         uuid; // Valid for writers (connected sockets as opposite to accepted) only
+        universal_id   uuid; // Valid for writers (connected sockets as opposite to accepted) only
         socket_type    sock;
         socket_address saddr;
     };
@@ -82,7 +81,7 @@ private:
 private:
     counter_type _counter {0};
     std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
-    uuid_t         _uuid;
+    universal_id   _uuid;
     socket_type    _listener;
     socket_address _listener_address;
     std::chrono::milliseconds _poll_interval {10};
@@ -106,7 +105,7 @@ private:
     std::unordered_map<socket_id, socket_iterator> _index_by_socket_id;
 
     // Writer sockets
-    std::unordered_map<uuid_t, socket_iterator> _writers;
+    std::unordered_map<universal_id, socket_iterator> _writers;
 
     std::unordered_map<socket_id, std::chrono::milliseconds> _expiration_timepoints;
 
@@ -127,22 +126,22 @@ public: // Callbacks
     /**
      * Launched when new writer socket ready (connected).
      */
-    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> writer_ready;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> writer_ready;
 
     /**
      * Launched when new address accepted by discoverer.
      */
-    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> rookie_accepted;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> rookie_accepted;
 
     /**
      * Launched when address expired (update is timed out).
      */
-    mutable std::function<void (uuid_t, inet4_addr, std::uint16_t)> peer_expired;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_expired;
 
     /**
      * Message received.
      */
-    mutable std::function<void (uuid_t, std::string)> data_received;
+    mutable std::function<void (universal_id, std::string)> data_received;
 
     /**
      * Message dispatched
@@ -169,7 +168,7 @@ public:
     }
 
 public:
-    engine (uuid_t uuid)
+    engine (universal_id uuid)
         : _uuid(uuid)
         , _connecting_poller("connecting")
         , _poller("main")
@@ -234,7 +233,7 @@ public:
     engine (engine &&) = default;
     engine & operator = (engine &&) = default;
 
-    uuid_t const & uuid () const noexcept
+    universal_id const & uuid () const noexcept
     {
         return _uuid;
     }
@@ -337,7 +336,7 @@ public:
      * @return Unique identifier of the message (internal counter within the
      *         engine session).
      */
-    counter_type send (uuid_t uuid, char const * data, std::streamsize len, int priority = 0)
+    counter_type send (universal_id uuid, char const * data, std::streamsize len, int priority = 0)
     {
         std::size_t prior = priority < 0
             ? 0
@@ -365,7 +364,7 @@ private:
         return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
     }
 
-    socket_info * locate_writer (uuid_t const & uuid)
+    socket_info * locate_writer (universal_id const & uuid)
     {
         socket_info * result {nullptr};
         auto pos = _writers.find(uuid);
@@ -435,7 +434,7 @@ private:
         update_expiration_timepoint(pos->sock.id());
     }
 
-    void connect_to_peer (uuid_t peer_uuid
+    void connect_to_peer (universal_id peer_uuid
         , inet4_addr const & addr
         , std::uint16_t port)
     {
@@ -771,7 +770,7 @@ private:
         }
     }
 
-    void update_peer (uuid_t peer_uuid, inet4_addr const & addr, std::uint16_t port)
+    void update_peer (universal_id peer_uuid, inet4_addr const & addr, std::uint16_t port)
     {
         auto it = _writers.find(peer_uuid);
 

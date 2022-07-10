@@ -49,7 +49,11 @@ if (NETTY_P2P__ENABLE_CEREAL)
     portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
-portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty::static PUBLIC ws2_32)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty::static)
+
+if (MSVC)
+    portable_target(LINK ${PROJECT_NAME} PUBLIC ws2_32)
+endif(MSVC)
 
 if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
     # UDT sources

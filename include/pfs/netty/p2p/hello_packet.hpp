@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "serializer.hpp"
-#include "uuid.hpp"
+#include "universal_id.hpp"
 #include "pfs/crc16.hpp"
-#include "pfs/uuid_crc.hpp"
+#include "pfs/universal_id_crc.hpp"
 #include <cereal/archives/binary.hpp>
 
 namespace netty {
@@ -21,7 +21,7 @@ struct hello_packet
     static constexpr std::size_t PACKET_SIZE = 4 + 16 + 2 + 2;
 
     char greeting[4] = {'H', 'E', 'L', 'O'};
-    uuid_t uuid;
+    universal_id uuid;
     std::uint16_t port {0};
     std::int16_t crc16;
 };

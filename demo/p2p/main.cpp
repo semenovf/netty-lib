@@ -72,7 +72,7 @@ using packet_type = engine::packet_type;
 } // namespace p2p
 
 namespace {
-    const pfs::uuid_t UUID = pfs::generate_uuid();
+    const pfs::universal_id UUID = pfs::generate_uuid();
 
     std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {100};
     std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {2000};
@@ -101,7 +101,7 @@ void on_failure (std::string const & error)
     fmt::print(stderr, "!ERROR: {}\n", error);
 }
 
-void on_rookie_accepted (pfs::uuid_t uuid
+void on_rookie_accepted (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
@@ -111,7 +111,7 @@ void on_rookie_accepted (pfs::uuid_t uuid
         , port);
 }
 
-void on_peer_expired (pfs::uuid_t uuid
+void on_peer_expired (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
@@ -142,7 +142,7 @@ int main (int /*argc*/, char * argv[])
     peer.failure = on_failure;
     peer.rookie_accepted = on_rookie_accepted;
     peer.peer_expired = on_peer_expired;
-    peer.writer_ready = [& peer] (pfs::uuid_t uuid
+    peer.writer_ready = [& peer] (pfs::universal_id uuid
             , netty::inet4_addr const & addr
             , std::uint16_t port) {
         LOG_TRACE_1("WRITER READY: {} ({}:{})"
@@ -153,7 +153,7 @@ int main (int /*argc*/, char * argv[])
         peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
     };
 
-    peer.data_received = [& peer] (pfs::uuid_t uuid, std::string message) {
+    peer.data_received = [& peer] (pfs::universal_id uuid, std::string message) {
         LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
             , to_string(uuid)
             , message.substr(0, 20)

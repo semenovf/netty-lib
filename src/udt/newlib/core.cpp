@@ -61,6 +61,8 @@ modified by
       #include <wspiapi.h>
    #endif
 #endif
+
+#include <limits>
 #include <cmath>
 #include <sstream>
 #include <cassert>
