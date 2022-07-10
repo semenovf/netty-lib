@@ -3,7 +3,7 @@
 CWD=`pwd`
 CEREAL_RELEASE=v1.3.2
 
-if [ -d .git ] ; then
+if [ -e .git ] ; then
 
     git pull \
         && git submodule update --init \
