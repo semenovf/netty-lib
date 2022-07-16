@@ -80,7 +80,7 @@ private:
 
 private:
     counter_type _counter {0};
-    std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
+    std::uint16_t  _packet_size = packet::MAX_PACKET_SIZE;
     universal_id   _uuid;
     socket_type    _listener;
     socket_address _listener_address;

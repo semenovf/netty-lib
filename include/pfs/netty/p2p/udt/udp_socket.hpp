@@ -18,7 +18,7 @@ namespace netty {
 namespace p2p {
 namespace udt {
 
-class NETTY__EXPORT udp_socket
+class udp_socket
 {
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
@@ -49,18 +49,18 @@ public:
 
 public:
     udp_socket () = default;
-    ~udp_socket ();
+    NETTY__EXPORT ~udp_socket ();
 
     udp_socket (udp_socket const &) = delete;
     udp_socket & operator = (udp_socket const &) = delete;
 
-    udp_socket (udp_socket && other)
+    udp_socket (udp_socket && other) noexcept
     {
         _socket = other._socket;
         other._socket = INVALID_SOCKET;
     }
 
-    udp_socket & operator = (udp_socket && other)
+    udp_socket & operator = (udp_socket && other) noexcept
     {
         _socket = other._socket;
         other._socket = INVALID_SOCKET;
@@ -72,32 +72,32 @@ public:
         return _socket;
     }
 
-    state_enum state () const;
+    NETTY__EXPORT state_enum state () const;
 
     std::string backend_string () const noexcept
     {
         return "UDT";
     }
 
-    udp_socket accept (inet4_addr * addr, std::uint16_t * port);
-    bool bind (inet4_addr const & addr, std::uint16_t port);
-    void close ();
-    bool connect (inet4_addr const & addr, std::uint16_t port);
-    bool listen (int backlog = 10);
-    std::streamsize recv (char * msg, std::streamsize len);
-    std::streamsize send (char const * data, std::streamsize len);
+    NETTY__EXPORT udp_socket accept (inet4_addr * addr, std::uint16_t * port);
+    NETTY__EXPORT bool bind (inet4_addr const & addr, std::uint16_t port);
+    NETTY__EXPORT void close ();
+    NETTY__EXPORT bool connect (inet4_addr const & addr, std::uint16_t port);
+    NETTY__EXPORT bool listen (int backlog = 10);
+    NETTY__EXPORT std::streamsize recv (char * msg, std::streamsize len);
+    NETTY__EXPORT std::streamsize send (char const * data, std::streamsize len);
 
-    std::string error_string () const;
+    NETTY__EXPORT std::string error_string () const;
 
     inline std::string state_string () const noexcept
     {
         return state_string(state());
     }
 
-    std::vector<std::pair<std::string, std::string>> dump_options () const;
+    NETTY__EXPORT std::vector<std::pair<std::string, std::string>> dump_options () const;
 
 public: // static
-    static std::string state_string (int state);
+    static NETTY__EXPORT std::string state_string (int state);
 };
 
 }}} // namespace netty::p2p::udt

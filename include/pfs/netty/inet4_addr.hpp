@@ -9,6 +9,7 @@
 //      2017.07.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "exports.hpp"
 #include <string>
 #include <functional>
 
@@ -172,7 +173,8 @@ public:
     *
     *
     */
-std::string to_string (inet4_addr const & addr, std::string const & format, int base);
+NETTY__EXPORT std::string to_string (inet4_addr const & addr
+    , std::string const & format, int base);
 
 inline bool operator == (inet4_addr const & a, inet4_addr const & b)
 {

@@ -15,9 +15,9 @@
 #include <cereal/types/string.hpp>
 
 namespace p2p {
-    using output_envelope = netty::p2p::output_envelope<>;
-    using input_envelope  = netty::p2p::input_envelope<>;
-    using universal_id    = netty::p2p::universal_id;
+    using output_envelope = ::netty::p2p::output_envelope<>;
+    using input_envelope  = ::netty::p2p::input_envelope<>;
+    using universal_id    = ::netty::p2p::universal_id;
 } // namespace p2p
 
 TEST_CASE("Envelope") {

@@ -34,8 +34,8 @@ struct packet
         + sizeof(std::uint32_t)  // partcount
         + sizeof(std::uint32_t)  // partindex
         + sizeof(std::uint16_t); // payloadsize
-    static constexpr std::size_t MAX_PACKET_SIZE = 1430;
-    static constexpr std::size_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
+    static constexpr std::uint16_t MAX_PACKET_SIZE = 1430;
+    static constexpr std::uint16_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
     std::uint16_t   packetsize;  // Total packet size
     universal_id    uuid;        // Sender UUID
@@ -58,15 +58,17 @@ void split_into_packets (std::uint16_t packet_size
     auto remain_len   = len;
     char const * remain_data = data;
     std::uint32_t partindex  = 1;
-    std::uint32_t partcount  = len / payload_size
+    auto partcount  = len / payload_size
         + (len % payload_size ? 1 : 0);
+
+    assert(partcount <= (std::numeric_limits<std::uint32_t>::max)());
 
     while (remain_len) {
         packet p;
 
         p.packetsize  = packet::PACKET_HEADER_SIZE + payload_size;
         p.uuid        = sender_uuid;
-        p.partcount   = partcount;
+        p.partcount   = static_cast<decltype(p.partcount)>(partcount);
         p.partindex   = partindex++;
         p.payloadsize = remain_len > payload_size
             ? payload_size

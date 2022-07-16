@@ -394,24 +394,23 @@ int CRcvBuffer::addData(CUnit* unit, int offset)
    return 0;
 }
 
-int CRcvBuffer::readBuffer(char* data, int len)
+std::streamsize CRcvBuffer::readBuffer (char * data, std::streamsize len)
 {
-   int p = m_iStartPos;
-   int lastack = m_iLastAckPos;
-   int rs = len;
+    auto p = m_iStartPos;
+    auto lastack = m_iLastAckPos;
+    auto rs = len;
 
-   while ((p != lastack) && (rs > 0))
-   {
-      int unitsize = m_pUnit[p]->m_Packet.getLength() - m_iNotch;
+   while ((p != lastack) && (rs > 0)) {
+      auto unitsize = m_pUnit[p]->m_Packet.getLength() - m_iNotch;
+
       if (unitsize > rs)
          unitsize = rs;
 
       memcpy(data, m_pUnit[p]->m_Packet.m_pcData + m_iNotch, unitsize);
       data += unitsize;
 
-      if ((rs > unitsize) || (rs == m_pUnit[p]->m_Packet.getLength() - m_iNotch))
-      {
-         CUnit* tmp = m_pUnit[p];
+      if ((rs > unitsize) || (rs == m_pUnit[p]->m_Packet.getLength() - m_iNotch)) {
+         CUnit * tmp = m_pUnit[p];
          m_pUnit[p] = NULL;
          tmp->m_iFlag = 0;
          -- m_pUnitQueue->m_iCount;
@@ -420,9 +419,9 @@ int CRcvBuffer::readBuffer(char* data, int len)
             p = 0;
 
          m_iNotch = 0;
-      }
-      else
+      } else {
          m_iNotch += rs;
+      }
 
       rs -= unitsize;
    }
@@ -431,24 +430,24 @@ int CRcvBuffer::readBuffer(char* data, int len)
    return len - rs;
 }
 
-int CRcvBuffer::readBufferToFile(fstream& ofs, int len)
+std::streamsize CRcvBuffer::readBufferToFile (fstream & ofs, std::streamsize len)
 {
-   int p = m_iStartPos;
-   int lastack = m_iLastAckPos;
-   int rs = len;
+   auto p = m_iStartPos;
+   auto lastack = m_iLastAckPos;
+   auto rs = len;
 
-   while ((p != lastack) && (rs > 0))
-   {
-      int unitsize = m_pUnit[p]->m_Packet.getLength() - m_iNotch;
+   while ((p != lastack) && (rs > 0)) {
+      auto unitsize = m_pUnit[p]->m_Packet.getLength() - m_iNotch;
+
       if (unitsize > rs)
          unitsize = rs;
 
       ofs.write(m_pUnit[p]->m_Packet.m_pcData + m_iNotch, unitsize);
+
       if (ofs.fail())
          break;
 
-      if ((rs > unitsize) || (rs == m_pUnit[p]->m_Packet.getLength() - m_iNotch))
-      {
+      if ((rs > unitsize) || (rs == m_pUnit[p]->m_Packet.getLength() - m_iNotch)) {
          CUnit* tmp = m_pUnit[p];
          m_pUnit[p] = NULL;
          tmp->m_iFlag = 0;
@@ -501,17 +500,19 @@ void CRcvBuffer::dropMsg(int32_t msgno)
          m_pUnit[i]->m_iFlag = 3;
 }
 
-int CRcvBuffer::readMsg(char* data, int len)
+std::streamsize CRcvBuffer::readMsg (char * data, std::streamsize len)
 {
    int p, q;
    bool passack;
+
    if (!scanMsg(p, q, passack))
       return 0;
 
-   int rs = len;
-   while (p != (q + 1) % m_iSize)
-   {
-      int unitsize = m_pUnit[p]->m_Packet.getLength();
+   auto rs = len;
+
+   while (p != (q + 1) % m_iSize) {
+      auto unitsize = m_pUnit[p]->m_Packet.getLength();
+
       if ((rs >= 0) && (unitsize > rs))
          unitsize = rs;
 

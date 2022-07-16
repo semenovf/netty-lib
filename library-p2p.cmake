@@ -22,37 +22,52 @@ if (NETTY_P2P__ENABLE_EXCEPTIONS)
     set(PFS__ENABLE_EXCEPTIONS ON CACHE INTERNAL "")
 endif()
 
-portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty::p2p)
+portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty::p2p EXPORTS NETTY__EXPORTS
+    BIND_STATIC ${PROJECT_NAME}-static STATIC_ALIAS pfs::netty::p2p::static STATIC_EXPORTS NETTY__STATIC)
+portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
 if (NETTY_P2P__ENABLE_QT5)
     portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PUBLIC Core Network)
+    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME}-static PUBLIC Core Network)
+
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__QT5_CORE_ENABLED=1")
+
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
 endif(NETTY_P2P__ENABLE_QT5)
 
 if (NETTY_P2P__ENABLE_UDT)
     set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "UDT enabled")
     set(NETTY_P2P__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/lib")
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__UDT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__UDT_ENABLED=1")
 endif(NETTY_P2P__ENABLE_UDT)
 
 if (NETTY_P2P__ENABLE_NEW_UDT)
     set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "modified UDT enabled")
     set(NETTY_P2P__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/newlib")
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__NEW_UDT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__NEW_UDT_ENABLED=1")
 endif(NETTY_P2P__ENABLE_NEW_UDT)
 
 if (NETTY_P2P__ENABLE_CEREAL)
     if (NOT TARGET cereal)
         portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/cmake/Cereal.cmake)
     endif()
+
     portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
+    portable_target(LINK ${PROJECT_NAME}-static PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
-portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty::static)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
+portable_target(LINK ${PROJECT_NAME}-static PRIVATE pfs::netty::static)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
+portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
     portable_target(LINK ${PROJECT_NAME} PUBLIC ws2_32)
+    portable_target(LINK ${PROJECT_NAME}-static PUBLIC ws2_32)
 endif(MSVC)
 
 if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
@@ -79,11 +94,15 @@ if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
 
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__RELIABLE_TRANSPORT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__RELIABLE_TRANSPORT_ENABLED=1")
 endif()
 
 if (MSVC)
     portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd4251")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd4251")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd26812")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd26812")
 endif(MSVC)
 
-portable_target(EXPORTS ${PROJECT_NAME} NETTY__EXPORTS NETTY__STATIC)
-portable_target(EXPORTS ${PROJECT_NAME} UDT_EXPORTS UDT_STATIC)
+portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "UDT_EXPORTS")
+portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE "UDT_STATIC")

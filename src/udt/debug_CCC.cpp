@@ -54,7 +54,7 @@ void debug_CCC::onACK (int32_t ackno)
 //    1) [in] size: length of the loss list.
 // Returned value:
 //    None.
-void debug_CCC::onLoss (int32_t const *, int)
+void debug_CCC::onLoss (int32_t const *, std::streamsize)
 {
     LOG_TRACE_3("--- debug_CCC::onLoss() ---", 0);
 }

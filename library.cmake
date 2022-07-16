@@ -17,12 +17,13 @@ if (NETTY__ENABLE_EXCEPTIONS)
     set(PFS__ENABLE_EXCEPTIONS ON CACHE INTERNAL "")
 endif()
 
+portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty EXPORTS NETTY__EXPORTS
+    BIND_STATIC ${PROJECT_NAME}-static STATIC_ALIAS pfs::netty::static STATIC_EXPORTS NETTY__STATIC)
+
 if (NOT TARGET pfs::common)
     portable_target(INCLUDE_PROJECT
         ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
 endif()
-
-portable_target(LIBRARY ${PROJECT_NAME} ALIAS pfs::netty)
 
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)
@@ -41,10 +42,11 @@ endif()
 
 portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
+portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
     portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd4251")
-    portable_target(LINK ${PROJECT_NAME} PUBLIC Ws2_32 Iphlpapi)
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd4251")
+    portable_target(LINK ${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
+    portable_target(LINK ${PROJECT_NAME}-static PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
-
-portable_target(EXPORTS ${PROJECT_NAME} NETTY__EXPORTS NETTY__STATIC)
