@@ -43,7 +43,7 @@ written by
 #ifdef WIN32
    struct iovec
    {
-      int iov_len;
+      std::streamsize iov_len;
       char* iov_base;
    };
 #endif
