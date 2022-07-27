@@ -253,7 +253,7 @@ public:
         }
     }
 
-    std::streamsize send (char const * data, std::uint16_t size
+    std::streamsize send (char const * data, std::streamsize size
         , inet4_addr const & addr, std::uint16_t port)
     {
         auto hostaddr = (addr == inet4_addr{})

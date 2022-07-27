@@ -18,7 +18,7 @@ namespace netty {
 namespace p2p {
 namespace udt {
 
-class NETTY__EXPORT poller
+class poller
 {
     using UDTSOCKET = decltype(udp_socket{}.id());
 
@@ -42,25 +42,25 @@ public:
     mutable std::function<void (std::string const &)> failure;
 
 public:
-    poller (std::string const & name);
-    ~poller ();
+    NETTY__EXPORT poller (std::string const & name);
+    NETTY__EXPORT ~poller ();
 
     poller (poller const &) = delete;
     poller & operator = (poller const &) = delete;
 
-    poller (poller &&);
-    poller & operator = (poller &&);
+    NETTY__EXPORT poller (poller &&);
+    NETTY__EXPORT poller & operator = (poller &&);
 
-    bool initialize ();
-    void release ();
-    void add (UDTSOCKET u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
-    void remove (UDTSOCKET u);
-    int wait (std::chrono::milliseconds millis);
+    NETTY__EXPORT bool initialize ();
+    NETTY__EXPORT void release ();
+    NETTY__EXPORT void add (UDTSOCKET u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
+    NETTY__EXPORT void remove (UDTSOCKET u);
+    NETTY__EXPORT int wait (std::chrono::milliseconds millis);
 
-    void process_events (input_callback_type && in, output_callback_type && out);
+    NETTY__EXPORT void process_events (input_callback_type && in, output_callback_type && out);
 
 private:
-    void failure_helper (std::string const & reason);
+    NETTY__EXPORT void failure_helper (std::string const & reason);
 };
 
 }}} // namespace netty::p2p::udt

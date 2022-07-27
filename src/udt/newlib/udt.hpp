@@ -342,9 +342,9 @@ UDT_API int getpeername(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockname(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockopt(UDTSOCKET u, int level, SOCKOPT optname, void* optval, int* optlen);
 UDT_API int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen);
-UDT_API std::streamsize send (UDTSOCKET u, const char* buf, int len, int flags);
-UDT_API std::streamsize recv (UDTSOCKET u, char* buf, int len, int flags);
-UDT_API std::streamsize sendmsg (UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
+UDT_API std::streamsize send (UDTSOCKET u, const char* buf, std::streamsize  len, int flags);
+UDT_API std::streamsize recv (UDTSOCKET u, char* buf, std::streamsize  len, int flags);
+UDT_API std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
 #if NETTY_P2P__UDT_PATCHED
 UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
 #else

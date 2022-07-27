@@ -195,10 +195,10 @@ public:
      *         - netty::errc::system_error
      * @return Network interfaces
      */
-    friend std::vector<network_interface> fetch_interfaces (std::error_code & ec);
+    friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (std::error_code & ec);
 };
 
-std::vector<network_interface> fetch_interfaces (std::error_code & ec);
+NETTY__EXPORT std::vector<network_interface> fetch_interfaces (std::error_code & ec);
 
 template <typename Visitor>
 std::vector<network_interface> fetch_interfaces (std::error_code & ec, Visitor && visit)
@@ -237,7 +237,7 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     return ifaces;
 }
 
-std::string to_string (network_interface_type type);
-std::string to_string (network_interface_status status);
+NETTY__EXPORT std::string to_string (network_interface_type type);
+NETTY__EXPORT std::string to_string (network_interface_status status);
 
 } // namespace netty

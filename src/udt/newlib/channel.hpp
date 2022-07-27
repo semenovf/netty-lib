@@ -137,7 +137,7 @@ public:
       // Returned value:
       //    Actual size of data sent.
 
-   int sendto(const sockaddr* addr, CPacket& packet) const;
+   int sendto(const sockaddr * addr, CPacket & packet) const;
 
       // Functionality:
       //    Receive a packet from the channel and record the source address.
@@ -147,7 +147,7 @@ public:
       // Returned value:
       //    Actual size of data received.
 
-   int recvfrom(sockaddr* addr, CPacket& packet) const;
+   std::streamsize recvfrom (sockaddr * addr, CPacket & packet) const;
 
 private:
    void setUDPSockOpt();

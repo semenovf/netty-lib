@@ -197,7 +197,6 @@ private:
       //    3) [in] inorder: if the message should be delivered in order.
       // Returned value:
       //    Actual size of data sent.
-
    std::streamsize sendmsg(const char * data, std::streamsize len, int ttl, bool inorder);
 
       // Functionality:
@@ -213,7 +212,6 @@ private:
 #else
    std::streamsize recvmsg (char * data, std::streamsize len);
 #endif
-
       // Functionality:
       //    Request UDT to send out a file described as "fd", starting from "offset", with size of "size".
       // Parameters:
@@ -236,7 +234,7 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-   int64_t recvfile(std::fstream& ofs, int64_t& offset, int64_t size, int block = 7320000);
+   std::streamsize recvfile (std::fstream & ofs, std::streamsize & offset, std::streamsize size, int block = 7320000);
 
       // Functionality:
       //    Configure UDT options.
@@ -396,7 +394,7 @@ private: // synchronization: mutexes and conditions
    void releaseSynch();
 
 private: // Generation and processing of packets
-   void sendCtrl(int pkttype, void* lparam = NULL, void* rparam = NULL, int size = 0);
+   void sendCtrl(int pkttype, void* lparam = NULL, void* rparam = NULL, std::streamsize size = 0);
    void processCtrl(CPacket& ctrlpkt);
    std::streamsize packData(CPacket& packet, uint64_t& ts);
    int processData(CUnit* unit);

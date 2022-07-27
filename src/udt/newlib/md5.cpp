@@ -319,11 +319,10 @@ md5_init(md5_state_t *pms)
     pms->abcd[3] = 0x10325476;
 }
 
-void
-md5_append(md5_state_t *pms, const md5_byte_t *data, std::size_t nbytes)
+void md5_append(md5_state_t *pms, const md5_byte_t *data, std::size_t nbytes)
 {
     const md5_byte_t *p = data;
-    int left = nbytes;
+    auto left = nbytes;
     int offset = (pms->count[0] >> 3) & 63;
     md5_word_t nbits = (md5_word_t)(nbytes << 3);
 
@@ -338,14 +337,14 @@ md5_append(md5_state_t *pms, const md5_byte_t *data, std::size_t nbytes)
 
     /* Process an initial partial block. */
     if (offset) {
-	int copy = (offset + nbytes > 64 ? 64 - offset : nbytes);
+	    auto copy = (offset + nbytes > 64 ? 64 - offset : nbytes);
 
-	memcpy(pms->buf + offset, p, copy);
-	if (offset + copy < 64)
-	    return;
-	p += copy;
-	left -= copy;
-	md5_process(pms, pms->buf);
+	    memcpy(pms->buf + offset, p, copy);
+	    if (offset + copy < 64)
+	        return;
+	    p += copy;
+	    left -= copy;
+	    md5_process(pms, pms->buf);
     }
 
     /* Process full blocks. */

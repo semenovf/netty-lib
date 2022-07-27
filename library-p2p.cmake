@@ -24,8 +24,10 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty::p2p
     STATIC_ALIAS pfs::netty::p2p::static
     STATIC_EXPORTS NETTY__STATIC)
 
-portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE UDT_EXPORTS)
-portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC UDT_STATIC)
+portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC UDT_EXPORTS)
+portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE UDT_STATIC)
+
+portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
 if (NETTY_P2P__ENABLE_QT5)
     portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PUBLIC Core Network)
@@ -61,12 +63,15 @@ if (NETTY_P2P__ENABLE_CEREAL)
     if (NOT TARGET cereal)
         portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/cmake/Cereal.cmake)
     endif()
+
     portable_target(LINK ${PROJECT_NAME} PUBLIC cereal)
     portable_target(LINK ${PROJECT_NAME}-static PUBLIC cereal)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
 portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
-portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::netty::static)
+portable_target(LINK ${PROJECT_NAME}-static PRIVATE pfs::netty::static)
+portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
+portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
     portable_target(LINK ${PROJECT_NAME} PUBLIC ws2_32)
@@ -100,4 +105,7 @@ endif()
 if (MSVC)
     portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd4251")
     portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd4251")
+
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd26812")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd26812")
 endif(MSVC)

@@ -229,16 +229,19 @@ void CChannel::getPeerAddr(sockaddr* addr) const
 int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
 {
    // convert control information into network order
-   if (packet.getFlag())
-      for (int i = 0, n = packet.getLength() / 4; i < n; ++ i)
+   if (packet.getFlag()) {
+       auto n = packet.getLength() / 4;
+
+      for (int i = 0; i < n; i++)
          *((uint32_t *)packet.m_pcData + i) = htonl(*((uint32_t *)packet.m_pcData + i));
+   }
 
    // convert packet header into network order
    //for (int j = 0; j < 4; ++ j)
    //   packet.m_nHeader[j] = htonl(packet.m_nHeader[j]);
    uint32_t* p = packet.m_nHeader;
-   for (int j = 0; j < 4; ++ j)
-   {
+
+   for (int j = 0; j < 4; ++ j) {
       *p = htonl(*p);
       ++ p;
    }
@@ -257,7 +260,7 @@ int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
    #else
       DWORD size = CPacket::m_iPktHdrSize + packet.getLength();
       int addrsize = m_iSockAddrSize;
-      int res = ::WSASendTo(m_iSocket, (LPWSABUF)packet.m_PacketVector, 2, &size, 0, addr, addrsize, NULL, NULL);
+      int res = ::WSASendTo(m_iSocket, (LPWSABUF)packet.m_PacketVector, 2, & size, 0, addr, addrsize, NULL, NULL);
       res = (0 == res) ? size : -1;
    #endif
 
@@ -271,16 +274,17 @@ int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
        ++ p;
    }
 
-   if (packet.getFlag())
-   {
-      for (int l = 0, n = packet.getLength() / 4; l < n; ++ l)
+   if (packet.getFlag()) {
+       auto n = packet.getLength() / 4;
+
+      for (int l = 0; l < n; ++ l)
          *((uint32_t *)packet.m_pcData + l) = ntohl(*((uint32_t *)packet.m_pcData + l));
    }
 
    return res;
 }
 
-int CChannel::recvfrom(sockaddr* addr, CPacket& packet) const
+std::streamsize CChannel::recvfrom (sockaddr * addr, CPacket & packet) const
 {
    #ifndef WIN32
       msghdr mh;
@@ -330,9 +334,10 @@ int CChannel::recvfrom(sockaddr* addr, CPacket& packet) const
       ++ p;
    }
 
-   if (packet.getFlag())
-   {
-      for (int j = 0, n = packet.getLength() / 4; j < n; ++ j)
+   if (packet.getFlag()) {
+       auto n = packet.getLength() / 4;
+
+      for (int j = 0; j < n; ++ j)
          *((uint32_t *)packet.m_pcData + j) = ntohl(*((uint32_t *)packet.m_pcData + j));
    }
 

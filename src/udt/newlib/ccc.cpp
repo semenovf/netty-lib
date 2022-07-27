@@ -248,7 +248,7 @@ void CUDTCC::onACK(int32_t ack)
    m_dPktSndPeriod = (m_dPktSndPeriod * m_iRCInterval) / (m_dPktSndPeriod * inc + m_iRCInterval);
 }
 
-void CUDTCC::onLoss(const int32_t* losslist, int)
+void CUDTCC::onLoss(const int32_t* losslist, std::streamsize)
 {
    //Slow Start stopped, if it hasn't yet
    if (m_bSlowStart)

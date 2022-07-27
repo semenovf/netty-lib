@@ -178,7 +178,7 @@ public:
     // Returned value:
     //    size of data read.
 
-    int readBuffer(char* data, int len);
+    std::streamsize readBuffer (char * data, std::streamsize len);
 
     // Functionality:
     //    Read data directly into file.
@@ -187,7 +187,7 @@ public:
     //    1) [in] len: expected length of data to write into the file.
     // Returned value:
     //    size of data read.
-    int readBufferToFile(std::fstream& ofs, int len);
+    std::streamsize readBufferToFile (std::fstream & ofs, std::streamsize len);
 
     // Functionality:
     //    Update the ACK point of the buffer.
@@ -228,7 +228,7 @@ public:
     //    1) [in] len: size of the buffer.
     // Returned value:
     //    actuall size of data read.
-    int readMsg(char* data, int len);
+    std::streamsize readMsg (char* data, std::streamsize len);
 
     // Functionality:
     //    Query how many messages are available now.
@@ -248,10 +248,10 @@ private:
 
     int m_iStartPos;          // the head position for I/O (inclusive)
     int m_iLastAckPos;        // the last ACKed position (exclusive)
-                                // EMPTY: m_iStartPos = m_iLastAckPos   FULL: m_iStartPos = m_iLastAckPos + 1
+                              // EMPTY: m_iStartPos = m_iLastAckPos   FULL: m_iStartPos = m_iLastAckPos + 1
     int m_iMaxPos;            // the furthest data position
 
-    int m_iNotch;             // the starting read point of the first unit
+    std::streamsize m_iNotch; // the starting read point of the first unit
 
 private:
     CRcvBuffer () = delete;

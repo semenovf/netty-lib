@@ -1378,27 +1378,34 @@ CUDTException* CUDTUnited::getError()
    #endif
 }
 
-#ifdef WIN32
+#ifdef _MSC_VER
 void CUDTUnited::checkTLSValue()
 {
    CGuard tg(m_TLSLock);
 
    vector<DWORD> tbr;
-   for (map<DWORD, CUDTException*>::iterator i = m_mTLSRecord.begin(); i != m_mTLSRecord.end(); ++ i)
-   {
+
+   for (map<DWORD, CUDTException*>::iterator i = m_mTLSRecord.begin()
+        ; i != m_mTLSRecord.end(); ++ i) {
+
       HANDLE h = OpenThread(THREAD_QUERY_INFORMATION, FALSE, i->first);
-      if (NULL == h)
-      {
+
+      if (NULL == h) {
          tbr.push_back(i->first);
          break;
       }
-      if (WAIT_OBJECT_0 == WaitForSingleObject(h, 0))
-      {
+
+#pragma warning(push)
+#pragma warning(disable: 6001)
+      if (WAIT_OBJECT_0 == WaitForSingleObject(h, 0)) {
          delete i->second;
          tbr.push_back(i->first);
       }
+#pragma warning(pop)
+
       CloseHandle(h);
    }
+
    for (vector<DWORD>::iterator j = tbr.begin(); j != tbr.end(); ++ j)
       m_mTLSRecord.erase(*j);
 }
@@ -1842,18 +1849,13 @@ std::streamsize CUDT::send (UDTSOCKET u, const char * buf, std::streamsize len, 
 
 std::streamsize CUDT::recv (UDTSOCKET u, char * buf, std::streamsize len, int)
 {
-   try
-   {
+   try {
       CUDT* udt = s_UDTUnited.lookup(u);
       return udt->recv(buf, len);
-   }
-   catch (CUDTException e)
-   {
+   } catch (CUDTException e){
       s_UDTUnited.setError(new CUDTException(e));
       return ERROR;
-   }
-   catch (...)
-   {
+   } catch (...) {
       s_UDTUnited.setError(new CUDTException(-1, 0, 0));
       return ERROR;
    }
@@ -2236,12 +2238,12 @@ int setsockopt (UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int
    return CUDT::setsockopt(u, level, optname, optval, optlen);
 }
 
-std::streamsize send (UDTSOCKET u, const char* buf, int len, int flags)
+std::streamsize send (UDTSOCKET u, const char* buf, std::streamsize len, int flags)
 {
    return CUDT::send(u, buf, len, flags);
 }
 
-std::streamsize recv (UDTSOCKET u, char* buf, int len, int flags)
+std::streamsize recv (UDTSOCKET u, char* buf, std::streamsize len, int flags)
 {
    return CUDT::recv(u, buf, len, flags);
 }
@@ -2332,8 +2334,8 @@ int epoll_wait(int eid, set<UDTSOCKET>* readfds, set<UDTSOCKET>* writefds, int64
 #define SET_RESULT(val, num, fds, it) \
    if ((val != NULL) && !val->empty()) \
    { \
-      if (*num > static_cast<int>(val->size())) \
-         *num = val->size(); \
+      if (*num > /*static_cast<int>*/(val->size())) \
+         *num = static_cast<int>(val->size()); \
       int count = 0; \
       for (it = val->begin(); it != val->end(); ++ it) \
       { \
@@ -2384,7 +2386,7 @@ int epoll_release(int eid)
    return CUDT::epoll_release(eid);
 }
 
-ERRORINFO& getlasterror()
+ERRORINFO & getlasterror()
 {
    return CUDT::getlasterror();
 }

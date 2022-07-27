@@ -38,13 +38,13 @@ struct packet
     static constexpr std::uint8_t PACKET_HEADER_SIZE =
           sizeof(std::underlying_type<packet_type_enum>::type) // packettype
         + sizeof(std::uint16_t)  // packetsize
-        + 16                     // uuid
+        + 16                     // addresser
         + sizeof(std::uint16_t)  // payloadsize
         + sizeof(std::uint32_t)  // partcount
         + sizeof(std::uint32_t); // partindex
 
-    static constexpr std::size_t MAX_PACKET_SIZE = 1430;
-    static constexpr std::size_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
+    static constexpr std::uint16_t MAX_PACKET_SIZE = 1430;
+    static constexpr std::uint16_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
     packet_type_enum packettype;
     std::uint16_t   packetsize;  // Packet size

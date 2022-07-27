@@ -43,7 +43,7 @@ written by
 #ifdef WIN32
    struct iovec
    {
-      int iov_len;
+      std::streamsize iov_len;
       char* iov_base;
    };
 #endif
@@ -76,7 +76,7 @@ public:
       // Returned value:
       //    the payload or the control information field length.
 
-   int getLength() const;
+   std::streamsize getLength () const;
 
       // Functionality:
       //    Set the payload or the control information field length.
@@ -97,7 +97,7 @@ public:
       // Returned value:
       //    None.
 
-   void pack(int pkttype, void* lparam = NULL, void* rparam = NULL, int size = 0);
+   void pack(int pkttype, void* lparam = NULL, void* rparam = NULL, std::streamsize size = 0);
 
       // Functionality:
       //    Read the packet vector.
@@ -197,8 +197,8 @@ class CHandShake
 public:
    CHandShake();
 
-   int serialize(char* buf, int& size);
-   int deserialize(const char* buf, int size);
+   int serialize (char* buf, std::streamsize & size);
+   int deserialize (const char* buf, std::streamsize size);
 
 public:
    static const int m_iContentSize;	// Size of hand shake data

@@ -390,7 +390,7 @@ public:
       // Returned value:
       //    Size of data sent out.
 
-   int sendto(const sockaddr* addr, CPacket& packet);
+   std::streamsize sendto(const sockaddr* addr, CPacket& packet);
 
 private:
 #ifndef WIN32
@@ -450,7 +450,7 @@ public:
       // Returned value:
       //    Data size of the packet
 
-   int recvfrom(int32_t id, CPacket& packet);
+   std::streamsize recvfrom (int32_t id, CPacket & packet);
 
 private:
 #ifndef WIN32
