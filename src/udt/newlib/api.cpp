@@ -1129,7 +1129,6 @@ int CUDTUnited::epoll_add_usock(const int eid, const UDTSOCKET u, const int* eve
         ret = m_EPoll.add_usock(eid, u, events);
         s->m_pUDT->addEPoll(eid);
     } else {
-        LOG_TRACE_3("*** CUDTException: {}", 5004);
         throw CUDTException(5, 4);
     }
 
@@ -1141,21 +1140,20 @@ int CUDTUnited::epoll_add_ssock(const int eid, const SYSSOCKET s, const int* eve
    return m_EPoll.add_ssock(eid, s, events);
 }
 
-int CUDTUnited::epoll_remove_usock(const int eid, const UDTSOCKET u)
+int CUDTUnited::epoll_remove_usock (const int eid, const UDTSOCKET u)
 {
-   int ret = m_EPoll.remove_usock(eid, u);
+    int ret = m_EPoll.remove_usock(eid, u);
+    CUDTSocket * s = locate(u);
 
-   CUDTSocket* s = locate(u);
-   if (NULL != s)
-   {
-      s->m_pUDT->removeEPoll(eid);
-   }
+    if (nullptr != s) {
+        s->m_pUDT->removeEPoll(eid);
+    }
    //else
    //{
    //   throw CUDTException(5, 4);
    //}
 
-   return ret;
+    return ret;
 }
 
 int CUDTUnited::epoll_remove_ssock(const int eid, const SYSSOCKET s)
@@ -1163,9 +1161,11 @@ int CUDTUnited::epoll_remove_ssock(const int eid, const SYSSOCKET s)
    return m_EPoll.remove_ssock(eid, s);
 }
 
-int CUDTUnited::epoll_wait(const int eid, set<UDTSOCKET>* readfds, set<UDTSOCKET>* writefds, int64_t msTimeOut, set<SYSSOCKET>* lrfds, set<SYSSOCKET>* lwfds)
+int CUDTUnited::epoll_wait (const int eid, set<UDTSOCKET> * readfds
+    , set<UDTSOCKET> * writefds, int64_t msTimeOut, set<SYSSOCKET> * lrfds
+    , set<SYSSOCKET> * lwfds)
 {
-   return m_EPoll.wait(eid, readfds, writefds, msTimeOut, lrfds, lwfds);
+    return m_EPoll.wait(eid, readfds, writefds, msTimeOut, lrfds, lwfds);
 }
 
 int CUDTUnited::epoll_release(const int eid)
@@ -1823,31 +1823,24 @@ int CUDT::setsockopt(UDTSOCKET u, int, UDTOpt optname, const void* optval, int o
    }
 }
 
-int CUDT::send(UDTSOCKET u, const char* buf, int len, int)
+std::streamsize CUDT::send (UDTSOCKET u, const char * buf, std::streamsize len, int)
 {
-   try
-   {
-      CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->send(buf, len);
-   }
-   catch (CUDTException e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return ERROR;
-   }
-   catch (bad_alloc&)
-   {
-      s_UDTUnited.setError(new CUDTException(3, 2, 0));
-      return ERROR;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return ERROR;
-   }
+    try {
+        CUDT * udt = s_UDTUnited.lookup(u);
+        return udt->send(buf, len);
+    } catch (CUDTException e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return ERROR;
+    } catch (bad_alloc &) {
+        s_UDTUnited.setError(new CUDTException(3, 2, 0));
+        return ERROR;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return ERROR;
+    }
 }
 
-int CUDT::recv(UDTSOCKET u, char* buf, int len, int)
+std::streamsize CUDT::recv (UDTSOCKET u, char * buf, std::streamsize len, int)
 {
    try
    {
@@ -1866,90 +1859,76 @@ int CUDT::recv(UDTSOCKET u, char* buf, int len, int)
    }
 }
 
-int CUDT::sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
+std::streamsize CUDT::sendmsg(UDTSOCKET u, const char * buf
+    , std::streamsize len, int ttl, bool inorder)
 {
-   try
-   {
-      CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->sendmsg(buf, len, ttl, inorder);
-   }
-   catch (CUDTException e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return ERROR;
-   }
-   catch (bad_alloc&)
-   {
-      s_UDTUnited.setError(new CUDTException(3, 2, 0));
-      return ERROR;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return ERROR;
-   }
+    try {
+        CUDT* udt = s_UDTUnited.lookup(u);
+        return udt->sendmsg(buf, len, ttl, inorder);
+    } catch (CUDTException e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return ERROR;
+    } catch (bad_alloc &) {
+        s_UDTUnited.setError(new CUDTException(3, 2, 0));
+        return ERROR;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return ERROR;
+    }
 }
 
-int CUDT::recvmsg(UDTSOCKET u, char* buf, std::streamsize len)
+#if NETTY_P2P__UDT_PATCHED
+std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill)
+#else
+std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
+#endif
 {
-   try
-   {
-      CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->recvmsg(buf, len);
-   }
-   catch (CUDTException e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return ERROR;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return ERROR;
-   }
+    try {
+        CUDT * udt = s_UDTUnited.lookup(u);
+#if NETTY_P2P__UDT_PATCHED
+        return udt->recvmsg(buf, len, pHaveMsgStill);
+#else
+        return udt->recvmsg(buf, len);
+#endif
+    } catch (CUDTException e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return ERROR;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return ERROR;
+    }
 }
 
-int64_t CUDT::sendfile(UDTSOCKET u, fstream& ifs, int64_t& offset, int64_t size, int block)
+int64_t CUDT::sendfile (UDTSOCKET u, fstream & ifs, int64_t & offset, int64_t size, int block)
 {
-   try
-   {
-      CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->sendfile(ifs, offset, size, block);
-   }
-   catch (CUDTException e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return ERROR;
-   }
-   catch (bad_alloc&)
-   {
-      s_UDTUnited.setError(new CUDTException(3, 2, 0));
-      return ERROR;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return ERROR;
-   }
+    try {
+        CUDT* udt = s_UDTUnited.lookup(u);
+        return udt->sendfile(ifs, offset, size, block);
+    } catch (CUDTException e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return ERROR;
+    } catch (bad_alloc &) {
+        s_UDTUnited.setError(new CUDTException(3, 2, 0));
+        return ERROR;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return ERROR;
+    }
 }
 
-int64_t CUDT::recvfile(UDTSOCKET u, fstream& ofs, int64_t& offset, int64_t size, int block)
+int64_t CUDT::recvfile (UDTSOCKET u, fstream & ofs, int64_t & offset
+    , int64_t size, int block)
 {
-   try
-   {
-      CUDT* udt = s_UDTUnited.lookup(u);
-      return udt->recvfile(ofs, offset, size, block);
-   }
-   catch (CUDTException e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return ERROR;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return ERROR;
-   }
+    try {
+        CUDT* udt = s_UDTUnited.lookup(u);
+        return udt->recvfile(ofs, offset, size, block);
+    } catch (CUDTException e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return ERROR;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return ERROR;
+    }
 }
 
 int CUDT::select(int, ud_set* readfds, ud_set* writefds, ud_set* exceptfds, const timeval* timeout)
@@ -2247,37 +2226,44 @@ int getsockname(UDTSOCKET u, struct sockaddr* name, int* namelen)
    return CUDT::getsockname(u, name, namelen);
 }
 
-int getsockopt(UDTSOCKET u, int level, SOCKOPT optname, void* optval, int* optlen)
+int getsockopt (UDTSOCKET u, int level, SOCKOPT optname, void* optval, int* optlen)
 {
    return CUDT::getsockopt(u, level, optname, optval, optlen);
 }
 
-int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen)
+int setsockopt (UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen)
 {
    return CUDT::setsockopt(u, level, optname, optval, optlen);
 }
 
-int send(UDTSOCKET u, const char* buf, int len, int flags)
+std::streamsize send (UDTSOCKET u, const char* buf, int len, int flags)
 {
    return CUDT::send(u, buf, len, flags);
 }
 
-int recv(UDTSOCKET u, char* buf, int len, int flags)
+std::streamsize recv (UDTSOCKET u, char* buf, int len, int flags)
 {
    return CUDT::recv(u, buf, len, flags);
 }
 
-int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
+std::streamsize sendmsg (UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
 {
    return CUDT::sendmsg(u, buf, len, ttl, inorder);
 }
 
-int recvmsg(UDTSOCKET u, char* buf, std::streamsize len)
+#if NETTY_P2P__UDT_PATCHED
+std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill)
 {
-   return CUDT::recvmsg(u, buf, len);
+    return CUDT::recvmsg(u, buf, len, pHaveMsgStill);
 }
+#else
+std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
+{
+    return CUDT::recvmsg(u, buf, len);
+}
+#endif
 
-int64_t sendfile(UDTSOCKET u, fstream& ifs, int64_t& offset, int64_t size, int block)
+int64_t sendfile (UDTSOCKET u, fstream & ifs, int64_t & offset, int64_t size, int block)
 {
    return CUDT::sendfile(u, ifs, offset, size, block);
 }
@@ -2418,9 +2404,9 @@ int perfmon(UDTSOCKET u, TRACEINFO* perf, bool clear)
    return CUDT::perfmon(u, perf, clear);
 }
 
-UDTSTATUS getsockstate(UDTSOCKET u)
+UDTSTATUS getsockstate (UDTSOCKET u)
 {
-   return CUDT::getsockstate(u);
+    return CUDT::getsockstate(u);
 }
 
 }  // namespace UDT

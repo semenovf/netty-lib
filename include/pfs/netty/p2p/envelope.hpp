@@ -46,6 +46,12 @@ public:
     {
         return _archiver_backend.str();
     }
+
+    // Clear content of internal archive
+    void reset ()
+    {
+        _archiver_backend.str(std::string{});
+    }
 };
 
 class basic_input_envelope
@@ -64,7 +70,7 @@ public:
     {
         _input_archive >> payload;
     }
-    
+
     template <typename T>
     basic_input_envelope & operator >> (T & payload)
     {
@@ -83,7 +89,7 @@ class input_envelope<std::istream>: public basic_input_envelope
     {
         buffer (char const * s, std::size_t n)
         {
-            auto * p = const_cast<char*>(s);
+            auto * p = const_cast<char *>(s);
             setg(p, p, p + n);
         }
     };
@@ -105,7 +111,7 @@ public:
     input_envelope (char const * data, std::streamsize size)
         : basic_input_envelope(_archiver_backend)
         , _buf(data, size)
-        , _archiver_backend(&_buf)
+        , _archiver_backend(& _buf)
     {}
 
     template <typename T>
@@ -119,6 +125,18 @@ public:
     {
         _input_archive >> payload;
         return *this;
+    }
+
+    /**
+     * Peeks character from underlying istream instance.
+     *
+     * @return character (>= 0) peek from stream or negative value on failure.
+     */
+    int peek ()
+    {
+        return _archiver_backend.good()
+            ?  _archiver_backend.peek()
+            : -1;
     }
 };
 

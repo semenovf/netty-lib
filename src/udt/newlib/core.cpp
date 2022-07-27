@@ -1092,7 +1092,7 @@ std::streamsize CUDT::send(const char* data, std::streamsize len)
     return size;
 }
 
-int CUDT::recv(char* data, int len)
+std::streamsize CUDT::recv (char * data, std::streamsize len)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);
@@ -1179,7 +1179,7 @@ int CUDT::recv(char* data, int len)
     return res;
 }
 
-int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
+std::streamsize CUDT::sendmsg (const char* data, std::streamsize len, int msttl, bool inorder)
 {
    if (UDT_STREAM == m_iSockType)
       throw CUDTException(5, 9, 0);
@@ -1266,7 +1266,7 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
     if (0 == m_pSndBuffer->getCurrBufSize())
         m_llSndDurationCounter = CTimer::getTime();
 
-    // insert the user buffer into the sening list
+    // insert the user buffer into the sending list
     m_pSndBuffer->addBuffer(data, len, msttl, inorder);
 
     // insert this socket to the snd list if it is not on the list yet
@@ -1281,8 +1281,17 @@ int CUDT::sendmsg(const char* data, int len, int msttl, bool inorder)
     return len;
 }
 
-int CUDT::recvmsg(char* data, int len)
+#if NETTY_P2P__UDT_PATCHED
+std::streamsize CUDT::recvmsg (char * data, std::streamsize len, bool * pHaveMsgStill)
+#else
+std::streamsize CUDT::recvmsg (char * data, std::streamsize len)
+#endif
 {
+#if NETTY_P2P__UDT_PATCHED
+    if (pHaveMsgStill != nullptr)
+       *pHaveMsgStill = false;
+#endif
+
    if (UDT_STREAM == m_iSockType)
       throw CUDTException(5, 9, 0);
 
@@ -1300,9 +1309,14 @@ int CUDT::recvmsg(char* data, int len)
 
         if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
             // read is not available any more
-            // LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
         }
+#if NETTY_P2P__UDT_PATCHED
+        else {
+            if (pHaveMsgStill != nullptr)
+                *pHaveMsgStill = true;
+        }
+#endif
 
         if (0 == res)
             throw CUDTException(2, 1, 0);
@@ -1312,6 +1326,19 @@ int CUDT::recvmsg(char* data, int len)
 
     if (!m_bSynRecving) {
         int res = m_pRcvBuffer->readMsg(data, len);
+
+#if NETTY_P2P__UDT_PATCHED
+        // udt4 epoll bug: always let sock readable.
+        //   http://sourceforge.net/p/udt/discussion/852996/thread/88d8bee5/
+        if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
+            // read is not available any more
+            s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
+        } else {
+            if (pHaveMsgStill != nullptr)
+                *pHaveMsgStill = true;
+        }
+#endif
+
         if (0 == res)
             throw CUDTException(6, 2, 0);
         else
@@ -1359,17 +1386,22 @@ int CUDT::recvmsg(char* data, int len)
          }
       #endif
 
-      if (m_bBroken || m_bClosing)
-         throw CUDTException(2, 1, 0);
-      else if (!m_bConnected)
-         throw CUDTException(2, 2, 0);
-   } while ((0 == res) && !timeout);
+        if (m_bBroken || m_bClosing)
+            throw CUDTException(2, 1, 0);
+        else if (!m_bConnected)
+            throw CUDTException(2, 2, 0);
+    } while ((0 == res) && !timeout);
 
     if (m_pRcvBuffer->getRcvMsgNum() <= 0) {
         // read is not available any more
-        //LOG_TRACE_3("*** UDT_EPOLL_IN OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, false);
     }
+#if NETTY_P2P__UDT_PATCHED
+    else {
+        if (pHaveMsgStill != nullptr)
+            *pHaveMsgStill = true;
+    }
+#endif
 
     if ((res <= 0) && (m_iRcvTimeOut >= 0))
         throw CUDTException(6, 3, 0);
@@ -1377,7 +1409,7 @@ int CUDT::recvmsg(char* data, int len)
     return res;
 }
 
-int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
+int64_t CUDT::sendfile (fstream & ifs, int64_t & offset, int64_t size, int block)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);
@@ -1462,15 +1494,13 @@ int64_t CUDT::sendfile(fstream& ifs, int64_t& offset, int64_t size, int block)
    }
 
     if (m_iSndBufSize <= m_pSndBuffer->getCurrBufSize()) {
-        // write is not available any more
-        // LOG_TRACE_3("*** UDT_EPOLL_OUT OFF *** id: {}", m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, false);
     }
 
     return size - tosend;
 }
 
-int64_t CUDT::recvfile(fstream& ofs, int64_t& offset, int64_t size, int block)
+int64_t CUDT::recvfile (fstream & ofs, int64_t & offset, int64_t size, int block)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);

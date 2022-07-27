@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2021 Vladislav Trifochkin
+// Copyright (c) 2019-2022 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -12,11 +12,15 @@
 #include "hello_packet.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
+#include "pfs/filesystem.hpp"
 #include "pfs/fmt.hpp"
+#include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
 #include "pfs/ring_buffer.hpp"
+#include "pfs/sha256.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include <array>
+#include <fstream>
 #include <list>
 #include <unordered_map>
 #include <utility>
@@ -27,40 +31,47 @@ namespace netty {
 namespace p2p {
 
 namespace {
-constexpr std::chrono::milliseconds DEFAULT_DISCOVERY_INTERVAL { 5000};
-constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT {10000};
-constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {   64};
-constexpr std::size_t               DEFAULT_BUFFER_INC         {  256};
+constexpr std::chrono::milliseconds DEFAULT_DISCOVERY_INTERVAL {  5000};
+constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT { 10000};
+constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {    64};
+constexpr std::size_t               DEFAULT_BUFFER_INC         {   256};
+constexpr std::size_t               MAX_BUFFER_SIZE            {100000};
+constexpr char const * INPUT_QUEUE_NAME = "input queue";
 }
+
+namespace fs = pfs::filesystem;
 
 template <
       typename DiscoverySocketAPI
     , typename ReliableSocketAPI  // Meets the requirements for reliable and in-order data delivery
-    , std::size_t PriorityCount = 1>
+    , std::size_t PriorityCount = 2>
 class engine
 {
-    static_assert(PriorityCount > 0, "PriorityCount must be greater than zero");
+    // NOTE File operations have the lowest priority.
+
+    static_assert(PriorityCount >= 2, "PriorityCount must be greater or equals to 2");
 
 public:
-    using counter_type = std::uint64_t;
-    using packet_type = packet;
+    using entity_id = std::uint64_t; // Zero value is invalid entity
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
+
+    static constexpr entity_id INVALID_ENTITY {0};
 
 private:
     struct output_queue_item
     {
-        counter_type counter;
+        entity_id    id;
         universal_id addressee;
-        packet_type  pkt;
+        packet       pkt;
     };
 
-    using discovery_socket_type = typename DiscoverySocketAPI::socket_type;
-    using socket_type           = typename ReliableSocketAPI::socket_type;
-    using poller_type           = typename ReliableSocketAPI::poller_type;
-    using socket_id             = decltype(socket_type{}.id());
-    using input_queue_type      = pfs::ring_buffer<packet_type, DEFAULT_BUFFER_BULK_SIZE>;
-    using output_queue_type     = pfs::ring_buffer<output_queue_item, DEFAULT_BUFFER_BULK_SIZE>;
+    using discovery_socket_type  = typename DiscoverySocketAPI::socket_type;
+    using socket_type            = typename ReliableSocketAPI::socket_type;
+    using poller_type            = typename ReliableSocketAPI::poller_type;
+    using socket_id              = decltype(socket_type{}.id());
+    using input_queue_type       = pfs::ring_buffer<packet, DEFAULT_BUFFER_BULK_SIZE>;
+    using output_queue_type      = pfs::ring_buffer<output_queue_item, DEFAULT_BUFFER_BULK_SIZE>;
 
     struct socket_address
     {
@@ -79,7 +90,9 @@ private:
     using socket_iterator  = typename socket_container::iterator;
 
 private:
-    counter_type _counter {0};
+    // Unique identifier for entity (message, file) inside engine session.
+    entity_id _entity_id {0};
+
     std::size_t    _packet_size = packet::MAX_PACKET_SIZE;
     universal_id   _uuid;
     socket_type    _listener;
@@ -134,9 +147,9 @@ public: // Callbacks
     mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> rookie_accepted;
 
     /**
-     * Launched when address expired (update is timed out).
+     * Launched when peer closed.
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_expired;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_closed;
 
     /**
      * Message received.
@@ -144,14 +157,89 @@ public: // Callbacks
     mutable std::function<void (universal_id, std::string)> data_received;
 
     /**
+     * File credentials received (need too prepare to receive file content).
+     */
+    mutable std::function<void (universal_id, file_credentials)> file_credentials_received;
+
+    /**
      * Message dispatched
      */
-    mutable std::function<void (counter_type)> data_dispatched;
+    mutable std::function<void (entity_id)> data_dispatched;
 
 private:
-    counter_type inc_counter ()
+    entity_id next_entity_id ()
     {
-        return ++_counter;
+        ++_entity_id;
+        return _entity_id == INVALID_ENTITY ? ++_entity_id : _entity_id;
+    }
+
+    template <typename Queue>
+    bool ensure_capacity (Queue & q, char const * queue_name)
+    {
+        if (q.size() == q.capacity()) {
+            if (q.size() >= MAX_BUFFER_SIZE) {
+                failure(tr::f_("Exceeded maximum queue size for: `{}`", queue_name));
+                return false;
+            }
+
+            auto new_size = q.size() + DEFAULT_BUFFER_INC;
+
+            if (new_size > MAX_BUFFER_SIZE)
+                new_size = MAX_BUFFER_SIZE;
+
+            q.reserve(new_size);
+        }
+
+        return true;
+    }
+
+    entity_id enqueue_packets (universal_id addressee
+        , packet_type_enum packettype
+        , char const * data, std::streamsize len
+        , int priority = 0)
+    {
+        std::size_t prior = priority < 0
+            ? 0
+            : priority >= _output_queues.size()
+                ? _output_queues.size() - 1
+                : static_cast<std::size_t>(priority);
+
+        assert(_packet_size <= packet::MAX_PACKET_SIZE
+            && _packet_size > packet::PACKET_HEADER_SIZE);
+
+        assert(packettype == packet_type_enum::regular
+            || packettype == packet_type_enum::file_credentials);
+
+        auto payload_size = _packet_size - packet::PACKET_HEADER_SIZE;
+        auto remain_len   = len;
+        char const * remain_data = data;
+        std::uint32_t partindex  = 1;
+        std::uint32_t partcount  = len / payload_size
+            + (len % payload_size ? 1 : 0);
+
+        packet p;
+        auto entityid = next_entity_id();
+
+        while (remain_len) {
+            p.packettype  = packettype;
+            p.packetsize  = packet::PACKET_HEADER_SIZE + payload_size;
+            p.addresser   = _uuid;
+            p.payloadsize = remain_len > payload_size
+                ? payload_size
+                : static_cast<std::uint16_t>(remain_len);
+            p.partcount   = partcount;
+            p.partindex   = partindex++;
+            std::memset(p.payload, 0, payload_size);
+            std::memcpy(p.payload, remain_data, p.payloadsize);
+
+            remain_len -= p.payloadsize;
+            remain_data += p.payloadsize;
+
+            _output_queues[prior].push(output_queue_item{
+                entityid, addressee, std::move(p)});
+        }
+
+        return entityid;
     }
 
 public:
@@ -236,11 +324,6 @@ public:
     universal_id const & uuid () const noexcept
     {
         return _uuid;
-    }
-
-    void set_packet_size (std::size_t size)
-    {
-        _packet_size = size;
     }
 
     template <typename Configurator>
@@ -331,27 +414,89 @@ public:
     }
 
     /**
-     * Split data to send into packets and enqueue them into output queue.
+     * Send data.
      *
-     * @return Unique identifier of the message (internal counter within the
-     *         engine session).
+     * @details Actually this method splits data to send into packets and
+     *          enqueue them into output queue.
+     *
+     * @param addressee Addressee unique identifier.
+     * @param data Data to send.
+     * @param len  Data length.
+     * @param priority Priority for sending data.
+     *
+     * @return Unique entity identifier.
      */
-    counter_type send (universal_id uuid, char const * data, std::streamsize len, int priority = 0)
+    entity_id send (universal_id addressee, char const * data
+        , std::streamsize len, int priority = 0)
     {
-        std::size_t prior = priority < 0
-            ? 0
-            : priority >= _output_queues.size()
-                ? _output_queues.size() - 1
-                : static_cast<std::size_t>(priority);
+        return enqueue_packets(addressee, packet_type_enum::regular
+            , data, len, priority);
+    }
 
-        auto counter = inc_counter();
+    /**
+     * Send file.
+     *
+     * @details Actually this method enqueue file send credentials into output queue.
+     *
+     * @param addressee Addressee unique identifier.
+     * @param path Path to sending file.
+     *
+     * @return Unique entity identifier.
+     */
+    entity_id send_file (universal_id addressee
+        , fs::path const & path
+        , std::uint64_t offset = 0)
+    {
+        if (!fs::exists(path)) {
+            failure(tr::f_("File not found: {}", path));
+            return INVALID_ENTITY;
+        }
 
-        split_into_packets(_packet_size, _uuid, data, len
-            , [this, & uuid, prior, counter] (packet_type && p) {
-                _output_queues[prior].push(output_queue_item{counter, uuid, std::move(p)});
-            });
+        auto filename = fs::utf8_encode(path.filename());
+        auto filesize = fs::file_size(path);
 
-        return counter;
+        if (offset >= filesize) {
+            failure(tr::f_("File offset ({}) greater than it's size {}: {}"
+                , offset, filesize, path));
+            return INVALID_ENTITY;
+        }
+
+        std::fstream ifs{fs::utf8_encode(path), std::ios::binary | std::ios::in};
+
+        if (!ifs.is_open()) {
+            failure(tr::f_("Unable to open file: {}", path));
+            return INVALID_ENTITY;
+        }
+
+        pfs::crypto::sha256_digest sha256;
+
+        // FIXME This may take too long time. Need to replace with async
+        // (future) operation.
+        bool success {true};
+//         sha256 = pfs::crypto::sha256::digest(ifs, & success);
+
+        if (!success) {
+            failure(tr::f_("Calculate checksum failure for file: {}", path));
+            return INVALID_ENTITY;
+        }
+
+        ifs.seekg(offset, std::ios::beg);
+
+        LOG_TRACE_2("File: {}; size: {}; sha256: {}"
+            , filename
+            , filesize
+            , to_string(sha256));
+
+        file_credentials fc;
+        fc.filename = filename;
+        fc.filesize = filesize;
+        fc.sha256 = sha256;
+
+        output_envelope_type out;
+        out << fc;
+
+        return enqueue_packets(addressee, packet_type_enum::file_credentials
+            , out.data().data(), out.data().size(), _output_queues.size() - 1);
     }
 
 private:
@@ -372,8 +517,7 @@ private:
         if (pos != _writers.end()) {
             result = & *pos->second;
         } else {
-            this->failure(fmt::format("cannot locate writer by UUID: {}"
-                , uuid));
+            this->failure(tr::f_("Cannot locate writer by UUID: {}", uuid));
         }
 
         return result;
@@ -493,7 +637,13 @@ private:
                 }
 
                 if (is_connected_socket) {
-                    process_connected(pos->sock.id());
+                    //process_connected(pos->sock.id());
+                    LOG_TRACE_3("Connected to: {} ({}:{}), id: {}. Status: {}"
+                        , peer_uuid
+                        , to_string(pos->saddr.addr)
+                        , pos->saddr.port
+                        , pos->sock.id()
+                        , pos->sock.state_string());
                 }
             }
         }
@@ -556,7 +706,7 @@ private:
         _expiration_timepoints.erase(sid);
 
         if (writers_erased > 0)
-            this->peer_expired(uuid, addr, port);
+            this->peer_closed(uuid, addr, port);
     }
 
     void poll ()
@@ -641,36 +791,93 @@ private:
             }
 
             if (is_input_event) {
+                int read_iterations = 0;
+
                 do {
-                    std::array<char, packet_type::MAX_PACKET_SIZE> buf;
-                    std::streamsize rc = sockinfo.sock.recv(buf.data(), buf.size());
+                    std::array<char, packet::MAX_PACKET_SIZE> buf;
+                    std::streamsize rc = sockinfo.sock.recvmsg(buf.data(), buf.size());
 
-                    if (rc > 0) {
-                        auto pos = it->second;
-                        input_envelope_type in {buf.data(), buf.size()};
-                        packet_type pkt;
-
-                        in.unseal(pkt);
-
-                        if (pkt.packetsize > packet_type::MAX_PACKET_SIZE) {
-                            this->failure(fmt::format("bad packet received from: {}:{}"
-                                , to_string(pos->saddr.addr)
-                                , pos->saddr.port));
-                        } else {
-                            _input_queue.push(std::move(pkt));
+                    if (rc == 0) {
+                        if (read_iterations == 0) {
+                            this->failure(tr::f_("Expected any data from: {}:{}, but no data read"
+                                , to_string(sockinfo.saddr.addr)
+                                , sockinfo.saddr.port));
                         }
-                    } else {
+
                         break;
+                    }
+
+                    if (rc < 0) {
+                        this->failure(tr::f_("Receive data {}:{} failure: {} (code={})"
+                            , to_string(sockinfo.saddr.addr)
+                            , sockinfo.saddr.port
+                            , sockinfo.sock.error_string()
+                            , sockinfo.sock.error_code()));
+                        break;
+                    }
+
+                    read_iterations++;
+
+                    input_envelope_type in {buf.data(), buf.size()};
+
+                    static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
+
+                    auto packettype = static_cast<packet_type_enum>(in.peek());
+
+                    decltype(packet::packetsize) packetsize {0};
+                    bool bad_packetsize {false};
+
+                    switch (packettype) {
+                        case packet_type_enum::regular:
+                        case packet_type_enum::file_credentials: {
+                            packet pkt;
+                            in.unseal(pkt);
+                            packetsize = pkt.packetsize;
+
+                            if (rc != packetsize) {
+                                bad_packetsize = true;
+                            } else {
+                                if (ensure_capacity(_input_queue, INPUT_QUEUE_NAME))
+                                    _input_queue.push(std::move(pkt));
+                            }
+
+                            break;
+                        }
+
+                        case packet_type_enum::file: {
+                            // FIXME
+                            break;
+                        }
+
+                        default:
+                            this->failure(tr::f_("Unexpected packet type ({})"
+                                " received from: {}:{}, ignored."
+                                , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
+                                , to_string(sockinfo.saddr.addr)
+                                , sockinfo.saddr.port));
+                            break;
+                    }
+
+                    if (bad_packetsize) {
+                        this->failure(tr::f_("Unexpected packet size ({})"
+                            " received from: {}:{}, expected: {}"
+                            , rc
+                            , to_string(sockinfo.saddr.addr)
+                            , sockinfo.saddr.port
+                            , packetsize));
+
+                        // Ignore
+                        continue;
                     }
                 } while (true);
             } else {
-                //TRACE_3("PROCESS SOCKET EVENT (OUTPUT): id: {}. Status: {}"
+                //("PROCESS SOCKET EVENT (OUTPUT): id: {}. Status: {}"
                 //    , sid
                 //    , sockinfo.sock.state_string());
                 ;
             }
         } else {
-            this->failure(fmt::format("poll: socket not found by id: {}"
+            this->failure(tr::f_("Socket not found by id: {}"
                 ", may be it was closed before removing from poller"
                 , sid));
         }
@@ -706,11 +913,11 @@ private:
                             this->update_peer(packet.uuid, sender_addr, packet.port);
                         }
                     } else {
-                        this->failure(fmt::format("bad CRC16 for HELO packet received from: {}:{}"
+                        this->failure(tr::f_("Bad CRC16 for HELO packet received from: {}:{}"
                             , to_string(sender_addr), sender_port));
                     }
                 } else {
-                    this->failure(fmt::format("bad HELO packet received from: {}:{}"
+                    this->failure(tr::f_("Bad HELO packet received from: {}:{}"
                         , to_string(sender_addr), sender_port));
                 }
             });
@@ -741,7 +948,7 @@ private:
                     , size, item.addr, item.port);
 
                 if (bytes_written < 0) {
-                    this->failure(fmt::format("transmit failure to {}:{}: {}"
+                    this->failure(tr::f_("Transmit failure to {}:{}: {}"
                         , to_string(item.addr)
                         , item.port
                         , _discovery.transmitter.error_string()));
@@ -803,8 +1010,9 @@ private:
 
             // Most likely there are enough packages to complete the message
             if (pkt.partcount <= _input_queue.size()) {
-                auto uuid = pkt.uuid;
+                auto sender = pkt.addresser;
                 auto expected_partcount = pkt.partcount;
+                auto expected_packettype = pkt.packettype;
                 decltype(pkt.partindex) expected_partindex = 1;
 
                 std::string message;
@@ -814,9 +1022,10 @@ private:
 
                 while (success) {
                     // Check data integrity
-                    success = uuid == pkt.uuid
+                    success = (sender == pkt.addresser
+                        && pkt.packettype == expected_packettype
                         && pkt.partcount == expected_partcount
-                        && pkt.partindex == expected_partindex++;
+                        && pkt.partindex == expected_partindex++);
 
                     if (success) {
                         message.append(pkt.payload, pkt.payloadsize);
@@ -836,7 +1045,30 @@ private:
                 };
 
                 if (success) {
-                    this->data_received(uuid, std::move(message));
+                    switch (expected_packettype) {
+                        case packet_type_enum::regular:
+                            this->data_received(sender, std::move(message));
+                            break;
+                        case packet_type_enum::file_credentials: {
+                            input_envelope_type in {message};
+                            file_credentials fc;
+                            in.unseal(fc);
+                            this->file_credentials_received(sender, std::move(fc));
+                            break;
+                        }
+
+                        case packet_type_enum::file: {
+                            // FIXME
+                            break;
+                        }
+
+                        default:
+                            this->failure(tr::f_("Unexpected message with packet type ({})"
+                                " received from: {}, ignored."
+                                , static_cast<std::underlying_type<decltype(expected_packettype)>::type>(expected_packettype)
+                                , sender));
+                            break;
+                    }
                 } else {
                     // Unexpected behavior!!!
                     // Corrupted/incomplete sequence of packets received.
@@ -846,10 +1078,10 @@ private:
                         pkt = _input_queue.front();
                     }
 
-                    this->failure(fmt::format("!!! DATA INTEGRITY VIOLATED:"
+                    this->failure(tr::f_("!!! DATA INTEGRITY VIOLATED:"
                         " corrupted/incomplete sequence of"
                         " packets received from: {}"
-                        , uuid));
+                        , sender));
                 }
             } else {
                 break;
@@ -864,6 +1096,8 @@ private:
         socket_info * last_sinfo_ptr = nullptr;
         double coeff = 1.0;
 
+        output_envelope_type out;
+
         for (std::size_t prior = 0; prior < _output_queues.size(); prior++) {
             // TODO Need more smart of coefficient calculation {{
             std::size_t count = _output_queues[prior].size() * coeff;
@@ -875,22 +1109,21 @@ private:
             }
 
             if (count == 0 && _output_queues[prior].size() > 0)
-                count = 1; // _output_queues[prior].size();
-            // }}
+                count = 1;
 
             while (count-- && !_output_queues[prior].empty()) {
                 auto & item = _output_queues[prior].front();
-                auto const & pkt = item.pkt;
 
-                output_envelope_type out;
-                out.seal(pkt);
+                auto const & pkt = item.pkt;
+                out.reset();   // Empty envelope
+                out.seal(pkt); // Seal new data
 
                 auto data = out.data();
                 auto size = data.size();
 
                 _output_queues[prior].pop();
 
-                assert(size <= packet_type::MAX_PACKET_SIZE);
+                assert(size <= packet::MAX_PACKET_SIZE);
 
                 auto need_locate = !last_sinfo_ptr
                     || last_sinfo_ptr->uuid != item.addressee;
@@ -905,20 +1138,19 @@ private:
                 assert(item.addressee == last_sinfo_ptr->uuid);
 
                 auto & sock = last_sinfo_ptr->sock;
-
-                auto bytes_sent = sock.send(data.data(), size);
+                auto bytes_sent = sock.sendmsg(data.data(), size);
 
                 if (bytes_sent > 0) {
                     total_bytes_sent += bytes_sent;
 
                     // Message sent complete
                     if (pkt.partindex == pkt.partcount)
-                        data_dispatched(item.counter);
+                        data_dispatched(item.id);
 
                 } else if (bytes_sent < 0) {
                     auto & saddr = last_sinfo_ptr->saddr;
 
-                    this->failure(fmt::format("sending failure to {} ({}:{}): {}"
+                    this->failure(tr::f_("sending failure to {} ({}:{}): {}"
                         , last_sinfo_ptr->uuid
                         , to_string(saddr.addr)
                         , saddr.port
@@ -933,3 +1165,4 @@ private:
 };
 
 }} // namespace netty::p2p
+

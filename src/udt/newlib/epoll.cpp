@@ -132,6 +132,22 @@ int CEPoll::add_ssock(const int eid, const SYSSOCKET& s, const int* events)
          ev.events |= EPOLLERR;
    }
 
+#if NETTY_P2P__UDT_PATCHED
+    // Requests edge-triggered notification for the associated file descriptor.
+    // The default behavior for epoll is level-triggered.
+    // See epoll(7) for more detailed information about edge-triggered and
+    // level-triggered notification.
+    // This flag is an input flag for the event.events field when calling
+    // epoll_ctl(); it is never returned by epoll_wait(2).
+    //
+    // The suggested way to use epoll as an edge-triggered (EPOLLET) interface
+    // is as follows:
+    //   - with nonblocking file descriptors; and
+    //   - by waiting for an event only after read(2) or write(2) return EAGAIN.
+    // FIXME Check it for work.
+    //ev.events |= EPOLLET;
+#endif
+
    ev.data.fd = s;
    if (::epoll_ctl(p->second.m_iLocalID, EPOLL_CTL_ADD, s, &ev) < 0)
       throw CUDTException();
@@ -221,8 +237,8 @@ int CEPoll::wait(const int eid, set<UDTSOCKET>* readfds, set<UDTSOCKET>* writefd
              + static_cast<int>(p->second.m_sUDTExcepts.size());
       }
 
-      if ((NULL != writefds) 
-            && (!p->second.m_sUDTWrites.empty() 
+      if ((NULL != writefds)
+            && (!p->second.m_sUDTWrites.empty()
                 || !p->second.m_sUDTExcepts.empty())) {
 
          *writefds = p->second.m_sUDTWrites;

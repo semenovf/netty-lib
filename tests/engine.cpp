@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021,2022 Vladislav Trifochkin
 //
 // License: see LICENSE file
 //
@@ -9,8 +9,6 @@
 //      2021.10.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define PFS__LOG_LEVEL 3
-//#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-//#include "doctest.h"
 #include "pfs/error.hpp"
 #include "pfs/fmt.hpp"
 #include "pfs/log.hpp"
@@ -69,12 +67,12 @@ namespace p2p {
 using inet4_addr           = netty::inet4_addr;
 using discovery_socket_api = netty::p2p::qt5::api;
 using reliable_socket_api  = netty::p2p::udt::api;
-static constexpr std::size_t DEFAULT_PACKET_SIZE = 64;
+static constexpr std::size_t PACKET_SIZE = 64;
 
 using engine = netty::p2p::engine<
       discovery_socket_api
     , reliable_socket_api
-    , DEFAULT_PACKET_SIZE>;
+    , PACKET_SIZE>;
 } // namespace p2p
 
 namespace {
@@ -118,11 +116,11 @@ void on_writer_ready (pfs::universal_id uuid
         QUIT_PEER2 = true;
 }
 
-void on_peer_expired (pfs::universal_id uuid
+void on_peer_closed (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    LOG_TRACE_1("EXPIRED: {} ({}:{})"
+    LOG_TRACE_1("CLOSED: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -134,7 +132,7 @@ void worker (p2p::engine & peer)
 {
     LOG_TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
-    TRY {
+    try {
         while (true) {
             peer.loop();
 
@@ -144,14 +142,10 @@ void worker (p2p::engine & peer)
             if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
                 break;
         }
-    } CATCH (cereal::Exception ex) {
-#if PFS__EXCEPTIONS_ENABLED
+    } catch (cereal::Exception ex) {
         LOGE("cereal::Exception", "{} (peer={})", ex.what(), peer.uuid());
-#endif
-    } CATCH (...) {
-#if PFS__EXCEPTIONS_ENABLED
+    } catch (...) {
         LOGE("Unhandled exception", "peer={}", peer.uuid());
-#endif
     }
 
     LOG_TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
@@ -209,7 +203,7 @@ int main ()
         peer1.failure = on_failure;
         peer1.rookie_accepted = on_rookie_accepted;
         peer1.writer_ready = on_writer_ready;
-        peer1.peer_expired = on_peer_expired;
+        peer1.peer_closed = on_peer_closed;
 
         //REQUIRE(peer1.configure(configurator1{}));
         peer1.configure(configurator1{});
@@ -224,7 +218,7 @@ int main ()
         peer2.failure = on_failure;
         peer2.rookie_accepted = on_rookie_accepted;
         peer2.writer_ready = on_writer_ready;
-        peer2.peer_expired = on_peer_expired;
+        peer2.peer_closed = on_peer_closed;
 
         //REQUIRE(peer2.configure(configurator2{}));
         peer2.configure(configurator2{});

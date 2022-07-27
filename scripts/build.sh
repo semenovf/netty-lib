@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# Copyright (c) 2021 Vladislav Trifochkin
+# Copyright (c) 2021,2022 Vladislav Trifochkin
 #
 # Unified build script for Linux distributions
 #
@@ -10,6 +10,7 @@
 #      2021.11.08 SOURCE_DIR recognition modified.
 #      2021.11.19 Added support for profiling.
 #      2022.07.06 Added CTEST_OPTIONS.
+#      2022.07.26 Fixed conditions for run tests and coverage tests.
 ################################################################################
 
 CMAKE_OPTIONS="${CMAKE_OPTIONS}"
@@ -156,6 +157,16 @@ fi
 mkdir -p ${BUILD_DIR} \
     && cd ${BUILD_DIR} \
     && cmake -G "${BUILD_GENERATOR}" $CMAKE_OPTIONS $SOURCE_DIR \
-    && cmake --build . \
-    && [ -n "$BUILD_TESTS" ] && ctest $CTEST_OPTIONS -C $BUILD_TYPE \
-    && [ -n "$ENABLE_COVERAGE" ] && cmake --build . --target Coverage
+    && cmake --build .
+
+if [ $? -eq 0 ] ; then
+    if [ -n "$BUILD_TESTS" ] ; then
+        ctest $CTEST_OPTIONS -C $BUILD_TYPE
+    fi
+fi
+
+if [ $? -eq 0 ] ; then
+    if [ -n "$ENABLE_COVERAGE" ] ; then
+        cmake --build . --target Coverage
+    fi
+fi

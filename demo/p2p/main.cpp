@@ -7,7 +7,7 @@
 //      2021.09.13 Initial version
 //      2021.11.01 New version using UDT.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS__TRACE_LEVEL 3
+#define PFS__LOG_LEVEL 3
 #include "pfs/log.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/p2p/engine.hpp"
@@ -68,7 +68,7 @@ using engine = netty::p2p::engine<
     , reliable_socket_api
     , PACKET_SIZE>;
 
-using packet_type = engine::packet_type;
+//using packet_type = engine::packet_type;
 } // namespace p2p
 
 namespace {
@@ -111,11 +111,11 @@ void on_rookie_accepted (pfs::universal_id uuid
         , port);
 }
 
-void on_peer_expired (pfs::universal_id uuid
+void on_peer_closed (pfs::universal_id uuid
     , netty::inet4_addr const & addr
     , std::uint16_t port)
 {
-    LOG_TRACE_1("EXPIRED: {} ({}:{})"
+    LOG_TRACE_1("CLOSED: {} ({}:{})"
         , to_string(uuid)
         , to_string(addr)
         , port);
@@ -128,47 +128,76 @@ void worker (p2p::engine & peer)
     }
 }
 
-int main (int /*argc*/, char * argv[])
+int main (int argc, char * argv[])
 {
+    namespace fs = pfs::filesystem;
+
     std::string program{argv[0]};
+    pfs::filesystem::path file;
+
+    if (argc > 1) {
+        file = fs::utf8_decode(argv[1]);
+
+        if (!fs::exists(file)) {
+            LOGE("", "File does not exist: {}", file);
+            return EXIT_FAILURE;
+        }
+    }
 
     fmt::print("My name is {}\n", std::to_string(UUID));
 
     if (!p2p::engine::startup())
         return EXIT_FAILURE;
 
-    p2p::engine peer {UUID};
+    p2p::engine host {UUID};
 
-    peer.failure = on_failure;
-    peer.rookie_accepted = on_rookie_accepted;
-    peer.peer_expired = on_peer_expired;
-    peer.writer_ready = [& peer] (pfs::universal_id uuid
+    host.failure = on_failure;
+    host.rookie_accepted = on_rookie_accepted;
+    host.peer_closed = on_peer_closed;
+    host.writer_ready = [& host, file] (pfs::universal_id peer_uuid
             , netty::inet4_addr const & addr
             , std::uint16_t port) {
         LOG_TRACE_1("WRITER READY: {} ({}:{})"
-            , to_string(uuid)
+            , to_string(peer_uuid)
             , to_string(addr)
             , port);
 
-        peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
+        if (!file.empty())
+            host.send_file(peer_uuid, file, 0);
+
+        host.send(peer_uuid, loremipsum, std::strlen(loremipsum), 0);
     };
 
-    peer.data_received = [& peer] (pfs::universal_id uuid, std::string message) {
+    host.data_received = [& host] (pfs::universal_id peer_uuid, std::string message) {
         LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
-            , to_string(uuid)
+            , to_string(peer_uuid)
             , message.substr(0, 20)
             , message.substr(message.size() - 20)
             , message.size()
             , std::strlen(loremipsum));
 
-        peer.send(uuid, loremipsum, std::strlen(loremipsum), 0);
+        host.send(peer_uuid, loremipsum, std::strlen(loremipsum), 0);
     };
 
-    assert(peer.configure(configurator{}));
+    host.file_credentials_received = [] (pfs::universal_id peer_uuid
+        , netty::p2p::file_credentials fc) {
+        LOG_TRACE_1("File credentials received from {}:"
+            " file name: {}; size: {}; sha256: {})"
+            , to_string(peer_uuid)
+            , fc.filename
+            , fc.filesize
+            , to_string(fc.sha256));
+    };
 
-    peer.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
+    host.data_dispatched = [& host] (p2p::engine::entity_id id) {
+        LOG_TRACE_1("Message dispatched: {}", id);
+    };
 
-    worker(peer);
+    assert(host.configure(configurator{}));
+
+    host.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
+
+    worker(host);
 
     p2p::engine::cleanup();
 

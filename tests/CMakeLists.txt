@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2021 Vladislav Trifochkin
+# Copyright (c) 2021,2022 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -13,8 +13,7 @@ if (NETTY__BUILD_P2P)
 
 set(TESTS
     engine
-    envelope
-    packet_serializer)
+    envelope)
 
 foreach (t ${TESTS})
     portable_target(ADD_TEST ${t}

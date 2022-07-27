@@ -10,6 +10,7 @@
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/fmt.hpp"
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -84,10 +85,11 @@ public:
     void close ();
     bool connect (inet4_addr const & addr, std::uint16_t port);
     bool listen (int backlog = 10);
-    std::streamsize recv (char * msg, std::streamsize len);
-    std::streamsize send (char const * data, std::streamsize len);
+    std::streamsize recvmsg (char * msg, std::streamsize len);
+    std::streamsize sendmsg (char const * data, std::streamsize len);
 
-    std::string error_string () const;
+    std::string error_string () const noexcept;
+    int error_code () const noexcept;
 
     inline std::string state_string () const noexcept
     {

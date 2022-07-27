@@ -342,10 +342,14 @@ UDT_API int getpeername(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockname(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockopt(UDTSOCKET u, int level, SOCKOPT optname, void* optval, int* optlen);
 UDT_API int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen);
-UDT_API int send(UDTSOCKET u, const char* buf, int len, int flags);
-UDT_API int recv(UDTSOCKET u, char* buf, int len, int flags);
-UDT_API int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
-UDT_API int recvmsg(UDTSOCKET u, char* buf, std::streamsize len);
+UDT_API std::streamsize send (UDTSOCKET u, const char* buf, int len, int flags);
+UDT_API std::streamsize recv (UDTSOCKET u, char* buf, int len, int flags);
+UDT_API std::streamsize sendmsg (UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
+#if NETTY_P2P__UDT_PATCHED
+UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
+#else
+UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
+#endif
 UDT_API int64_t sendfile(UDTSOCKET u, std::fstream& ifs, int64_t& offset, int64_t size, int block = 364000);
 UDT_API int64_t recvfile(UDTSOCKET u, std::fstream& ofs, int64_t& offset, int64_t size, int block = 7280000);
 UDT_API int64_t sendfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 364000);

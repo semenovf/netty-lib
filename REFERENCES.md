@@ -28,7 +28,8 @@
 
 ### Reliable UDP
 
-1. [UDT: UDP-based Data Transfer Protocol](https://github.com/whtghst1/udt)
+1. [UDT: UDP-based Data Transfer Protocol (v4.12)](https://github.com/whtghst1/udt)
+1. [UDT: UDT patch for epoll api](https://github.com/libinzhangyuan/udt_patch_for_epoll)
 2. [Reliable-UDP](https://github.com/dileepramesh/Reliable-UDP)
 3. [Reliable-UDP](https://github.com/andrewzk/Reliable-UDP)
 4. [Tonk - Reliable UDP (rUDP) Network Library in C++](https://github.com/catid/tonk)

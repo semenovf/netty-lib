@@ -244,16 +244,22 @@ std::vector<std::pair<std::string, std::string>> udp_socket::dump_options () con
     return result;
 }
 
-std::streamsize udp_socket::recv (char * data, std::streamsize len)
+std::streamsize udp_socket::recvmsg (char * data, std::streamsize len)
 {
-    // FIXME Need more smart implementation
-    return UDT::recvmsg(_socket, data, len);
+    auto res = UDT::recvmsg(_socket, data, len);
+
+    if (res == UDT::ERROR) {
+        // Error code: 6002
+        // Error desc: Non-blocking call failure: no data available for reading.
+        if (CUDTException{6, 2, 0}.getErrorCode() == error_code())
+            res = 0;
+    }
+
+    return res;
 }
 
-std::streamsize udp_socket::send (char const * data, std::streamsize len)
+std::streamsize udp_socket::sendmsg (char const * data, std::streamsize len)
 {
-    // FIXME Need more smart implementation
-
     int ttl_millis = -1;
     bool inorder = true;
 
@@ -263,19 +269,23 @@ std::streamsize udp_socket::send (char const * data, std::streamsize len)
     //                   before the timer expires;
     //                   if len <= 0.
     // UDT::ERROR (-1) - on error
-    auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
+    auto sz = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
-    if (rc == UDT::ERROR) {
-//         if ()
+    if (len == UDT::ERROR) {
         return -1;
     }
 
-    return rc;
+    return sz;
 }
 
-std::string udp_socket::error_string () const
+std::string udp_socket::error_string () const noexcept
 {
-    return UDT::getlasterror().getErrorMessage();
+    return UDT::getlasterror_desc();
+}
+
+int udp_socket::error_code () const noexcept
+{
+    return UDT::getlasterror_code();
 }
 
 std::string udp_socket::state_string (int state)

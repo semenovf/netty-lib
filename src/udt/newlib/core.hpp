@@ -36,9 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*****************************************************************************
 written by
    Yunhong Gu, last updated 02/28/2012
-
-modified by
-    Vladislav Trifochkin 2021.11.08
 *****************************************************************************/
 #pragma once
 #include "udt.hpp"
@@ -89,17 +86,21 @@ public: //API
    static int getsockname(UDTSOCKET u, sockaddr* name, int* namelen);
    static int getsockopt(UDTSOCKET u, int level, UDTOpt optname, void* optval, int* optlen);
    static int setsockopt(UDTSOCKET u, int level, UDTOpt optname, const void* optval, int optlen);
-   static int send(UDTSOCKET u, const char* buf, int len, int flags);
-   static int recv(UDTSOCKET u, char* buf, int len, int flags);
-   static int sendmsg(UDTSOCKET u, const char* buf, std::streamsize len, int ttl = -1, bool inorder = false);
-   static int recvmsg(UDTSOCKET u, char* buf, std::streamsize len);
-   static int64_t sendfile(UDTSOCKET u, std::fstream& ifs, int64_t& offset, int64_t size, int block = 364000);
-   static int64_t recvfile(UDTSOCKET u, std::fstream& ofs, int64_t& offset, int64_t size, int block = 7280000);
+   static std::streamsize send (UDTSOCKET u, const char * buf, std::streamsize len, int flags);
+   static std::streamsize recv (UDTSOCKET u, char * buf, std::streamsize len, int flags);
+   static std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
+#if NETTY_P2P__UDT_PATCHED
+   static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
+#else
+   static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
+#endif
+   static int64_t sendfile (UDTSOCKET u, std::fstream & ifs, int64_t & offset, int64_t size, int block = 364000);
+   static int64_t recvfile (UDTSOCKET u, std::fstream & ofs, int64_t & offset, int64_t size, int block = 7280000);
    static int select(int nfds, ud_set* readfds, ud_set* writefds, ud_set* exceptfds, const timeval* timeout);
    static int selectEx(const std::vector<UDTSOCKET>& fds, std::vector<UDTSOCKET>* readfds, std::vector<UDTSOCKET>* writefds, std::vector<UDTSOCKET>* exceptfds, int64_t msTimeOut);
    static int epoll_create();
-   static int epoll_add_usock(const int eid, const UDTSOCKET u, const int* events = NULL);
-   static int epoll_add_ssock(const int eid, const SYSSOCKET s, const int* events = NULL);
+   static int epoll_add_usock(const int eid, const UDTSOCKET u, const int* events = nullptr);
+   static int epoll_add_ssock(const int eid, const SYSSOCKET s, const int* events = nullptr);
    static int epoll_remove_usock(const int eid, const UDTSOCKET u);
    static int epoll_remove_ssock(const int eid, const SYSSOCKET s);
    static int epoll_wait(const int eid, std::set<UDTSOCKET>* readfds, std::set<UDTSOCKET>* writefds, int64_t msTimeOut, std::set<SYSSOCKET>* lrfds = NULL, std::set<SYSSOCKET>* wrfds = NULL);
@@ -185,7 +186,7 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-   int recv(char* data, int len);
+   std::streamsize recv (char * data, std::streamsize len);
 
       // Functionality:
       //    send a message of a memory block "data" with size of "len".
@@ -197,7 +198,7 @@ private:
       // Returned value:
       //    Actual size of data sent.
 
-   int sendmsg(const char* data, int len, int ttl, bool inorder);
+   std::streamsize sendmsg(const char * data, std::streamsize len, int ttl, bool inorder);
 
       // Functionality:
       //    Receive a message to buffer "data".
@@ -207,7 +208,11 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-   int recvmsg(char* data, int len);
+#if NETTY_P2P__UDT_PATCHED
+   std::streamsize recvmsg (char * data, std::streamsize len, bool * pHaveMsgStill = nullptr);
+#else
+   std::streamsize recvmsg (char * data, std::streamsize len);
+#endif
 
       // Functionality:
       //    Request UDT to send out a file described as "fd", starting from "offset", with size of "size".
