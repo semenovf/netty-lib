@@ -45,4 +45,6 @@
 
 ## Miscellaneous resources
 
-1. [Rendezvous protocol] https://en.wikipedia.org/wiki/Rendezvous_protocol
+1. [Rendezvous protocol](https://en.wikipedia.org/wiki/Rendezvous_protocol)
+2. [Transmission BitTorrent](https://github.com/transmission/transmission)
+3. [libtorrent - bittorrent implementation](https://github.com/arvidn/libtorrent)

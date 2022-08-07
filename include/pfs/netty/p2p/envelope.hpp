@@ -108,7 +108,7 @@ public:
         // This work with GCC, but not with MSVC.
     }
 
-    input_envelope (char const * data, std::streamsize size)
+    input_envelope (char const * data, std::size_t size)
         : basic_input_envelope(_archiver_backend)
         , _buf(data, size)
         , _archiver_backend(& _buf)

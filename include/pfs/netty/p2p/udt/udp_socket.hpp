@@ -91,6 +91,11 @@ public:
     NETTY__EXPORT std::string error_string () const noexcept;
     NETTY__EXPORT int error_code () const noexcept;
 
+    /**
+     * Checks if the output buffer is overflow.
+     */
+    NETTY__EXPORT bool overflow () const noexcept;
+
     inline std::string state_string () const noexcept
     {
         return state_string(state());

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/endian.hpp"
 #include "pfs/netty/p2p/udt/udp_socket.hpp"
+#include <cerrno>
 #include <cassert>
 
 #if NETTY_P2P__NEW_UDT_ENABLED
@@ -267,11 +268,15 @@ std::streamsize udp_socket::sendmsg (char const * data, std::streamsize len)
     // > 0             - on success;
     // = 0             - if UDT_SNDTIMEO > 0 and the message cannot be sent
     //                   before the timer expires;
-    //                   if len <= 0.
-    // UDT::ERROR (-1) - on error
+    // -1              - on error
     auto sz = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
     if (len == UDT::ERROR) {
+        // Error code: 6001
+        // Error desc: Non-blocking call failure: no buffer available for sending.
+        if (CUDTException{6, 1, 0}.getErrorCode() == error_code())
+            return -1;
+
         return -1;
     }
 
@@ -286,6 +291,11 @@ std::string udp_socket::error_string () const noexcept
 int udp_socket::error_code () const noexcept
 {
     return UDT::getlasterror_code();
+}
+
+bool udp_socket::overflow () const noexcept
+{
+    return error_code() == 6001;
 }
 
 std::string udp_socket::state_string (int state)

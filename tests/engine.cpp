@@ -148,7 +148,7 @@ void worker (p2p::engine & peer)
         LOGE("Unhandled exception", "peer={}", peer.uuid());
     }
 
-    LOG_TRACE_1("Peer finished: {}", std::to_string(peer.uuid()));
+    LOG_TRACE_1("Peer finished: {}", peer.uuid());
 }
 
 struct configurator1
@@ -161,6 +161,7 @@ struct configurator1
     p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
     std::uint16_t   listener_port () const noexcept { return 5556u; }
     int backlog () const noexcept { return 10; }
+    std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
 };
 
 struct configurator2
@@ -173,6 +174,7 @@ struct configurator2
     p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
     std::uint16_t   listener_port () const noexcept { return 7778u; }
     int backlog () const noexcept { return 10; }
+    std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
 };
 
 void term_handler ()

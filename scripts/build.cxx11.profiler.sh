@@ -10,4 +10,4 @@ BUILD_TESTS=ON
 BUILD_DEMO=ON
 ENABLE_PROFILER=ON
 
-. ../build.sh
+. ./build.sh

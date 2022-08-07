@@ -249,7 +249,8 @@ public:
                 continue;
             }
 
-            callback(sender_inet4_addr, sender_port, packet_data.data(), packet_data.size());
+            callback(sender_inet4_addr, sender_port
+                , packet_data.data(), static_cast<std::size_t>(packet_data.size()));
         }
     }
 

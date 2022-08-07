@@ -10,5 +10,3 @@ BUILD_TESTS=ON
 BUILD_DEMO=ON
 
 . ./build.sh
-
-echo $?

@@ -24,6 +24,7 @@ enum class errc
     , device_not_found
     , permissions_denied
     , name_too_long
+    , unexpected_error
 };
 
 class error_category : public std::error_category
@@ -47,6 +48,8 @@ public:
                 return std::string{"permissions denied"};
             case static_cast<int>(errc::name_too_long):
                 return std::string{"name too long"};
+            case static_cast<int>(errc::unexpected_error):
+                return std::string{"unexpected error"};
 
             default: return std::string{"unknown net error"};
         }
