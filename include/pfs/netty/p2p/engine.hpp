@@ -200,21 +200,23 @@ private:
 
     struct ofile_item
     {
-        universal_id    addressee;
-        ifile_handle_t  ifh;
+        universal_id addressee;
+        ifile_t data_file;
+        bool at_end;          // true if file transferred
     };
 
     struct ifile_item
     {
-        ofile_handle_t info_ofh;
-        ofile_handle_t data_ofh;
+        ofile_t desc_file;
+        ofile_t data_file;
+        filesize_t filesize;
     };
 
     // file UUID ------------
     //                      |
     //                      v
-    std::unordered_map<universal_id, ofile_item> _ofile_pool;
-    std::unordered_map<universal_id, ifile_item> _ifile_pool;
+    std::unordered_map<fileid_t, ofile_item> _ofile_pool;
+    std::unordered_map<fileid_t, ifile_item> _ifile_pool;
 
 public: // Callbacks
     mutable std::function<void (std::string const &)> failure;
@@ -242,7 +244,7 @@ public: // Callbacks
     /**
      * File credentials received (need too prepare to receive file content).
      */
-    mutable std::function<void (universal_id, file_credentials)> file_credentials_received;
+    mutable std::function<void (universal_id, file_credentials const &)> file_credentials_received;
 
     /**
      * Message dispatched
@@ -250,6 +252,10 @@ public: // Callbacks
      * Do not call engine::send() method from this callback.
      */
     mutable std::function<void (entity_id)> data_dispatched;
+
+    mutable std::function<void (fileid_t /*fileid*/
+        , filesize_t /*downloaded_size*/
+        , filesize_t /*total_size*/)> download_progress;
 
 private:
     inline entity_id next_entity_id () noexcept
@@ -267,11 +273,63 @@ private:
         return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
     }
 
+    inline fs::path make_descfilepath (universal_id addresser, fileid_t fileid) const
+    {
+        auto dir = _opts.transient_directory / fs::utf8_decode(to_string(addresser));
+        if (!fs::exists(dir))
+            fs::create_directories(dir);
+        return dir / fs::utf8_decode(to_string(fileid) + ".desc");
+    }
+
+    inline fs::path make_datafilepath (universal_id addresser, fileid_t fileid) const
+    {
+        auto dir = _opts.transient_directory / fs::utf8_decode(to_string(addresser));
+        if (!fs::exists(dir))
+            fs::create_directories(dir);
+        return dir / fs::utf8_decode(to_string(fileid) + ".data");
+    }
+
+    inline fs::path make_donefilepath (universal_id addresser, fileid_t fileid) const
+    {
+        auto dir = _opts.transient_directory / fs::utf8_decode(to_string(addresser));
+        if (!fs::exists(dir))
+            fs::create_directories(dir);
+        return dir / fs::utf8_decode(to_string(fileid) + ".done");
+    }
+
+    inline fs::path make_cachefilepath (fileid_t fileid) const
+    {
+        return _opts.cache_directory
+            / fs::utf8_decode(to_string(fileid) + ".desc");
+    }
+
+    std::vector<char> read_chunk (file const & data_file, filesize_t count)
+    {
+        std::vector<char> chunk(count);
+        auto n = data_file.read(chunk.data(), count);
+
+        if (n == 0)
+            chunk.clear();
+        else if (n < count)
+            chunk.resize(n);
+
+        return chunk;
+    }
+
+    template <typename P>
+    void unseal (std::vector<char> const & buffer, P & payload)
+    {
+        input_envelope_type in {buffer.data(), buffer.size()};
+        in.unseal(payload);
+    }
+
+    // UNUSED YET
     inline void loss_efficiency (efficiency value) noexcept
     {
         _efficiency_loss_bits.set(static_cast<std::size_t>(value));
     }
 
+    // UNUSED YET
     inline void restore_efficiency (efficiency value) noexcept
     {
         _efficiency_loss_bits.reset(static_cast<std::size_t>(value));
@@ -282,7 +340,8 @@ private:
         return !_efficiency_loss_bits.test(static_cast<std::size_t>(value));
     }
 
-    inline void append_chunk (std::vector<char> & vec, char const * buf, std::size_t len)
+    inline void append_chunk (std::vector<char> & vec
+        , char const * buf, std::size_t len)
     {
         if (len > 0)
             vec.insert(vec.end(), buf, buf + len);
@@ -290,13 +349,12 @@ private:
 
     socket_info * locate_writer (universal_id const & uuid)
     {
-        socket_info * result {nullptr};
         auto pos = _writers.find(uuid);
 
         if (pos != _writers.end())
-            result = & *pos->second;
+            return & *pos->second;
 
-        return result;
+        return nullptr;
     }
 
     inline ipool_item * locate_ipool_item (decltype(socket_type{}.id()) sock_id)
@@ -311,59 +369,76 @@ private:
         return & pos->second;
     }
 
-    inline opool_item * locate_opool_item (universal_id const & peer_uuid)
+    inline opool_item * locate_opool_item (universal_id const & peer_uuid
+        , bool ensure)
     {
         auto pos = _opool.find(peer_uuid);
 
         if (pos == _opool.end()) {
-            auto res = _opool.emplace(peer_uuid, opool_item{});
-            LOG_TRACE_1("Peer added to output pool: {}", peer_uuid);
-            return & res.first->second;
+            if (ensure) {
+                auto res = _opool.emplace(peer_uuid, opool_item{});
+                LOG_TRACE_1("Peer added to output pool: {}", peer_uuid);
+                return & res.first->second;
+            } else {
+                return nullptr;
+            }
         }
 
         return & pos->second;
     }
 
-    inline ifile_item * locate_ifile_item (universal_id const & fileid)
+    /**
+     * Locates @c ifile_item by @a fileid.
+     *
+     * @details If ensure is @c true and if @c ifile_item not found, then
+     *          the new item emplaced into the pool.
+     */
+    ifile_item * locate_ifile_item (universal_id addresser
+        , fileid_t const & fileid, bool ensure)
     {
         auto pos = _ifile_pool.find(fileid);
 
         if (pos == _ifile_pool.end()) {
-            fs::path infofilepath = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".info");
-            fs::path filepath     = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".data");
+            if (ensure) {
+                auto descfilepath = make_descfilepath(addresser, fileid);
+                auto datafilepath = make_datafilepath(addresser, fileid);
 
-            std::error_code ec;
-            auto info_ofh = open_ofile(infofilepath, CURRENT_OFFSET
-                , truncate_enum::off, ec);
+                auto desc_file = file::open_write_only(descfilepath);
+                auto data_file = file::open_write_only(datafilepath);
 
-            if (info_ofh < 0) {
-                this->failure(tr::f_("Open info file failure: {}: {}"
-                    , infofilepath, ec.message()));
+                auto res = _ifile_pool.emplace(fileid, ifile_item{
+                      std::move(desc_file)
+                    , std::move(data_file)
+                    , 0
+                });
+
+                return & res.first->second;
+            } else {
                 return nullptr;
             }
-
-            auto data_ofh = open_ofile(filepath, CURRENT_OFFSET
-                , truncate_enum::off, ec);
-
-            if (data_ofh < 0) {
-                this->failure(tr::f_("Open data file failure: {}: {}"
-                    , filepath, ec.message()));
-                return nullptr;
-            }
-
-            auto res = _ifile_pool.emplace(fileid, ifile_item{info_ofh, data_ofh});
-
-            return & res.first->second;
         }
 
         return & pos->second;
     }
 
+    inline void remove_ifile_item (fileid_t fileid)
+    {
+        _ifile_pool.erase(fileid);
+    }
+
+    inline void remove_ofile_item (fileid_t fileid)
+    {
+        _ofile_pool.erase(fileid);
+    }
+
+    /**
+     * Splits @a data into packets and enqueue them into output queue.
+     */
     entity_id enqueue_packets (universal_id addressee
-        , packet_enum packettype
+        , packet_type packettype
         , char const * data, std::streamsize len)
     {
-        auto * pitem = locate_opool_item(addressee);
+        auto * pitem = locate_opool_item(addressee, true);
 
         if (!pitem)
             return INVALID_ENTITY;
@@ -400,129 +475,141 @@ private:
         return entityid;
     }
 
-    bool save_file_credentials (file_credentials const & fc, filesize_t offset = 0)
+    void save_file_credentials (universal_id addresser, file_credentials const & fc)
     {
-        fs::path infofilepath = _opts.transient_directory
-            / fs::utf8_decode(to_string(fc.fileid) + ".info");
-        fs::path filepath     = _opts.transient_directory
-            / fs::utf8_decode(to_string(fc.fileid) + ".data");
+        auto descfilepath = make_descfilepath(addresser, fc.fileid);
+        auto datafilepath = make_datafilepath(addresser, fc.fileid);
 
-        bool success = true;
-        std::error_code ec;
-        auto info_ofh = open_ofile(infofilepath, 0, truncate_enum::on, ec);
+        auto desc_file = file::open_write_only(descfilepath, truncate_enum::on);
+        // Only create/reset file
+        auto data_file = file::open_write_only(datafilepath, truncate_enum::on);
 
-        if (info_ofh < 0)
-            success = false;
-
-        if (success) {
-            // Only create/reset file
-            auto data_ofh = open_ofile(filepath, 0, truncate_enum::on, ec);
-
-            if (data_ofh < 0) {
-                if (ec) {
-                    this->failure(tr::f_("Save file credentials failure: {}: {}"
-                        , filepath, ec.message()));
-                }
-                success = false;
-            } else {
-                close_file(data_ofh);
-            }
-        }
-
-        if (success) {
-            success =
-                   ::write(info_ofh, reinterpret_cast<char const *>(& offset), sizeof(offset)) > 0
-                && ::write(info_ofh, reinterpret_cast<char const *>(& fc.filesize), sizeof(fc.filesize)) > 0
-                && ::write(info_ofh, reinterpret_cast<char const *>(fc.sha256.value.data())
-                    , fc.sha256.value.size()) > 0
-                && ::write(info_ofh, reinterpret_cast<char const *>(fc.filename.c_str())
-                    , fc.filename.size()) > 0;
-
-            if (!success)
-                ec = std::error_code(errno, std::generic_category());
-        }
-
-        if (ec) {
-            this->failure(tr::f_("Save file credentials failure: {}: {}"
-                , infofilepath, ec.message()));
-        }
-
-        close_file(info_ofh);
-        return success;
+        desc_file.write(fc.offset);
+        desc_file.write(fc.filesize);
+        desc_file.write(reinterpret_cast<char const *>(fc.sha256.data()), fc.sha256.size());
+        desc_file.write(reinterpret_cast<char const *>(fc.filename.c_str()), fc.filename.size());
     }
 
-    bool load_file_credentials (universal_id fileid, filesize_t * offset, file_credentials * fc)
+    void load_file_credentials (universal_id addresser, fileid_t fileid, file_credentials * fc)
     {
-        fs::path path = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".info");
-        bool success = true;
-        std::error_code ec;
+        auto descfilepath = make_descfilepath(addresser, fileid);
+        auto desc_file = file::open_read_only(descfilepath);
 
-        auto ifh = open_ifile(path, 0, ec);
+        fc->fileid = fileid;
 
-        if (ifh < 0)
-            success = false;
+        desc_file.read(fc->offset);
+        desc_file.read(fc->filesize);
+        desc_file.read(reinterpret_cast<char *>(fc->sha256.data()), fc->sha256.size());
 
-        if (success) {
-            fc->fileid = fileid;
-
-            success =
-                   ::read(ifh, offset, sizeof(*offset)) > 0
-                && ::read(ifh, & fc->filesize, sizeof(fc->filesize)) > 0
-                && ::read(ifh, fc->sha256.value.data(), fc->sha256.value.size()) > 0;
-
-            if (success) {
-                std::error_code ec;
-                fc->filename = read_file(ifh, CURRENT_OFFSET, ec);
-
-                if (ec) {
-                    this->failure(tr::f_("Load file credentials failure: {}", path));
-                    success = false;
-                } else if (fc->filename.empty()) {
-                    this->failure(tr::f_("File with file credentials may be corrupted: {}", path));
-                    success = false;
-                }
-            }
-        }
-
-        close_file(ifh);
-        return true;
+        fc->filename = desc_file.read_all();
     }
 
-//     bool update_read_offset (universal_id fileid, filesize_t offset)
-//     {
-//         fs::path path = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".info");
-//         auto ofh = open_ofile(path, 0, false);
-//
-//         if (ofh < 0)
-//             return false;
-//
-//         // Reserve space for offset
-//         bool success = ::write(ofh, reinterpret_cast<char const *>(& offset), sizeof(offset)) > 0
-//             && ::fsync(ofh);
-//
-//         if (!success) {
-//             auto ec = std::error_code(errno, std::generic_category());
-//             this->failure(tr::f_("Update read offset failure: {}: {}"
-//                 , path, ec.message()));
+    void cache_file_credentials (fileid_t fileid, fs::path const & abspath)
+    {
+        auto cachefilepath = make_cachefilepath(fileid);
+        file::rewrite(cachefilepath, fs::utf8_encode(abspath));
+    }
+
+    void uncache_file_credentials (fileid_t fileid)
+    {
+        auto cachefilepath = make_cachefilepath(fileid);
+        fs::remove(cachefilepath);
+    }
+
+    void commit_chunk (universal_id addresser, file_chunk const & fc)
+    {
+        // Returns non-null pointer or throws an exception
+        auto * p = locate_ifile_item(addresser, fc.fileid, true);
+
+        PFS__ASSERT(p, "");
+
+        // Write data chunk
+        //std::error_code ec;
+        //p->data_file.set_pos(fc.offset, ec);
+        p->data_file.set_pos(fc.offset);
+
+//         if (ec == std::errc::resource_unavailable_try_again) {
+//             // FIXME Need to slow down bitrate
+//             LOG_TRACE_1("-- RESOURCE TEMPORARY UNAVAILABLE");
+//             p->data_file.close();
+//             p->desc_file.close();
+//             std::abort();
 //         }
-//
-//         close_file(ofh);
-//         return success;
-//     }
 
-    bool cache_file_credentials (fs::path const & path, file_credentials const & fc)
+        p->data_file.write(fc.chunk.data(), fc.chunk.size());
+
+        // Write offset
+        filesize_t offset = p->data_file.offset();
+
+        p->desc_file.set_pos(0);
+        p->desc_file.write(offset);
+
+        if (p->filesize > 0)
+            download_progress(fc.fileid, offset, p->filesize);
+    }
+
+    void complete_file (fileid_t fileid)
     {
-        fs::path infofilepath = _opts.cache_directory / fs::utf8_decode(to_string(fc.fileid) + ".info");
-        std::error_code ec;
-        rewrite_file(infofilepath, fs::utf8_encode(path), ec);
+        uncache_file_credentials(fileid);
+        remove_ofile_item(fileid);
+    }
 
-        if (ec) {
-            this->failure(tr::f_("Cache file credentials failure: {}: {}", path
-                , ec.message()));
-            return false;
+    void commit_file (universal_id addresser, fileid_t fileid)
+    {
+        auto * p = locate_ifile_item(addresser, fileid, false);
+
+        if (!p) {
+            std::error_code ec = std::make_error_code(
+                std::errc::no_such_file_or_directory);
+
+            throw pfs::error{ec
+                , tr::f_("ifile item not found by fileid: {}", fileid)};
         }
 
-        return true;
+        auto descfilepath = make_descfilepath(addresser, fileid);
+        auto donefilepath = make_donefilepath(addresser, fileid);
+        fs::rename(descfilepath, donefilepath);
+        remove_ifile_item(fileid);
+    }
+
+    /**
+     * Notify receiver about end of file (file transfer complete).
+     */
+    void notify_file_status (universal_id addressee
+        , fileid_t fileid
+        , file_status filestatus)
+    {
+        file_state fs;
+        fs.fileid = fileid;
+        fs.status = filestatus;
+
+        output_envelope_type out;
+        out << fs;
+
+        LOG_TRACE_2("###--- Notify file status: {} (fileid={}, status:{})"
+            , addressee
+            , fileid
+            , filestatus);
+
+        enqueue_packets(addressee, packet_type::file_state
+            , out.data().data(), out.data().size());
+    }
+
+    /**
+     * Resume download files
+     */
+    void resume_downloads (universal_id addresser)
+    {
+        auto dir = _opts.transient_directory / to_string(addresser);
+
+        if (fs::exists(dir)) {
+            for (auto const & dir_entry: fs::directory_iterator{dir}) {
+                if (dir_entry.path().extension() == ".desc") {
+                    fileid_t fileid = pfs::from_string<fileid_t>(dir_entry.path().stem());
+                    send_file_request(addresser, fileid);
+                }
+            }
+        }
     }
 
 public:
@@ -544,6 +631,20 @@ public:
         , _connecting_poller("connecting")
         , _poller("main")
     {
+        failure = [] (std::string const & s) {
+            fmt::print(stderr, "{}\n", s);
+        };
+
+        writer_ready              = [] (universal_id, inet4_addr, std::uint16_t) {};
+        rookie_accepted           = [] (universal_id, inet4_addr, std::uint16_t) {};
+        peer_closed               = [] (universal_id, inet4_addr, std::uint16_t) {};
+        data_received             = [] (universal_id, std::string) {};
+        file_credentials_received = [] (universal_id, file_credentials const &) {};
+        data_dispatched           = [] (entity_id) {};
+        download_progress         = [] (fileid_t /*fileid*/
+            , filesize_t /*downloaded_size*/
+            , filesize_t /*total_size*/) {};
+
         _listener.failure = [this] (std::string const & error) {
             this->failure(error);
         };
@@ -573,12 +674,16 @@ public:
         _expiration_timepoints.clear();
 
         for (auto & sock: _index_by_socket_id) {
-            LOG_TRACE_1("Socket closing (socket id={})", sock.first);
-
             auto pos = sock.second;
             auto uuid = pos->uuid;
             auto addr = pos->saddr.addr;
             auto port = pos->saddr.port;
+
+            LOG_TRACE_1("Socket closing: {} (socket address={}:{}; socket id={})"
+                , uuid
+                , to_string(addr)
+                , port
+                , sock.first);
 
             pos->sock.close();
 
@@ -833,7 +938,7 @@ public:
     entity_id send (universal_id addressee, char const * data
         , std::streamsize len)
     {
-        return enqueue_packets(addressee, packet_enum::regular, data, len);
+        return enqueue_packets(addressee, packet_type::regular, data, len);
     }
 
     /**
@@ -848,32 +953,27 @@ public:
      *
      * @return Unique file identifier.
      */
-    universal_id send_file (universal_id addressee
+    fileid_t send_file (universal_id addressee
         , fs::path const & path
-        , pfs::crypto::sha256_digest sha256
-        , filesize_t offset = 0)
+        , pfs::crypto::sha256_digest sha256)
     {
         if (fs::file_size(path) > _opts.max_file_size) {
             this->failure(tr::f_("Unable to send file: {}, file too big."
                 " Max size is {} bytes", path, _opts.max_file_size));
-            return universal_id{};
+            return fileid_t{};
         }
 
-        auto * pitem = locate_opool_item(addressee);
+        auto * pitem = locate_opool_item(addressee, true);
 
-        if (!pitem)
-            return universal_id{};
+        PFS__ASSERT(pitem, "");
 
-        std::error_code ec;
-        auto ifh = open_ifile(path, offset, ec);
-
-        if (ifh < 0) {
-            this->failure(tr::f_("Open file failure to send: {}: {}"
-                , path, ec.message()));
-            return universal_id{};
+        try {
+            file::open_read_only(path);
+        } catch (...) {
+            this->failure(tr::f_("Unable to send file: {}: file not found or"
+                " has no permissions", path));
+            return fileid_t{};
         }
-
-        close_file(ifh);
 
         auto fileid = pfs::generate_uuid();
 
@@ -881,64 +981,53 @@ public:
               fileid
             , path.filename()
             , static_cast<filesize_t>(fs::file_size(path))
+            , 0
             , sha256
         };
 
-        if (!cache_file_credentials(fs::absolute(path), fc))
-            return universal_id{};
+        LOG_TRACE_2("###--- Send file credentials: {} (file id={}; size={} bytes)"
+            , path, fileid, fc.filesize);
+
+        cache_file_credentials(fileid, fs::absolute(path));
 
         output_envelope_type out;
         out << fc;
 
-        LOG_TRACE_2("###--- Send file credentials: {} ({})", fileid, path);
-
-        enqueue_packets(addressee, packet_enum::file_credentials
+        enqueue_packets(addressee, packet_type::file_credentials
             , out.data().data(), out.data().size());
 
         return fileid;
     }
 
-    void send_file_request (universal_id addressee, universal_id fileid)
+    void send_file_request (universal_id addressee, fileid_t fileid)
     {
-        fs::path filepath     = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".data");
-        fs::path infofilepath = _opts.transient_directory / fs::utf8_decode(to_string(fileid) + ".info");
-
-        if (!fs::exists(filepath)) {
-            failure(tr::f_("Send file request failure: file not found: {}"
-                , filepath));
-            return;
-        }
-
-        if (!fs::exists(infofilepath)) {
-            failure(tr::f_("Send file request failure: info file not found: {}"
-                , infofilepath));
-            return;
-        }
-
-        auto filesize = fs::file_size(filepath);
-
-        filesize_t offset = 0;
         file_credentials fc;
-        auto success = load_file_credentials(fileid, & offset, & fc);
+        load_file_credentials(addressee, fileid, & fc);
 
-        if (!success)
-            return;
+        auto datafilepath = make_datafilepath(addressee, fileid);
+        auto filesize = fs::file_size(datafilepath);
 
-        if (offset > filesize) {
-            failure(tr::f_("Original file size is less than offset stored in"
+        if (fc.offset > filesize) {
+            this->failure(tr::f_("Original file size is less than offset stored in"
                 " info file for: {}"
                 ", using file size as an offset but the file may be corrupted"
                 " when the download completes."
-                , filepath));
+                , datafilepath));
 
-            offset = filesize;
+            fc.offset = filesize;
         }
 
-        file_request fr { fileid, offset };
+        auto * p = locate_ifile_item(addressee, fileid, true);
+
+        if (p) {
+            p->filesize = fc.filesize;
+        }
+
+        file_request fr { fileid, fc.offset };
         output_envelope_type out;
         out << fr;
 
-        enqueue_packets(addressee, packet_enum::file_request
+        enqueue_packets(addressee, packet_type::file_request
             , out.data().data(), out.data().size());
 
         LOG_TRACE_2("###--- Send file request for: {} (offset={})"
@@ -1000,6 +1089,9 @@ private:
 
         this->writer_ready(pos->uuid, pos->saddr.addr, pos->saddr.port);
         update_expiration_timepoint(pos->sock.id());
+
+        if (_opts.auto_download)
+            resume_downloads(pos->uuid);
     }
 
     void connect_to_peer (universal_id peer_uuid
@@ -1116,8 +1208,6 @@ private:
 
     void close_socket (socket_id sid)
     {
-        LOG_TRACE_1("Socket closing (socket id={})", sid);
-
         auto it = _index_by_socket_id.find(sid);
         assert(it != std::end(_index_by_socket_id));
 
@@ -1126,6 +1216,12 @@ private:
         auto uuid = pos->uuid;
         auto addr = pos->saddr.addr;
         auto port = pos->saddr.port;
+
+        LOG_TRACE_1("Socket closing: {} (socket address={}:{}; socket id={})"
+            , uuid
+            , to_string(addr)
+            , port
+            , sid);
 
         // Remove from pollers before closing socket to avoid infinite error
         _connecting_poller.remove(sid);
@@ -1143,6 +1239,15 @@ private:
         _index_by_socket_id.erase(sid);
         _sockets.erase(pos);
         _expiration_timepoints.erase(sid);
+
+        // Erase items from file output pool associated with closed socket.
+        for (auto it = _ofile_pool.begin(); it != _ofile_pool.end();) {
+            if (it->second.addressee == uuid) {
+                it = _ofile_pool.erase(it);
+            } else {
+                ++it;
+            }
+        }
 
         if (writers_erased > 0) {
             // TODO
@@ -1286,15 +1391,16 @@ private:
 
             input_envelope_type in {buf.data(), buf.size()};
 
-            static_assert(sizeof(packet_enum) <= sizeof(char), "");
+            static_assert(sizeof(packet_type) <= sizeof(char), "");
 
-            auto packettype = static_cast<packet_enum>(in.peek());
+            auto packettype = static_cast<packet_type>(in.peek());
             decltype(packet::packetsize) packetsize {0};
 
-            auto valid_packettype = packettype == packet_enum::regular
-                || packettype == packet_enum::file_credentials
-                || packettype == packet_enum::file_request
-                || packettype == packet_enum::file_chunk;
+            auto valid_packettype = packettype == packet_type::regular
+                || packettype == packet_type::file_credentials
+                || packettype == packet_type::file_request
+                || packettype == packet_type::file_chunk
+                || packettype == packet_type::file_state;
 
             if (!valid_packettype) {
                 this->failure(tr::f_("Unexpected packet type ({})"
@@ -1332,49 +1438,29 @@ private:
                 auto sender = pkt.addresser;
 
                 switch (packettype) {
-                    case packet_enum::regular:
+                    case packet_type::regular:
                         this->data_received(sender
                             , std::string(pitem->b.data(), pitem->b.size()));
                         break;
 
-                    case packet_enum::file_credentials: {
-                        input_envelope_type in {pitem->b.data(), pitem->b.size()};
+                    case packet_type::file_credentials: {
                         file_credentials fc;
-                        in.unseal(fc);
+                        unseal(pitem->b, fc);
+                        save_file_credentials(sender, fc);
+                        file_credentials_received(sender, fc);
 
-                        if (save_file_credentials(fc)) {
-                            LOG_TRACE_2("###--- File credentials received from {}: {}"
-                                " (file name: {}; size: {}; sha256: {})"
-                                , sender
-                                , fc.fileid
-                                , fc.filename
-                                , fc.filesize
-                                , to_string(fc.sha256));
-
-                            file_credentials_received(sender, std::move(fc));
-
-                            if (_opts.auto_download) {
-                                send_file_request(sender, fc.fileid);
-                            }
-                        }
+                        if (_opts.auto_download)
+                            send_file_request(sender, fc.fileid);
 
                         break;
                     }
 
-                    case packet_enum::file_request: {
-                        input_envelope_type in {pitem->b.data(), pitem->b.size()};
+                    case packet_type::file_request: {
                         file_request fr;
-                        in.unseal(fr);
+                        unseal(pitem->b, fr);
 
-                        fs::path infofilepath = _opts.cache_directory / fs::utf8_decode(to_string(fr.fileid) + ".info");
-                        std::error_code ec;
-                        auto orig_path = read_file(infofilepath, 0, ec);
-
-                        if (ec) {
-                            this->failure(tr::f_("Read path from cache file failure: {}: {}"
-                                , infofilepath, ec.message()));
-                            break;
-                        }
+                        auto cachefilepath = make_cachefilepath(fr.fileid);
+                        auto orig_path = file::read_all(cachefilepath);
 
                         if (!orig_path.empty()) {
                             LOG_TRACE_2("###--- File request received from {}: {}"
@@ -1384,45 +1470,58 @@ private:
                                 , orig_path
                                 , fr.offset);
 
-                            std::error_code ec;
+                            auto data_file = file::open_read_only(fs::utf8_decode(orig_path));
+                            data_file.set_pos(fr.offset);
 
-                            auto ifh = open_ifile(fs::utf8_decode(orig_path)
-                                , fr.offset, ec);
-
-                            if (ifh < 0) {
-                                this->failure(tr::f_("Open file failure: {}: {}"
-                                    , orig_path, ec.message()));
-                                break;
-                            }
-
-                            _ofile_pool.emplace(fr.fileid, ofile_item{sender, ifh});
+                            _ofile_pool.emplace(fr.fileid, ofile_item{
+                                  sender
+                                , std::move(data_file)
+                                , false
+                            });
                         }
 
                         break;
                     }
 
-                    case packet_enum::file_chunk: {
-                        input_envelope_type in {pitem->b.data(), pitem->b.size()};
+                    // File chunk received
+                    case packet_type::file_chunk: {
                         file_chunk fc;
-                        in.unseal(fc);
+                        unseal(pitem->b, fc);
 
-                        // TODO Implement
                         LOG_TRACE_2("###--- File chunk received from: {}"
                             " (fileid={}; offset={}; chunk size={})"
                             , pkt.addresser, fc.fileid, fc.offset, fc.chunk.size());
 
-                        auto * p = locate_ifile_item(fc.fileid);
+                        commit_chunk(sender, fc);
 
-                        if (p) {
-                            std::error_code ec;
-                            write_chunk(p->data_ofh, fc.offset
-                                , reinterpret_cast<char const *>(fc.chunk.data())
-                                , fc.chunk.size(), ec);
+                        break;
+                    }
 
-                            if (ec) {
-                                this->failure(tr::f_("Write file chunk failure: {}: {}"
-                                    , fc.fileid, ec.message()));
+                    case packet_type::file_state: {
+                        input_envelope_type in {pitem->b.data(), pitem->b.size()};
+                        file_state fs;
+                        in.unseal(fs);
+
+                        switch (fs.status) {
+                            // File received successfully by opponent
+                            case file_status::success:
+                                complete_file(fs.fileid);
+                                break;
+
+                            // File transfer complete
+                            case file_status::end: {
+                                commit_file(sender, fs.fileid);
+                                notify_file_status(sender, fs.fileid, file_status::success);
+                                break;
                             }
+
+                            default:
+                                this->failure(tr::f_("Unexpected file status ({})"
+                                    " received from: {}:{}, ignored."
+                                    , static_cast<std::underlying_type<file_status>::type>(fs.status)
+                                    , to_string(sockinfo->saddr.addr)
+                                    , sockinfo->saddr.port));
+                                break;
                         }
 
                         break;
@@ -1474,8 +1573,15 @@ private:
 
     void broadcast_discovery_data ()
     {
-        bool interval_exceeded = _discovery.last_timepoint
-            + _discovery.transmit_interval <= current_timepoint();
+        auto now = current_timepoint();
+        bool interval_exceeded = false;
+
+        if (_discovery.last_timepoint > now) {
+            interval_exceeded = true;
+        } else {
+            interval_exceeded = (_discovery.last_timepoint
+                + _discovery.transmit_interval) <= now;
+        }
 
         if (interval_exceeded) {
             hello_packet packet;
@@ -1516,7 +1622,7 @@ private:
         auto now = current_timepoint();
 
         for (auto it = _expiration_timepoints.begin(); it != _expiration_timepoints.end();) {
-            if (it->second <= now) {
+            if (it->second < now) {
                 auto sid = it->first;
                 mark_socket_as_expired(sid);
                 it = _expiration_timepoints.erase(it);
@@ -1629,30 +1735,36 @@ private:
         if (_ofile_pool.empty())
             return;
 
-        for (auto it = _ofile_pool.begin(); it != _ofile_pool.end(); ) {
-            auto ifh = it->second.ifh;
-            auto offset = file_offset(ifh);
+        for (auto it = _ofile_pool.begin(); it != _ofile_pool.end();) {
+            // Check if addressee alive
+            socket_info * sinfo = locate_writer(it->second.addressee);
 
-            file_chunk fc;
-            std::error_code ec;
-            fc.chunk = read_file(ifh, _opts.file_chunk_size, CURRENT_OFFSET, ec); //it->second.ec);
+            if (!sinfo) {
+                // Writer closed or connecting
 
-            if (ec) {
-                this->failure(tr::f_("File upload error: {}", it->first));
-                close_file(ifh);
-                it = _ofile_pool.erase(it);
+                // See also remove_ofile_item
+                // it = _ofile_pool.erase(it);
+                ++it;
                 continue;
             }
+
+            if (it->second.at_end) {
+                ++it;
+                continue;
+            }
+
+            auto fileid  = it->first;
+            auto * p = & it->second;
+            auto offset = p->data_file.offset();
+
+            file_chunk fc;
+            fc.chunk = read_chunk(p->data_file, _opts.file_chunk_size);
 
             // End of file
             if (fc.chunk.empty()) {
-                LOG_TRACE_2("###--- File upload complete: {}", it->first);
-                close_file(ifh);
-                it = _ofile_pool.erase(it);
-                continue;
-            }
-
-            if (fc.chunk.size() > 0) {
+                p->at_end = true;
+                notify_file_status(p->addressee, fileid, file_status::end);
+            } else if (fc.chunk.size() > 0) {
                 fc.fileid = it->first;
                 fc.offset = offset;
                 fc.chunksize = static_cast<filesize_t>(fc.chunk.size());
@@ -1663,7 +1775,7 @@ private:
                 LOG_TRACE_2("###--- Send file chunk: {} (offset={}, chunk size={})"
                     , it->first, offset, fc.chunk.size() /*bytes_read*/);
 
-                enqueue_packets(it->second.addressee, packet_enum::file_chunk
+                enqueue_packets(it->second.addressee, packet_type::file_chunk
                     , out.data().data(), out.data().size());
             }
 

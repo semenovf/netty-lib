@@ -65,9 +65,7 @@ static constexpr std::size_t PACKET_SIZE = 64;
 using engine_t = p2p::engine<p2p::qt5::api, p2p::udt::api, PACKET_SIZE>;
 
 namespace {
-    const pfs::universal_id UUID = pfs::generate_uuid();
-
-    std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {100};
+    std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {1000};
     std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {2000};
     std::chrono::milliseconds const POLL_INTERVAL {10};
     //std::chrono::milliseconds const POLL_INTERVAL {1000};
@@ -112,20 +110,64 @@ void on_peer_closed (pfs::universal_id uuid
 
 void worker (engine_t & engine)
 {
-    while (true) {
-        engine.loop();
+    try {
+        while (true) {
+            engine.loop();
+        }
+    } catch (pfs::error ex) {
+        on_failure(tr::f_("!!!EXCEPTION: {}", ex.what()));
     }
+}
+
+void print_usage (char const * program)
+{
+    fmt::print(stdout, "Usage\n\t{} [--uuid UUID] [FILE]\n", program);
 }
 
 int main (int argc, char * argv[])
 {
-    std::string program{argv[0]};
+    auto my_uuid = pfs::generate_uuid();
     pfs::filesystem::path file;
     pfs::crypto::sha256_digest sha256;
 
-    if (argc > 1) {
-        file = fs::utf8_decode(argv[1]);
+    bool success = true;
 
+    if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            if (std::string{"-h"} == argv[i] || std::string{"--help"} == argv[i]) {
+                print_usage(argv[0]);
+                return EXIT_SUCCESS;
+            } else if (std::string{"--uuid"} == argv[i]) {
+                if (++i >= argc) {
+                    success = false;
+                    break;
+                }
+
+                my_uuid = pfs::from_string<pfs::universal_id>(argv[i]);
+
+                if (my_uuid == pfs::universal_id{}) {
+                    LOGE("", "Bad UUID");
+                    success = false;
+                }
+            } else {
+                auto arglen = std::strlen(argv[i]);
+
+                if (arglen > 0 && argv[i][0] == '-') {
+                    LOGE("", "Bad option");
+                    success = false;
+                } else {
+                    file = fs::utf8_decode(argv[i]);
+                }
+            }
+        }
+    }
+
+    if (!success) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (!file.empty()) {
         if (!fs::exists(file)) {
             LOGE("", "File does not exist: {}", file);
             return EXIT_FAILURE;
@@ -136,12 +178,12 @@ int main (int argc, char * argv[])
         LOGD("", "Digest for: {}: {}", file, to_string(sha256));
     }
 
-    fmt::print("My name is {}\n", to_string(UUID));
+    fmt::print("My name is {}\n", to_string(my_uuid));
 
     if (!engine_t::startup())
         return EXIT_FAILURE;
 
-    engine_t engine {UUID};
+    engine_t engine {my_uuid};
 
     engine.failure = on_failure;
     engine.rookie_accepted = on_rookie_accepted;
@@ -155,7 +197,7 @@ int main (int argc, char * argv[])
             , port);
 
         if (!file.empty()) {
-            engine.send_file(peer_uuid, file, sha256, 0);
+            engine.send_file(peer_uuid, file, sha256);
         }
 
         engine.send(peer_uuid, loremipsum, std::strlen(loremipsum));
@@ -186,15 +228,32 @@ int main (int argc, char * argv[])
         //engine.send(peer_uuid, loremipsum, std::strlen(loremipsum));
     };
 
-    engine.file_credentials_received = [] (pfs::universal_id
-        , netty::p2p::file_credentials) {
+    engine.file_credentials_received = [] (pfs::universal_id sender
+        , netty::p2p::file_credentials const & fc) {
+
+        LOG_TRACE_1("###--- File credentials received from {}: {}"
+            " (file name: {}; size: {}; sha256: {})"
+            , sender
+            , fc.fileid
+            , fc.filename
+            , fc.filesize
+            , to_string(fc.sha256));
+
     };
 
     engine.data_dispatched = [] (engine_t::entity_id id) {
         LOG_TRACE_1("Message dispatched: {}", id);
     };
 
-    auto success = engine.configure(configurator{});
+    engine.download_progress = [] (p2p::fileid_t fileid
+        , p2p::filesize_t downloaded_size
+        , p2p::filesize_t total_size) {
+
+        LOG_TRACE_2("{}: {}%", fileid
+            , 100 * static_cast<float>(downloaded_size) / total_size);
+    };
+
+    success = engine.configure(configurator{});
 
     success = success
         && engine.set_option(p2p::option_enum::download_directory, fs::temp_directory_path())

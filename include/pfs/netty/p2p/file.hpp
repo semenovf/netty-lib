@@ -9,6 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/filesystem.hpp"
+#include "pfs/i18n.hpp"
+#include "pfs/universal_id.hpp"
+#include "pfs/netty/error.hpp"
 
 #if _MSC_VER
 #   include "windows.hpp"
@@ -23,278 +26,352 @@ namespace p2p {
 
 namespace fs = pfs::filesystem;
 
-using filesize_t     = std::int32_t;
-using file_handle_t  = int;
-using ifile_handle_t = file_handle_t;
-using ofile_handle_t = file_handle_t;
-
-namespace {
-constexpr filesize_t CURRENT_OFFSET = -1;
-constexpr filesize_t INVALID_FILE_HANDLE = -1;
-}
+using fileid_t   = pfs::universal_id;
+using filesize_t = std::int32_t;
 
 enum class truncate_enum: std::int8_t { off, on };
 
-// inline bool eof (file_handle_t fh)
-// {
-//     return ::lseek(fh, 0, SEEK_CUR) == ::lseek(fh, 0, SEEK_END);
-// }
-
-inline filesize_t file_offset (ifile_handle_t fh)
+class file
 {
-    return static_cast<filesize_t>(::lseek(fh, 0, SEEK_CUR));
-}
+    static constexpr filesize_t const INVALID_FILE_HANDLE = -1;
+    using handle_type = int;
 
-inline void close_file (file_handle_t fh)
-{
-    if (fh > 0)
-        ::close(fh);
-}
+private:
+    handle_type _h {INVALID_FILE_HANDLE};
 
-/**
- * @brief Open file for reading.
- *
- * @return Input file handle or @c INVALID_FILE_HANDLE on error. In last case
- *         @a ec set to appropriate error code:
- *         - @c std::errc::no_such_file_or_directory if file not found;
- *         - @c std::errc::invalid_argument if @a offset has unsuitable value;
- *         - other POSIX-specific error codes returned by @c ::open and
- *           @c ::lseek calls.
- */
-inline ifile_handle_t open_ifile (fs::path const & path, filesize_t offset
-    , std::error_code & ec)
-{
-    if (!fs::exists(path)) {
-        ec = make_error_code(std::errc::no_such_file_or_directory);
-        return INVALID_FILE_HANDLE;
-    }
+private:
+    file (handle_type h): _h(h) {}
 
-    auto filesize = fs::file_size(path);
+public:
+    file () {}
 
-    // File offset greater than it's size
-    if (offset >= filesize) {
-        ec = make_error_code(std::errc::invalid_argument);
-        return INVALID_FILE_HANDLE;
-    }
+    file (file const & f) = delete;
+    file & operator = (file const & f) = delete;
 
-    ifile_handle_t ifh = ::open(fs::utf8_encode(path).c_str(), O_RDONLY);
-
-    if (ifh < 0) {
-        ec = std::error_code(errno, std::generic_category());
-        return INVALID_FILE_HANDLE;
-    }
-
-    if (offset >= 0) {
-        filesize_t off = ::lseek(ifh, offset, SEEK_SET);
-
-        if (off < 0) {
-            ec = std::error_code(errno, std::generic_category());
-            close_file(ifh);
-            return INVALID_FILE_HANDLE;
+    file (file && f)
+    {
+        if (this != & f) {
+            _h = f._h;
+            f._h = INVALID_FILE_HANDLE;
         }
     }
 
-    return ifh;
-}
-
-/**
- * @brief Open file for writing.
- *
- * @return Output file handle or @c INVALID_FILE_HANDLE on error. In last case
- *         @a ec set to appropriate error code:
- *         - POSIX-specific error codes returned by @c ::open and
- *           @c ::lseek calls.
- */
-inline ofile_handle_t open_ofile (fs::path const & path, filesize_t offset
-    , truncate_enum trunc, std::error_code & ec)
-{
-    int oflags = O_WRONLY | O_CREAT;
-
-    if (trunc == truncate_enum::on)
-        oflags |= O_TRUNC;
-
-    ofile_handle_t ofh = ::open(fs::utf8_encode(path).c_str()
-        , oflags, S_IRUSR | S_IWUSR);
-
-    if (ofh < 0) {
-        ec = std::error_code(errno, std::generic_category());
-        return INVALID_FILE_HANDLE;
-    }
-
-    if (offset >= 0) {
-        filesize_t off = ::lseek(ofh, offset, SEEK_SET);
-
-        if (off < 0) {
-            ec = std::error_code(errno, std::generic_category());
-            close_file(ofh);
-            return INVALID_FILE_HANDLE;
-        }
-    }
-
-    return ofh;
-}
-
-/**
- * Read data chunk from file.
- *
- * @param ifh File descriptor.
- * @param buffer Pointer to input buffer.
- * @param size Input buffer size.
- * @param offset Offset from start to read (-1 for start read from current position).
- * @param ec Error code.
- *
- * @return Actually read chunk size or -1 on error.
- *
- * @note Limit maximum file size to 2,147,479,552 bytes. For transfer bigger
- *       files use another way/tools (scp, for example).
- */
-inline filesize_t read_file (ifile_handle_t ifh, char * buffer, filesize_t count
-    , filesize_t offset, std::error_code & ec)
-{
-    if (count == 0)
-        return 0;
-
-    if (count < 0) {
-        ec = make_error_code(std::errc::invalid_argument);
-        return -1;
-    }
-
-    if (ifh < 0) {
-        ec = make_error_code(std::errc::invalid_argument);
-        return -1;
-    }
-
-    if (offset < 0) {
-        // Start from current position
-    } else if (offset >= 0) {
-        filesize_t curr_off = ::lseek(ifh, 0, SEEK_CUR);
-        filesize_t off = ::lseek(ifh, offset, SEEK_SET);
-
-        if (off < 0) {
-            ec = std::error_code(errno, std::generic_category());
-            return -1;
+    file & operator = (file && f)
+    {
+        if (this != & f) {
+            close();
+            _h = f._h;
+            f._h = INVALID_FILE_HANDLE;
         }
 
-        if (off != offset) {
+        return *this;
+    }
+
+    ~file ()
+    {
+        close();
+    }
+
+    operator bool () const noexcept
+    {
+        return _h >= 0;
+    }
+
+    inline void close () noexcept
+    {
+        if (_h > 0)
+            ::close(_h);
+
+        _h = INVALID_FILE_HANDLE;
+    }
+
+    filesize_t offset () const
+    {
+        return static_cast<filesize_t>(::lseek(_h, 0, SEEK_CUR));
+    }
+
+    /**
+     * Read data chunk from file.
+     *
+     * @param ifh File descriptor.
+     * @param buffer Pointer to input buffer.
+     * @param size Input buffer size.
+     * @param offset Offset from start to read (-1 for start read from current position).
+     * @param ec Error code.
+     *
+     * @return Actually read chunk size or -1 on error.
+     *
+     * @note Limit maximum file size to 2,147,479,552 bytes. For transfer bigger
+     *       files use another way/tools (scp, for example).
+     */
+    filesize_t read (char * buffer, filesize_t count, std::error_code & ec) const noexcept
+    {
+        if (count == 0)
+            return 0;
+
+        if (count < 0) {
             ec = make_error_code(std::errc::invalid_argument);
-            ::lseek(ifh, curr_off, SEEK_SET);
             return -1;
         }
+
+        auto n = ::read(_h, buffer, count);
+
+        if (n < 0) {
+            ec = std::error_code(errno, std::generic_category());
+            return -1;
+        }
+
+        return n;
     }
 
-    auto n = ::read(ifh, buffer, count);
+    filesize_t read (char * buffer, filesize_t count) const
+    {
+        std::error_code ec;
+        auto n = read(buffer, count, ec);
 
-    if (n < 0) {
-        ec = std::error_code(errno, std::generic_category());
-        return -1;
+        if (ec)
+            throw pfs::error{ec, tr::_("read buffer from file")};
+
+        return n;
     }
 
-    return n;
-}
-
-/**
- * Convenient function for read data chunk from file.
- *
- * @return Bytes read from file stored in vector of chars.
- */
-inline std::vector<char> read_file (ifile_handle_t ifh, filesize_t count
-    , filesize_t offset, std::error_code & ec)
-{
-    if (count == 0)
-        return std::vector<char>{};
-
-    if (count < 0) {
-        ec = make_error_code(std::errc::invalid_argument);
-        return std::vector<char>{};
+    template <typename T>
+    inline filesize_t read (T & value, std::error_code & ec) const noexcept
+    {
+        return read(reinterpret_cast<char *>(& value), sizeof(T), ec);
     }
 
-    std::vector<char> result(static_cast<std::size_t>(count));
-
-    auto n = read_file(ifh, result.data(), result.size(), offset, ec);
-
-    if (n >= 0)
-        result.resize(static_cast<std::size_t>(n));
-    else
-        result.clear();
-
-    return result;
-}
-
-/**
- * Read all content from file started from specified @a offset.
- */
-inline std::string read_file (ifile_handle_t ifh, filesize_t offset
-    , std::error_code & ec)
-{
-    std::string result;
-    char buffer[512];
-
-    auto n = read_file(ifh, buffer, 512, offset, ec);
-
-    while (n > 0) {
-        result.append(buffer, n);
-        n = read_file(ifh, buffer, 512, -1, ec);
+    template <typename T>
+    inline filesize_t read (T & value) const noexcept
+    {
+        return read(reinterpret_cast<char *>(& value), sizeof(T));
     }
 
-    close_file(ifh);
+    /**
+     * Read all content from file started from specified @a offset.
+     */
+    std::string read_all (std::error_code & ec) const noexcept
+    {
+        std::string result;
+        char buffer[512];
 
-    return ec ? std::string{} : result;
-}
+        auto n = read(buffer, 512, ec);
 
-/**
- * Read all content from file started from specified @a offset.
- */
-inline std::string read_file (fs::path const & path, filesize_t offset
-    , std::error_code & ec)
-{
-    auto ifh = open_ifile(path, offset, ec);
+        while (n > 0) {
+            result.append(buffer, n);
+            n = read(buffer, 512, ec);
+        }
 
-    if (ifh < 0)
-        return std::string{};
+        return ec ? std::string{} : result;
+    }
 
-    auto result = read_file(ifh, offset, ec);
+    std::string read_all () const
+    {
+        std::error_code ec;
+        auto result = read_all(ec);
 
-    return ec ? std::string{} : result;
-}
+        if (ec)
+            throw pfs::error{ec, tr::_("read all from file")};
 
-/**
- * Rewrite file with content from @a text.
- */
-inline void rewrite_file (fs::path const & path, std::string const & text
-    , std::error_code & ec)
-{
-    auto ofh = open_ofile(path, 0, truncate_enum::on, ec);
+        return result;
+    }
 
-    if (ofh > 0) {
-        auto n = ::write(ofh, text.c_str(), text.size());
+    /**
+     * @brief Write buffer to file.
+     */
+    filesize_t write (char const * buffer, filesize_t count, std::error_code & ec)
+    {
+        auto n = ::write(_h, buffer, count);
 
         if (n < 0)
             ec = std::error_code(errno, std::generic_category());
 
-        close_file(ofh);
+        return n;
     }
-}
 
-/**
- * @brief Write chunk of data to file.
- */
-inline void write_chunk (ofile_handle_t ofh, filesize_t offset
-    , char const * data, filesize_t count, std::error_code & ec)
-{
-    if (offset >= 0) {
-        filesize_t off = ::lseek(ofh, offset, SEEK_SET);
+    /**
+     * @brief Write buffer to file.
+     */
+    template <typename T>
+    inline filesize_t write (T const & value, std::error_code & ec)
+    {
+        return write(reinterpret_cast<char const *>(& value), sizeof(T), ec);
+    }
 
-        if (off < 0) {
+    filesize_t write (char const * buffer, filesize_t count)
+    {
+        std::error_code ec;
+        auto n = write(buffer, count, ec);
+
+        if (ec)
+            throw pfs::error{ec, tr::_("write file")};
+
+        return n;
+    }
+
+    template <typename T>
+    inline filesize_t write (T const & value)
+    {
+        return write(reinterpret_cast<char const *>(& value), sizeof(T));
+    }
+
+    bool set_pos (filesize_t offset, std::error_code & ec)
+    {
+        auto pos = static_cast<filesize_t>(::lseek(_h, offset, SEEK_SET));
+
+        if (pos < 0) {
             ec = std::error_code(errno, std::generic_category());
-            close_file(ofh);
-            return;
+            return false;
         }
+
+        return true;
     }
 
-    auto n = ::write(ofh, data, count);
+    void set_pos (filesize_t offset)
+    {
+        std::error_code ec;
 
-    if (n < 0)
-        ec = std::error_code(errno, std::generic_category());
-}
+        if (!set_pos(offset, ec))
+            throw pfs::error{ec, tr::_("set file position")};
+    }
+
+public: // static
+   /**
+    * @brief Open file for reading.
+    *
+    * @return Input file handle or @c INVALID_FILE_HANDLE on error. In last case
+    *         @a ec set to appropriate error code:
+    *         - @c std::errc::no_such_file_or_directory if file not found;
+    *         - @c std::errc::invalid_argument if @a offset has unsuitable value;
+    *         - other POSIX-specific error codes returned by @c ::open and
+    *           @c ::lseek calls.
+    */
+    static file open_read_only (fs::path const & path, std::error_code & ec)
+    {
+        if (!fs::exists(path)) {
+            ec = make_error_code(std::errc::no_such_file_or_directory);
+            return file{};
+        }
+
+        handle_type h = ::open(fs::utf8_encode(path).c_str(), O_RDONLY);
+
+        if (h < 0) {
+            ec = std::error_code(errno, std::generic_category());
+            return file{};
+        }
+
+        return file{h};
+    }
+
+    static file open_read_only (fs::path const & path)
+    {
+        std::error_code ec;
+        auto f = open_read_only(path, ec);
+
+        if (ec)
+            throw pfs::error{ec, tr::f_("open read only file: {}", path)};
+
+        return f;
+    }
+
+    /**
+    * @brief Open file for writing.
+    *
+    * @return Output file handle or @c INVALID_FILE_HANDLE on error. In last case
+    *         @a ec set to appropriate error code:
+    *         - POSIX-specific error codes returned by @c ::open and
+    *           @c ::lseek calls.
+    */
+    static file open_write_only (fs::path const & path, truncate_enum trunc
+        , std::error_code & ec)
+    {
+        int oflags = O_WRONLY | O_CREAT;
+
+        if (trunc == truncate_enum::on)
+            oflags |= O_TRUNC;
+
+        handle_type h = ::open(fs::utf8_encode(path).c_str()
+            , oflags, S_IRUSR | S_IWUSR);
+
+        if (h < 0) {
+            ec = std::error_code(errno, std::generic_category());
+            return file{};
+        }
+
+        return file{h};
+    }
+
+    static file open_write_only (fs::path const & path, truncate_enum trunc)
+    {
+        std::error_code ec;
+        auto f = open_write_only(path, trunc, ec);
+
+        if (ec)
+            throw pfs::error{ec, tr::f_("open write only file: {}", path)};
+
+        return f;
+    }
+
+    static file open_write_only (fs::path const & path, std::error_code & ec)
+    {
+        return open_write_only(path, truncate_enum::off, ec);
+    }
+
+    static file open_write_only (fs::path const & path)
+    {
+        return open_write_only(path, truncate_enum::off);
+    }
+
+    /**
+     * Rewrite file with content from @a text.
+     */
+    static bool rewrite (fs::path const & path, char const * buffer
+        , filesize_t count, std::error_code & ec)
+    {
+        file f = open_write_only(path, truncate_enum::on, ec);
+
+        if (f) {
+            auto n = f.write(buffer, count, ec);
+            return n >= 0;
+        }
+
+        return false;
+    }
+
+    static void rewrite (fs::path const & path, char const * buffer
+        , filesize_t count)
+    {
+        std::error_code ec;
+        rewrite(path, buffer, count, ec);
+
+        if (ec)
+            throw pfs::error{ec, tr::f_("rewrite file: {}", path)};
+    }
+
+    static void rewrite (fs::path const & path, std::string const & text)
+    {
+        rewrite(path, text.c_str(), text.size());
+    }
+
+    static std::string read_all (fs::path const & path, std::error_code & ec)
+    {
+        auto f = file::open_read_only(path, ec);
+
+        if (ec)
+            return f.read_all(ec);
+
+        return std::string{};
+    }
+
+    static std::string read_all (fs::path const & path)
+    {
+        auto f = file::open_read_only(path);
+        return f.read_all();
+    }
+};
+
+using file_t  = file;
+using ifile_t = file;
+using ofile_t = file;
 
 }} // namespace netty::p2p

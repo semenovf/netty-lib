@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "envelope.hpp"
+#include "file.hpp"
 #include "serializer.hpp"
 #include "universal_id.hpp"
 #include "pfs/sha256.hpp"
@@ -21,11 +22,18 @@
 namespace netty {
 namespace p2p {
 
-enum class packet_enum: std::uint8_t {
+enum class packet_type: std::uint8_t {
       regular = 0x2A
     , file_credentials
     , file_request
     , file_chunk
+    , file_state
+};
+
+enum class file_status: std::uint8_t {
+      success = 0x2A // File received successfully
+    , interrupt      // File transfer error, need interrupt
+    , end            // File transfer complete
 };
 
 // Packet structure
@@ -50,13 +58,11 @@ enum class packet_enum: std::uint8_t {
 //   |<------file request----------------|
 //   |                                   |
 //   |-------file chunk----------------->|
-//   |-------file fragment-------------->|
-//   |-------file fragment-------------->|
-//   |               ...                 |
-//   |-------file fragment-------------->|
 //   |-------file chunk----------------->|
-//   |-------file fragment-------------->|
 //   |               ...                 |
+//   |-------file chunk----------------->|
+//   |-------file state(end)------------>|
+//   |<------file state(success)---------|
 //
 // By request, initiating file transfer
 //
@@ -65,19 +71,17 @@ enum class packet_enum: std::uint8_t {
 //   |<------file request----------------|
 //   |                                   |
 //   |-------file chunk----------------->|
-//   |-------file fragment-------------->|
-//   |-------file fragment-------------->|
-//   |               ...                 |
-//   |-------file fragment-------------->|
 //   |-------file chunk----------------->|
-//   |-------file fragment-------------->|
 //   |               ...                 |
+//   |-------file chunk----------------->|
+//   |-------file state(end)------------>|
+//   |<------file state(success)---------|
 //
 
 struct packet
 {
     static constexpr std::uint8_t PACKET_HEADER_SIZE =
-          sizeof(std::underlying_type<packet_enum>::type) // packettype
+          sizeof(std::underlying_type<packet_type>::type) // packettype
         + sizeof(std::uint16_t)  // packetsize
         + 16                     // addresser
         + sizeof(std::uint16_t)  // payloadsize
@@ -87,7 +91,7 @@ struct packet
     static constexpr std::uint16_t MAX_PACKET_SIZE = 1430;
     static constexpr std::uint16_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
-    packet_enum packettype;
+    packet_type packettype;
     std::uint16_t   packetsize;  // Packet size
     universal_id    addresser;   // Addresser (sender) UUID
     std::uint16_t   payloadsize;
@@ -98,24 +102,31 @@ struct packet
 
 struct file_credentials
 {
-    universal_id fileid;
+    fileid_t     fileid;
     std::string  filename;
     std::int32_t filesize;
+    std::int32_t offset;
     pfs::crypto::sha256_digest sha256;
 };
 
 struct file_request
 {
-    universal_id fileid;
+    fileid_t     fileid;
     std::int32_t offset;
 };
 
 struct file_chunk
 {
-    universal_id fileid;
+    fileid_t     fileid;
     std::int32_t offset;
     std::int32_t chunksize;
     std::vector<char> chunk;
+};
+
+struct file_state
+{
+    fileid_t fileid;
+    file_status status;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -151,7 +162,8 @@ inline void save (cereal::BinaryOutputArchive & ar, file_credentials const & fc)
     ar << fc.fileid
         << fc.filename
         << pfs::to_network_order(fc.filesize)
-        << cereal::binary_data(fc.sha256.value.data(), fc.sha256.value.size());
+        << pfs::to_network_order(fc.offset)
+        << cereal::binary_data(fc.sha256.data(), fc.sha256.size());
 }
 
 inline void load (cereal::BinaryInputArchive & ar, file_credentials & fc)
@@ -159,7 +171,8 @@ inline void load (cereal::BinaryInputArchive & ar, file_credentials & fc)
     ar >> fc.fileid
         >> fc.filename
         >> ntoh_wrapper<decltype(fc.filesize)>{fc.filesize}
-        >> cereal::binary_data(fc.sha256.value.data(), fc.sha256.value.size());
+        >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
+        >> cereal::binary_data(fc.sha256.data(), fc.sha256.size());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -192,6 +205,19 @@ inline void load (cereal::BinaryInputArchive & ar, file_chunk & fc)
         >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
         >> ntoh_wrapper<decltype(fc.chunksize)>{fc.chunksize}
         >> fc.chunk;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// file_state
+////////////////////////////////////////////////////////////////////////////////
+inline void save (cereal::BinaryOutputArchive & ar, file_state const & fs)
+{
+    ar << fs.fileid << fs.status;
+}
+
+inline void load (cereal::BinaryInputArchive & ar, file_state & fs)
+{
+    ar >> fs.fileid >> fs.status;
 }
 
 }} // namespace netty::p2p
