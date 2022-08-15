@@ -77,13 +77,13 @@ namespace {
 
 struct configurator
 {
-    netty::inet4_addr discovery_address () const noexcept { return DISCOVERY_ADDR; }
-    std::uint16_t discovery_port () const noexcept { return DISCOVERY_PORT; }
-    std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
-    std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
-    std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
-    netty::inet4_addr listener_address () const noexcept { return netty::inet4_addr{}; }
-    std::uint16_t listener_port () const noexcept { return 4224u; }
+//     netty::inet4_addr discovery_address () const noexcept { return ; }
+//     std::uint16_t discovery_port () const noexcept { return DISCOVERY_PORT; }
+//     std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
+//     std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
+//     std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
+//    netty::inet4_addr listener_address () const noexcept { return netty::inet4_addr{}; }
+//    std::uint16_t listener_port () const noexcept { return 4224u; }
     int backlog () const noexcept { return 10; }
     //std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
 };
@@ -180,9 +180,6 @@ int main (int argc, char * argv[])
 
     fmt::print("My name is {}\n", to_string(my_uuid));
 
-    if (!engine_t::startup())
-        return EXIT_FAILURE;
-
     engine_t engine {my_uuid};
 
     engine.failure = on_failure;
@@ -253,20 +250,29 @@ int main (int argc, char * argv[])
             , 100 * static_cast<float>(downloaded_size) / total_size);
     };
 
-    success = engine.configure(configurator{});
-
     success = success
-        && engine.set_option(p2p::option_enum::download_directory, fs::temp_directory_path())
-        && engine.set_option(p2p::option_enum::auto_download, true);
+        && engine.set_option(engine_t::option_enum::download_directory, fs::temp_directory_path())
+        && engine.set_option(engine_t::option_enum::auto_download, true)
+        && engine.set_option(engine_t::option_enum::discovery_address
+            , netty::socket4_addr{DISCOVERY_ADDR, DISCOVERY_PORT})
+        && engine.set_option(engine_t::option_enum::transmit_interval
+            , DISCOVERY_TRANSMIT_INTERVAL)
+        && engine.set_option(engine_t::option_enum::expiration_timeout
+            , PEER_EXPIRATION_TIMEOUT)
+        && engine.set_option(engine_t::option_enum::poll_interval
+            , POLL_INTERVAL)
+        && engine.set_option(engine_t::option_enum::listener_address
+            , netty::socket4_addr{netty::inet4_addr{}, 4224})
+        && engine.set_option(engine_t::option_enum::file_chunk_size
+            , 16 * 1024);
 
     if (!success)
         return EXIT_FAILURE;
 
     engine.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
 
-    worker(engine);
-
-    engine_t::cleanup();
+    if (engine.start())
+        worker(engine);
 
     return EXIT_SUCCESS;
 }

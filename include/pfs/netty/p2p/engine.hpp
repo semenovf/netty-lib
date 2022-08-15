@@ -19,7 +19,9 @@
 #include "pfs/ring_buffer.hpp"
 #include "pfs/sha256.hpp"
 #include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/socket4_addr.hpp"
 #include <array>
+#include <atomic>
 #include <bitset>
 #include <list>
 #include <unordered_map>
@@ -34,6 +36,7 @@ namespace {
 constexpr std::chrono::milliseconds DEFAULT_DISCOVERY_INTERVAL {  5000};
 constexpr std::chrono::milliseconds DEFAULT_EXPIRATION_TIMEOUT { 10000};
 constexpr std::chrono::milliseconds DEFAULT_OVERFLOW_TIMEOUT   {   100};
+constexpr std::int32_t              DEFAULT_LISTENER_BACKLOG   {64};
 constexpr std::size_t               DEFAULT_BUFFER_BULK_SIZE   {64 * 1024};
 constexpr std::size_t               MAX_BUFFER_SIZE            {100000};
 constexpr filesize_t                DEFAULT_FILE_CHUNK_SIZE    {16 * 1024};
@@ -44,14 +47,6 @@ constexpr char const * FILE_QUEUE_NAME   = "file queue";
 constexpr char const * UNSUITABLE_VALUE  = tr::noop_("Unsuitable value for option: {}");
 constexpr char const * BAD_VALUE         = tr::noop_("Bad value for option: {}");
 }
-
-enum class option_enum: std::int16_t
-{
-      download_directory // fs::path
-    , auto_download      // bool
-    , file_chunk_size    // std::int32_t
-    , max_file_size      // std::int32_t
-};
 
 /**
  * @brief P2P delivery engine.
@@ -77,6 +72,25 @@ public:
 
     static constexpr entity_id INVALID_ENTITY {0};
 
+    enum class option_enum: std::int16_t
+    {
+        download_directory // fs::path
+        , auto_download      // bool
+        , file_chunk_size    // std::int32_t
+        , max_file_size      // std::int32_t
+        , discovery_address  // socket4_addr
+        , listener_address   // socket4_addr
+
+        // The maximum length to which the queue of pending connections
+        // for listener may grow.
+        , listener_backlog   // std::int32_t
+
+        // Discovery transmit interval
+        , transmit_interval  // std::chrono::milliseconds
+        , expiration_timeout // std::chrono::milliseconds
+        , poll_interval      // std::chrono::milliseconds
+    };
+
 private:
     struct options
     {
@@ -92,6 +106,14 @@ private:
 
         filesize_t file_chunk_size {DEFAULT_FILE_CHUNK_SIZE};
         filesize_t max_file_size {MAX_FILE_SIZE};
+
+        socket4_addr discovery_address;
+        socket4_addr listener_address;
+        std::int32_t listener_backlog {DEFAULT_LISTENER_BACKLOG};
+
+        std::chrono::milliseconds transmit_interval {DEFAULT_DISCOVERY_INTERVAL};
+        std::chrono::milliseconds expiration_timeout {DEFAULT_EXPIRATION_TIMEOUT};
+        std::chrono::milliseconds poll_interval {10};
     };
 
     struct oqueue_item
@@ -115,17 +137,11 @@ private:
     using socket_id             = decltype(socket_type{}.id());
     using oqueue_type           = pfs::ring_buffer<oqueue_item, DEFAULT_BUFFER_BULK_SIZE>;
 
-    struct socket_address
-    {
-        inet4_addr    addr;
-        std::uint16_t port;
-    };
-
     struct socket_info
     {
-        universal_id   uuid; // Valid for writers (connected sockets as opposite to accepted) only
-        socket_type    sock;
-        socket_address saddr;
+        universal_id uuid; // Valid for writers (connected sockets as opposite to accepted) only
+        socket_type  sock;
+        socket4_addr saddr;
     };
 
     using socket_container = std::list<socket_info>;
@@ -135,6 +151,8 @@ private:
     // TODO Only for standalone mode
     //std::atomic_flag _running_flag = ATOMIC_FLAG_INIT;
 
+    static std::atomic<int> _instance_count;
+
     options _opts;
 
     std::bitset<4> _efficiency_loss_bits {0};
@@ -142,24 +160,20 @@ private:
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
-    universal_id   _uuid;
-    socket_type    _listener;
-    socket_address _listener_address;
-    std::chrono::milliseconds _poll_interval {10};
+    universal_id _uuid;
+    socket_type  _listener;
+
 
     // Used to solve problems with output overflow
     std::chrono::milliseconds _output_timepoint;
 
     // Discovery specific members
     struct {
-        discovery_socket_type       receiver;
-        discovery_socket_type       transmitter;
-        std::chrono::milliseconds   last_timepoint;
-        std::chrono::milliseconds   transmit_interval {DEFAULT_DISCOVERY_INTERVAL};
-        std::vector<socket_address> targets;
+        discovery_socket_type     receiver;
+        discovery_socket_type     transmitter;
+        std::chrono::milliseconds last_timepoint;
+        std::vector<socket4_addr> targets;
     } _discovery;
-
-    std::chrono::milliseconds _expiration_timeout {DEFAULT_EXPIRATION_TIMEOUT};
 
     // All sockets (readers / writers)
     socket_container _sockets;
@@ -613,24 +627,39 @@ private:
     }
 
 public:
-    static bool startup ()
-    {
-        return DiscoverySocketAPI::startup()
-            && ReliableSocketAPI::startup();
-    }
-
-    static void cleanup ()
-    {
-        DiscoverySocketAPI::cleanup();
-        ReliableSocketAPI::cleanup();
-    }
-
-public:
-    engine (universal_id uuid)
+    /**
+     * Initializes underlying APIs and constructs engine instance.
+     *
+     * @param uuid Unique identifier for this instance.
+     * @param pec Pointer to store error code while initialization.
+     *        If @a pec is @c nullptr an exception occurs on error.
+     */
+    engine (universal_id uuid, std::error_code * pec = nullptr)
         : _uuid(uuid)
         , _connecting_poller("connecting")
         , _poller("main")
     {
+        if (_instance_count == 0) {
+            std::error_code ec;
+
+            if (DiscoverySocketAPI::startup(ec)) {
+                if (ReliableSocketAPI::startup(ec)) {
+                    ;
+                } else {
+                    DiscoverySocketAPI::cleanup(ec);
+                }
+            }
+
+            if (ec) {
+                if (pec) {
+                    *pec = ec;
+                    return;
+                }
+
+                throw pfs::error {ec};
+            }
+        }
+
         failure = [] (std::string const & s) {
             fmt::print(stderr, "{}\n", s);
         };
@@ -664,6 +693,8 @@ public:
         _poller.failure = [this] (std::string const & error) {
             this->failure(error);
         };
+
+        ++_instance_count;
     }
 
     ~engine ()
@@ -696,6 +727,12 @@ public:
 
         _index_by_socket_id.clear();
         _sockets.clear();
+
+        if (--_instance_count == 0) {
+            std::error_code ec;
+            DiscoverySocketAPI::cleanup(ec);
+            ReliableSocketAPI::cleanup(ec);
+        }
     }
 
     engine (engine const &) = delete;
@@ -707,6 +744,54 @@ public:
     universal_id const & uuid () const noexcept
     {
         return _uuid;
+    }
+
+    bool start ()
+    {
+        bool success = true;
+
+        success = success && _connecting_poller.initialize();
+        success = success && _poller.initialize();
+        success = success && _discovery.receiver.bind(_opts.discovery_address.addr
+            , _opts.discovery_address.port);
+        success = success && _listener.bind(_opts.listener_address.addr
+            , _opts.listener_address.port);
+        success = success && _listener.listen(_opts.listener_backlog);
+
+        if (success)
+            _poller.add(_listener.id());
+
+        if (success) {
+            LOG_TRACE_2("Discovery listener backend: {}"
+                , _discovery.receiver.backend_string());
+            LOG_TRACE_2("General listener backend: {}"
+                , _listener.backend_string());
+            LOG_TRACE_2("Discovery listener: {}:{}. Status: {}"
+                , to_string(_opts.discovery_address.addr)
+                , _opts.discovery_address.port
+                , _discovery.receiver.state_string());
+            LOG_TRACE_2("General listener: {}:{}. Status: {}"
+                , to_string(_opts.listener_address.addr)
+                , _opts.listener_address.port
+                , _listener.state_string());
+
+            auto listener_options = _listener.dump_options();
+
+            LOG_TRACE_3("General listener options (socket id={})", _listener.id());
+
+            for (auto const & opt_item: listener_options) {
+                LOG_TRACE_3("   * {}: {}", opt_item.first, opt_item.second);
+            }
+        }
+
+        auto now = current_timepoint();
+
+        _discovery.last_timepoint = now > _opts.transmit_interval
+            ? now - _opts.transmit_interval : now;
+
+        _output_timepoint = now;
+
+        return success;
     }
 
     bool set_option (option_enum opttype, fs::path const & path)
@@ -754,11 +839,40 @@ public:
         return false;
     }
 
-    bool set_option (option_enum opttype, bool value)
+    bool set_option (option_enum opttype, socket4_addr sa)
     {
         switch (opttype) {
-            case option_enum::auto_download:
-                _opts.auto_download = value;
+            case option_enum::discovery_address:
+                _opts.discovery_address.addr = sa.addr;
+                _opts.discovery_address.port = sa.port;
+                // FIXME move to start method
+                //return _discovery.receiver.bind(sa.addr, sa.port);
+                return true;
+            case option_enum::listener_address:
+                _opts.listener_address.addr = sa.addr;
+                _opts.listener_address.port = sa.port;
+                // FIXME move to start method
+                //return _listener.bind(_listener_address.addr, _listener_address.port);
+                return true;
+            default:
+                break;
+        }
+
+        failure(tr::f_(UNSUITABLE_VALUE, opttype));
+        return false;
+    }
+
+    bool set_option (option_enum opttype, std::chrono::milliseconds msecs)
+    {
+        switch (opttype) {
+            case option_enum::transmit_interval:
+                _opts.transmit_interval = msecs;
+                return true;
+            case option_enum::expiration_timeout:
+                _opts.expiration_timeout = msecs;
+                return true;
+            case option_enum::poll_interval:
+                _opts.poll_interval = msecs;
                 return true;
 
             default:
@@ -769,9 +883,13 @@ public:
         return false;
     }
 
-    bool set_option (option_enum opttype, std::int32_t value)
+    bool set_option (option_enum opttype, std::intmax_t value)
     {
         switch (opttype) {
+            case option_enum::auto_download:
+                _opts.auto_download = (value != 0);
+                return true;
+
             case option_enum::file_chunk_size:
                 if (value <= 0) {
                     failure(tr::f_(BAD_VALUE, opttype));
@@ -779,6 +897,7 @@ public:
                 }
                 _opts.file_chunk_size = value;
                 return true;
+
             case option_enum::max_file_size:
                 if (value <= 0 || value > MAX_FILE_SIZE) {
                     failure(tr::f_(BAD_VALUE, opttype));
@@ -787,77 +906,20 @@ public:
                 _opts.max_file_size = value;
                 return true;
 
+            case option_enum::listener_backlog:
+                if (value <= 0 && value > (std::numeric_limits<std::int32_t>::max)()) {
+                    failure(tr::f_(BAD_VALUE, opttype));
+                    return false;
+                }
+                _opts.listener_backlog = value;
+                return true;
+
             default:
                 break;
         }
 
         failure(tr::f_(UNSUITABLE_VALUE, opttype));
         return false;
-    }
-
-    // DEPRECATED
-    // FIXME Replace with sequence of set_option() calls
-    template <typename Configurator>
-    bool configure (Configurator && c)
-    {
-        bool success = true;
-
-        _discovery.transmit_interval = c.discovery_transmit_interval();
-        _expiration_timeout = c.expiration_timeout();
-        _poll_interval      = c.poll_interval();
-
-        success = success && _connecting_poller.initialize();
-        success = success && _poller.initialize();
-        success = success && _discovery.receiver.bind(c.discovery_address()
-            , c.discovery_port());
-
-        _listener_address.addr = c.listener_address();
-        _listener_address.port = c.listener_port();
-        success = success && _listener.bind(_listener_address.addr
-            , _listener_address.port);
-
-        success = success && _listener.listen(c.backlog());
-
-        if (success) {
-            _poller.add(_listener.id());
-        }
-
-        if (success) {
-            LOG_TRACE_2("Discovery listener backend: {}"
-                , _discovery.receiver.backend_string());
-            LOG_TRACE_2("General listener backend: {}"
-                , _listener.backend_string());
-
-            LOG_TRACE_2("Discovery listener: {}:{}. Status: {}"
-                , to_string(c.discovery_address())
-                , c.discovery_port()
-                , _discovery.receiver.state_string());
-            LOG_TRACE_2("General listener: {}:{}. Status: {}"
-                , to_string(_listener_address.addr)
-                , _listener_address.port
-                , _listener.state_string());
-
-            auto listener_options = _listener.dump_options();
-
-            LOG_TRACE_3("General listener options (socket id={})", _listener.id());
-
-            for (auto const & opt_item: listener_options) {
-                LOG_TRACE_3("   * {}: {}", opt_item.first, opt_item.second);
-            }
-        }
-
-//         if (success) {
-//             _file_chunk.resize(c.file_chunk_size());
-//         }
-
-        auto now = current_timepoint();
-
-        _discovery.last_timepoint = now > _discovery.transmit_interval
-            ? now - _discovery.transmit_interval : now;
-
-        _output_timepoint = now;
-
-        return success;
     }
 
     /**
@@ -906,7 +968,7 @@ public:
 
     bool add_discovery_target (inet4_addr const & addr, std::uint16_t port)
     {
-        _discovery.targets.emplace_back(socket_address{addr, port});
+        _discovery.targets.emplace_back(socket4_addr{addr, port});
 
         if (is_multicast(addr)) {
             auto success = _discovery.receiver.join_multicast_group(addr);
@@ -1276,7 +1338,7 @@ private:
         }
 
         {
-            auto rc = _poller.wait(_poll_interval);
+            auto rc = _poller.wait(_opts.poll_interval);
 
             // Some events rised
             if (rc > 0) {
@@ -1580,13 +1642,13 @@ private:
             interval_exceeded = true;
         } else {
             interval_exceeded = (_discovery.last_timepoint
-                + _discovery.transmit_interval) <= now;
+                + _opts.transmit_interval) <= now;
         }
 
         if (interval_exceeded) {
             hello_packet packet;
             packet.uuid = _uuid;
-            packet.port = _listener_address.port;
+            packet.port = _opts.listener_address.port;
 
             packet.crc16 = crc16_of(packet);
 
@@ -1648,7 +1710,7 @@ private:
     void update_expiration_timepoint (socket_id sid)
     {
         auto now = current_timepoint();
-        auto expiration_timepoint = now + _expiration_timeout;
+        auto expiration_timepoint = now + _opts.expiration_timeout;
 
         auto it = _expiration_timepoints.find(sid);
 
@@ -1783,5 +1845,11 @@ private:
         }
     }
 };
+
+template <
+      typename DiscoverySocketAPI
+    , typename ReliableSocketAPI
+    , std::uint16_t PACKET_SIZE>
+std::atomic<int> engine<DiscoverySocketAPI, ReliableSocketAPI, PACKET_SIZE>::_instance_count {0};
 
 }} // namespace netty::p2p

@@ -63,17 +63,20 @@ static char loremipsum[] =
 39.decima et quinta decima.\" Eodem modo typi, qui nunc nobis    \n\
 40.videntur parum clari, fiant sollemnes in futurum.";
 
-namespace p2p {
-using inet4_addr           = netty::inet4_addr;
-using discovery_socket_api = netty::p2p::qt5::api;
-using reliable_socket_api  = netty::p2p::udt::api;
+// namespace p2p {
+// using inet4_addr           = netty::inet4_addr;
+// using discovery_socket_api = netty::p2p::qt5::api;
+// using reliable_socket_api  = netty::p2p::udt::api;
 static constexpr std::size_t PACKET_SIZE = 64;
 
-using engine = netty::p2p::engine<
-      discovery_socket_api
-    , reliable_socket_api
-    , PACKET_SIZE>;
-} // namespace p2p
+// using engine = netty::p2p::engine<
+//       discovery_socket_api
+//     , reliable_socket_api
+//     , PACKET_SIZE>;
+// } // namespace p2p
+
+namespace p2p = netty::p2p;
+using engine_t = netty::p2p::engine<p2p::qt5::api, p2p::udt::api, PACKET_SIZE>;
 
 namespace {
     pfs::universal_id const PEER1_UUID = "01FH7H6YJB8XK9XNNZYR0WYDJ1"_uuid;
@@ -81,8 +84,7 @@ namespace {
 
     std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {100};
     std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {500};
-    std::chrono::milliseconds const POLL_INTERVAL {10};
-    //std::chrono::milliseconds const POLL_INTERVAL {1000};
+    std::chrono::milliseconds const POLL_INTERVAL {1000};
 
     std::atomic_bool QUIT_PEER1 {false};
     std::atomic_bool QUIT_PEER2 {false};
@@ -128,19 +130,21 @@ void on_peer_closed (pfs::universal_id uuid
     QUIT_PEER1 = true;
 }
 
-void worker (p2p::engine & peer)
+void worker (engine_t & peer)
 {
     LOG_TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
     try {
-        while (true) {
-            peer.loop();
+        if (peer.start()) {
+            while (true) {
+                peer.loop();
 
-            if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
-                break;
+                if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
+                    break;
 
-            if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
-                break;
+                if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
+                    break;
+            }
         }
     } catch (cereal::Exception ex) {
         LOGE("cereal::Exception", "{} (peer={})", ex.what(), peer.uuid());
@@ -150,32 +154,6 @@ void worker (p2p::engine & peer)
 
     LOG_TRACE_1("Peer finished: {}", peer.uuid());
 }
-
-struct configurator1
-{
-    p2p::inet4_addr discovery_address () const noexcept { { return p2p::inet4_addr{127, 0, 0, 1}; } }
-    std::uint16_t   discovery_port () const noexcept { return 5555u; }
-    std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
-    std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
-    std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
-    p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
-    std::uint16_t   listener_port () const noexcept { return 5556u; }
-    int backlog () const noexcept { return 10; }
-    std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
-};
-
-struct configurator2
-{
-    p2p::inet4_addr discovery_address () const noexcept { { return p2p::inet4_addr{127, 0, 0, 1}; } }
-    std::uint16_t   discovery_port () const noexcept { return 7777u; }
-    std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
-    std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
-    std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
-    p2p::inet4_addr listener_address () const noexcept { return p2p::inet4_addr{127, 0, 0, 1}; }
-    std::uint16_t   listener_port () const noexcept { return 7778u; }
-    int backlog () const noexcept { return 10; }
-    std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
-};
 
 void term_handler ()
 {
@@ -195,45 +173,64 @@ int main ()
 {
     std::set_terminate(term_handler);
 
-    p2p::engine::startup();
-
     std::thread peer1_worker;
     std::thread peer2_worker;
 
     peer1_worker = std::thread{[] {
-        p2p::engine peer1 {PEER1_UUID};
+        engine_t peer1 {PEER1_UUID};
         peer1.failure = on_failure;
         peer1.rookie_accepted = on_rookie_accepted;
         peer1.writer_ready = on_writer_ready;
         peer1.peer_closed = on_peer_closed;
 
-        //REQUIRE(peer1.configure(configurator1{}));
-        peer1.configure(configurator1{});
+        bool success = true;
 
-        peer1.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 7777u);
+        success = success
+            && peer1.set_option(engine_t::option_enum::discovery_address
+                , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 5555u})
+            && peer1.set_option(engine_t::option_enum::transmit_interval
+                , DISCOVERY_TRANSMIT_INTERVAL)
+            && peer1.set_option(engine_t::option_enum::expiration_timeout
+                , PEER_EXPIRATION_TIMEOUT)
+            && peer1.set_option(engine_t::option_enum::poll_interval
+                , POLL_INTERVAL)
+            && peer1.set_option(engine_t::option_enum::listener_address
+                , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 5556u})
+            && peer1.set_option(engine_t::option_enum::listener_backlog, 10);
+
+        peer1.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 7777u);
 
         worker(peer1);
     }};
 
     peer2_worker = std::thread{[] {
-        p2p::engine peer2 {PEER2_UUID};
+        engine_t peer2 {PEER2_UUID};
         peer2.failure = on_failure;
         peer2.rookie_accepted = on_rookie_accepted;
         peer2.writer_ready = on_writer_ready;
         peer2.peer_closed = on_peer_closed;
 
-        //REQUIRE(peer2.configure(configurator2{}));
-        peer2.configure(configurator2{});
+        bool success = true;
+        success = success
+            && peer2.set_option(engine_t::option_enum::discovery_address
+                , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 7777u})
+            && peer2.set_option(engine_t::option_enum::transmit_interval
+                , DISCOVERY_TRANSMIT_INTERVAL)
+            && peer2.set_option(engine_t::option_enum::expiration_timeout
+                , PEER_EXPIRATION_TIMEOUT)
+            && peer2.set_option(engine_t::option_enum::poll_interval
+                , POLL_INTERVAL)
+            && peer2.set_option(engine_t::option_enum::listener_address
+                , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 7778u})
+            && peer2.set_option(engine_t::option_enum::listener_backlog, 10);
 
-        peer2.add_discovery_target(p2p::inet4_addr{127, 0, 0, 1}, 5555u);
+        peer2.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 5555u);
 
         worker(peer2);
     }};
 
     peer1_worker.join();
     peer2_worker.join();
-
-    p2p::engine::cleanup();
 
     return 0;
 }

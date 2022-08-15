@@ -199,7 +199,7 @@ int CUDTUnited::startup()
    //init CTimer::EventLock
 
    if (m_bGCStatus)
-      return true;
+      return true; // FIXME --wladt-- May be need to return non-zero value?
 
    m_bClosing = false;
    #ifndef WIN32
