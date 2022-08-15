@@ -74,7 +74,7 @@ public:
 
     enum class option_enum: std::int16_t
     {
-        download_directory // fs::path
+          download_directory // fs::path
         , auto_download      // bool
         , file_chunk_size    // std::int32_t
         , max_file_size      // std::int32_t
@@ -1005,13 +1005,15 @@ public:
      * @details Actually this method enqueue file send credentials into output queue.
      *
      * @param addressee Addressee unique identifier.
+     * @param fileid Unique file identifier. If @a fileid is invalid it
+     *        will be generated automatically.
      * @param path Path to sending file.
      * @param sha256 SHA-2 digest for file.
-     * @param offset File offset to start sending.
      *
-     * @return Unique file identifier.
+     * @return Unique file identifier or invalid identifier on error.
      */
     fileid_t send_file (universal_id addressee
+        , fileid_t fileid
         , fs::path const & path
         , pfs::crypto::sha256_digest sha256)
     {
@@ -1033,7 +1035,8 @@ public:
             return fileid_t{};
         }
 
-        auto fileid = pfs::generate_uuid();
+        if (fileid == fileid_t{})
+            fileid = pfs::generate_uuid();
 
         file_credentials fc {
               fileid
@@ -1055,6 +1058,24 @@ public:
             , out.data().data(), out.data().size());
 
         return fileid;
+    }
+
+    /**
+     * Send file.
+     *
+     * @details Actually this method enqueue file send credentials into output queue.
+     *
+     * @param addressee Addressee unique identifier.
+     * @param path Path to sending file.
+     * @param sha256 SHA-2 digest for file.
+     *
+     * @return Unique file identifier or invalid identifier on error.
+     */
+    fileid_t send_file (universal_id addressee
+        , fs::path const & path
+        , pfs::crypto::sha256_digest sha256)
+    {
+        return send_file(addressee, fileid_t{}, path, sha256);
     }
 
     void send_file_request (universal_id addressee, fileid_t fileid)
