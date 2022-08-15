@@ -75,19 +75,6 @@ namespace {
     const std::uint16_t DISCOVERY_PORT{4242u};
 }
 
-struct configurator
-{
-//     netty::inet4_addr discovery_address () const noexcept { return ; }
-//     std::uint16_t discovery_port () const noexcept { return DISCOVERY_PORT; }
-//     std::chrono::milliseconds discovery_transmit_interval () const noexcept { return DISCOVERY_TRANSMIT_INTERVAL; }
-//     std::chrono::milliseconds expiration_timeout () const noexcept { return PEER_EXPIRATION_TIMEOUT; }
-//     std::chrono::milliseconds poll_interval () const noexcept { return POLL_INTERVAL; }
-//    netty::inet4_addr listener_address () const noexcept { return netty::inet4_addr{}; }
-//    std::uint16_t listener_port () const noexcept { return 4224u; }
-    int backlog () const noexcept { return 10; }
-    //std::size_t file_chunk_size () const noexcept { return 64 * 1024; }
-};
-
 void on_failure (std::string const & error)
 {
     fmt::print(stderr, "!ERROR: {}\n", error);
@@ -269,10 +256,10 @@ int main (int argc, char * argv[])
     if (!success)
         return EXIT_FAILURE;
 
-    engine.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
-
-    if (engine.start())
+    if (engine.start()) {
+        engine.add_discovery_target(TARGET_ADDR, DISCOVERY_PORT);
         worker(engine);
+    }
 
     return EXIT_SUCCESS;
 }

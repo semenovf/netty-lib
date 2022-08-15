@@ -845,14 +845,10 @@ public:
             case option_enum::discovery_address:
                 _opts.discovery_address.addr = sa.addr;
                 _opts.discovery_address.port = sa.port;
-                // FIXME move to start method
-                //return _discovery.receiver.bind(sa.addr, sa.port);
                 return true;
             case option_enum::listener_address:
                 _opts.listener_address.addr = sa.addr;
                 _opts.listener_address.port = sa.port;
-                // FIXME move to start method
-                //return _listener.bind(_listener_address.addr, _listener_address.port);
                 return true;
             default:
                 break;

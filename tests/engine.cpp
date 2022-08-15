@@ -135,16 +135,14 @@ void worker (engine_t & peer)
     LOG_TRACE_1("Peer started: {}", to_string(peer.uuid()));
 
     try {
-        if (peer.start()) {
-            while (true) {
-                peer.loop();
+        while (true) {
+            peer.loop();
 
-                if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
-                    break;
+            if (peer.uuid() == PEER1_UUID && QUIT_PEER1)
+                break;
 
-                if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
-                    break;
-            }
+            if (peer.uuid() == PEER2_UUID && QUIT_PEER2)
+                break;
         }
     } catch (cereal::Exception ex) {
         LOGE("cereal::Exception", "{} (peer={})", ex.what(), peer.uuid());
@@ -198,9 +196,10 @@ int main ()
                 , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 5556u})
             && peer1.set_option(engine_t::option_enum::listener_backlog, 10);
 
-        peer1.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 7777u);
-
-        worker(peer1);
+        if (peer1.start()) {
+            peer1.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 7777u);
+            worker(peer1);
+        }
     }};
 
     peer2_worker = std::thread{[] {
@@ -224,9 +223,10 @@ int main ()
                 , netty::socket4_addr{netty::inet4_addr{127, 0, 0, 1}, 7778u})
             && peer2.set_option(engine_t::option_enum::listener_backlog, 10);
 
-        peer2.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 5555u);
-
-        worker(peer2);
+        if (peer2.start()) {
+            peer2.add_discovery_target(netty::inet4_addr{127, 0, 0, 1}, 5555u);
+            worker(peer2);
+        }
     }};
 
     peer1_worker.join();
