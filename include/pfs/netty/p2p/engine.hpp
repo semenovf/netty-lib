@@ -267,7 +267,8 @@ public: // Callbacks
      */
     mutable std::function<void (entity_id)> data_dispatched;
 
-    mutable std::function<void (fileid_t /*fileid*/
+    mutable std::function<void (universal_id /*addresser*/
+        , fileid_t /*fileid*/
         , filesize_t /*downloaded_size*/
         , filesize_t /*total_size*/)> download_progress;
 
@@ -559,7 +560,7 @@ private:
         p->desc_file.write(offset);
 
         if (p->filesize > 0)
-            download_progress(fc.fileid, offset, p->filesize);
+            download_progress(addresser, fc.fileid, offset, p->filesize);
     }
 
     void complete_file (fileid_t fileid)
@@ -670,7 +671,8 @@ public:
         data_received             = [] (universal_id, std::string) {};
         file_credentials_received = [] (universal_id, file_credentials const &) {};
         data_dispatched           = [] (entity_id) {};
-        download_progress         = [] (fileid_t /*fileid*/
+        download_progress         = [] (universal_id /*receiver_id*/
+            , fileid_t /*fileid*/
             , filesize_t /*downloaded_size*/
             , filesize_t /*total_size*/) {};
 

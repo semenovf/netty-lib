@@ -229,11 +229,14 @@ int main (int argc, char * argv[])
         LOG_TRACE_1("Message dispatched: {}", id);
     };
 
-    engine.download_progress = [] (p2p::fileid_t fileid
+    engine.download_progress = [] (pfs::universal_id receiver_id
+        , p2p::fileid_t fileid
         , p2p::filesize_t downloaded_size
         , p2p::filesize_t total_size) {
 
-        LOG_TRACE_2("{}: {}%", fileid
+        LOG_TRACE_2("Receiver {}: {}: {}%"
+            , receiver_id
+            , fileid
             , 100 * static_cast<float>(downloaded_size) / total_size);
     };
 
