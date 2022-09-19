@@ -11,6 +11,7 @@
 #include "pfs/netty/exports.hpp"
 #include "poller.hpp"
 #include "udp_socket.hpp"
+#include <functional>
 
 namespace netty {
 namespace p2p {

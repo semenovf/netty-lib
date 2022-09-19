@@ -179,293 +179,280 @@ CUDTUnited::~CUDTUnited()
    delete m_pCache;
 }
 
-int CUDTUnited::startup()
+int CUDTUnited::startup ()
 {
-   CGuard gcinit(m_InitLock);
+    CGuard gcinit(m_InitLock);
 
-   if (m_iInstanceCount++ > 0)
-      return 0;
+    if (m_iInstanceCount++ > 0)
+        return 0;
 
-   // Global initialization code
-   #ifdef WIN32
-      WORD wVersionRequested;
-      WSADATA wsaData;
-      wVersionRequested = MAKEWORD(2, 2);
+    // Global initialization code
+#ifdef WIN32
+        WORD wVersionRequested;
+        WSADATA wsaData;
+        wVersionRequested = MAKEWORD(2, 2);
 
-      if (0 != WSAStartup(wVersionRequested, &wsaData))
-         throw CUDTException(1, 0,  WSAGetLastError());
-   #endif
+        if (0 != WSAStartup(wVersionRequested, &wsaData))
+            throw CUDTException(1, 0,  WSAGetLastError());
+#endif
 
-   //init CTimer::EventLock
+    //init CTimer::EventLock
 
-   if (m_bGCStatus)
-      return true; // FIXME --wladt-- May be need to return non-zero value?
+    if (m_bGCStatus)
+        return true; // FIXME --wladt-- May be need to return non-zero value?
 
-   m_bClosing = false;
-   #ifndef WIN32
-      pthread_mutex_init(&m_GCStopLock, NULL);
-      pthread_cond_init(&m_GCStopCond, NULL);
-      pthread_create(&m_GCThread, NULL, garbageCollect, this);
-   #else
-      m_GCStopLock = CreateMutex(NULL, false, NULL);
-      m_GCStopCond = CreateEvent(NULL, false, false, NULL);
-      DWORD ThreadID;
-      m_GCThread = CreateThread(NULL, 0, garbageCollect, this, 0, &ThreadID);
-   #endif
+    m_bClosing = false;
 
-   m_bGCStatus = true;
+#ifndef WIN32
+    pthread_mutex_init(&m_GCStopLock, NULL);
+    pthread_cond_init(&m_GCStopCond, NULL);
+    pthread_create(&m_GCThread, NULL, garbageCollect, this);
+#else
+    m_GCStopLock = CreateMutex(NULL, false, NULL);
+    m_GCStopCond = CreateEvent(NULL, false, false, NULL);
+    DWORD ThreadID;
+    m_GCThread = CreateThread(NULL, 0, garbageCollect, this, 0, &ThreadID);
+#endif
 
-   return 0;
+    m_bGCStatus = true;
+
+    return 0;
 }
 
-int CUDTUnited::cleanup()
+int CUDTUnited::cleanup ()
 {
-   CGuard gcinit(m_InitLock);
+    CGuard gcinit(m_InitLock);
 
-   if (--m_iInstanceCount > 0)
-      return 0;
+    if (--m_iInstanceCount > 0)
+        return 0;
 
-   //destroy CTimer::EventLock
+    //destroy CTimer::EventLock
 
-   if (!m_bGCStatus)
-      return 0;
+    if (!m_bGCStatus)
+        return 0;
 
-   m_bClosing = true;
-   #ifndef WIN32
-      pthread_cond_signal(&m_GCStopCond);
-      pthread_join(m_GCThread, NULL);
-      pthread_mutex_destroy(&m_GCStopLock);
-      pthread_cond_destroy(&m_GCStopCond);
-   #else
-      SetEvent(m_GCStopCond);
-      WaitForSingleObject(m_GCThread, INFINITE);
-      CloseHandle(m_GCThread);
-      CloseHandle(m_GCStopLock);
-      CloseHandle(m_GCStopCond);
-   #endif
+    m_bClosing = true;
 
-   m_bGCStatus = false;
+#ifndef WIN32
+    pthread_cond_signal(&m_GCStopCond);
+    pthread_join(m_GCThread, NULL);
+    pthread_mutex_destroy(&m_GCStopLock);
+    pthread_cond_destroy(&m_GCStopCond);
+#else
+    SetEvent(m_GCStopCond);
+    WaitForSingleObject(m_GCThread, INFINITE);
+    CloseHandle(m_GCThread);
+    CloseHandle(m_GCStopLock);
+    CloseHandle(m_GCStopCond);
+#endif
 
-   // Global destruction code
-   #ifdef WIN32
-      WSACleanup();
-   #endif
+    m_bGCStatus = false;
 
-   return 0;
+    // Global destruction code
+#ifdef WIN32
+    WSACleanup();
+#endif
+
+    return 0;
 }
 
-UDTSOCKET CUDTUnited::newSocket(int af, int type)
+UDTSOCKET CUDTUnited::newSocket (int af, int type)
 {
-   if ((type != SOCK_STREAM) && (type != SOCK_DGRAM))
-      throw CUDTException(5, 3, 0);
+    if ((type != SOCK_STREAM) && (type != SOCK_DGRAM))
+        throw CUDTException(5, 3, 0);
 
-   CUDTSocket* ns = NULL;
+    CUDTSocket * ns = NULL;
 
-   try
-   {
-      ns = new CUDTSocket;
-      ns->m_pUDT = new CUDT;
-      if (AF_INET == af)
-      {
-         ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
-         ((sockaddr_in*)(ns->m_pSelfAddr))->sin_port = 0;
-      }
-      else
-      {
-         ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in6);
-         ((sockaddr_in6*)(ns->m_pSelfAddr))->sin6_port = 0;
-      }
-   }
-   catch (...)
-   {
-      delete ns;
-      throw CUDTException(3, 2, 0);
-   }
+    try {
+        ns = new CUDTSocket;
+        ns->m_pUDT = new CUDT;
 
-   CGuard::enterCS(m_IDLock);
-   ns->m_SocketID = -- m_SocketID;
-   CGuard::leaveCS(m_IDLock);
+        if (AF_INET == af) {
+            ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
+            ((sockaddr_in*)(ns->m_pSelfAddr))->sin_port = 0;
+        } else {
+            ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in6);
+            ((sockaddr_in6*)(ns->m_pSelfAddr))->sin6_port = 0;
+        }
+    } catch (...) {
+        delete ns;
+        throw CUDTException(3, 2, 0);
+    }
 
-   ns->m_Status = INIT;
-   ns->m_ListenSocket = 0;
-   ns->m_pUDT->m_SocketID = ns->m_SocketID;
-   ns->m_pUDT->m_iSockType = (SOCK_STREAM == type) ? UDT_STREAM : UDT_DGRAM;
-   ns->m_pUDT->m_iIPversion = ns->m_iIPversion = af;
-   ns->m_pUDT->m_pCache = m_pCache;
+    CGuard::enterCS(m_IDLock);
+    ns->m_SocketID = -- m_SocketID;
+    CGuard::leaveCS(m_IDLock);
 
-   // protect the m_Sockets structure.
-   CGuard::enterCS(m_ControlLock);
-   try
-   {
-      m_Sockets[ns->m_SocketID] = ns;
-   }
-   catch (...)
-   {
-      //failure and rollback
-      CGuard::leaveCS(m_ControlLock);
-      delete ns;
-      ns = NULL;
-   }
-   CGuard::leaveCS(m_ControlLock);
+    ns->m_Status = INIT;
+    ns->m_ListenSocket = 0;
+    ns->m_pUDT->m_SocketID = ns->m_SocketID;
+    ns->m_pUDT->m_iSockType = (SOCK_STREAM == type) ? UDT_STREAM : UDT_DGRAM;
+    ns->m_pUDT->m_iIPversion = ns->m_iIPversion = af;
+    ns->m_pUDT->m_pCache = m_pCache;
 
-   if (NULL == ns)
-      throw CUDTException(3, 2, 0);
+    // protect the m_Sockets structure.
+    CGuard::enterCS(m_ControlLock);
 
-   return ns->m_SocketID;
+    try {
+        m_Sockets[ns->m_SocketID] = ns;
+    } catch (...) {
+        //failure and rollback
+        CGuard::leaveCS(m_ControlLock);
+        delete ns;
+        ns = NULL;
+    }
+
+    CGuard::leaveCS(m_ControlLock);
+
+    if (NULL == ns)
+        throw CUDTException(3, 2, 0);
+
+    return ns->m_SocketID;
 }
 
-int CUDTUnited::newConnection(const UDTSOCKET listen, const sockaddr* peer, CHandShake* hs)
+int CUDTUnited::newConnection (UDTSOCKET const listen, sockaddr const * peer
+    , CHandShake * hs)
 {
-   CUDTSocket* ns = NULL;
-   CUDTSocket* ls = locate(listen);
+    CUDTSocket* ns = NULL;
+    CUDTSocket* ls = locate(listen);
 
-   if (NULL == ls)
-      return -1;
+    if (NULL == ls)
+        return -1;
 
-   // if this connection has already been processed
-   if (NULL != (ns = locate(peer, hs->m_iID, hs->m_iISN)))
-   {
-      if (ns->m_pUDT->m_bBroken)
-      {
-         // last connection from the "peer" address has been broken
-         ns->m_Status = CLOSED;
-         ns->m_TimeStamp = CTimer::getTime();
+    // if this connection has already been processed
+    if (NULL != (ns = locate(peer, hs->m_iID, hs->m_iISN))) {
+        if (ns->m_pUDT->m_bBroken) {
+            // last connection from the "peer" address has been broken
+            ns->m_Status = CLOSED;
+            ns->m_TimeStamp = CTimer::getTime();
 
-         CGuard::enterCS(ls->m_AcceptLock);
-         ls->m_pQueuedSockets->erase(ns->m_SocketID);
-         ls->m_pAcceptSockets->erase(ns->m_SocketID);
-         CGuard::leaveCS(ls->m_AcceptLock);
-      }
-      else
-      {
-         // connection already exist, this is a repeated connection request
-         // respond with existing HS information
+            CGuard::enterCS(ls->m_AcceptLock);
+            ls->m_pQueuedSockets->erase(ns->m_SocketID);
+            ls->m_pAcceptSockets->erase(ns->m_SocketID);
+            CGuard::leaveCS(ls->m_AcceptLock);
 
-         hs->m_iISN = ns->m_pUDT->m_iISN;
-         hs->m_iMSS = ns->m_pUDT->m_iMSS;
-         hs->m_iFlightFlagSize = ns->m_pUDT->m_iFlightFlagSize;
-         hs->m_iReqType = -1;
-         hs->m_iID = ns->m_SocketID;
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
+        } else {
+            // connection already exist, this is a repeated connection request
+            // respond with existing HS information
 
-         return 0;
+            hs->m_iISN = ns->m_pUDT->m_iISN;
+            hs->m_iMSS = ns->m_pUDT->m_iMSS;
+            hs->m_iFlightFlagSize = ns->m_pUDT->m_iFlightFlagSize;
+            hs->m_iReqType = -1;
+            hs->m_iID = ns->m_SocketID;
 
-         //except for this situation a new connection should be started
-      }
-   }
+            return 0;
 
-   // exceeding backlog, refuse the connection request
-   if (ls->m_pQueuedSockets->size() >= ls->m_uiBackLog)
-      return -1;
+            //except for this situation a new connection should be started
+        }
+    }
 
-   try
-   {
-      ns = new CUDTSocket;
-      ns->m_pUDT = new CUDT(*(ls->m_pUDT));
-      if (AF_INET == ls->m_iIPversion)
-      {
-         ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
-         ((sockaddr_in*)(ns->m_pSelfAddr))->sin_port = 0;
-         ns->m_pPeerAddr = (sockaddr*)(new sockaddr_in);
-         memcpy(ns->m_pPeerAddr, peer, sizeof(sockaddr_in));
-      }
-      else
-      {
-         ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in6);
-         ((sockaddr_in6*)(ns->m_pSelfAddr))->sin6_port = 0;
-         ns->m_pPeerAddr = (sockaddr*)(new sockaddr_in6);
-         memcpy(ns->m_pPeerAddr, peer, sizeof(sockaddr_in6));
-      }
-   }
-   catch (...)
-   {
-      delete ns;
-      return -1;
-   }
+    // exceeding backlog, refuse the connection request
+    if (ls->m_pQueuedSockets->size() >= ls->m_uiBackLog)
+        return -1;
 
-   CGuard::enterCS(m_IDLock);
-   ns->m_SocketID = -- m_SocketID;
-   CGuard::leaveCS(m_IDLock);
+    try {
+        ns = new CUDTSocket;
+        ns->m_pUDT = new CUDT(*(ls->m_pUDT));
 
-   ns->m_ListenSocket = listen;
-   ns->m_iIPversion = ls->m_iIPversion;
-   ns->m_pUDT->m_SocketID = ns->m_SocketID;
-   ns->m_PeerID = hs->m_iID;
-   ns->m_iISN = hs->m_iISN;
+        if (AF_INET == ls->m_iIPversion) {
+            ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in);
+            ((sockaddr_in*)(ns->m_pSelfAddr))->sin_port = 0;
+            ns->m_pPeerAddr = (sockaddr*)(new sockaddr_in);
+            memcpy(ns->m_pPeerAddr, peer, sizeof(sockaddr_in));
+        } else {
+            ns->m_pSelfAddr = (sockaddr*)(new sockaddr_in6);
+            ((sockaddr_in6*)(ns->m_pSelfAddr))->sin6_port = 0;
+            ns->m_pPeerAddr = (sockaddr*)(new sockaddr_in6);
+            memcpy(ns->m_pPeerAddr, peer, sizeof(sockaddr_in6));
+        }
+    } catch (...) {
+        delete ns;
+        return -1;
+    }
 
-   int error = 0;
+    CGuard::enterCS(m_IDLock);
+    ns->m_SocketID = -- m_SocketID;
+    CGuard::leaveCS(m_IDLock);
 
-   try
-   {
-      // bind to the same addr of listening socket
-      ns->m_pUDT->open();
-      updateMux(ns, ls);
-      ns->m_pUDT->connect(peer, hs);
-   }
-   catch (...)
-   {
-      error = 1;
-      goto ERR_ROLLBACK;
-   }
+    ns->m_ListenSocket = listen;
+    ns->m_iIPversion = ls->m_iIPversion;
+    ns->m_pUDT->m_SocketID = ns->m_SocketID;
+    ns->m_PeerID = hs->m_iID;
+    ns->m_iISN = hs->m_iISN;
 
-   ns->m_Status = CONNECTED;
+    int error = 0;
 
-   // copy address information of local node
-   ns->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(ns->m_pSelfAddr);
-   CIPAddress::pton(ns->m_pSelfAddr, ns->m_pUDT->m_piSelfIP, ns->m_iIPversion);
+    try {
+        // bind to the same addr of listening socket
+        ns->m_pUDT->open();
+        updateMux(ns, ls);
+        ns->m_pUDT->connect(peer, hs);
+    } catch (...) {
+        error = 1;
+        goto ERR_ROLLBACK;
+    }
 
-   // protect the m_Sockets structure.
-   CGuard::enterCS(m_ControlLock);
-   try
-   {
-      m_Sockets[ns->m_SocketID] = ns;
-      m_PeerRec[(ns->m_PeerID << 30) + ns->m_iISN].insert(ns->m_SocketID);
-   }
-   catch (...)
-   {
-      error = 2;
-   }
-   CGuard::leaveCS(m_ControlLock);
+    ns->m_Status = CONNECTED;
 
-   CGuard::enterCS(ls->m_AcceptLock);
-   try
-   {
-      ls->m_pQueuedSockets->insert(ns->m_SocketID);
-   }
-   catch (...)
-   {
-      error = 3;
-   }
-   CGuard::leaveCS(ls->m_AcceptLock);
+    // Reader (accepted) socket connected here
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
 
-   // acknowledge users waiting for new connections on the listening socket
-   //LOG_TRACE_3("*** UDT_EPOLL_IN ON *** id: {}", listen);
-   m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, true);
+    // copy address information of local node
+    ns->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(ns->m_pSelfAddr);
+    CIPAddress::pton(ns->m_pSelfAddr, ns->m_pUDT->m_piSelfIP, ns->m_iIPversion);
 
-   CTimer::triggerEvent();
+    // protect the m_Sockets structure.
+    CGuard::enterCS(m_ControlLock);
 
-   ERR_ROLLBACK:
-   if (error > 0)
-   {
-      ns->m_pUDT->close();
-      ns->m_Status = CLOSED;
-      ns->m_TimeStamp = CTimer::getTime();
+    try {
+        m_Sockets[ns->m_SocketID] = ns;
+        m_PeerRec[(ns->m_PeerID << 30) + ns->m_iISN].insert(ns->m_SocketID);
+    } catch (...) {
+        error = 2;
+    }
 
-      return -1;
-   }
+    CGuard::leaveCS(m_ControlLock);
 
-   // wake up a waiting accept() call
-   #ifndef WIN32
-      pthread_mutex_lock(&(ls->m_AcceptLock));
-      pthread_cond_signal(&(ls->m_AcceptCond));
-      pthread_mutex_unlock(&(ls->m_AcceptLock));
-   #else
-      SetEvent(ls->m_AcceptCond);
-   #endif
+    CGuard::enterCS(ls->m_AcceptLock);
 
-   return 1;
+    try {
+        ls->m_pQueuedSockets->insert(ns->m_SocketID);
+    } catch (...) {
+        error = 3;
+    }
+
+    CGuard::leaveCS(ls->m_AcceptLock);
+
+    // acknowledge users waiting for new connections on the listening socket
+    //LOG_TRACE_3("*** UDT_EPOLL_IN ON *** id: {}", listen);
+    m_EPoll.update_events(listen, ls->m_pUDT->m_sPollID, UDT_EPOLL_IN, true);
+
+    CTimer::triggerEvent();
+
+    ERR_ROLLBACK:
+    if (error > 0) {
+        ns->m_pUDT->close();
+        ns->m_Status = CLOSED;
+        ns->m_TimeStamp = CTimer::getTime();
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
+        return -1;
+    }
+
+    // wake up a waiting accept() call
+#ifndef WIN32
+    pthread_mutex_lock(&(ls->m_AcceptLock));
+    pthread_cond_signal(&(ls->m_AcceptCond));
+    pthread_mutex_unlock(&(ls->m_AcceptLock));
+#else
+    SetEvent(ls->m_AcceptCond);
+#endif
+
+    return 1;
 }
 
-CUDT* CUDTUnited::lookup(const UDTSOCKET u)
+CUDT * CUDTUnited::lookup (UDTSOCKET const u)
 {
     // protects the m_Sockets structure
     CGuard cg(m_ControlLock);
@@ -473,39 +460,39 @@ CUDT* CUDTUnited::lookup(const UDTSOCKET u)
     map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 
     if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED)) {
-        LOG_TRACE_3("*** CUDTException: {}", 5004);
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
         throw CUDTException(5, 4, 0);
     }
 
     return i->second->m_pUDT;
 }
 
-UDTSTATUS CUDTUnited::getStatus(const UDTSOCKET u)
+UDTSTATUS CUDTUnited::getStatus (UDTSOCKET const u)
 {
-   // protects the m_Sockets structure
-   CGuard cg(m_ControlLock);
+    // protects the m_Sockets structure
+    CGuard cg(m_ControlLock);
 
-   map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
+    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
 
-   if (i == m_Sockets.end())
-   {
-      if (m_ClosedSockets.find(u) != m_ClosedSockets.end())
-         return CLOSED;
+    if (i == m_Sockets.end()) {
+        if (m_ClosedSockets.find(u) != m_ClosedSockets.end())
+            return CLOSED;
 
-      return NONEXIST;
-   }
+        return NONEXIST;
+    }
 
-   if (i->second->m_pUDT->m_bBroken)
-      return BROKEN;
+    if (i->second->m_pUDT->m_bBroken)
+        return BROKEN;
 
-   return i->second->m_Status;
+    return i->second->m_Status;
 }
 
-int CUDTUnited::bind(const UDTSOCKET u, const sockaddr* name, int namelen)
+int CUDTUnited::bind (UDTSOCKET const u, sockaddr const * name, int namelen)
 {
-    CUDTSocket* s = locate(u);
+    CUDTSocket * s = locate(u);
+
     if (NULL == s) {
-        LOG_TRACE_3("*** CUDTException: {}", 5004);
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
         throw CUDTException(5, 4, 0);
     }
 
@@ -516,13 +503,10 @@ int CUDTUnited::bind(const UDTSOCKET u, const sockaddr* name, int namelen)
         throw CUDTException(5, 0, 0);
 
     // check the size of SOCKADDR structure
-    if (AF_INET == s->m_iIPversion)
-    {
+    if (AF_INET == s->m_iIPversion) {
         if (namelen != sizeof(sockaddr_in))
             throw CUDTException(5, 3, 0);
-    }
-    else
-    {
+    } else {
         if (namelen != sizeof(sockaddr_in6))
             throw CUDTException(5, 3, 0);
     }
@@ -531,68 +515,71 @@ int CUDTUnited::bind(const UDTSOCKET u, const sockaddr* name, int namelen)
     updateMux(s, name);
     s->m_Status = OPENED;
 
+    // Bound socket (listener, e.g.) opened here
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+
     // copy address information of local node
     s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
 
     return 0;
 }
 
-int CUDTUnited::bind(UDTSOCKET u, UDPSOCKET udpsock)
+int CUDTUnited::bind (UDTSOCKET u, UDPSOCKET udpsock)
 {
-   CUDTSocket* s = locate(u);
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    CUDTSocket* s = locate(u);
 
-   CGuard cg(s->m_ControlLock);
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   // cannot bind a socket more than once
-   if (INIT != s->m_Status)
-      throw CUDTException(5, 0, 0);
+    CGuard cg(s->m_ControlLock);
 
-   sockaddr_in name4;
-   sockaddr_in6 name6;
-   sockaddr* name;
-   socklen_t namelen;
+    // cannot bind a socket more than once
+    if (INIT != s->m_Status)
+        throw CUDTException(5, 0, 0);
 
-   if (AF_INET == s->m_iIPversion)
-   {
-      namelen = sizeof(sockaddr_in);
-      name = (sockaddr*)&name4;
-   }
-   else
-   {
-      namelen = sizeof(sockaddr_in6);
-      name = (sockaddr*)&name6;
-   }
+    sockaddr_in name4;
+    sockaddr_in6 name6;
+    sockaddr* name;
+    socklen_t namelen;
 
-   if (-1 == ::getsockname(udpsock, name, &namelen))
-      throw CUDTException(5, 3);
+    if (AF_INET == s->m_iIPversion) {
+        namelen = sizeof(sockaddr_in);
+        name = (sockaddr*)&name4;
+    } else {
+        namelen = sizeof(sockaddr_in6);
+        name = (sockaddr*)&name6;
+    }
 
-   s->m_pUDT->open();
-   updateMux(s, name, &udpsock);
-   s->m_Status = OPENED;
+    if (-1 == ::getsockname(udpsock, name, &namelen))
+        throw CUDTException(5, 3);
 
-   // copy address information of local node
-   s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
+    s->m_pUDT->open();
+    updateMux(s, name, &udpsock);
+    s->m_Status = OPENED;
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
 
-   return 0;
+    // copy address information of local node
+    s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
+
+    return 0;
 }
 
 int CUDTUnited::listen(const UDTSOCKET u, int backlog)
 {
-   CUDTSocket* s = locate(u);
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    CUDTSocket* s = locate(u);
 
-   CGuard cg(s->m_ControlLock);
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   // do nothing if the socket is already listening
-   if (LISTENING == s->m_Status)
-      return 0;
+    CGuard cg(s->m_ControlLock);
+
+    // do nothing if the socket is already listening
+    if (LISTENING == s->m_Status)
+        return 0;
 
    // a socket can listen only if is in OPENED status
    if (OPENED != s->m_Status)
@@ -622,29 +609,30 @@ int CUDTUnited::listen(const UDTSOCKET u, int backlog)
    s->m_pUDT->listen();
 
    s->m_Status = LISTENING;
+   LOG_TRACE_3("~~~ STATUS CHANGED: Socket LISTENING: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
 
    return 0;
 }
 
 UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrlen)
 {
-   if ((NULL != addr) && (NULL == addrlen))
-      throw CUDTException(5, 3, 0);
+    if ((NULL != addr) && (NULL == addrlen))
+        throw CUDTException(5, 3, 0);
 
-   CUDTSocket* ls = locate(listen);
+    CUDTSocket* ls = locate(listen);
 
-   if (ls == NULL) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    if (ls == NULL) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   // the "listen" socket must be in LISTENING status
-   if (LISTENING != ls->m_Status)
-      throw CUDTException(5, 6, 0);
+    // the "listen" socket must be in LISTENING status
+    if (LISTENING != ls->m_Status)
+        throw CUDTException(5, 6, 0);
 
-   // no "accept" in rendezvous connection setup
-   if (ls->m_pUDT->m_bRendezvous)
-      throw CUDTException(5, 7, 0);
+    // no "accept" in rendezvous connection setup
+    if (ls->m_pUDT->m_bRendezvous)
+        throw CUDTException(5, 7, 0);
 
    UDTSOCKET u = CUDT::INVALID_SOCK;
    bool accepted = false;
@@ -742,260 +730,263 @@ UDTSOCKET CUDTUnited::accept(const UDTSOCKET listen, sockaddr* addr, int* addrle
 
 int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 {
-   CUDTSocket* s = locate(u);
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    CUDTSocket * s = locate(u);
 
-   CGuard cg(s->m_ControlLock);
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   // check the size of SOCKADDR structure
-   if (AF_INET == s->m_iIPversion)
-   {
-      if (namelen != sizeof(sockaddr_in))
-         throw CUDTException(5, 3, 0);
-   }
-   else
-   {
-      if (namelen != sizeof(sockaddr_in6))
-         throw CUDTException(5, 3, 0);
-   }
+    CGuard cg(s->m_ControlLock);
 
-   // a socket can "connect" only if it is in INIT or OPENED status
-   if (INIT == s->m_Status)
-   {
-      if (!s->m_pUDT->m_bRendezvous)
-      {
-         s->m_pUDT->open();
-         updateMux(s);
-         s->m_Status = OPENED;
-      }
-      else
-         throw CUDTException(5, 8, 0);
-   }
-   else if (OPENED != s->m_Status)
-      throw CUDTException(5, 2, 0);
+    // check the size of SOCKADDR structure
+    if (AF_INET == s->m_iIPversion) {
+        if (namelen != sizeof(sockaddr_in))
+            throw CUDTException(5, 3, 0);
+    } else {
+        if (namelen != sizeof(sockaddr_in6))
+            throw CUDTException(5, 3, 0);
+    }
 
-   // connect_complete() may be called before connect() returns.
-   // So we need to update the status before connect() is called,
-   // otherwise the status may be overwritten with wrong value (CONNECTED vs. CONNECTING).
-   s->m_Status = CONNECTING;
-   try
-   {
-      s->m_pUDT->connect(name);
-   }
-   catch (CUDTException e)
-   {
-      s->m_Status = OPENED;
-      throw e;
-   }
+    // a socket can "connect" only if it is in INIT or OPENED status
+    if (INIT == s->m_Status) {
+        if (!s->m_pUDT->m_bRendezvous) {
+            s->m_pUDT->open();
+            updateMux(s);
+            s->m_Status = OPENED;
 
-   // record peer address
-   delete s->m_pPeerAddr;
-   if (AF_INET == s->m_iIPversion)
-   {
-      s->m_pPeerAddr = (sockaddr*)(new sockaddr_in);
-      memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in));
-   }
-   else
-   {
-      s->m_pPeerAddr = (sockaddr*)(new sockaddr_in6);
-      memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in6));
-   }
+            // Writer socket opened here
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+        } else {
+            throw CUDTException(5, 8, 0);
+        }
+    } else if (OPENED != s->m_Status) {
+        throw CUDTException(5, 2, 0);
+    }
 
-   return 0;
+    // connect_complete() may be called before connect() returns.
+    // So we need to update the status before connect() is called,
+    // otherwise the status may be overwritten with wrong value (CONNECTED vs. CONNECTING).
+    s->m_Status = CONNECTING;
+
+    // Writer socket connecting here
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTING: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+
+    try {
+        s->m_pUDT->connect(name);
+    } catch (CUDTException e) {
+        s->m_Status = OPENED;
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+        throw e;
+    }
+
+    // record peer address
+    delete s->m_pPeerAddr;
+
+    if (AF_INET == s->m_iIPversion) {
+        s->m_pPeerAddr = (sockaddr*)(new sockaddr_in);
+        memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in));
+    } else {
+        s->m_pPeerAddr = (sockaddr*)(new sockaddr_in6);
+        memcpy(s->m_pPeerAddr, name, sizeof(sockaddr_in6));
+    }
+
+    return 0;
 }
 
-void CUDTUnited::connect_complete(const UDTSOCKET u)
+void CUDTUnited::connect_complete (UDTSOCKET const u)
 {
-   CUDTSocket* s = locate(u);
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    CUDTSocket * s = locate(u);
 
-   // copy address information of local node
-   // the local port must be correctly assigned BEFORE CUDT::connect(),
-   // otherwise if connect() fails, the multiplexer cannot be located by garbage collection and will cause leak
-   s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
-   CIPAddress::pton(s->m_pSelfAddr, s->m_pUDT->m_piSelfIP, s->m_iIPversion);
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   s->m_Status = CONNECTED;
+    // copy address information of local node
+    // the local port must be correctly assigned BEFORE CUDT::connect(),
+    // otherwise if connect() fails, the multiplexer cannot be located by garbage collection and will cause leak
+    s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
+    CIPAddress::pton(s->m_pSelfAddr, s->m_pUDT->m_piSelfIP, s->m_iIPversion);
+
+    s->m_Status = CONNECTED;
+
+    // Writer socket connected here
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
 }
 
-int CUDTUnited::close(const UDTSOCKET u)
+int CUDTUnited::close (UDTSOCKET const u)
 {
-   CUDTSocket* s = locate(u);
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    CUDTSocket * s = locate(u);
 
-   CGuard socket_cg(s->m_ControlLock);
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   if (s->m_Status == LISTENING)
-   {
-      if (s->m_pUDT->m_bBroken)
-         return 0;
+    CGuard socket_cg(s->m_ControlLock);
 
-      s->m_TimeStamp = CTimer::getTime();
+    if (s->m_Status == LISTENING)
+    {
+        if (s->m_pUDT->m_bBroken)
+            return 0;
 
-      LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", u);
-      s->m_pUDT->m_bBroken = true;
+        s->m_TimeStamp = CTimer::getTime();
 
-      // broadcast all "accept" waiting
-      #ifndef WIN32
-         pthread_mutex_lock(&(s->m_AcceptLock));
-         pthread_cond_broadcast(&(s->m_AcceptCond));
-         pthread_mutex_unlock(&(s->m_AcceptLock));
-      #else
-         SetEvent(s->m_AcceptCond);
-      #endif
+        s->m_pUDT->m_bBroken = true;
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
 
-      return 0;
-   }
+        // broadcast all "accept" waiting
+        #ifndef WIN32
+            pthread_mutex_lock(&(s->m_AcceptLock));
+            pthread_cond_broadcast(&(s->m_AcceptCond));
+            pthread_mutex_unlock(&(s->m_AcceptLock));
+        #else
+            SetEvent(s->m_AcceptCond);
+        #endif
 
-   s->m_pUDT->close();
+        return 0;
+    }
 
-   // synchronize with garbage collection.
-   CGuard manager_cg(m_ControlLock);
+    s->m_pUDT->close();
 
-   // since "s" is located before m_ControlLock, locate it again in case it became invalid
-   map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
-   if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED))
-      return 0;
-   s = i->second;
+    // synchronize with garbage collection.
+    CGuard manager_cg(m_ControlLock);
 
-   s->m_Status = CLOSED;
+    // since "s" is located before m_ControlLock, locate it again in case it became invalid
+    map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.find(u);
+    if ((i == m_Sockets.end()) || (i->second->m_Status == CLOSED))
+        return 0;
+    s = i->second;
 
-   // a socket will not be immediated removed when it is closed
-   // in order to prevent other methods from accessing invalid address
-   // a timer is started and the socket will be removed after approximately 1 second
-   s->m_TimeStamp = CTimer::getTime();
+    s->m_Status = CLOSED;
 
-   m_Sockets.erase(s->m_SocketID);
-   m_ClosedSockets.insert(pair<UDTSOCKET, CUDTSocket*>(s->m_SocketID, s));
+    // a socket will not be immediated removed when it is closed
+    // in order to prevent other methods from accessing invalid address
+    // a timer is started and the socket will be removed after approximately 1 second
+    s->m_TimeStamp = CTimer::getTime();
 
-   CTimer::triggerEvent();
+    m_Sockets.erase(s->m_SocketID);
+    m_ClosedSockets.insert(pair<UDTSOCKET, CUDTSocket*>(s->m_SocketID, s));
 
-   return 0;
+    LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+
+    CTimer::triggerEvent();
+
+    return 0;
 }
 
 int CUDTUnited::getpeername(const UDTSOCKET u, sockaddr* name, int* namelen)
 {
-   if (CONNECTED != getStatus(u))
-      throw CUDTException(2, 2, 0);
+    if (CONNECTED != getStatus(u))
+        throw CUDTException(2, 2, 0);
 
-   CUDTSocket* s = locate(u);
+    CUDTSocket* s = locate(u);
 
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   if (!s->m_pUDT->m_bConnected || s->m_pUDT->m_bBroken)
-      throw CUDTException(2, 2, 0);
+    if (!s->m_pUDT->m_bConnected || s->m_pUDT->m_bBroken)
+        throw CUDTException(2, 2, 0);
 
-   if (AF_INET == s->m_iIPversion)
-      *namelen = sizeof(sockaddr_in);
-   else
-      *namelen = sizeof(sockaddr_in6);
+    if (AF_INET == s->m_iIPversion)
+        *namelen = sizeof(sockaddr_in);
+    else
+        *namelen = sizeof(sockaddr_in6);
 
-   // copy address information of peer node
-   memcpy(name, s->m_pPeerAddr, *namelen);
+    // copy address information of peer node
+    memcpy(name, s->m_pPeerAddr, *namelen);
 
-   return 0;
+    return 0;
 }
 
 int CUDTUnited::getsockname(const UDTSOCKET u, sockaddr* name, int* namelen)
 {
-   CUDTSocket* s = locate(u);
+    CUDTSocket* s = locate(u);
 
-   if (NULL == s) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    if (NULL == s) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   if (s->m_pUDT->m_bBroken) {
-       LOG_TRACE_3("*** CUDTException: {}", 5004);
-      throw CUDTException(5, 4, 0);
-   }
+    if (s->m_pUDT->m_bBroken) {
+        //LOG_TRACE_3("*** CUDTException: {}", 5004);
+        throw CUDTException(5, 4, 0);
+    }
 
-   if (INIT == s->m_Status)
-      throw CUDTException(2, 2, 0);
+    if (INIT == s->m_Status)
+        throw CUDTException(2, 2, 0);
 
-   if (AF_INET == s->m_iIPversion)
-      *namelen = sizeof(sockaddr_in);
-   else
-      *namelen = sizeof(sockaddr_in6);
+    if (AF_INET == s->m_iIPversion)
+        *namelen = sizeof(sockaddr_in);
+    else
+        *namelen = sizeof(sockaddr_in6);
 
-   // copy address information of local node
-   memcpy(name, s->m_pSelfAddr, *namelen);
+    // copy address information of local node
+    memcpy(name, s->m_pSelfAddr, *namelen);
 
-   return 0;
+    return 0;
 }
 
 int CUDTUnited::select(ud_set* readfds, ud_set* writefds, ud_set* exceptfds, const timeval* timeout)
 {
-   uint64_t entertime = CTimer::getTime();
+    std::uint64_t entertime = CTimer::getTime();
 
-   uint64_t to;
-   if (NULL == timeout)
-      to = 0xFFFFFFFFFFFFFFFFULL;
-   else
-      to = timeout->tv_sec * 1000000 + timeout->tv_usec;
+    std::uint64_t to = (NULL == timeout)
+        ? 0xFFFFFFFFFFFFFFFFULL
+        : timeout->tv_sec * 1000000 + timeout->tv_usec;
 
-   // initialize results
-   int count = 0;
-   set<UDTSOCKET> rs, ws, es;
+    // initialize results
+    int count = 0;
+    set<UDTSOCKET> rs, ws, es;
 
-   // retrieve related UDT sockets
-   vector<CUDTSocket*> ru, wu, eu;
-   CUDTSocket* s;
-   if (NULL != readfds)
-      for (set<UDTSOCKET>::iterator i1 = readfds->begin(); i1 != readfds->end(); ++ i1)
-      {
-         if (BROKEN == getStatus(*i1))
-         {
-            rs.insert(*i1);
-            ++ count;
-         }
-         else if (NULL == (s = locate(*i1))) {
-             LOG_TRACE_3("*** CUDTException: {}", 5004);
-            throw CUDTException(5, 4, 0);
-         } else
-            ru.push_back(s);
-      }
-   if (NULL != writefds)
-      for (set<UDTSOCKET>::iterator i2 = writefds->begin(); i2 != writefds->end(); ++ i2)
-      {
-         if (BROKEN == getStatus(*i2))
-         {
-            ws.insert(*i2);
-            ++ count;
-         }
-         else if (NULL == (s = locate(*i2))) {
-             LOG_TRACE_3("*** CUDTException: {}", 5004);
-            throw CUDTException(5, 4, 0);
-         } else
-            wu.push_back(s);
-      }
-   if (NULL != exceptfds)
-      for (set<UDTSOCKET>::iterator i3 = exceptfds->begin(); i3 != exceptfds->end(); ++ i3)
-      {
-         if (BROKEN == getStatus(*i3))
-         {
-            es.insert(*i3);
-            ++ count;
-         }
-         else if (NULL == (s = locate(*i3))) {
-             LOG_TRACE_3("*** CUDTException: {}", 5004);
-            throw CUDTException(5, 4, 0);
-         }
-         else
-            eu.push_back(s);
-      }
+    // retrieve related UDT sockets
+    vector<CUDTSocket*> ru, wu, eu;
+    CUDTSocket * s;
+
+    if (NULL != readfds) {
+        for (set<UDTSOCKET>::iterator i1 = readfds->begin(); i1 != readfds->end(); ++ i1) {
+            if (BROKEN == getStatus(*i1)) {
+                rs.insert(*i1);
+                ++ count;
+            } else if (NULL == (s = locate(*i1))) {
+                //LOG_TRACE_3("*** CUDTException: {}", 5004);
+                throw CUDTException(5, 4, 0);
+            } else {
+                ru.push_back(s);
+            }
+        }
+    }
+
+    if (NULL != writefds) {
+        for (set<UDTSOCKET>::iterator i2 = writefds->begin(); i2 != writefds->end(); ++ i2) {
+            if (BROKEN == getStatus(*i2)) {
+                ws.insert(*i2);
+                ++ count;
+            } else if (NULL == (s = locate(*i2))) {
+                //LOG_TRACE_3("*** CUDTException: {}", 5004);
+                throw CUDTException(5, 4, 0);
+            } else {
+                wu.push_back(s);
+            }
+        }
+    }
+
+    if (NULL != exceptfds) {
+        for (set<UDTSOCKET>::iterator i3 = exceptfds->begin(); i3 != exceptfds->end(); ++ i3) {
+            if (BROKEN == getStatus(*i3)) {
+                es.insert(*i3);
+                ++ count;
+            } else if (NULL == (s = locate(*i3))) {
+                //LOG_TRACE_3("*** CUDTException: {}", 5004);
+                throw CUDTException(5, 4, 0);
+            } else {
+                eu.push_back(s);
+            }
+        }
+    }
 
    do
    {
@@ -1209,142 +1200,149 @@ CUDTSocket* CUDTUnited::locate(const sockaddr* peer, const UDTSOCKET id, int32_t
 
 void CUDTUnited::checkBrokenSockets()
 {
-   CGuard cg(m_ControlLock);
+    CGuard cg(m_ControlLock);
 
-   // set of sockets To Be Closed and To Be Removed
-   vector<UDTSOCKET> tbc;
-   vector<UDTSOCKET> tbr;
+    // set of sockets To Be Closed and To Be Removed
+    vector<UDTSOCKET> tbc;
+    vector<UDTSOCKET> tbr;
 
-   for (map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.begin(); i != m_Sockets.end(); ++ i)
-   {
-      // check broken connection
-      if (i->second->m_pUDT->m_bBroken)
-      {
-         if (i->second->m_Status == LISTENING)
-         {
-            // for a listening socket, it should wait an extra 3 seconds in case a client is connecting
-            if (CTimer::getTime() - i->second->m_TimeStamp < 3000000)
-               continue;
-         }
-         else if ((i->second->m_pUDT->m_pRcvBuffer != NULL) && (i->second->m_pUDT->m_pRcvBuffer->getRcvDataSize() > 0) && (i->second->m_pUDT->m_iBrokenCounter -- > 0))
-         {
-            // if there is still data in the receiver buffer, wait longer
-            continue;
-         }
+    for (map<UDTSOCKET, CUDTSocket*>::iterator i = m_Sockets.begin()
+            ; i != m_Sockets.end(); ++ i) {
+        // check broken connection
+        if (i->second->m_pUDT->m_bBroken) {
+            if (i->second->m_Status == LISTENING) {
+                // for a listening socket, it should wait an extra 3 seconds in case a client is connecting
+                if (CTimer::getTime() - i->second->m_TimeStamp < 3000000)
+                    continue;
+            } else if ((i->second->m_pUDT->m_pRcvBuffer != NULL)
+                    && (i->second->m_pUDT->m_pRcvBuffer->getRcvDataSize() > 0)
+                    && (i->second->m_pUDT->m_iBrokenCounter -- > 0)) {
+                // if there is still data in the receiver buffer, wait longer
+                continue;
+            }
 
-         //close broken connections and start removal timer
-         i->second->m_Status = CLOSED;
-         i->second->m_TimeStamp = CTimer::getTime();
-         tbc.push_back(i->first);
-         m_ClosedSockets[i->first] = i->second;
+            //close broken connections and start removal timer
+            i->second->m_Status = CLOSED;
+            i->second->m_TimeStamp = CTimer::getTime();
+            tbc.push_back(i->first);
+            m_ClosedSockets[i->first] = i->second;
 
-         // remove from listener's queue
-         map<UDTSOCKET, CUDTSocket*>::iterator ls = m_Sockets.find(i->second->m_ListenSocket);
-         if (ls == m_Sockets.end())
-         {
-            ls = m_ClosedSockets.find(i->second->m_ListenSocket);
-            if (ls == m_ClosedSockets.end())
-               continue;
-         }
+            // Writer or reader socket closed here
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", i->first, __FILE__, __LINE__);
 
-         CGuard::enterCS(ls->second->m_AcceptLock);
-         ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
-         ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
-         CGuard::leaveCS(ls->second->m_AcceptLock);
-      }
-   }
+            // remove from listener's queue
+            map<UDTSOCKET, CUDTSocket*>::iterator ls = m_Sockets.find(i->second->m_ListenSocket);
 
-   for (map<UDTSOCKET, CUDTSocket*>::iterator j = m_ClosedSockets.begin(); j != m_ClosedSockets.end(); ++ j)
-   {
-      if (j->second->m_pUDT->m_ullLingerExpiration > 0)
-      {
-         // asynchronous close:
-         if ((NULL == j->second->m_pUDT->m_pSndBuffer) || (0 == j->second->m_pUDT->m_pSndBuffer->getCurrBufSize()) || (j->second->m_pUDT->m_ullLingerExpiration <= CTimer::getTime()))
-         {
-            j->second->m_pUDT->m_ullLingerExpiration = 0;
-            j->second->m_pUDT->m_bClosing = true;
-            j->second->m_TimeStamp = CTimer::getTime();
-         }
-      }
+            if (ls == m_Sockets.end()) {
+                ls = m_ClosedSockets.find(i->second->m_ListenSocket);
 
-      // timeout 1 second to destroy a socket AND it has been removed from RcvUList
-      if ((CTimer::getTime() - j->second->m_TimeStamp > 1000000) && ((NULL == j->second->m_pUDT->m_pRNode) || !j->second->m_pUDT->m_pRNode->m_bOnList))
-      {
-         tbr.push_back(j->first);
-      }
-   }
+                if (ls == m_ClosedSockets.end())
+                    continue;
+            }
 
-   // move closed sockets to the ClosedSockets structure
-   for (vector<UDTSOCKET>::iterator k = tbc.begin(); k != tbc.end(); ++ k)
-      m_Sockets.erase(*k);
+            CGuard::enterCS(ls->second->m_AcceptLock);
+            ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
+            ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
+            CGuard::leaveCS(ls->second->m_AcceptLock);
+        }
+    }
 
-   // remove those timeout sockets
-   for (vector<UDTSOCKET>::iterator l = tbr.begin(); l != tbr.end(); ++ l)
-      removeSocket(*l);
+    for (map<UDTSOCKET, CUDTSocket*>::iterator j = m_ClosedSockets.begin()
+            ; j != m_ClosedSockets.end(); ++ j) {
+        if (j->second->m_pUDT->m_ullLingerExpiration > 0) {
+            // asynchronous close:
+            if ((NULL == j->second->m_pUDT->m_pSndBuffer)
+                    || (0 == j->second->m_pUDT->m_pSndBuffer->getCurrBufSize())
+                    || (j->second->m_pUDT->m_ullLingerExpiration <= CTimer::getTime())) {
+                j->second->m_pUDT->m_ullLingerExpiration = 0;
+                j->second->m_pUDT->m_bClosing = true;
+                j->second->m_TimeStamp = CTimer::getTime();
+            }
+        }
+
+        // timeout 1 second to destroy a socket AND it has been removed from RcvUList
+        if ((CTimer::getTime() - j->second->m_TimeStamp > 1000000)
+                && ((NULL == j->second->m_pUDT->m_pRNode)
+                    || !j->second->m_pUDT->m_pRNode->m_bOnList)) {
+            tbr.push_back(j->first);
+        }
+    }
+
+    // move closed sockets to the ClosedSockets structure
+    for (vector<UDTSOCKET>::iterator k = tbc.begin(); k != tbc.end(); ++ k)
+        m_Sockets.erase(*k);
+
+    // remove those timeout sockets
+    for (vector<UDTSOCKET>::iterator l = tbr.begin(); l != tbr.end(); ++ l)
+        removeSocket(*l);
 }
 
-void CUDTUnited::removeSocket(const UDTSOCKET u)
+void CUDTUnited::removeSocket (UDTSOCKET const u)
 {
-   map<UDTSOCKET, CUDTSocket*>::iterator i = m_ClosedSockets.find(u);
+    map<UDTSOCKET, CUDTSocket*>::iterator i = m_ClosedSockets.find(u);
 
-   // invalid socket ID
-   if (i == m_ClosedSockets.end())
-      return;
+    // invalid socket ID
+    if (i == m_ClosedSockets.end())
+        return;
 
-   // decrease multiplexer reference count, and remove it if necessary
-   const int mid = i->second->m_iMuxID;
+    // decrease multiplexer reference count, and remove it if necessary
+    const int mid = i->second->m_iMuxID;
 
-   if (NULL != i->second->m_pQueuedSockets)
-   {
-      CGuard::enterCS(i->second->m_AcceptLock);
+    if (NULL != i->second->m_pQueuedSockets) {
+        CGuard::enterCS(i->second->m_AcceptLock);
 
-      // if it is a listener, close all un-accepted sockets in its queue and remove them later
-      for (set<UDTSOCKET>::iterator q = i->second->m_pQueuedSockets->begin(); q != i->second->m_pQueuedSockets->end(); ++ q)
-      {
-          LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", *q);
-         m_Sockets[*q]->m_pUDT->m_bBroken = true;
-         m_Sockets[*q]->m_pUDT->close();
-         m_Sockets[*q]->m_TimeStamp = CTimer::getTime();
-         m_Sockets[*q]->m_Status = CLOSED;
-         m_ClosedSockets[*q] = m_Sockets[*q];
-         m_Sockets.erase(*q);
-      }
+        // if it is a listener, close all un-accepted sockets in its queue and remove them later
+        for (set<UDTSOCKET>::iterator q = i->second->m_pQueuedSockets->begin()
+            ; q != i->second->m_pQueuedSockets->end(); ++ q) {
 
-      CGuard::leaveCS(i->second->m_AcceptLock);
-   }
+            m_Sockets[*q]->m_pUDT->m_bBroken = true;
+            m_Sockets[*q]->m_pUDT->close();
+            m_Sockets[*q]->m_TimeStamp = CTimer::getTime();
+            m_Sockets[*q]->m_Status = CLOSED;
+            m_ClosedSockets[*q] = m_Sockets[*q];
+            m_Sockets.erase(*q);
 
-   // remove from peer rec
-   map<int64_t, set<UDTSOCKET> >::iterator j = m_PeerRec.find((i->second->m_PeerID << 30) + i->second->m_iISN);
-   if (j != m_PeerRec.end())
-   {
-      j->second.erase(u);
-      if (j->second.empty())
-         m_PeerRec.erase(j);
-   }
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", *q, __FILE__, __LINE__);
+        }
 
-   // delete this one
-   i->second->m_pUDT->close();
-   delete i->second;
-   m_ClosedSockets.erase(i);
+        CGuard::leaveCS(i->second->m_AcceptLock);
+    }
 
-   map<int, CMultiplexer>::iterator m;
-   m = m_mMultiplexer.find(mid);
-   if (m == m_mMultiplexer.end())
-   {
-      //something is wrong!!!
-      return;
-   }
+    // remove from peer rec
+    map<int64_t, set<UDTSOCKET> >::iterator j = m_PeerRec.find(
+        (i->second->m_PeerID << 30) + i->second->m_iISN);
 
-   m->second.m_iRefCount --;
-   if (0 == m->second.m_iRefCount)
-   {
-      m->second.m_pChannel->close();
-      delete m->second.m_pSndQueue;
-      delete m->second.m_pRcvQueue;
-      delete m->second.m_pTimer;
-      delete m->second.m_pChannel;
-      m_mMultiplexer.erase(m);
-   }
+    if (j != m_PeerRec.end()) {
+        j->second.erase(u);
+
+        if (j->second.empty())
+            m_PeerRec.erase(j);
+    }
+
+    // delete this one
+    i->second->m_pUDT->close();
+    delete i->second;
+    m_ClosedSockets.erase(i);
+
+    map<int, CMultiplexer>::iterator m;
+
+    m = m_mMultiplexer.find(mid);
+
+    if (m == m_mMultiplexer.end()) {
+        //something is wrong!!!
+        return;
+    }
+
+    m->second.m_iRefCount --;
+
+    if (0 == m->second.m_iRefCount) {
+        m->second.m_pChannel->close();
+        delete m->second.m_pSndQueue;
+        delete m->second.m_pRcvQueue;
+        delete m->second.m_pTimer;
+        delete m->second.m_pChannel;
+        m_mMultiplexer.erase(m);
+    }
 }
 
 void CUDTUnited::setError(CUDTException* e)
@@ -1504,88 +1502,92 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
 }
 
 #ifndef WIN32
-   void* CUDTUnited::garbageCollect(void* p)
+   void * CUDTUnited::garbageCollect (void * p)
 #else
-   DWORD WINAPI CUDTUnited::garbageCollect(LPVOID p)
+   DWORD WINAPI CUDTUnited::garbageCollect (LPVOID p)
 #endif
 {
-   CUDTUnited* self = (CUDTUnited*)p;
+    CUDTUnited * self = static_cast<CUDTUnited *>(p);
 
-   CGuard gcguard(self->m_GCStopLock);
+    CGuard gcguard(self->m_GCStopLock);
 
-   while (!self->m_bClosing)
-   {
-      self->checkBrokenSockets();
+    while (!self->m_bClosing) {
+        self->checkBrokenSockets();
 
-      #ifdef WIN32
-         self->checkTLSValue();
-      #endif
+#ifdef WIN32
+        self->checkTLSValue();
+#endif
 
-      #ifndef WIN32
-         timeval now;
-         timespec timeout;
-         gettimeofday(&now, 0);
-         timeout.tv_sec = now.tv_sec + 1;
-         timeout.tv_nsec = now.tv_usec * 1000;
+#ifndef WIN32
+        timeval now;
+        timespec timeout;
+        gettimeofday(& now, 0);
+        timeout.tv_sec = now.tv_sec + 1;
+        timeout.tv_nsec = now.tv_usec * 1000;
 
-         pthread_cond_timedwait(&self->m_GCStopCond, &self->m_GCStopLock, &timeout);
-      #else
-         WaitForSingleObject(self->m_GCStopCond, 1000);
-      #endif
-   }
+        pthread_cond_timedwait(& self->m_GCStopCond, & self->m_GCStopLock, & timeout);
+#else
+        WaitForSingleObject(self->m_GCStopCond, 1000);
+#endif
+    }
 
-   // remove all sockets and multiplexers
-   CGuard::enterCS(self->m_ControlLock);
-   for (map<UDTSOCKET, CUDTSocket*>::iterator i = self->m_Sockets.begin(); i != self->m_Sockets.end(); ++ i)
-   {
-       LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", i->first);
-      i->second->m_pUDT->m_bBroken = true;
-      i->second->m_pUDT->close();
-      i->second->m_Status = CLOSED;
-      i->second->m_TimeStamp = CTimer::getTime();
-      self->m_ClosedSockets[i->first] = i->second;
+    // remove all sockets and multiplexers
+    CGuard::enterCS(self->m_ControlLock);
 
-      // remove from listener's queue
-      map<UDTSOCKET, CUDTSocket*>::iterator ls = self->m_Sockets.find(i->second->m_ListenSocket);
-      if (ls == self->m_Sockets.end())
-      {
-         ls = self->m_ClosedSockets.find(i->second->m_ListenSocket);
-         if (ls == self->m_ClosedSockets.end())
+    for (map<UDTSOCKET, CUDTSocket*>::iterator i = self->m_Sockets.begin()
+            ; i != self->m_Sockets.end(); ++ i) {
+
+        i->second->m_pUDT->m_bBroken = true;
+        i->second->m_pUDT->close();
+        i->second->m_Status = CLOSED;
+        i->second->m_TimeStamp = CTimer::getTime();
+        self->m_ClosedSockets[i->first] = i->second;
+
+        // Listener socket closed here
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", i->first, __FILE__, __LINE__);
+
+        // remove from listener's queue
+        map<UDTSOCKET, CUDTSocket*>::iterator ls = self->m_Sockets.find(i->second->m_ListenSocket);
+
+        if (ls == self->m_Sockets.end()) {
+            ls = self->m_ClosedSockets.find(i->second->m_ListenSocket);
+            if (ls == self->m_ClosedSockets.end())
             continue;
-      }
+        }
 
-      CGuard::enterCS(ls->second->m_AcceptLock);
-      ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
-      ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
-      CGuard::leaveCS(ls->second->m_AcceptLock);
-   }
-   self->m_Sockets.clear();
+        CGuard::enterCS(ls->second->m_AcceptLock);
+        ls->second->m_pQueuedSockets->erase(i->second->m_SocketID);
+        ls->second->m_pAcceptSockets->erase(i->second->m_SocketID);
+        CGuard::leaveCS(ls->second->m_AcceptLock);
+    }
 
-   for (map<UDTSOCKET, CUDTSocket*>::iterator j = self->m_ClosedSockets.begin(); j != self->m_ClosedSockets.end(); ++ j)
-   {
-      j->second->m_TimeStamp = 0;
-   }
-   CGuard::leaveCS(self->m_ControlLock);
+    self->m_Sockets.clear();
 
-   while (true)
-   {
-      self->checkBrokenSockets();
+    for (map<UDTSOCKET, CUDTSocket*>::iterator j = self->m_ClosedSockets.begin()
+            ; j != self->m_ClosedSockets.end(); ++ j) {
+        j->second->m_TimeStamp = 0;
+    }
 
-      CGuard::enterCS(self->m_ControlLock);
-      bool empty = self->m_ClosedSockets.empty();
-      CGuard::leaveCS(self->m_ControlLock);
+    CGuard::leaveCS(self->m_ControlLock);
 
-      if (empty)
-         break;
+    while (true) {
+        self->checkBrokenSockets();
 
-      CTimer::sleep();
-   }
+        CGuard::enterCS(self->m_ControlLock);
+        bool empty = self->m_ClosedSockets.empty();
+        CGuard::leaveCS(self->m_ControlLock);
 
-   #ifndef WIN32
-      return NULL;
-   #else
-      return 0;
-   #endif
+        if (empty)
+            break;
+
+        CTimer::sleep();
+    }
+
+#ifndef WIN32
+    return nullptr;
+#else
+    return 0;
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////

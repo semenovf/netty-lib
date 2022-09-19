@@ -77,23 +77,24 @@ public:
    virtual void release() {}
 };
 
-template<typename T> class CCache
+template <typename T>
+class CCache
 {
 public:
-   CCache(int size = 1024):
-   m_iMaxSize(size),
-   m_iHashSize(size * 3),
-   m_iCurrSize(0)
-   {
-      m_vHashPtr.resize(m_iHashSize);
-      CGuard::createMutex(m_Lock);
-   }
+    CCache (int size = 1024)
+        : m_iMaxSize(size)
+        , m_iHashSize(size * 3)
+        , m_iCurrSize(0)
+    {
+        m_vHashPtr.resize(m_iHashSize);
+        CGuard::createMutex(m_Lock);
+    }
 
-   ~CCache()
-   {
-      clear();
-      CGuard::releaseMutex(m_Lock);
-   }
+    ~CCache ()
+    {
+        clear();
+        CGuard::releaseMutex(m_Lock);
+    }
 
 public:
       // Functionality:

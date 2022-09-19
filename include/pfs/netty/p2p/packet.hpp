@@ -26,14 +26,16 @@ enum class packet_type: std::uint8_t {
       regular = 0x2A
     , file_credentials
     , file_request
+    , file_stop    // Stop/pause file transferring
     , file_chunk
+    , file_end
     , file_state
 };
 
 enum class file_status: std::uint8_t {
       success = 0x2A // File received successfully
-    , interrupt      // File transfer error, need interrupt
-    , end            // File transfer complete
+//    , end            // File transfer complete
+    , checksum       // Checksum error
 };
 
 // Packet structure
@@ -92,40 +94,50 @@ struct packet
     static constexpr std::uint16_t MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
     packet_type packettype;
-    std::uint16_t   packetsize;  // Packet size
-    universal_id    addresser;   // Addresser (sender) UUID
-    std::uint16_t   payloadsize;
-    std::uint32_t   partcount;   // Total count of parts
-    std::uint32_t   partindex;   // Part index (starts from 1)
-    char            payload[MAX_PAYLOAD_SIZE];
+    std::uint16_t packetsize;  // Packet size
+    universal_id  addresser;   // Addresser (sender) UUID
+    std::uint16_t payloadsize;
+    std::uint32_t partcount;   // Total count of parts
+    std::uint32_t partindex;   // Part index (starts from 1)
+    char          payload[MAX_PAYLOAD_SIZE];
 };
 
 struct file_credentials
 {
-    fileid_t     fileid;
+    universal_id fileid;
     std::string  filename;
     std::int32_t filesize;
     std::int32_t offset;
-    pfs::crypto::sha256_digest sha256;
 };
 
 struct file_request
 {
-    fileid_t     fileid;
+    universal_id fileid;
     std::int32_t offset;
+};
+
+struct file_stop
+{
+    universal_id fileid;
 };
 
 struct file_chunk
 {
-    fileid_t     fileid;
+    universal_id fileid;
     std::int32_t offset;
     std::int32_t chunksize;
     std::vector<char> chunk;
 };
 
+struct file_end
+{
+    universal_id fileid;
+    pfs::crypto::sha256_digest checksum;
+};
+
 struct file_state
 {
-    fileid_t fileid;
+    universal_id fileid;
     file_status status;
 };
 
@@ -162,8 +174,7 @@ inline void save (cereal::BinaryOutputArchive & ar, file_credentials const & fc)
     ar << fc.fileid
         << fc.filename
         << pfs::to_network_order(fc.filesize)
-        << pfs::to_network_order(fc.offset)
-        << cereal::binary_data(fc.sha256.data(), fc.sha256.size());
+        << pfs::to_network_order(fc.offset);
 }
 
 inline void load (cereal::BinaryInputArchive & ar, file_credentials & fc)
@@ -171,8 +182,7 @@ inline void load (cereal::BinaryInputArchive & ar, file_credentials & fc)
     ar >> fc.fileid
         >> fc.filename
         >> ntoh_wrapper<decltype(fc.filesize)>{fc.filesize}
-        >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
-        >> cereal::binary_data(fc.sha256.data(), fc.sha256.size());
+        >> ntoh_wrapper<decltype(fc.offset)>{fc.offset};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -186,6 +196,19 @@ inline void save (cereal::BinaryOutputArchive & ar, file_request const & fr)
 inline void load (cereal::BinaryInputArchive & ar, file_request & fr)
 {
     ar >> fr.fileid >> ntoh_wrapper<decltype(fr.offset)>{fr.offset};
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// file_stop
+////////////////////////////////////////////////////////////////////////////////
+inline void save (cereal::BinaryOutputArchive & ar, file_stop const & fs)
+{
+    ar << fs.fileid;
+}
+
+inline void load (cereal::BinaryInputArchive & ar, file_stop & fs)
+{
+    ar >> fs.fileid;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +228,20 @@ inline void load (cereal::BinaryInputArchive & ar, file_chunk & fc)
         >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
         >> ntoh_wrapper<decltype(fc.chunksize)>{fc.chunksize}
         >> fc.chunk;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// file_end
+////////////////////////////////////////////////////////////////////////////////
+inline void save (cereal::BinaryOutputArchive & ar, file_end const & fe)
+{
+    ar << fe.fileid
+        << cereal::binary_data(fe.checksum.data(), fe.checksum.size());
+}
+
+inline void load (cereal::BinaryInputArchive & ar, file_end & fe)
+{
+    ar >> fe.fileid >> cereal::binary_data(fe.checksum.data(), fe.checksum.size());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -742,7 +742,7 @@ POST_CONNECT:
         m_pSndTimeWindow = pfs::make_unique<CPktTimeWindow>();
         m_pRcvTimeWindow = pfs::make_unique<CPktTimeWindow>(16, 64);
     } catch (...) {
-        LOG_TRACE_3("*** CONNECT *** CUDTException(3, 2, 0): m_iID={}", response.m_iID);
+        //LOG_TRACE_3("*** CONNECT *** CUDTException(3, 2, 0): m_iID={}", response.m_iID);
         throw CUDTException(3, 2, 0);
     }
 
@@ -1996,8 +1996,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         // check the validation of the ack
         if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0) {
             //this should not happen: attack or bug
-            LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+
             m_iBrokenCounter = 0;
             break;
         }
@@ -2157,8 +2158,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
         if (!secure) {
             //this should not happen: attack or bug
-            // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+
             m_iBrokenCounter = 0;
             break;
         }
@@ -2215,8 +2217,10 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         m_bShutdown = true;
         m_bClosing = true;
 
-        // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
         m_bBroken = true;
+
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+
         m_iBrokenCounter = 60;
 
         // Signal the sender and recver if they are waiting for data.
@@ -2602,6 +2606,9 @@ void CUDT::checkTimers()
             m_bClosing = true;
             // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
+
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+
             m_iBrokenCounter = 30;
 
             // update snd U list to remove this socket

@@ -26,7 +26,6 @@ namespace p2p {
 
 namespace fs = pfs::filesystem;
 
-using fileid_t   = pfs::universal_id;
 using filesize_t = std::int32_t;
 
 enum class truncate_enum: std::int8_t { off, on };
@@ -215,6 +214,9 @@ public:
         return write(reinterpret_cast<char const *>(& value), sizeof(T));
     }
 
+    /**
+     * Set file position by @a offset.
+     */
     bool set_pos (filesize_t offset, std::error_code & ec)
     {
         auto pos = static_cast<filesize_t>(::lseek(_h, offset, SEEK_SET));
@@ -227,6 +229,11 @@ public:
         return true;
     }
 
+    /**
+     * Set file position by @a offset.
+     *
+     * @throw pfs::error on set file position failure.
+     */
     void set_pos (filesize_t offset)
     {
         std::error_code ec;

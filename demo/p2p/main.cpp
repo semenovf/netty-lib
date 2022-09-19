@@ -159,10 +159,6 @@ int main (int argc, char * argv[])
             LOGE("", "File does not exist: {}", file);
             return EXIT_FAILURE;
         }
-
-        LOGD("", "Calculate digest for: {}", file);
-        sha256 = pfs::crypto::sha256::digest(file);
-        LOGD("", "Digest for: {}: {}", file, to_string(sha256));
     }
 
     fmt::print("My name is {}\n", to_string(my_uuid));
@@ -181,7 +177,7 @@ int main (int argc, char * argv[])
             , port);
 
         if (!file.empty()) {
-            engine.send_file(peer_uuid, file, sha256);
+            engine.send_file(peer_uuid, file);
         }
 
         engine.send(peer_uuid, loremipsum, std::strlen(loremipsum));
@@ -216,12 +212,11 @@ int main (int argc, char * argv[])
         , netty::p2p::file_credentials const & fc) {
 
         LOG_TRACE_1("###--- File credentials received from {}: {}"
-            " (file name: {}; size: {}; sha256: {})"
+            " (file name: {}; size: {})"
             , sender
             , fc.fileid
             , fc.filename
-            , fc.filesize
-            , to_string(fc.sha256));
+            , fc.filesize);
 
     };
 
@@ -230,7 +225,7 @@ int main (int argc, char * argv[])
     };
 
     engine.download_progress = [] (pfs::universal_id receiver_id
-        , p2p::fileid_t fileid
+        , pfs::universal_id fileid
         , p2p::filesize_t downloaded_size
         , p2p::filesize_t total_size) {
 
@@ -242,7 +237,7 @@ int main (int argc, char * argv[])
 
     success = success
         && engine.set_option(engine_t::option_enum::download_directory, fs::temp_directory_path())
-        && engine.set_option(engine_t::option_enum::auto_download, true)
+        //&& engine.set_option(engine_t::option_enum::auto_download, true)
         && engine.set_option(engine_t::option_enum::discovery_address
             , netty::socket4_addr{DISCOVERY_ADDR, DISCOVERY_PORT})
         && engine.set_option(engine_t::option_enum::transmit_interval

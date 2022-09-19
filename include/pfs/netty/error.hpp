@@ -15,6 +15,7 @@ namespace netty {
 // Error codes, category, exception class
 ////////////////////////////////////////////////////////////////////////////////
 using error_code = std::error_code;
+using error = pfs::error;
 
 enum class errc
 {
@@ -24,6 +25,7 @@ enum class errc
     , device_not_found
     , permissions_denied
     , name_too_long
+    , filesystem_error
     , unexpected_error
 };
 
@@ -32,7 +34,7 @@ class error_category : public std::error_category
 public:
     virtual char const * name () const noexcept override
     {
-        return "net_category";
+        return "netty::category";
     }
 
     virtual std::string message (int ev) const override
@@ -48,6 +50,8 @@ public:
                 return std::string{"permissions denied"};
             case static_cast<int>(errc::name_too_long):
                 return std::string{"name too long"};
+            case static_cast<int>(errc::filesystem_error):
+                return std::string{"filesystem error"};
             case static_cast<int>(errc::unexpected_error):
                 return std::string{"unexpected error"};
 
