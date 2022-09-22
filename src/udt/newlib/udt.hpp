@@ -61,6 +61,7 @@ modified by
 #endif
 
 #include <fstream>
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -72,7 +73,6 @@ modified by
 
 //if compiling with MinGW, it only works on XP or above
 //use -D_WIN32_WINNT=0x0501
-
 
 #ifdef WIN32
    #ifndef __MINGW__
@@ -325,12 +325,17 @@ typedef UDTOpt SOCKOPT;
 typedef CPerfMon TRACEINFO;
 typedef ud_set UDSET;
 
+struct startup_context
+{
+    std::function<void (UDTSOCKET)> state_changed_callback;
+};
+
 UDT_API extern const UDTSOCKET INVALID_SOCK;
 #undef ERROR
 UDT_API extern const int ERROR;
 
-UDT_API int startup();
-UDT_API int cleanup();
+UDT_API int startup (startup_context && ctx);
+UDT_API int cleanup ();
 UDT_API UDTSOCKET socket(int af, int type, int protocol);
 UDT_API int bind(UDTSOCKET u, const struct sockaddr* name, int namelen);
 UDT_API int bind2(UDTSOCKET u, UDPSOCKET udpsock);

@@ -10,9 +10,8 @@
 cmake_minimum_required (VERSION 3.11)
 project(netty-p2p CXX)
 
-option(NETTY_P2P__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
+option(NETTY_P2P__ENABLE_QT5 "Enable Qt5 library (network backend)" ON)
 option(NETTY_P2P__ENABLE_QT6 "Enable Qt6 library (network backend)" OFF)
-option(NETTY_P2P__ENABLE_UDT "Enable UDT library (reliable UDP implementation)" OFF)
 option(NETTY_P2P__ENABLE_NEW_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
 option(NETTY_P2P__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY_P2P__ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
@@ -39,13 +38,6 @@ if (NETTY_P2P__ENABLE_QT5)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY_P2P__QT5_NETWORK_ENABLED=1")
 endif(NETTY_P2P__ENABLE_QT5)
-
-if (NETTY_P2P__ENABLE_UDT)
-    set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "UDT enabled")
-    set(NETTY_P2P__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/lib")
-    portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE "NETTY_P2P__UDT_ENABLED=1")
-    portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE "NETTY_P2P__UDT_ENABLED=1")
-endif(NETTY_P2P__ENABLE_UDT)
 
 if (NETTY_P2P__ENABLE_NEW_UDT)
     set(NETTY_P2P__UDT_ENABLED ON CACHE BOOL "modified UDT enabled")
@@ -78,7 +70,7 @@ if (MSVC)
     portable_target(LINK ${PROJECT_NAME}-static PUBLIC ws2_32)
 endif(MSVC)
 
-if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
+if (NETTY_P2P__ENABLE_NEW_UDT)
     # UDT sources
     portable_target(SOURCES ${PROJECT_NAME}
         ${NETTY_P2P__UDT_ROOT}/api.cpp
@@ -96,11 +88,20 @@ if (NETTY_P2P__UDT_ENABLED OR NETTY_P2P__ENABLE_NEW_UDT)
         ${NETTY_P2P__UDT_ROOT}/window.cpp)
 
     portable_target(SOURCES ${PROJECT_NAME}
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/api.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/sockets_api.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udp_socket.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
 endif()
+
+if (NETTY_P2P__ENABLE_QT5)
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/discovery_engine.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_socket.cpp)
+endif()
+
+portable_target(SOURCES ${PROJECT_NAME}
+    ${CMAKE_CURRENT_LIST_DIR}/src/file_transporter.cpp)
 
 if (MSVC)
     portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd4251")

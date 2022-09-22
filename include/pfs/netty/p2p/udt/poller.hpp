@@ -12,6 +12,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
 
 namespace netty {
@@ -20,7 +21,8 @@ namespace udt {
 
 class poller
 {
-    using UDTSOCKET = decltype(udp_socket{}.id());
+    using socket_type = udp_socket;
+    using socket_id = socket_type::native_type;
 
 public:
     enum event_enum {
@@ -29,38 +31,44 @@ public:
         , POLL_ERR_EVENT = 0x8
     };
 
-    using input_callback_type  = std::function<void(UDTSOCKET)>;
-    using output_callback_type = std::function<void(UDTSOCKET)>;
+    using input_callback_type  = std::function<void(socket_id)>;
+    using output_callback_type = std::function<void(socket_id)>;
 
 private:
-    class impl;
+    int _eid {-1}; // -1 is same as CUDT::ERROR
 
-    std::unique_ptr<impl> _p;
-    std::string _name;
+    std::set<socket_id> _readfds;
+    std::set<socket_id> _writefds;
 
-public:
-    mutable std::function<void (std::string const &)> failure;
+    // For system sockets on Linux, developers may choose to watch individual
+    // events from EPOLLIN (read), EPOLLOUT (write), and EPOLLERR (exceptions).
+    // When using epoll_remove_ssock, if the socket is waiting on multiple
+    // events, only those specified in events are removed.
+    // The events can be a combination (with "|" operation).
+    // For all other situations, the parameter events is ignored and all events
+    // will be watched.
+    // For compatibility, set them all.
+    // int events {UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR};
 
-public:
-    NETTY__EXPORT poller (std::string const & name);
-    NETTY__EXPORT ~poller ();
-
+private:
     poller (poller const &) = delete;
     poller & operator = (poller const &) = delete;
+
+public:
+    NETTY__EXPORT poller ();
+    NETTY__EXPORT ~poller ();
 
     NETTY__EXPORT poller (poller &&);
     NETTY__EXPORT poller & operator = (poller &&);
 
-    NETTY__EXPORT bool initialize ();
-    NETTY__EXPORT void release ();
-    NETTY__EXPORT void add (UDTSOCKET u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
-    NETTY__EXPORT void remove (UDTSOCKET u);
+    NETTY__EXPORT void add (socket_type const & u, int events = POLL_IN_EVENT | POLL_OUT_EVENT | POLL_ERR_EVENT);
+    NETTY__EXPORT void remove (socket_type const & u);
     NETTY__EXPORT int wait (std::chrono::milliseconds millis);
 
     NETTY__EXPORT void process_events (input_callback_type && in, output_callback_type && out);
 
 private:
-    NETTY__EXPORT void failure_helper (std::string const & reason);
+    NETTY__EXPORT std::string error_string (std::string const & reason);
 };
 
 }}} // namespace netty::p2p::udt

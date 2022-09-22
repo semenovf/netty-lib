@@ -20,11 +20,14 @@ using error = pfs::error;
 enum class errc
 {
       success = 0
+    , engine_error       // General purpose errors.
     , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
     , device_not_found
     , permissions_denied
     , name_too_long
+    , socket_error       // Socket operation error
+    , poller_error       // Errors occurred in poller
     , filesystem_error
     , unexpected_error
 };
@@ -50,6 +53,10 @@ public:
                 return std::string{"permissions denied"};
             case static_cast<int>(errc::name_too_long):
                 return std::string{"name too long"};
+            case static_cast<int>(errc::socket_error):
+                return std::string{"socket error"};
+            case static_cast<int>(errc::poller_error):
+                return std::string{"poller error"};
             case static_cast<int>(errc::filesystem_error):
                 return std::string{"filesystem error"};
             case static_cast<int>(errc::unexpected_error):

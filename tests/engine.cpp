@@ -177,7 +177,7 @@ int main ()
     peer1_worker = std::thread{[] {
         engine_t peer1 {PEER1_UUID};
         peer1.failure = on_failure;
-        peer1.rookie_accepted = on_rookie_accepted;
+        peer1.peer_discovered = on_rookie_accepted;
         peer1.writer_ready = on_writer_ready;
         peer1.peer_closed = on_peer_closed;
 
@@ -205,7 +205,7 @@ int main ()
     peer2_worker = std::thread{[] {
         engine_t peer2 {PEER2_UUID};
         peer2.failure = on_failure;
-        peer2.rookie_accepted = on_rookie_accepted;
+        peer2.peer_discovered = on_rookie_accepted;
         peer2.writer_ready = on_writer_ready;
         peer2.peer_closed = on_peer_closed;
 

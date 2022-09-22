@@ -166,7 +166,7 @@ int main (int argc, char * argv[])
     engine_t engine {my_uuid};
 
     engine.failure = on_failure;
-    engine.rookie_accepted = on_rookie_accepted;
+    engine.peer_discovered = on_rookie_accepted;
     engine.peer_closed = on_peer_closed;
     engine.writer_ready = [& engine, & file, & sha256] (pfs::universal_id peer_uuid
             , netty::inet4_addr const & addr

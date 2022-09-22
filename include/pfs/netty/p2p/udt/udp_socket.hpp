@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/exports.hpp"
-#include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/socket4_addr.hpp"
 #include "pfs/fmt.hpp"
 #include <fstream>
 #include <string>
@@ -40,13 +40,11 @@ public:
         , NONEXIST
     };
 
-    using id_type = UDTSOCKET;
+    using native_type = UDTSOCKET;
 
 private:
     UDTSOCKET _socket {INVALID_SOCKET};
-
-public:
-    mutable std::function<void (std::string const &)> failure;
+    socket4_addr _saddr;
 
 public:
     udp_socket () = default;
@@ -58,33 +56,51 @@ public:
     udp_socket (udp_socket && other) noexcept
     {
         _socket = other._socket;
+        _saddr  = other._saddr;
         other._socket = INVALID_SOCKET;
     }
 
     udp_socket & operator = (udp_socket && other) noexcept
     {
         _socket = other._socket;
+        _saddr  = other._saddr;
         other._socket = INVALID_SOCKET;
         return *this;
     }
 
-    id_type id () const
+    native_type native () const
     {
         return _socket;
     }
 
     NETTY__EXPORT state_enum state () const;
 
-    std::string backend_string () const noexcept
+    inet4_addr addr () const noexcept
     {
-        return "UDT";
+        return _saddr.addr;
     }
 
-    NETTY__EXPORT udp_socket accept (inet4_addr * addr, std::uint16_t * port);
-    NETTY__EXPORT bool bind (inet4_addr const & addr, std::uint16_t port);
+    std::uint16_t port () const noexcept
+    {
+        return _saddr.port;
+    }
+
+    socket4_addr saddr () const noexcept
+    {
+        return _saddr;
+    }
+
+    NETTY__EXPORT udp_socket accept ();
+    NETTY__EXPORT void bind (inet4_addr addr, std::uint16_t port);
+
+    inline void bind (socket4_addr saddr)
+    {
+        bind(saddr.addr, saddr.port);
+    }
+
     NETTY__EXPORT void close ();
-    NETTY__EXPORT bool connect (inet4_addr const & addr, std::uint16_t port);
-    NETTY__EXPORT bool listen (int backlog = 10);
+    NETTY__EXPORT void connect (inet4_addr addr, std::uint16_t port);
+    NETTY__EXPORT void listen (int backlog = 10);
     NETTY__EXPORT std::streamsize recvmsg (char * msg, std::streamsize len);
     NETTY__EXPORT std::streamsize sendmsg (char const * data, std::streamsize len);
 
@@ -108,3 +124,26 @@ public: // static
 };
 
 }}} // namespace netty::p2p::udt
+
+namespace fmt {
+
+template <>
+struct formatter<netty::p2p::udt::udp_socket>
+{
+    template <typename ParseContext>
+    constexpr auto parse (ParseContext & ctx) -> decltype(ctx.begin())
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format (netty::p2p::udt::udp_socket const & sock
+        , FormatContext & ctx) -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}.{}"
+            , to_string(sock.saddr())
+            , sock.native());
+    }
+};
+
+} // namespace fmt

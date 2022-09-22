@@ -645,11 +645,11 @@ void CUDT::connect(const sockaddr* serv_addr)
 
 int CUDT::connect(const CPacket& response)// throw ()
 {
-    LOG_TRACE_3("*** CONNECT *** m_iSeqNo={}; m_iMsgNo={}; m_iTimeStamp={}; m_iID={}"
-        , response.m_iSeqNo
-        , response.m_iMsgNo
-        , response.m_iTimeStamp
-        , response.m_iID);
+    //LOG_TRACE_3("*** CONNECT *** m_iSeqNo={}; m_iMsgNo={}; m_iTimeStamp={}; m_iID={}"
+    //    , response.m_iSeqNo
+    //    , response.m_iMsgNo
+    //    , response.m_iTimeStamp
+    //    , response.m_iID);
 
    // this is the 2nd half of a connection request. If the connection is setup successfully this returns 0.
    // returning -1 means there is an error.

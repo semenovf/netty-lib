@@ -179,7 +179,7 @@ CUDTUnited::~CUDTUnited()
    delete m_pCache;
 }
 
-int CUDTUnited::startup ()
+int CUDTUnited::startup (UDT::startup_context && ctx)
 {
     CGuard gcinit(m_InitLock);
 
@@ -197,6 +197,7 @@ int CUDTUnited::startup ()
 #endif
 
     //init CTimer::EventLock
+    state_changed_callback = std::move(ctx.state_changed_callback);
 
     if (m_bGCStatus)
         return true; // FIXME --wladt-- May be need to return non-zero value?
@@ -332,6 +333,7 @@ int CUDTUnited::newConnection (UDTSOCKET const listen, sockaddr const * peer
             CGuard::leaveCS(ls->m_AcceptLock);
 
             LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
+            state_changed_callback(ns->m_SocketID);
         } else {
             // connection already exist, this is a repeated connection request
             // respond with existing HS information
@@ -398,6 +400,7 @@ int CUDTUnited::newConnection (UDTSOCKET const listen, sockaddr const * peer
 
     // Reader (accepted) socket connected here
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(ns->m_SocketID);
 
     // copy address information of local node
     ns->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(ns->m_pSelfAddr);
@@ -437,6 +440,7 @@ int CUDTUnited::newConnection (UDTSOCKET const listen, sockaddr const * peer
         ns->m_Status = CLOSED;
         ns->m_TimeStamp = CTimer::getTime();
         LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", ns->m_SocketID, __FILE__, __LINE__);
+        state_changed_callback(ns->m_SocketID);
         return -1;
     }
 
@@ -517,6 +521,7 @@ int CUDTUnited::bind (UDTSOCKET const u, sockaddr const * name, int namelen)
 
     // Bound socket (listener, e.g.) opened here
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(s->m_SocketID);
 
     // copy address information of local node
     s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
@@ -559,6 +564,7 @@ int CUDTUnited::bind (UDTSOCKET u, UDPSOCKET udpsock)
     updateMux(s, name, &udpsock);
     s->m_Status = OPENED;
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(s->m_SocketID);
 
     // copy address information of local node
     s->m_pUDT->m_pSndQueue->m_pChannel->getSockAddr(s->m_pSelfAddr);
@@ -610,6 +616,7 @@ int CUDTUnited::listen(const UDTSOCKET u, int backlog)
 
    s->m_Status = LISTENING;
    LOG_TRACE_3("~~~ STATUS CHANGED: Socket LISTENING: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+   state_changed_callback(s->m_SocketID);
 
    return 0;
 }
@@ -757,6 +764,7 @@ int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 
             // Writer socket opened here
             LOG_TRACE_3("~~~ STATUS CHANGED: Socket OPENED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+            state_changed_callback(s->m_SocketID);
         } else {
             throw CUDTException(5, 8, 0);
         }
@@ -771,6 +779,7 @@ int CUDTUnited::connect(const UDTSOCKET u, const sockaddr* name, int namelen)
 
     // Writer socket connecting here
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTING: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(s->m_SocketID);
 
     try {
         s->m_pUDT->connect(name);
@@ -813,6 +822,7 @@ void CUDTUnited::connect_complete (UDTSOCKET const u)
 
     // Writer socket connected here
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket CONNECTED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(s->m_SocketID);
 }
 
 int CUDTUnited::close (UDTSOCKET const u)
@@ -870,6 +880,7 @@ int CUDTUnited::close (UDTSOCKET const u)
     m_ClosedSockets.insert(pair<UDTSOCKET, CUDTSocket*>(s->m_SocketID, s));
 
     LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", s->m_SocketID, __FILE__, __LINE__);
+    state_changed_callback(s->m_SocketID);
 
     CTimer::triggerEvent();
 
@@ -1229,6 +1240,7 @@ void CUDTUnited::checkBrokenSockets()
 
             // Writer or reader socket closed here
             LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", i->first, __FILE__, __LINE__);
+            state_changed_callback(i->first);
 
             // remove from listener's queue
             map<UDTSOCKET, CUDTSocket*>::iterator ls = m_Sockets.find(i->second->m_ListenSocket);
@@ -1303,6 +1315,7 @@ void CUDTUnited::removeSocket (UDTSOCKET const u)
             m_Sockets.erase(*q);
 
             LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", *q, __FILE__, __LINE__);
+            state_changed_callback(*q);
         }
 
         CGuard::leaveCS(i->second->m_AcceptLock);
@@ -1545,6 +1558,7 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
 
         // Listener socket closed here
         LOG_TRACE_3("~~~ STATUS CHANGED: Socket CLOSED: {} ({}:{})", i->first, __FILE__, __LINE__);
+        self->state_changed_callback(i->first);
 
         // remove from listener's queue
         map<UDTSOCKET, CUDTSocket*>::iterator ls = self->m_Sockets.find(i->second->m_ListenSocket);
@@ -1592,9 +1606,9 @@ void CUDTUnited::updateMux(CUDTSocket* s, const CUDTSocket* ls)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int CUDT::startup()
+int CUDT::startup (UDT::startup_context && ctx)
 {
-   return s_UDTUnited.startup();
+   return s_UDTUnited.startup(std::move(ctx));
 }
 
 int CUDT::cleanup()
@@ -1602,30 +1616,25 @@ int CUDT::cleanup()
    return s_UDTUnited.cleanup();
 }
 
-UDTSOCKET CUDT::socket(int af, int type, int)
+UDTSOCKET CUDT::socket (int af, int type, int)
 {
-   if (!s_UDTUnited.m_bGCStatus)
-      s_UDTUnited.startup();
+    if (!s_UDTUnited.m_bGCStatus) {
+        UDT::startup_context ctx { [] (UDTSOCKET) {} };
+        s_UDTUnited.startup(std::move(ctx));
+    }
 
-   try
-   {
-      return s_UDTUnited.newSocket(af, type);
-   }
-   catch (CUDTException& e)
-   {
-      s_UDTUnited.setError(new CUDTException(e));
-      return INVALID_SOCK;
-   }
-   catch (bad_alloc&)
-   {
-      s_UDTUnited.setError(new CUDTException(3, 2, 0));
-      return INVALID_SOCK;
-   }
-   catch (...)
-   {
-      s_UDTUnited.setError(new CUDTException(-1, 0, 0));
-      return INVALID_SOCK;
-   }
+    try {
+        return s_UDTUnited.newSocket(af, type);
+    } catch (CUDTException & e) {
+        s_UDTUnited.setError(new CUDTException(e));
+        return INVALID_SOCK;
+    } catch (bad_alloc &) {
+        s_UDTUnited.setError(new CUDTException(3, 2, 0));
+        return INVALID_SOCK;
+    } catch (...) {
+        s_UDTUnited.setError(new CUDTException(-1, 0, 0));
+        return INVALID_SOCK;
+    }
 }
 
 int CUDT::bind(UDTSOCKET u, const sockaddr* name, int namelen)
@@ -2175,9 +2184,9 @@ UDTSTATUS CUDT::getsockstate(UDTSOCKET u)
 namespace UDT
 {
 
-int startup()
+int startup (startup_context && ctx)
 {
-   return CUDT::startup();
+   return CUDT::startup(std::move(ctx));
 }
 
 int cleanup()

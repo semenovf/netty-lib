@@ -135,8 +135,31 @@ public:
     int peek ()
     {
         return _archiver_backend.good()
-            ?  _archiver_backend.peek()
+            ? _archiver_backend.peek()
             : -1;
+    }
+
+    template <typename P>
+    static void unseal (P & payload, std::vector<char> const & buffer)
+    {
+        input_envelope in {buffer.data(), buffer.size()};
+        in.unseal(payload);
+    }
+
+    template <typename P>
+    static P unseal (std::vector<char> const & buffer)
+    {
+        P payload;
+        input_envelope{buffer.data(), buffer.size()}.unseal(payload);
+        return payload;
+    }
+
+    template <typename P>
+    static P unseal (char const * data, std::size_t size)
+    {
+        P payload;
+        input_envelope{data, size}.unseal(payload);
+        return payload;
     }
 };
 

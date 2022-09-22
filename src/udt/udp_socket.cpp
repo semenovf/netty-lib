@@ -7,6 +7,8 @@
 //      2021.10.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/endian.hpp"
+#include "pfs/i18n.hpp"
+#include "pfs/netty/error.hpp"
 #include "pfs/netty/p2p/udt/udp_socket.hpp"
 #include <cerrno>
 #include <cassert>
@@ -78,7 +80,7 @@ udp_socket::state_enum udp_socket::state () const
     return static_cast<state_enum>(status);
 }
 
-bool udp_socket::bind (inet4_addr const & addr, std::uint16_t port)
+void udp_socket::bind (inet4_addr addr, std::uint16_t port)
 {
     sockaddr_in addr_in4;
     _socket = create(addr, port, addr_in4);
@@ -88,52 +90,48 @@ bool udp_socket::bind (inet4_addr const & addr, std::uint16_t port)
         , sizeof(addr_in4));
 
     if (UDT::ERROR == rc) {
-        failure(fmt::format("bind {}:{} to socket failure: {}"
-            , to_string(addr)
-            , port
-            , error_string()));
-        return false;
+        throw error{
+              make_error_code(errc::socket_error)
+            , tr::f_("bind {}:{} to socket failure: {}"
+                , to_string(addr), port, error_string())
+        };
     }
 
-    return true;
+    _saddr.addr = addr;
+    _saddr.port = port;
 }
 
-bool udp_socket::listen (int backlog)
+void udp_socket::listen (int backlog)
 {
-    assert(_socket >= 0);
+    PFS__ASSERT(_socket >= 0, "");
 
     auto rc = UDT::listen(_socket, backlog);
 
     if (rc < 0) {
-        failure(fmt::format("`listen` failure: {}"
-            , error_string()));
-        return false;
+        throw error{
+              make_error_code(errc::socket_error)
+            , tr::f_("listen failure: {}", error_string())
+        };
     }
-
-    return true;
 }
 
-udp_socket udp_socket::accept (inet4_addr * addr_ptr, std::uint16_t * port_ptr)
+udp_socket udp_socket::accept ()
 {
     udp_socket result;
 
-    sockaddr saddr;
+    sockaddr sa;
     int addrlen;
 
-    result._socket = UDT::accept(_socket, & saddr, & addrlen);
+    result._socket = UDT::accept(_socket, & sa, & addrlen);
 
-    if (saddr.sa_family == AF_INET) {
-        auto addr_in4_ptr = reinterpret_cast<sockaddr_in *>(& saddr);
+    if (sa.sa_family == AF_INET) {
+        auto addr_in4_ptr = reinterpret_cast<sockaddr_in *>(& sa);
 
-        if (addr_ptr) {
-            *addr_ptr = pfs::to_native_order(
-                static_cast<std::uint32_t>(addr_in4_ptr->sin_addr.s_addr));
-        }
+        result._saddr.addr = pfs::to_native_order(
+            static_cast<std::uint32_t>(addr_in4_ptr->sin_addr.s_addr));
 
-        if (port_ptr) {
-            *port_ptr = pfs::to_native_order(
-                static_cast<std::uint16_t>(addr_in4_ptr->sin_port));
-        }
+        result._saddr.port = pfs::to_native_order(
+            static_cast<std::uint16_t>(addr_in4_ptr->sin_port));
 
         //UDT::setsockopt(result._socket, 0, UDT_LINGER
         //    , new linger{1, 3}, sizeof(linger));
@@ -145,14 +143,17 @@ udp_socket udp_socket::accept (inet4_addr * addr_ptr, std::uint16_t * port_ptr)
     #endif
 
     } else {
-        failure("`accept` failure: unsupported sockaddr family"
-            " (AF_INET supported only)");
+        throw error {
+              make_error_code(errc::socket_error)
+            , tr::_("Socket accept failure: unsupported sockaddr family"
+                " (AF_INET supported only)")
+        };
     }
 
     return result;
 }
 
-bool udp_socket::connect (inet4_addr const & addr, std::uint16_t port)
+void udp_socket::connect (inet4_addr addr, std::uint16_t port)
 {
     sockaddr_in addr_in4;
     _socket = create(addr, port, addr_in4);
@@ -162,14 +163,17 @@ bool udp_socket::connect (inet4_addr const & addr, std::uint16_t port)
         , sizeof(addr_in4));
 
     if (rc < 0) {
-        failure(fmt::format("connection to {}:{} failure: {}"
-            , to_string(addr)
-            , port
-            , error_string()));
-        return false;
+        throw error{
+              make_error_code(errc::socket_error)
+            , tr::f_("connection to {}:{} failure: {}"
+                , to_string(addr)
+                , port
+                , error_string())
+        };
     }
 
-    return true;
+    _saddr.addr = addr;
+    _saddr.port = port;
 }
 
 void udp_socket::close ()

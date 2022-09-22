@@ -95,11 +95,12 @@ friend class CUDT;
 friend class CRendezvousQueue;
 
 public:
-   CUDTUnited();
-   ~CUDTUnited();
+   CUDTUnited ();
+   ~CUDTUnited ();
+
+   std::function<void (UDTSOCKET)> state_changed_callback;
 
 public:
-
       // Functionality:
       //    initialize the UDT library.
       // Parameters:
@@ -107,7 +108,7 @@ public:
       // Returned value:
       //    0 if success, otherwise -1 is returned.
 
-   int startup();
+    int startup (UDT::startup_context && ctx);
 
       // Functionality:
       //    release the UDT library.
@@ -116,7 +117,7 @@ public:
       // Returned value:
       //    0 if success, otherwise -1 is returned.
 
-   int cleanup();
+   int cleanup ();
 
       // Functionality:
       //    Create a new UDT socket.
@@ -126,7 +127,7 @@ public:
       // Returned value:
       //    The new UDT socket ID, or INVALID_SOCK.
 
-   UDTSOCKET newSocket(int af, int type);
+   UDTSOCKET newSocket (int af, int type);
 
       // Functionality:
       //    Create a new UDT connection.
@@ -137,7 +138,7 @@ public:
       // Returned value:
       //    If the new connection is successfully created: 1 success, 0 already exist, -1 error.
 
-   int newConnection(const UDTSOCKET listen, const sockaddr* peer, CHandShake* hs);
+   int newConnection (UDTSOCKET const listen, sockaddr const * peer, CHandShake * hs);
 
       // Functionality:
       //    look up the UDT entity according to its ID.
@@ -146,7 +147,7 @@ public:
       // Returned value:
       //    Pointer to the UDT entity.
 
-   CUDT* lookup(const UDTSOCKET u);
+   CUDT * lookup (UDTSOCKET const u);
 
       // Functionality:
       //    Check the status of the UDT socket.
@@ -155,7 +156,7 @@ public:
       // Returned value:
       //    UDT socket status, or NONEXIST if not found.
 
-   UDTSTATUS getStatus(const UDTSOCKET u);
+   UDTSTATUS getStatus (UDTSOCKET const u);
 
       // socket APIs
 

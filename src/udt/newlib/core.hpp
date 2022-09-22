@@ -73,8 +73,8 @@ private: // constructor and desctructor
    ~CUDT();
 
 public: //API
-   static int startup();
-   static int cleanup();
+   static int startup (UDT::startup_context && ctx);
+   static int cleanup ();
    static UDTSOCKET socket(int af, int type = SOCK_STREAM, int protocol = 0);
    static int bind(UDTSOCKET u, const sockaddr* name, int namelen);
    static int bind(UDTSOCKET u, UDPSOCKET udpsock);
