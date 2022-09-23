@@ -166,7 +166,7 @@ private:
     /**
      * Commit income file.
      */
-    void commit_income_file (universal_id addresser
+    void commit_incoming_file (universal_id addresser
         , universal_id fileid, checksum_type checksum);
 
     /**

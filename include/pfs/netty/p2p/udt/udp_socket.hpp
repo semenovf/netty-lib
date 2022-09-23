@@ -34,7 +34,7 @@ public:
         , LISTENING
         , CONNECTING
         , CONNECTED
-        , BROKEN
+        , BROKEN     // Remote socket unexpectedly closed (Application exists)
         , CLOSING
         , CLOSED
         , NONEXIST

@@ -686,9 +686,11 @@ private:
 
     void process_socket_closed (socket_id sid, socket4_addr saddr)
     {
+        LOG_TRACE_2("=== PROCESS SOCKET CLOSED: {}", sid);
         auto pos = _writer_uuids.find(sid);
 
         if (pos != std::end(_writer_uuids)) {
+            LOG_TRACE_2("=== PROCESS SOCKET CLOSED: WRITER CLOSED: {}", sid);
             writer_closed(pos->second, saddr.addr, saddr.port);
             _writer_ids.erase(pos->second);
             _writer_uuids.erase(pos);
@@ -885,10 +887,16 @@ private:
                         _output_timepoint = current_timepoint() + DEFAULT_OVERFLOW_TIMEOUT;
                         return;
                     } else {
-                        log_error(tr::f_("Sending failure to {}@{}: {}"
-                            , pool_item.first
-                            , to_string(sock->saddr())
-                            , sock->error_string()));
+                        // Is socket is non-functional because of broken or closed
+                        // do not log error, ignore silently.
+                        if (sock->state() != sock->CONNECTED) {
+                            ;
+                        } else {
+                            log_error(tr::f_("Sending failure to {}@{}: {}"
+                                , pool_item.first
+                                , to_string(sock->saddr())
+                                , sock->error_string()));
+                        }
                     }
                 } else {
                     // FIXME Need to handle this state (broken connection ?)

@@ -11,6 +11,7 @@
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
 #include <cmath>
+#include <string>
 
 namespace netty {
 namespace p2p {
@@ -188,7 +189,42 @@ fs::path file_transporter::make_targetfilepath (universal_id addresser
     if (!fs::exists(dir))
         ensure_directory(dir);
 
-    return dir / fs::utf8_decode(filename);
+    auto target_filename = fs::utf8_decode(filename);
+    auto target_path = dir / target_filename;
+
+    int counter = 1;
+
+    if (fs::exists(target_path)) {
+        auto target_filestem = target_filename.stem();
+        auto target_fileext  = target_filename.extension();
+
+        while (fs::exists(target_path) && counter != (std::numeric_limits<int>::max)()) {
+            auto uniq_part = fmt::format("-({})", counter++);
+
+            target_path = dir / target_filestem;
+            target_path += fs::utf8_decode(uniq_part);
+            target_path += target_fileext;
+        }
+
+        // Last chance
+        if (fs::exists(target_path)) {
+            auto uniq_part = fmt::format("-({})", pfs::generate_uuid());
+
+            target_path = dir / target_filestem;
+            target_path += fs::utf8_decode(uniq_part);
+            target_path += target_fileext;
+        }
+
+        // It's impossible ;)
+        if (fs::exists(target_path)) {
+            throw error {
+                  make_error_code(errc::filesystem_error)
+                , tr::f_("Unable to generate unique file name for: {}", filename)
+            };
+        }
+    }
+
+    return target_path;
 }
 
 void file_transporter::remove_transient_files (universal_id addresser, universal_id fileid)
@@ -253,7 +289,7 @@ void file_transporter::notify_file_status (universal_id addressee
         , out.data().data(), out.data().size());
 }
 
-void file_transporter::commit_income_file (universal_id addresser
+void file_transporter::commit_incoming_file (universal_id addresser
     , universal_id fileid, checksum_type checksum)
 {
     auto * p = locate_ifile_item(addresser, fileid, false);
@@ -267,6 +303,7 @@ void file_transporter::commit_income_file (universal_id addresser
     auto fc = incoming_file_credentials(addresser, fileid);
 
     if (checksum == p->hash.digest()) {
+        LOG_TRACE_3("Checksum for: {}: {}", fileid, to_string(checksum));
         auto donefilepath = make_donefilepath(addresser, fileid);
         auto datafilepath = make_datafilepath(addresser, fileid);
         auto targetfilepath = make_targetfilepath(addresser, fc.filename);
@@ -275,18 +312,15 @@ void file_transporter::commit_income_file (universal_id addresser
         fs::rename(datafilepath, targetfilepath);
 
         notify_file_status(addresser, fileid, file_status::success);
-
-        if (download_complete)
-            download_complete(addresser, fileid, targetfilepath, true);
+        download_complete(addresser, fileid, targetfilepath, true);
     } else {
+        log_error(tr::f_("Checksum for: {} are different: sample=>{} != {}"
+            , fileid, to_string(checksum), to_string(p->hash.digest())));
         auto errfilepath = make_errfilepath(addresser, fileid);
         fs::rename(descfilepath, errfilepath);
 
         notify_file_status(addresser, fileid, file_status::checksum);
-
-        if (download_complete) {
-            download_complete(addresser, fileid, fs::path{}, false);
-        }
+        download_complete(addresser, fileid, fs::path{}, false);
 
         if (_opts.remove_transient_files_on_error)
             remove_transient_files(addresser, fileid);
@@ -460,7 +494,7 @@ void file_transporter::process_file_end (universal_id sender
     LOG_TRACE_2("File received completely from: {} ({})"
         , sender, fe.fileid);
 
-    commit_income_file(sender, fe.fileid, fe.checksum);
+    commit_incoming_file(sender, fe.fileid, fe.checksum);
 }
 
 void file_transporter::process_file_state (universal_id /*sender*/
