@@ -770,7 +770,8 @@ private:
                 || packettype == packet_type::file_request
                 || packettype == packet_type::file_chunk
                 || packettype == packet_type::file_end
-                || packettype == packet_type::file_state;
+                || packettype == packet_type::file_state
+                || packettype == packet_type::file_stop;
 
             if (!valid_packettype) {
                 log_error(tr::f_("Unexpected packet type ({})"

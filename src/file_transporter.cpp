@@ -380,7 +380,9 @@ void file_transporter::commit_chunk (universal_id addresser, file_chunk const & 
     // Returns non-null pointer or throws an exception
     auto * p = locate_ifile_item(addresser, fc.fileid, true);
 
-    PFS__ASSERT(p, "");
+    // May be file downloading is stopped
+    if (!p)
+        return;
 
     // Write data chunk
     p->data_file.set_pos(fc.offset);
@@ -470,6 +472,7 @@ void file_transporter::process_file_request (universal_id sender
 void file_transporter::process_file_stop (universal_id /*sender*/
     , std::vector<char> const & data)
 {
+    LOG_TRACE_3("=== FILE STOP ===");
     auto fs = input_envelope_type::unseal<file_stop>(data);
     remove_ofile_item(fs.fileid);
 }
@@ -612,6 +615,9 @@ void file_transporter::send_stop_file (universal_id addressee, universal_id file
 
     ready_to_send(addressee, packet_type::file_stop
         , out.data().data(), out.data().size());
+
+    // Do not process incoming file chunks
+    remove_ifile_item(fileid);
 }
 
 // Send chunk of file packets
