@@ -219,6 +219,9 @@ void discovery_engine::check_expiration ()
 
     for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
         if (pos->second.expiration_timepoint < now) {
+            LOG_TRACE_2("Discovered peer expired by timeout: {}@{}"
+                , pos->first, to_string(pos->second.saddr));
+
             peer_expired(pos->first, pos->second.saddr);
             pos = _discovered_peers.erase(pos);
         } else {

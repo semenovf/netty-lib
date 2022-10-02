@@ -283,6 +283,8 @@ void sockets_api::process_sockets_state_changed ()
                         case udp_socket::CLOSED:
                         case udp_socket::BROKEN:
                         case udp_socket::NONEXIST: {
+                            LOG_TRACE_2("Socket closed: {}", *psock);
+                            _poller.remove(*psock);
                             _sockets.erase(pos->second);
                             _index_by_socket_id.erase(pos);
 
