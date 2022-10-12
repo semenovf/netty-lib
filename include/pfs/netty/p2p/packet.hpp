@@ -35,7 +35,7 @@ enum class packet_type: std::uint8_t {
 enum class file_status: std::uint8_t {
       success = 0x2A // File received successfully
 //    , end            // File transfer complete
-    , checksum       // Checksum error
+//    , checksum       // Checksum error
 };
 
 // Packet structure
@@ -49,37 +49,6 @@ enum class file_status: std::uint8_t {
 //  |  |_________________________________________ Packet size (2 bytes)
 //  |____________________________________________ Packet type (1 byte)
 //
-// File transfer algorithm
-//------------------------------------------------------------------------------
-// Send file (initial)
-//
-// Sender                             Receiver
-//   |                                   |
-//   |-------file credentials ---------->|
-//   |                                   |
-//   |<------file request----------------|
-//   |                                   |
-//   |-------file chunk----------------->|
-//   |-------file chunk----------------->|
-//   |               ...                 |
-//   |-------file chunk----------------->|
-//   |-------file state(end)------------>|
-//   |<------file state(success)---------|
-//
-// By request, initiating file transfer
-//
-// Sender                             Receiver
-//   |                                   |
-//   |<------file request----------------|
-//   |                                   |
-//   |-------file chunk----------------->|
-//   |-------file chunk----------------->|
-//   |               ...                 |
-//   |-------file chunk----------------->|
-//   |-------file state(end)------------>|
-//   |<------file state(success)---------|
-//
-
 struct packet
 {
     static constexpr std::uint8_t PACKET_HEADER_SIZE =
@@ -132,7 +101,7 @@ struct file_chunk
 struct file_end
 {
     universal_id fileid;
-    pfs::crypto::sha256_digest checksum;
+    //pfs::crypto::sha256_digest checksum;
 };
 
 struct file_state
@@ -235,13 +204,14 @@ inline void load (cereal::BinaryInputArchive & ar, file_chunk & fc)
 ////////////////////////////////////////////////////////////////////////////////
 inline void save (cereal::BinaryOutputArchive & ar, file_end const & fe)
 {
-    ar << fe.fileid
-        << cereal::binary_data(fe.checksum.data(), fe.checksum.size());
+    ar << fe.fileid;
+//         << cereal::binary_data(fe.checksum.data(), fe.checksum.size());
 }
 
 inline void load (cereal::BinaryInputArchive & ar, file_end & fe)
 {
-    ar >> fe.fileid >> cereal::binary_data(fe.checksum.data(), fe.checksum.size());
+    ar >> fe.fileid;
+//         >> cereal::binary_data(fe.checksum.data(), fe.checksum.size());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

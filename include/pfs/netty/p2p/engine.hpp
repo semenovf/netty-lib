@@ -142,19 +142,24 @@ private:
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
-    // Host (listener) identifier
+    // Host (listener) identifier.
     universal_id _host_uuid;
 
-    // Used to solve problems with output overflow
+    // Used to solve problems with output overflow.
     std::chrono::milliseconds _output_timepoint;
 
-    // Mapping from writer contact identifier to socket identifier
+    // Mapping from writer contact identifier to socket identifier.
     // Contains element if the writer connected to peer.
     std::map<universal_id, socket_id> _writer_ids;
 
-    // Mapping from writer socket identifier to contact identifier
+    // Mapping from writer socket identifier to contact identifier.
     // Contains the element if peer discovered and started connection to it.
     std::map<socket_id, universal_id> _writer_uuids;
+
+    // Mapping from reader socket identifier to contact identifier.
+    // Contains element if the reader received data from peer.
+    // Filled in / modified in process_socket_input while receiving packets
+    std::map<socket_id, universal_id> _reader_uuids;
 
     // Input buffers pool
     // Buffers to accumulate payload from input packets
@@ -173,51 +178,73 @@ private:
     std::unordered_map<universal_id, opool_item> _opool;
 
 public: // Callbacks
-    mutable std::function<void (std::string const &)> log_error;
+    mutable std::function<void (std::string const &)> log_error
+        = [] (std::string const &) {};
 
     /**
      * Called when new peer discovered by desicover engine.
      * This is an opposite event to `peer_expired`.
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_discovered;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_discovered
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
      * Called when no discovery packets were received for a specified period.
      * This is an opposite event to `peer_discovered`.
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_expired;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_expired
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
      * Called when new writer socket ready (connected).
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> writer_ready;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> writer_ready
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
      * Called when writer socket closed/disconnected.
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> writer_closed;
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> writer_closed
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
+
+    /**
+     * Called when reader socket closed/disconnected.
+     */
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> reader_closed
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
      * Message received.
      */
-    mutable std::function<void (universal_id, std::string)> data_received;
+    mutable std::function<void (universal_id, std::string)> data_received
+        = [] (universal_id, std::string) {};
 
     /**
      * Message dispatched
      *
      * Do not call engine::send() method from this callback.
      */
-    mutable std::function<void (entity_id)> data_dispatched;
+//     mutable std::function<void (entity_id)> data_dispatched
+//         = [] (entity_id) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
         , filesize_t /*downloaded_size*/
-        , filesize_t /*total_size*/)> download_progress;
+        , filesize_t /*total_size*/)> download_progress
+        = [] (universal_id, universal_id, filesize_t , filesize_t) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
         , fs::path const & /*path*/
-        , bool /*success*/)> download_complete;
+        , bool /*success*/)> download_complete
+        = [] (universal_id, universal_id, fs::path const &, bool) {};
+
+    /**
+     * Called when file download interrupted, i.e. after peer closed.
+     */
+    mutable std::function<void (universal_id /*addresser*/
+        , universal_id /*fileid*/)> download_interrupted
+        = [] (universal_id, universal_id) {};
 
 private:
     inline entity_id next_entity_id () noexcept
@@ -356,18 +383,6 @@ public:
             fmt::print(stderr, "{}\n", s);
         };
 
-
-        peer_discovered   = [] (universal_id, inet4_addr, std::uint16_t) {};
-        peer_expired      = [] (universal_id, inet4_addr, std::uint16_t) {};
-        writer_ready      = [] (universal_id, inet4_addr, std::uint16_t) {};
-        writer_closed     = [] (universal_id, inet4_addr, std::uint16_t) {};
-        data_received     = [] (universal_id, std::string) {};
-        data_dispatched   = [] (entity_id) {};
-        download_progress = [] (universal_id /*receiver_id*/
-            , universal_id /*fileid*/
-            , filesize_t /*downloaded_size*/
-            , filesize_t /*total_size*/) {};
-
         _discovery = pfs::make_unique<DiscoveryEngineBackend>(_host_uuid);
         _socketsapi = pfs::make_unique<SocketsApiBackend>();
         _transporter = pfs::make_unique<FileTransporterBackend>();
@@ -456,6 +471,11 @@ public:
             }
 
             download_complete(addresser, fileid, path, success);
+        };
+
+        _transporter->download_interrupted = [this] (universal_id addresser
+                , universal_id fileid) {
+            download_interrupted(addresser, fileid);
         };
 
         auto now = current_timepoint();
@@ -654,9 +674,9 @@ public:
     /**
      * Send command to stop uploading file by @a addressee.
      */
-    void send_stop_file (universal_id addressee, universal_id fileid)
+    void stop_file (universal_id addressee, universal_id fileid)
     {
-        _transporter->send_stop_file(addressee, fileid);
+        _transporter->stop_file(addressee, fileid);
     }
 
 private:
@@ -686,23 +706,38 @@ private:
 
     void process_socket_closed (socket_id sid, socket4_addr saddr)
     {
-        LOG_TRACE_2("=== PROCESS SOCKET CLOSED: {}", sid);
         auto pos = _writer_uuids.find(sid);
 
         if (pos != std::end(_writer_uuids)) {
-            LOG_TRACE_2("=== PROCESS SOCKET CLOSED: WRITER CLOSED: {}", sid);
-            writer_closed(pos->second, saddr.addr, saddr.port);
-            _writer_ids.erase(pos->second);
-            _writer_uuids.erase(pos);
+            LOG_TRACE_2("Writer socket closed: {}", sid);
 
             // Erase item from output pool for specified socket
             _opool.erase(pos->second);
 
             // Erase file output pool
             _transporter->expire_addressee(pos->second);
+
+            writer_closed(pos->second, saddr.addr, saddr.port);
+            _writer_ids.erase(pos->second);
+            _writer_uuids.erase(pos);
+
         } else {
+            auto pos = _reader_uuids.find(sid);
+
             // Erase item from input pool for specified socket
             _ipool.erase(sid);
+
+            if (pos != std::end(_writer_uuids)) {
+                LOG_TRACE_2("Reader socket closed: {}", sid);
+
+                // Erase file input pool
+                _transporter->expire_addresser(pos->second);
+
+                reader_closed(pos->second, saddr.addr, saddr.port);
+                _reader_uuids.erase(pos);
+            } else {
+                LOGW("netty-p2p", "Unknown socket closed: {} (need investigation)", sid);
+            }
         }
     }
 
@@ -878,9 +913,9 @@ private:
                 if (bytes_sent > 0) {
                     total_bytes_sent += bytes_sent;
 
-                    // Message sent complete
-                    if (pkt.partindex == pkt.partcount)
-                        data_dispatched(item.id);
+//                     // Message sent complete
+//                     if (pkt.partindex == pkt.partcount)
+//                         data_dispatched(item.id);
                 } else if (bytes_sent < 0) {
                     // Output queue overflow
                     if (sock->overflow()) {

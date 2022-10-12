@@ -18,6 +18,29 @@
 #include <unordered_map>
 #include <vector>
 
+// File transfer algorithm
+//------------------------------------------------------------------------------
+//         addresser                    addressee
+//           ----                          ___
+// send_file   |                            |
+// ----------->|                            |
+//             |-------file_credentials---->|
+//             |                            |
+//             |<--------file_request-------|
+//             |                            |
+//             |---------file_chunk-------->|
+//             |---------file_chunk-------->|
+//             |            ...             |
+//             |---------file_chunk-------->|
+//             |----------file_end--------->|
+//             |                            |
+//             |<--------file_state---------|
+//             |                            |
+//
+// If addressee has already file credentials it can initiate the file transfering
+// by sending `file_request` packet to addresser.
+//
+
 namespace netty {
 namespace p2p {
 
@@ -55,6 +78,7 @@ private:
 
     struct ifile_item
     {
+        universal_id addresser;
         ofile_t desc_file;
         ofile_t data_file;
         filesize_t filesize;
@@ -96,11 +120,21 @@ public:
         , filesize_t /*total_size*/)> download_progress
         = [] (universal_id, universal_id, filesize_t, filesize_t) {};
 
+    /**
+     * Called when file download completed successfully or with an error.
+     */
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
         , pfs::filesystem::path const & /*path*/
         , bool /*success*/)> download_complete
         = [] (universal_id, universal_id, pfs::filesystem::path const &, bool) {};
+
+    /**
+     * Called when file download interrupted, i.e. after peer closed.
+     */
+    mutable std::function<void (universal_id /*addresser*/
+        , universal_id /*fileid*/)> download_interrupted
+        = [] (universal_id, universal_id) {};
 
 private:
     bool ensure_directory (pfs::filesystem::path const & dir) const;
@@ -139,11 +173,6 @@ private:
     void remove_ofile_item (universal_id fileid);
 
     /**
-     * Send request to download file from @a addressee_id.
-     */
-    void send_file_request (universal_id addressee_id, universal_id file_id);
-
-    /**
      * Load file credentials for incoming file
      */
     file_credentials incoming_file_credentials (universal_id addresser
@@ -167,7 +196,7 @@ private:
      * Commit income file.
      */
     void commit_incoming_file (universal_id addresser
-        , universal_id fileid, checksum_type checksum);
+        , universal_id fileid/*, checksum_type checksum*/);
 
     /**
      * Save file credentials for incoming file if not exists.
@@ -218,6 +247,12 @@ public:
     NETTY__EXPORT void expire_addressee (universal_id addressee);
 
     /**
+     * Remove input pool item associated with @a addresser.
+     * Notify when active downloads are interrupted.
+     */
+    NETTY__EXPORT void expire_addresser (universal_id addresser);
+
+    /**
      * Send file.
      *
      * @details Actually this method initiates file sending by send file
@@ -235,9 +270,15 @@ public:
         , pfs::filesystem::path const & path);
 
     /**
-     * Send command to stop downloading file from @a addressee.
+     * Send request to download file from @a addressee_id.
      */
-    NETTY__EXPORT void send_stop_file (universal_id addressee, universal_id fileid);
+    NETTY__EXPORT void send_file_request (universal_id addressee_id, universal_id file_id);
+
+    /**
+     * Stop file downloading and send command to @a addressee to stop
+     * downloading file from it.
+     */
+    NETTY__EXPORT void stop_file (universal_id addressee, universal_id fileid);
 };
 
 }} // namespace netty::p2p

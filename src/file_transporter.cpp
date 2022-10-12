@@ -254,7 +254,8 @@ file_transporter::ifile_item * file_transporter::locate_ifile_item (
             auto data_file = file::open_write_only(datafilepath);
 
             auto res = _ifile_pool.emplace(fileid, ifile_item{
-                  std::move(desc_file)
+                  addresser
+                , std::move(desc_file)
                 , std::move(data_file)
                 , 0
                 , pfs::crypto::sha256{}
@@ -290,9 +291,10 @@ void file_transporter::notify_file_status (universal_id addressee
 }
 
 void file_transporter::commit_incoming_file (universal_id addresser
-    , universal_id fileid, checksum_type checksum)
+    , universal_id fileid/*, checksum_type checksum*/)
 {
-    auto * p = locate_ifile_item(addresser, fileid, false);
+    auto ensure = false;
+    auto * p = locate_ifile_item(addresser, fileid, ensure);
 
     if (!p) {
         throw pfs::error{make_error_code(std::errc::no_such_file_or_directory)
@@ -302,8 +304,8 @@ void file_transporter::commit_incoming_file (universal_id addresser
     auto descfilepath = make_descfilepath(addresser, fileid);
     auto fc = incoming_file_credentials(addresser, fileid);
 
-    if (checksum == p->hash.digest()) {
-        LOG_TRACE_3("Checksum for: {}: {}", fileid, to_string(checksum));
+//     if (checksum == p->hash.digest()) {
+//         LOG_TRACE_3("Checksum for: {}: {}", fileid, to_string(checksum));
         auto donefilepath = make_donefilepath(addresser, fileid);
         auto datafilepath = make_datafilepath(addresser, fileid);
         auto targetfilepath = make_targetfilepath(addresser, fc.filename);
@@ -313,18 +315,18 @@ void file_transporter::commit_incoming_file (universal_id addresser
 
         notify_file_status(addresser, fileid, file_status::success);
         download_complete(addresser, fileid, targetfilepath, true);
-    } else {
-        log_error(tr::f_("Checksum for: {} are different: sample=>{} != {}"
-            , fileid, to_string(checksum), to_string(p->hash.digest())));
-        auto errfilepath = make_errfilepath(addresser, fileid);
-        fs::rename(descfilepath, errfilepath);
-
-        notify_file_status(addresser, fileid, file_status::checksum);
-        download_complete(addresser, fileid, fs::path{}, false);
-
-        if (_opts.remove_transient_files_on_error)
-            remove_transient_files(addresser, fileid);
-    }
+//     } else {
+//         log_error(tr::f_("Checksum for: {} are different: sample=>{} != {}"
+//             , fileid, to_string(checksum), to_string(p->hash.digest())));
+//         auto errfilepath = make_errfilepath(addresser, fileid);
+//         fs::rename(descfilepath, errfilepath);
+//
+//         notify_file_status(addresser, fileid, file_status::checksum);
+//         download_complete(addresser, fileid, fs::path{}, false);
+//
+//         if (_opts.remove_transient_files_on_error)
+//             remove_transient_files(addresser, fileid);
+//     }
 
     remove_ifile_item(fileid);
 }
@@ -407,25 +409,23 @@ void file_transporter::commit_chunk (universal_id addresser, file_chunk const & 
     p->desc_file.write(offset);
 
     if (p->filesize > 0) {
-        if (download_progress) {
-            auto pass_download_progress = p->filesize == offset
-                || _opts.download_progress_granularity == 0;
+        auto pass_download_progress = p->filesize == offset
+            || _opts.download_progress_granularity == 0;
 
-            if (!pass_download_progress) {
-                if (_opts.download_progress_granularity > 0) {
-                    int last_percents = std::round(100.0f * (static_cast<float>(last_offset) / p->filesize));
-                    int percents = std::round(100.0f * (static_cast<float>(offset) / p->filesize));
+        if (!pass_download_progress) {
+            if (_opts.download_progress_granularity > 0) {
+                int last_percents = std::round(100.0f * (static_cast<float>(last_offset) / p->filesize));
+                int percents = std::round(100.0f * (static_cast<float>(offset) / p->filesize));
 
-                    if (percents > last_percents
-                            && (percents % _opts.download_progress_granularity) == 0) {
-                        pass_download_progress = true;
-                    }
+                if (percents > last_percents
+                        && (percents % _opts.download_progress_granularity) == 0) {
+                    pass_download_progress = true;
                 }
             }
-
-            if (pass_download_progress)
-                download_progress(addresser, fc.fileid, offset, p->filesize);
         }
+
+        if (pass_download_progress)
+            download_progress(addresser, fc.fileid, offset, p->filesize);
     }
 }
 
@@ -497,7 +497,7 @@ void file_transporter::process_file_end (universal_id sender
     LOG_TRACE_2("File received completely from: {} ({})"
         , sender, fe.fileid);
 
-    commit_incoming_file(sender, fe.fileid, fe.checksum);
+    commit_incoming_file(sender, fe.fileid/*, fe.checksum*/);
 }
 
 void file_transporter::process_file_state (universal_id /*sender*/
@@ -511,9 +511,9 @@ void file_transporter::process_file_state (universal_id /*sender*/
             complete_file(fs.fileid, true);
             break;
 
-        case file_status::checksum:
-            complete_file(fs.fileid, false);
-            break;
+//         case file_status::checksum:
+//             complete_file(fs.fileid, false);
+//             break;
 
         default:
             // FIXME
@@ -534,6 +534,19 @@ void file_transporter::expire_addressee (universal_id addressee)
             pos = _ofile_pool.erase(pos);
         else
             ++pos;
+    }
+}
+
+void file_transporter::expire_addresser (universal_id addresser)
+{
+    // Erase all items associated with specified addressee
+    for (auto pos = _ifile_pool.begin(); pos != _ifile_pool.end();) {
+        if (pos->second.addresser == addresser) {
+            download_interrupted(addresser, pos->first);
+            pos = _ifile_pool.erase(pos);
+        } else {
+            ++pos;
+        }
     }
 }
 
@@ -585,7 +598,7 @@ universal_id file_transporter::send_file (universal_id addressee
         fileid = pfs::generate_uuid();
 
     file_credentials fc {
-            fileid
+          fileid
         , path.filename()
         , static_cast<filesize_t>(fs::file_size(path))
         , 0
@@ -605,8 +618,11 @@ universal_id file_transporter::send_file (universal_id addressee
     return fileid;
 }
 
-void file_transporter::send_stop_file (universal_id addressee, universal_id fileid)
+void file_transporter::stop_file (universal_id addressee, universal_id fileid)
 {
+    // Do not process incoming file chunks
+    remove_ifile_item(fileid);
+
     file_stop fs { fileid };
     output_envelope_type out;
     out << fs;
@@ -615,10 +631,7 @@ void file_transporter::send_stop_file (universal_id addressee, universal_id file
 
     ready_to_send(addressee, packet_type::file_stop
         , out.data().data(), out.data().size());
-
-    // Do not process incoming file chunks
-    remove_ifile_item(fileid);
-}
+    }
 
 // Send chunk of file packets
 void file_transporter::loop ()
@@ -645,7 +658,7 @@ void file_transporter::loop ()
             // File send completely, send `file_end` packet
 
             p->at_end = true;
-            file_end fe { fileid, p->hash.digest() };
+            file_end fe { fileid/*, p->hash.digest()*/ };
 
             output_envelope_type out;
             out << fe;
