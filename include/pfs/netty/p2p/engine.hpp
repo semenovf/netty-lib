@@ -481,8 +481,13 @@ public:
         auto now = current_timepoint();
         _output_timepoint = now;
 
-        _discovery->listen();
-        _socketsapi->listen();
+        try {
+            _discovery->listen();
+            _socketsapi->listen();
+        } catch (error ex) {
+            log_error(tr::f_("Start netty::p2p::engine failure: {}", ex.what()));
+            return false;
+        }
 
         return true;
     }

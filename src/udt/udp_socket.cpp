@@ -90,7 +90,7 @@ void udp_socket::bind (inet4_addr addr, std::uint16_t port)
         , sizeof(addr_in4));
 
     if (UDT::ERROR == rc) {
-        throw error{
+        throw error {
               make_error_code(errc::socket_error)
             , tr::f_("bind {}:{} to socket failure: {}"
                 , to_string(addr), port, error_string())
@@ -108,7 +108,7 @@ void udp_socket::listen (int backlog)
     auto rc = UDT::listen(_socket, backlog);
 
     if (rc < 0) {
-        throw error{
+        throw error {
               make_error_code(errc::socket_error)
             , tr::f_("listen failure: {}", error_string())
         };

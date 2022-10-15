@@ -15,7 +15,6 @@ namespace netty {
 // Error codes, category, exception class
 ////////////////////////////////////////////////////////////////////////////////
 using error_code = std::error_code;
-using error = pfs::error;
 
 enum class errc
 {
@@ -82,5 +81,31 @@ inline std::system_error make_exception (errc e)
 {
     return std::system_error(make_error_code(e));
 }
+
+class error: public pfs::error
+{
+public:
+    using pfs::error::error;
+
+    error (errc ec)
+        : pfs::error(make_error_code(ec))
+    {}
+
+    error (errc ec
+        , std::string const & description
+        , std::string const & cause)
+        : pfs::error(make_error_code(ec), description, cause)
+    {}
+
+    error (errc ec
+        , std::string const & description)
+        : pfs::error(make_error_code(ec), description)
+    {}
+
+    bool ok () const
+    {
+        return !*this;
+    }
+};
 
 } // namespace netty
