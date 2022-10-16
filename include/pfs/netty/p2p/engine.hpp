@@ -732,7 +732,7 @@ private:
             // Erase item from input pool for specified socket
             _ipool.erase(sid);
 
-            if (pos != std::end(_writer_uuids)) {
+            if (pos != std::end(_reader_uuids)) {
                 LOG_TRACE_2("Reader socket closed: {}", sid);
 
                 // Erase file input pool
@@ -753,7 +753,9 @@ private:
 
         if (res.second) {
             // New inserted
-            LOG_TRACE_2("Accepted socket added to input pool: {}", to_string(saddr));
+            LOG_TRACE_2("Accepted socket added to input pool: {} (size={})"
+                , to_string(saddr)
+                , _ipool.size());
         } else {
             auto & item = res.first->second;
 
