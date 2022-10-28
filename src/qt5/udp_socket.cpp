@@ -10,6 +10,7 @@
 #include "pfs/netty/p2p/qt5/udp_socket.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
+#include <array>
 
 namespace netty {
 namespace p2p {

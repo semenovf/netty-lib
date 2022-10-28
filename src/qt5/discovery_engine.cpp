@@ -32,6 +32,9 @@ discovery_engine::discovery_engine (universal_id host_uuid)
     };
 }
 
+discovery_engine::~discovery_engine ()
+{}
+
 bool discovery_engine::set_option (option_enum opttype, std::intmax_t value)
 {
     switch (opttype) {

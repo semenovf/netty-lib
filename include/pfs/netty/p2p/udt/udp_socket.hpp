@@ -24,7 +24,7 @@ class udp_socket
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
 
-    static constexpr UDTSOCKET INVALID_SOCKET = -1;
+    static UDTSOCKET const INVALID_UDTSOCKET = -1;
 
 public:
     // Must be same as UDTSTATUS defined in `udt.h`
@@ -43,7 +43,7 @@ public:
     using native_type = UDTSOCKET;
 
 private:
-    UDTSOCKET _socket {INVALID_SOCKET};
+    UDTSOCKET _socket {INVALID_UDTSOCKET};
     socket4_addr _saddr;
 
 public:
@@ -57,14 +57,14 @@ public:
     {
         _socket = other._socket;
         _saddr  = other._saddr;
-        other._socket = INVALID_SOCKET;
+        other._socket = INVALID_UDTSOCKET;
     }
 
     udp_socket & operator = (udp_socket && other) noexcept
     {
         _socket = other._socket;
         _saddr  = other._saddr;
-        other._socket = INVALID_SOCKET;
+        other._socket = INVALID_UDTSOCKET;
         return *this;
     }
 

@@ -599,7 +599,7 @@ universal_id file_transporter::send_file (universal_id addressee
 
     file_credentials fc {
           fileid
-        , path.filename()
+        , fs::utf8_encode(path.filename())
         , static_cast<filesize_t>(fs::file_size(path))
         , 0
     };

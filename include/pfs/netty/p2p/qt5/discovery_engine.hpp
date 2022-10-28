@@ -103,6 +103,8 @@ public:
      */
     NETTY__EXPORT discovery_engine (universal_id host_uuid);
 
+    NETTY__EXPORT ~discovery_engine ();
+
     /**
      * Sets boolean or integer type options.
      *

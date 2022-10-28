@@ -14,7 +14,18 @@
 #include "pfs/netty/error.hpp"
 
 #if _MSC_VER
-#   include "windows.hpp"
+#   include <sys/types.h>
+#   include <sys/stat.h>
+#   include <fcntl.h>
+
+#   ifndef S_IRUSR
+#       define S_IRUSR _S_IREAD
+#   endif
+
+#   ifndef S_IWUSR
+#       define S_IWUSR _S_IWRITE
+#   endif
+
 #else
 #   include <sys/types.h>
 #   include <fcntl.h>
