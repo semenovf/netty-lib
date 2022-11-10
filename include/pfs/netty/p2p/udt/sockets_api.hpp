@@ -134,6 +134,8 @@ public:
         return connect(saddr.addr, saddr.port);
     }
 
+    NETTY__EXPORT void close (socket_id sid);
+
     NETTY__EXPORT void loop ();
 };
 

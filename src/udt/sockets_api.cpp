@@ -169,6 +169,14 @@ sockets_api::socket_id sockets_api::connect (inet4_addr addr, std::uint16_t port
     return sid;
 }
 
+void sockets_api::close (socket_id sid)
+{
+    auto s = locate(sid);
+
+    if (s)
+        s->close();
+}
+
 void sockets_api::poll (std::chrono::milliseconds interval)
 {
     auto rc = _poller.wait(interval);
@@ -275,6 +283,9 @@ void sockets_api::process_sockets_state_changed ()
 
                                 process_connected(psock);
                                 _connecting_sockets.erase(pos1);
+                            } else {
+                                log_error(tr::f_("Socket not found in "
+                                    "connecting sockets: {}", sid));
                             }
 
                             break;

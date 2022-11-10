@@ -30,9 +30,9 @@ public:
 
     enum option_enum: std::int16_t
     {
-          discovery_address   // socket4_addr
-        , transmit_interval   // std::chrono::milliseconds
-        , listener_port       // std::uint16_t
+          discovery_address // socket4_addr
+        , transmit_interval // std::chrono::milliseconds
+        , listener_port     // std::uint16_t
     };
 
 private:
@@ -40,15 +40,20 @@ private:
         socket4_addr discovery_address;
         std::chrono::milliseconds transmit_interval;
         std::uint16_t listener_port;
-    } _opts;
+    };
 
+    struct target_item {
+        socket4_addr saddr;
+        std::uint32_t counter;
+    };
+
+private:
+    options _opts;
     universal_id _host_uuid;
-    socket_type _receiver;
-    socket_type _transmitter;
-    std::chrono::milliseconds _last_timepoint;
-
-    std::vector<socket4_addr> _targets;
-
+    socket_type  _receiver;
+    socket_type  _transmitter;
+    std::chrono::milliseconds _transmit_timepoint;
+    std::vector<target_item>  _targets;
 
     struct peer_credentials
     {

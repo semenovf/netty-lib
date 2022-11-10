@@ -178,10 +178,8 @@ void udp_socket::connect (inet4_addr addr, std::uint16_t port)
 
 void udp_socket::close ()
 {
-    if (_socket >= 0) {
+    if (_socket >= 0)
         UDT::close(_socket);
-        _socket = -1;
-    }
 }
 
 std::vector<std::pair<std::string, std::string>> udp_socket::dump_options () const

@@ -19,6 +19,8 @@ namespace qt5 {
 
 static std::chrono::milliseconds const MAX_TRANSMIT_INTERVAL {60 * 1000};
 static std::chrono::milliseconds const DEFAULT_TRANSMIT_INTERVAL {  5000};
+static std::chrono::milliseconds const MIN_EXPIRATION_INTERVAL {5000};
+static int const EXPIRATION_INTERVAL_FACTOR = 5;
 
 discovery_engine::discovery_engine (universal_id host_uuid)
     : _host_uuid(host_uuid)
@@ -73,6 +75,8 @@ bool discovery_engine::set_option (option_enum opttype, std::chrono::millisecond
         case option_enum::transmit_interval:
             if (msecs.count() > 0 && msecs <= MAX_TRANSMIT_INTERVAL) {
                 _opts.transmit_interval = msecs;
+                LOG_TRACE_2("Discovery transmit interval: {}"
+                    , _opts.transmit_interval);
                 return true;
             }
 
@@ -91,8 +95,7 @@ void discovery_engine::listen ()
 {
     auto now = current_timepoint();
 
-    _last_timepoint = now > _opts.transmit_interval
-        ? now - _opts.transmit_interval : now;
+    _transmit_timepoint = now + _opts.transmit_interval;
 
     _receiver.bind(_opts.discovery_address);
 
@@ -123,8 +126,12 @@ void discovery_engine::process_discovery_data (socket4_addr saddr
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
                 auto pos = _discovered_peers.find(packet.uuid);
-                auto expiration_timepoint = current_timepoint()
-                    + std::chrono::milliseconds(packet.transmit_interval) * 2;
+                auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval) * EXPIRATION_INTERVAL_FACTOR;
+
+                if (expiration_interval < MIN_EXPIRATION_INTERVAL)
+                    expiration_interval = MIN_EXPIRATION_INTERVAL;
+
+                auto expiration_timepoint = current_timepoint() + expiration_interval;
 
                 // New peer is discovered
                 if (pos == std::end(_discovered_peers)) {
@@ -149,67 +156,60 @@ void discovery_engine::process_discovery_data (socket4_addr saddr
                     modified = modified || (pos->second.saddr.port != packet.port);
 
                     if (modified) {
+                        LOG_TRACE_1("Peer modified (socket address changed): {}: {}=>{}"
+                            , packet.uuid
+                            , to_string(pos->second.saddr)
+                            , to_string(socket4_addr{saddr.addr, packet.port}));
+
                         peer_expired(packet.uuid, pos->second.saddr);
-                        pos->second.saddr = socket4_addr{saddr.addr, packet.port};
-                        peer_discovered(packet.uuid, pos->second.saddr);
+                    } else {
+                        pos->second.expiration_timepoint = expiration_timepoint;
                     }
                 }
-
-                pos->second.expiration_timepoint = expiration_timepoint;
             }
         } else {
-            if (log_error) {
-                log_error(tr::f_("Bad CRC16 for HELO packet received from: {}:{}"
-                    , to_string(saddr.addr), saddr.port));
-            }
-        }
-    } else {
-        if (log_error) {
-            log_error(tr::f_("Bad HELO packet received from: {}:{}"
+            log_error(tr::f_("Bad CRC16 for HELO packet received from: {}:{}"
                 , to_string(saddr.addr), saddr.port));
         }
+    } else {
+        log_error(tr::f_("Bad HELO packet received from: {}:{}"
+            , to_string(saddr.addr), saddr.port));
     }
 }
 
 void discovery_engine::broadcast_discovery_data ()
 {
     auto now = current_timepoint();
-    bool interval_exceeded = false;
-
-    if (_last_timepoint > now) {
-        interval_exceeded = true;
-    } else {
-        interval_exceeded = (_last_timepoint + _opts.transmit_interval) <= now;
-    }
+    auto interval_exceeded = (_transmit_timepoint <= now);
 
     if (interval_exceeded) {
         hello_packet packet;
         packet.uuid = _host_uuid;
         packet.port = _opts.listener_port;
         packet.transmit_interval = static_cast<std::uint16_t>(_opts.transmit_interval.count());
-        packet.crc16 = crc16_of(packet);
 
-        output_envelope_type out;
-        out.seal(packet);
+        for (auto & item: _targets) {
+            packet.counter = ++item.counter;
+            packet.crc16 = crc16_of(packet);
 
-        auto data = out.data();
-        auto size = data.size();
+            output_envelope_type out;
+            out.seal(packet);
 
-        PFS__ASSERT(size == hello_packet::PACKET_SIZE, "");
+            auto data = out.data();
+            auto size = data.size();
 
-        for (auto const & item: _targets) {
-            socket4_addr target_saddr {item.addr, item.port};
+            PFS__ASSERT(size == hello_packet::PACKET_SIZE, "");
+
+            socket4_addr target_saddr {item.saddr.addr, item.saddr.port};
             auto bytes_written = _transmitter.send(data.data(), size, target_saddr);
 
             if (bytes_written < 0) {
-                if (log_error) {
-                    log_error(tr::f_("Transmit failure to: {}: {}"
-                        , to_string(target_saddr), _transmitter.error_string()));
-                }
+                log_error(tr::f_("Transmit failure to: {}: {}"
+                    , to_string(target_saddr), _transmitter.error_string()));
             }
         }
 
-        _last_timepoint = current_timepoint();
+        _transmit_timepoint = current_timepoint() + _opts.transmit_interval;
     }
 }
 
@@ -222,8 +222,10 @@ void discovery_engine::check_expiration ()
 
     for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
         if (pos->second.expiration_timepoint < now) {
-            LOG_TRACE_2("Discovered peer expired by timeout: {}@{}"
-                , pos->first, to_string(pos->second.saddr));
+            LOG_TRACE_2("Discovered peer expired by timeout: {}@{}: {} < {}"
+                , pos->first, to_string(pos->second.saddr)
+                , pos->second.expiration_timepoint
+                , now);
 
             peer_expired(pos->first, pos->second.saddr);
             pos = _discovered_peers.erase(pos);
@@ -235,7 +237,7 @@ void discovery_engine::check_expiration ()
 
 void discovery_engine::add_target (socket4_addr saddr)
 {
-    _targets.emplace_back(saddr);
+    _targets.emplace_back(target_item{saddr, 0});
 
     if (is_multicast(saddr.addr)) {
         _receiver.join_multicast_group(saddr.addr);

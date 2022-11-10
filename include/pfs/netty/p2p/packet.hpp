@@ -24,6 +24,7 @@ namespace p2p {
 
 enum class packet_type: std::uint8_t {
       regular = 0x2A
+    , hello
     , file_credentials
     , file_request
     , file_stop    // Stop/pause file transferring
@@ -70,6 +71,9 @@ struct packet
     std::uint32_t partindex;   // Part index (starts from 1)
     char          payload[MAX_PAYLOAD_SIZE];
 };
+
+// `addresser` field of packet is a payload for this packet type
+struct hello {};
 
 struct file_credentials
 {
@@ -134,6 +138,15 @@ inline void load (cereal::BinaryInputArchive & ar, packet & pkt)
         >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex)
         >> cereal::binary_data(pkt.payload, pkt.packetsize - packet::PACKET_HEADER_SIZE);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// hello
+////////////////////////////////////////////////////////////////////////////////
+inline void save (cereal::BinaryOutputArchive & ar, hello const & h)
+{}
+
+inline void load (cereal::BinaryInputArchive & ar, hello & h)
+{}
 
 ////////////////////////////////////////////////////////////////////////////////
 // file_credentials

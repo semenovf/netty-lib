@@ -32,6 +32,7 @@ constexpr std::chrono::milliseconds DEFAULT_OVERFLOW_TIMEOUT { 100};
 constexpr std::size_t  DEFAULT_BUFFER_BULK_SIZE {64 * 1024};
 constexpr char const * UNSUITABLE_VALUE = tr::noop_("Unsuitable value for option: {}");
 constexpr char const * BAD_VALUE        = tr::noop_("Bad value for option: {}");
+constexpr char const * TAG = "netty-p2p";
 }
 
 /**
@@ -156,6 +157,10 @@ private:
     // Contains the element if peer discovered and started connection to it.
     std::map<socket_id, universal_id> _writer_uuids;
 
+    // Mapping from reader contact identifier to socket identifier.
+    // Contains element if the reader received hello packet.
+    std::map<universal_id, socket_id> _reader_ids;
+
     // Mapping from reader socket identifier to contact identifier.
     // Contains element if the reader received data from peer.
     // Filled in / modified in process_socket_input while receiving packets
@@ -218,14 +223,6 @@ public: // Callbacks
      */
     mutable std::function<void (universal_id, std::string)> data_received
         = [] (universal_id, std::string) {};
-
-    /**
-     * Message dispatched
-     *
-     * Do not call engine::send() method from this callback.
-     */
-//     mutable std::function<void (entity_id)> data_dispatched
-//         = [] (entity_id) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
@@ -414,6 +411,37 @@ public:
 
         _discovery->peer_expired = [this] (universal_id peer_uuid
                 , socket4_addr saddr) {
+
+            // Close writer
+            {
+                auto pos = _writer_ids.find(peer_uuid);
+
+                if (pos == std::end(_writer_ids)) {
+                    ; // Do nothing, socket may be closed earlier when peer socket
+                      // closed before
+                } else {
+                    LOG_TRACE_2("Peer expired, closing writer: {}@{}.{}"
+                        , peer_uuid, to_string(saddr), pos->second);
+
+                    _socketsapi->close(pos->second);
+                }
+            }
+
+            // Close reader
+            {
+                auto pos = _reader_ids.find(peer_uuid);
+
+                if (pos == std::end(_reader_ids)) {
+                    ; // Do nothing, socket may be closed earlier when peer socket
+                      // closed before
+                } else {
+                    LOG_TRACE_2("Peer expired, closing reader: {}@{}.{}"
+                        , peer_uuid, to_string(saddr), pos->second);
+
+                    _socketsapi->close(pos->second);
+                }
+            }
+
             peer_expired(peer_uuid, saddr.addr, saddr.port);
         };
 
@@ -707,6 +735,10 @@ private:
 
         _writer_ids.emplace(pos->second, sid);
         writer_ready(pos->second, saddr.addr, saddr.port);
+
+        // Payload doesn't matter, but length must be greater than zero.
+        char h = 0;
+        enqueue_packets(pos->second, packet_type::hello, & h, 1);
     }
 
     void process_socket_closed (socket_id sid, socket4_addr saddr)
@@ -725,7 +757,6 @@ private:
             writer_closed(pos->second, saddr.addr, saddr.port);
             _writer_ids.erase(pos->second);
             _writer_uuids.erase(pos);
-
         } else {
             auto pos = _reader_uuids.find(sid);
 
@@ -735,13 +766,19 @@ private:
             if (pos != std::end(_reader_uuids)) {
                 LOG_TRACE_2("Reader socket closed: {}", sid);
 
-                // Erase file input pool
-                _transporter->expire_addresser(pos->second);
+                if (pos->second != universal_id{}) {
+                    // Erase file input pool
+                    _transporter->expire_addresser(pos->second);
+                    reader_closed(pos->second, saddr.addr, saddr.port);
+                } else {
+                    LOGE(TAG, "Unknown universal identifier for reader with sockect id: {}"
+                        ", maybe `hello` packet was not received", sid);
+                }
 
-                reader_closed(pos->second, saddr.addr, saddr.port);
+                _reader_ids.erase(pos->second);
                 _reader_uuids.erase(pos);
             } else {
-                LOGW("netty-p2p", "Unknown socket closed: {} (need investigation)", sid);
+                LOGW(TAG, "Unknown socket closed: {} (need investigation)", sid);
             }
         }
     }
@@ -756,6 +793,8 @@ private:
             LOG_TRACE_2("Accepted socket added to input pool: {} (size={})"
                 , to_string(saddr)
                 , _ipool.size());
+
+            _reader_uuids.emplace(sid, universal_id{});
         } else {
             auto & item = res.first->second;
 
@@ -808,6 +847,7 @@ private:
             decltype(packet::packetsize) packetsize {0};
 
             auto valid_packettype = packettype == packet_type::regular
+                || packettype == packet_type::hello
                 || packettype == packet_type::file_credentials
                 || packettype == packet_type::file_request
                 || packettype == packet_type::file_chunk
@@ -855,6 +895,32 @@ private:
                         this->data_received(sender
                             , std::string(pitem->b.data(), pitem->b.size()));
                         break;
+
+                    case packet_type::hello: {
+                        auto pos = _reader_uuids.find(sid);
+
+                        if (pos != std::end(_reader_uuids)) {
+                            pos->second = sender;
+                            LOG_TRACE_2("Hello from: {}@{}:{}.{}"
+                                , pos->second, to_string(psock->addr())
+                                , psock->port(), sid);
+                        } else {
+                            LOGE(TAG, "No reader found by socket id: {}", sid);
+                        }
+
+                        auto pos1 = _reader_ids.find(sender);
+
+                        if (pos1 == std::end(_reader_ids)) {
+                            _reader_ids.emplace(sender, sid);
+                        } else {
+                            if (pos1->second != sid) {
+                                _socketsapi->close(pos1->second);
+                                pos1->second = sid;
+                            }
+                        }
+
+                        break;
+                    }
 
                     // Initiating file sending from peer
                     case packet_type::file_credentials:

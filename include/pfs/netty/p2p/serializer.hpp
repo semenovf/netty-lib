@@ -22,6 +22,9 @@ struct ntoh_wrapper
 };
 
 template <typename T>
+inline ntoh_wrapper<T> ntoh (T & v) { return ntoh_wrapper<T>{v}; }
+
+template <typename T>
 void load (cereal::BinaryInputArchive & ar, ntoh_wrapper<T> & r)
 {
     ar >> *r.p;
