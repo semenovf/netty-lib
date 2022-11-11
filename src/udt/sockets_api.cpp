@@ -284,8 +284,8 @@ void sockets_api::process_sockets_state_changed ()
                                 process_connected(psock);
                                 _connecting_sockets.erase(pos1);
                             } else {
-                                log_error(tr::f_("Socket not found in "
-                                    "connecting sockets: {}", sid));
+                                // Accepted socket
+                                LOG_TRACE_2("Accepted socket changed to connected state: {}", *psock);
                             }
 
                             break;
