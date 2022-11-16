@@ -304,29 +304,18 @@ void file_transporter::commit_incoming_file (universal_id addresser
     auto descfilepath = make_descfilepath(addresser, fileid);
     auto fc = incoming_file_credentials(addresser, fileid);
 
-//     if (checksum == p->hash.digest()) {
-//         LOG_TRACE_3("Checksum for: {}: {}", fileid, to_string(checksum));
-        auto donefilepath = make_donefilepath(addresser, fileid);
-        auto datafilepath = make_datafilepath(addresser, fileid);
-        auto targetfilepath = make_targetfilepath(addresser, fc.filename);
+    p->desc_file.close();
+    p->data_file.close();
 
-        fs::rename(descfilepath, donefilepath);
-        fs::rename(datafilepath, targetfilepath);
+    auto donefilepath = make_donefilepath(addresser, fileid);
+    auto datafilepath = make_datafilepath(addresser, fileid);
+    auto targetfilepath = make_targetfilepath(addresser, fc.filename);
 
-        notify_file_status(addresser, fileid, file_status::success);
-        download_complete(addresser, fileid, targetfilepath, true);
-//     } else {
-//         log_error(tr::f_("Checksum for: {} are different: sample=>{} != {}"
-//             , fileid, to_string(checksum), to_string(p->hash.digest())));
-//         auto errfilepath = make_errfilepath(addresser, fileid);
-//         fs::rename(descfilepath, errfilepath);
-//
-//         notify_file_status(addresser, fileid, file_status::checksum);
-//         download_complete(addresser, fileid, fs::path{}, false);
-//
-//         if (_opts.remove_transient_files_on_error)
-//             remove_transient_files(addresser, fileid);
-//     }
+    fs::rename(descfilepath, donefilepath);
+    fs::rename(datafilepath, targetfilepath);
+
+    notify_file_status(addresser, fileid, file_status::success);
+    download_complete(addresser, fileid, targetfilepath, true);
 
     remove_ifile_item(fileid);
 }
@@ -380,7 +369,8 @@ void file_transporter::uncache_file_credentials (universal_id fileid)
 void file_transporter::commit_chunk (universal_id addresser, file_chunk const & fc)
 {
     // Returns non-null pointer or throws an exception
-    auto * p = locate_ifile_item(addresser, fc.fileid, true);
+    auto ensure = false;
+    auto * p = locate_ifile_item(addresser, fc.fileid, ensure);
 
     // May be file downloading is stopped
     if (!p)
@@ -439,11 +429,11 @@ void file_transporter::complete_file (universal_id fileid, bool /*success*/)
 void file_transporter::process_file_credentials (universal_id sender
     , std::vector<char> const & data)
 {
-    auto fc = input_envelope_type::unseal<file_credentials>(data);
+	auto fc = input_envelope_type::unseal<file_credentials>(data);
 
-    // Cache incoming if file credentials if not exists
-    cache_incoming_file_credentials(sender, fc);
-    send_file_request(sender, fc.fileid);
+	// Cache incoming if file credentials if not exists
+	cache_incoming_file_credentials(sender, fc);
+	send_file_request(sender, fc.fileid);
 }
 
 void file_transporter::process_file_request (universal_id sender

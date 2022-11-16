@@ -89,15 +89,25 @@ public:
 
     inline void close () noexcept
     {
-        if (_h > 0)
-            ::close(_h);
+		if (_h > 0) {
+#if _MSC_VER
+			_close(_h);
+#else
+			::close(_h);
+#endif
+		}
 
         _h = INVALID_FILE_HANDLE;
     }
 
     filesize_t offset () const
     {
-        return static_cast<filesize_t>(::lseek(_h, 0, SEEK_CUR));
+#if _MSC_VER
+		return static_cast<filesize_t>(_lseek(_h, 0, SEEK_CUR));
+#else
+		return static_cast<filesize_t>(::lseek(_h, 0, SEEK_CUR));
+#endif
+			
     }
 
     /**
@@ -124,7 +134,11 @@ public:
             return -1;
         }
 
+#if _MSC_VER
+		auto n = _read(_h, buffer, count);
+#else
         auto n = ::read(_h, buffer, count);
+#endif
 
         if (n < 0) {
             ec = std::error_code(errno, std::generic_category());
@@ -191,7 +205,11 @@ public:
      */
     filesize_t write (char const * buffer, filesize_t count, std::error_code & ec)
     {
+#if _MSC_VER
+		auto n = _write(_h, buffer, count);
+#else
         auto n = ::write(_h, buffer, count);
+#endif
 
         if (n < 0)
             ec = std::error_code(errno, std::generic_category());
@@ -230,7 +248,11 @@ public:
      */
     bool set_pos (filesize_t offset, std::error_code & ec)
     {
+#if _MSC_VER
+		auto pos = static_cast<filesize_t>(_lseek(_h, offset, SEEK_SET));
+#else
         auto pos = static_cast<filesize_t>(::lseek(_h, offset, SEEK_SET));
+#endif
 
         if (pos < 0) {
             ec = std::error_code(errno, std::generic_category());
@@ -271,7 +293,12 @@ public: // static
             return file{};
         }
 
+#if _MSC_VER
+		handle_type h;
+		_sopen_s(& h, fs::utf8_encode(path).c_str(), O_RDONLY, _SH_DENYNO, 0);
+#else
         handle_type h = ::open(fs::utf8_encode(path).c_str(), O_RDONLY);
+#endif
 
         if (h < 0) {
             ec = std::error_code(errno, std::generic_category());
@@ -308,8 +335,14 @@ public: // static
         if (trunc == truncate_enum::on)
             oflags |= O_TRUNC;
 
+#if _MSC_VER
+		handle_type h;
+		_sopen_s(& h, fs::utf8_encode(path).c_str(), oflags, _SH_DENYWR, S_IRUSR | S_IWUSR);
+
+#else
         handle_type h = ::open(fs::utf8_encode(path).c_str()
             , oflags, S_IRUSR | S_IWUSR);
+#endif
 
         if (h < 0) {
             ec = std::error_code(errno, std::generic_category());
@@ -368,7 +401,7 @@ public: // static
 
     static void rewrite (fs::path const & path, std::string const & text)
     {
-        rewrite(path, text.c_str(), text.size());
+        rewrite(path, text.c_str(), static_cast<filesize_t>(text.size()));
     }
 
     static std::string read_all (fs::path const & path, std::error_code & ec)

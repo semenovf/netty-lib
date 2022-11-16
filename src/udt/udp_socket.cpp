@@ -61,8 +61,9 @@ static UDTSOCKET create (inet4_addr const & addr
 
 #if NETTY_P2P__NEW_UDT_ENABLED
     // TODO Need external configurable of bellow options
-    UDT::setsockopt(socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
-    UDT::setsockopt(socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
+    // Default values see udt/newlib/core.hpp
+    UDT::setsockopt(socket, 0, UDT_EXP_MAX_COUNTER, new int(16), sizeof(int));
+    UDT::setsockopt(socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(5000000), sizeof(std::uint64_t));
 #endif
 
     return socket;
@@ -138,8 +139,8 @@ udp_socket udp_socket::accept ()
 
     #if NETTY_P2P__NEW_UDT_ENABLED
         // TODO Need external configurable of bellow options
-        UDT::setsockopt(result._socket, 0, UDT_EXP_MAX_COUNTER, new int(0), sizeof(int));
-        UDT::setsockopt(result._socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(1000000), sizeof(std::uint64_t));
+        UDT::setsockopt(result._socket, 0, UDT_EXP_MAX_COUNTER, new int(16), sizeof(int));
+        UDT::setsockopt(result._socket, 0, UDT_EXP_THRESHOLD  , new std::uint64_t(5000000), sizeof(std::uint64_t));
     #endif
 
     } else {

@@ -130,13 +130,13 @@ inline void save (cereal::BinaryOutputArchive & ar, packet const & pkt)
 
 inline void load (cereal::BinaryInputArchive & ar, packet & pkt)
 {
-    ar >> pkt.packettype
-        >> ntoh_wrapper<decltype(pkt.packetsize)>{pkt.packetsize}
-        >> pkt.addresser
-        >> ntoh_wrapper<decltype(pkt.payloadsize)>(pkt.payloadsize)
-        >> ntoh_wrapper<decltype(pkt.partcount)>(pkt.partcount)
-        >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex)
-        >> cereal::binary_data(pkt.payload, pkt.packetsize - packet::PACKET_HEADER_SIZE);
+    ar >> pkt.packettype;
+    ar >> ntoh_wrapper<decltype(pkt.packetsize)>{pkt.packetsize};
+    ar >> pkt.addresser;
+    ar >> ntoh_wrapper<decltype(pkt.payloadsize)>(pkt.payloadsize);
+    ar >> ntoh_wrapper<decltype(pkt.partcount)>(pkt.partcount);
+    ar >> ntoh_wrapper<decltype(pkt.partindex)>(pkt.partindex);
+    ar >> cereal::binary_data(pkt.payload, pkt.packetsize - packet::PACKET_HEADER_SIZE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

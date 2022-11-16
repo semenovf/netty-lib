@@ -2219,7 +2219,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
         m_bBroken = true;
 
-        LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+        LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN (SHUTDOWN): {} ({}:{})", m_SocketID, __FILE__, __LINE__);
 
         m_iBrokenCounter = 60;
 
@@ -2593,11 +2593,15 @@ void CUDT::checkTimers()
 //             , currtime - m_ullLastRspTime
 //             , m_ullEXPThreshold * m_ullCPUFrequency);
 
-        // Haven't receive any information from the peer, is it dead?!
-        // timeout: at least 16 expirations and must be greater than 10 seconds
-        //if ((m_iEXPCount > 16) && (currtime - m_ullLastRspTime > 5000000 * m_ullCPUFrequency))
-        if ((m_iEXPCount > m_iEXPMaxCounter)
-                && (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency)) {
+      // Haven't receive any information from the peer, is it dead?!
+      // timeout: at least 16 expirations and must be greater than 10 seconds
+      //if ((m_iEXPCount > 16) && (currtime - m_ullLastRspTime > 5000000 * m_ullCPUFrequency))
+      auto a = m_iEXPCount > m_iEXPMaxCounter;
+      auto b = (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency);
+
+      //if ((m_iEXPCount > m_iEXPMaxCounter)
+      //         && (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency)) {
+      if (a && b) {
             //
             // Connection is broken.
             // UDT does not signal any information about this instead of to stop quietly.
@@ -2607,7 +2611,18 @@ void CUDT::checkTimers()
             // LOG_TRACE_3("*** SET BROKEN TRUE *** id: {}", m_SocketID);
             m_bBroken = true;
 
-            LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+            LOG_TRACE_3("~~~ STATUS CHANGED: Socket BROKEN: {} ({}:{})\n"
+               "\t1. m_iEXPCount({}) > m_iEXPMaxCounter({}) = {}\n"
+               "\t2. currtime({}) - m_ullLastRspTime ({}) = {}\n"
+               "\t3. m_ullEXPThreshold({}) * m_ullCPUFrequency({}) = {}\n"
+               "\t4. 2. > 3. = {}\n"
+               "\t5. 1. && 4. = {}"
+               , m_SocketID, __FILE__, __LINE__
+               , m_iEXPCount, m_iEXPMaxCounter, (m_iEXPCount > m_iEXPMaxCounter)
+               , currtime, m_ullLastRspTime, (currtime - m_ullLastRspTime)
+               , m_ullEXPThreshold, m_ullCPUFrequency, (m_ullEXPThreshold * m_ullCPUFrequency)
+               , (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency)
+               , (a && b));
 
             m_iBrokenCounter = 30;
 
