@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "udp_socket.hpp"
+#include "pfs/time_point.hpp"
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/p2p/envelope.hpp"
@@ -27,19 +28,23 @@ class discovery_engine
 
 public:
     using socket_type = udp_socket;
+    using milliseconds_type = std::chrono::milliseconds;
+    using timediff_type     = std::chrono::milliseconds;
 
     enum option_enum: std::int16_t
     {
-          discovery_address // socket4_addr
-        , transmit_interval // std::chrono::milliseconds
-        , listener_port     // std::uint16_t
+          discovery_address     // socket4_addr
+        , listener_port         // std::uint16_t
+        , transmit_interval     // std::chrono::milliseconds
+        , timestamp_error_limit // std::chrono::milliseconds
     };
 
 private:
     struct options {
         socket4_addr discovery_address;
-        std::chrono::milliseconds transmit_interval;
         std::uint16_t listener_port;
+        milliseconds_type transmit_interval;
+        milliseconds_type timestamp_error_limit;
     };
 
     struct target_item {
@@ -52,15 +57,18 @@ private:
     universal_id _host_uuid;
     socket_type  _receiver;
     socket_type  _transmitter;
-    std::chrono::milliseconds _transmit_timepoint;
-    std::vector<target_item>  _targets;
+    milliseconds_type _transmit_timepoint;
+    std::vector<target_item> _targets;
 
     struct peer_credentials
     {
         socket4_addr saddr;
 
         // Expiration timepoint to monitor if the peer is alive
-        std::chrono::milliseconds expiration_timepoint;
+        milliseconds_type expiration_timepoint;
+
+        // Peers time difference
+        timediff_type timediff;
     };
 
     // Contains discovered peers with additional information
@@ -74,8 +82,14 @@ public:
      * Called when peer discovery (hello) packet received.
      * It happens periodically (defined by _transmit_interval on the remote host).
      */
-    mutable std::function<void (universal_id, socket4_addr)> peer_discovered
-        = [] (universal_id /*peer_uuid*/, socket4_addr /*saddr*/) {};
+    mutable std::function<void (universal_id, socket4_addr, timediff_type const &)>
+        peer_discovered = [] (universal_id, socket4_addr, timediff_type const &) {};
+
+    /**
+     * Called when the time difference has changed significantly.
+     */
+    mutable std::function<void (universal_id, timediff_type const &)>
+        peer_timediff = [] (universal_id, timediff_type const &) {};
 
     /**
      * Called when no discovery packets were received for a specified period or

@@ -190,8 +190,15 @@ public: // Callbacks
      * Called when new peer discovered by desicover engine.
      * This is an opposite event to `peer_expired`.
      */
-    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> peer_discovered
-        = [] (universal_id, inet4_addr, std::uint16_t) {};
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t
+        , std::chrono::milliseconds const &)> peer_discovered
+        = [] (universal_id, inet4_addr, std::uint16_t, std::chrono::milliseconds const &) {};
+
+    /**
+     * Called when the time difference has changed significantly.
+     */
+    mutable std::function<void (universal_id, std::chrono::milliseconds const &)> peer_timediff
+        = [] (universal_id, std::chrono::milliseconds const &) {};
 
     /**
      * Called when no discovery packets were received for a specified period.
@@ -405,8 +412,13 @@ public:
         };
 
         _discovery->peer_discovered = [this] (universal_id peer_uuid
-                , socket4_addr saddr) {
-            process_peer_discovered(peer_uuid, saddr);
+                , socket4_addr saddr, std::chrono::milliseconds const & timediff) {
+            process_peer_discovered(peer_uuid, saddr, timediff);
+        };
+
+        _discovery->peer_timediff = [this] (universal_id peer_uuid
+                , std::chrono::milliseconds const & timediff) {
+            peer_timediff(peer_uuid, timediff);
         };
 
         _discovery->peer_expired = [this] (universal_id peer_uuid
@@ -713,9 +725,10 @@ public:
     }
 
 private:
-    void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr)
+    void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr
+        , std::chrono::milliseconds const & timediff)
     {
-        peer_discovered(peer_uuid, saddr.addr, saddr.port);
+        peer_discovered(peer_uuid, saddr.addr, saddr.port, timediff);
         auto sid = _socketsapi->connect(saddr);
 
         _writer_uuids.emplace(sid, peer_uuid);

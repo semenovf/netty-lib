@@ -23,6 +23,7 @@ struct hello_packet
         + 16
         + 2 * sizeof(std::uint16_t)
         + sizeof(std::uint32_t)
+        + sizeof(std::int64_t)
         + sizeof(std::int16_t);
 
     char greeting[4] = {'H', 'E', 'L', 'O'};
@@ -30,13 +31,15 @@ struct hello_packet
     std::uint16_t port {0};
     std::uint16_t transmit_interval {0};
     std::uint32_t counter {0};
+    std::int64_t  timestamp; // UTC timestamp in milliseconds since epoch
     std::int16_t  crc16;
 };
 
 inline std::int16_t crc16_of (hello_packet const & pkt)
 {
     auto crc16 = pfs::crc16_of_ptr(pkt.greeting, sizeof(pkt.greeting), 0);
-    crc16 = pfs::crc16_all_of(crc16, pkt.uuid, pkt.port, pkt.transmit_interval, pkt.counter);
+    crc16 = pfs::crc16_all_of(crc16, pkt.uuid, pkt.port, pkt.transmit_interval
+        , pkt.counter, pkt.timestamp);
     return crc16;
 }
 
@@ -50,6 +53,7 @@ inline void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
         << pfs::to_network_order(pkt.port)
         << pfs::to_network_order(pkt.transmit_interval)
         << pfs::to_network_order(pkt.counter)
+        << pfs::to_network_order(pkt.timestamp)
         << pfs::to_network_order(crc16_of(pkt));
 }
 
@@ -63,6 +67,7 @@ inline void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
         >> ntoh(pkt.port)
         >> ntoh(pkt.transmit_interval)
         >> ntoh(pkt.counter)
+        >> ntoh(pkt.timestamp)
         >> ntoh(pkt.crc16);
 }
 

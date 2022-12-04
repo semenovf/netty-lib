@@ -12,6 +12,7 @@
 #include "pfs/netty/p2p/qt5/discovery_engine.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
+#include "pfs/time_point.hpp"
 
 namespace netty {
 namespace p2p {
@@ -27,6 +28,7 @@ discovery_engine::discovery_engine (universal_id host_uuid)
 {
     _opts.transmit_interval = DEFAULT_TRANSMIT_INTERVAL;
     _opts.listener_port = 0;
+    _opts.timestamp_error_limit = std::chrono::milliseconds{500};
 
     _receiver.data_ready = [this] (socket4_addr saddr, char const * data
         , std::size_t size) {
@@ -80,8 +82,18 @@ bool discovery_engine::set_option (option_enum opttype, std::chrono::millisecond
                 return true;
             }
 
-            log_error(tr::_("Bad transmit interval, must be less or equals"
-                " to 60 seconds"));
+            log_error(tr::_("Bad transmit interval, must be less or equals to 60 seconds"));
+            break;
+
+        case option_enum::timestamp_error_limit:
+            if (msecs.count() >= 0) {
+                _opts.timestamp_error_limit = msecs;
+                LOG_TRACE_2("Discovery timestamp error limit: {}"
+                    , _opts.timestamp_error_limit);
+                return true;
+            }
+
+            log_error(tr::_("Bad timestamp error limit, must be greater or equals to 0 seconds"));
             break;
 
         default:
@@ -126,19 +138,28 @@ void discovery_engine::process_discovery_data (socket4_addr saddr
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
                 auto pos = _discovered_peers.find(packet.uuid);
-                auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval) * EXPIRATION_INTERVAL_FACTOR;
+                auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval)
+                    * EXPIRATION_INTERVAL_FACTOR;
 
                 if (expiration_interval < MIN_EXPIRATION_INTERVAL)
                     expiration_interval = MIN_EXPIRATION_INTERVAL;
 
                 auto expiration_timepoint = current_timepoint() + expiration_interval;
 
+                // Now in milliseconds since epoch in UTC.
+                auto now = std::chrono::duration_cast<milliseconds_type>(
+                    pfs::utc_time::now().time_since_epoch());
+
+                // Calculate time difference.
+                auto timediff = now - milliseconds_type{packet.timestamp};
+
                 // New peer is discovered
                 if (pos == std::end(_discovered_peers)) {
                     auto res = _discovered_peers.emplace(packet.uuid
-                        , peer_credentials{
+                        , peer_credentials {
                               socket4_addr{saddr.addr, packet.port}
                             , expiration_timepoint
+                            , timediff
                         });
 
                     if (!res.second) {
@@ -147,8 +168,9 @@ void discovery_engine::process_discovery_data (socket4_addr saddr
                             , tr::_("Unable to store discovered peer")
                         };
                     }
+
                     pos = res.first;
-                    peer_discovered(packet.uuid, pos->second.saddr);
+                    peer_discovered(packet.uuid, pos->second.saddr, timediff);
                 } else {
                     // Peer may be modified
 
@@ -164,6 +186,20 @@ void discovery_engine::process_discovery_data (socket4_addr saddr
                         peer_expired(packet.uuid, pos->second.saddr);
                     } else {
                         pos->second.expiration_timepoint = expiration_timepoint;
+
+                        auto diffdiff = timediff > pos->second.timediff
+                            ? timediff - pos->second.timediff
+                            : pos->second.timediff - timediff;
+
+                        if (diffdiff < milliseconds_type{0})
+                            diffdiff *= -1;
+
+                        // Notify about peer's timestamp is out of limits.
+                        // Store new value.
+                        if (diffdiff < _opts.timestamp_error_limit) {
+                            pos->second.timediff = timediff;
+                            peer_timediff(packet.uuid, timediff);
+                        }
                     }
                 }
             }
