@@ -128,14 +128,14 @@ template <>
 struct formatter<netty::p2p::qt5::udp_socket>
 {
     template <typename ParseContext>
-    constexpr auto parse (ParseContext & ctx) -> decltype(ctx.begin())
+    constexpr auto parse (ParseContext & ctx) const -> decltype(ctx.begin())
     {
         return ctx.begin();
     }
 
     template <typename FormatContext>
     auto format (netty::p2p::qt5::udp_socket const & sock
-        , FormatContext & ctx) -> decltype(ctx.out())
+        , FormatContext & ctx) const -> decltype(ctx.out())
     {
         return format_to(ctx.out(), "{}.{}", to_string(sock.saddr())
             , sock.native());
