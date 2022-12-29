@@ -225,6 +225,10 @@ void discovery_engine::broadcast_discovery_data ()
         packet.transmit_interval = static_cast<std::uint16_t>(_opts.transmit_interval.count());
 
         for (auto & item: _targets) {
+            auto now = std::chrono::duration_cast<milliseconds_type>(
+                pfs::utc_time::now().time_since_epoch());
+            packet.timestamp = static_cast<decltype(packet.timestamp)>(now.count());
+
             packet.counter = ++item.counter;
             packet.crc16 = crc16_of(packet);
 
