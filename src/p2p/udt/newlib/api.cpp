@@ -1912,7 +1912,8 @@ std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
     }
 }
 
-int64_t CUDT::sendfile (UDTSOCKET u, fstream & ifs, int64_t & offset, int64_t size, int block)
+std::streamsize CUDT::sendfile (UDTSOCKET u, fstream & ifs, std::streamsize & offset
+   , std::streamsize size, int block)
 {
     try {
         CUDT* udt = s_UDTUnited.lookup(u);
@@ -1929,8 +1930,8 @@ int64_t CUDT::sendfile (UDTSOCKET u, fstream & ifs, int64_t & offset, int64_t si
     }
 }
 
-int64_t CUDT::recvfile (UDTSOCKET u, fstream & ofs, int64_t & offset
-    , int64_t size, int block)
+std::streamsize CUDT::recvfile (UDTSOCKET u, fstream & ofs, std::streamsize & offset
+    , std::streamsize size, int block)
 {
     try {
         CUDT* udt = s_UDTUnited.lookup(u);
@@ -2276,17 +2277,20 @@ std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
 }
 #endif
 
-int64_t sendfile (UDTSOCKET u, fstream & ifs, int64_t & offset, int64_t size, int block)
+std::streamsize sendfile (UDTSOCKET u, fstream & ifs, std::streamsize & offset
+   , std::streamsize size, int block)
 {
    return CUDT::sendfile(u, ifs, offset, size, block);
 }
 
-int64_t recvfile(UDTSOCKET u, fstream& ofs, int64_t& offset, int64_t size, int block)
+std::streamsize recvfile(UDTSOCKET u, fstream& ofs, std::streamsize& offset
+   , std::streamsize size, int block)
 {
    return CUDT::recvfile(u, ofs, offset, size, block);
 }
 
-int64_t sendfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block)
+std::streamsize sendfile2(UDTSOCKET u, const char* path, std::streamsize* offset
+   , std::streamsize size, int block)
 {
    fstream ifs(path, ios::binary | ios::in);
    int64_t ret = CUDT::sendfile(u, ifs, *offset, size, block);
@@ -2294,7 +2298,8 @@ int64_t sendfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, 
    return ret;
 }
 
-int64_t recvfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block)
+std::streamsize recvfile2(UDTSOCKET u, const char* path, std::streamsize* offset
+   , std::streamsize size, int block)
 {
    fstream ofs(path, ios::binary | ios::out);
    int64_t ret = CUDT::recvfile(u, ofs, *offset, size, block);

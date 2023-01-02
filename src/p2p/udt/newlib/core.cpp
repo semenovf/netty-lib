@@ -1409,7 +1409,8 @@ std::streamsize CUDT::recvmsg (char * data, std::streamsize len)
     return res;
 }
 
-int64_t CUDT::sendfile (fstream & ifs, int64_t & offset, int64_t size, int block)
+std::streamsize CUDT::sendfile (fstream & ifs, std::streamsize & offset
+   , std::streamsize size, int block)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);
@@ -1500,7 +1501,8 @@ int64_t CUDT::sendfile (fstream & ifs, int64_t & offset, int64_t size, int block
     return size - tosend;
 }
 
-std::streamsize CUDT::recvfile (fstream & ofs, std::streamsize & offset, std::streamsize size, int block)
+std::streamsize CUDT::recvfile (fstream & ofs, std::streamsize & offset
+   , std::streamsize size, int block)
 {
    if (UDT_DGRAM == m_iSockType)
       throw CUDTException(5, 10, 0);

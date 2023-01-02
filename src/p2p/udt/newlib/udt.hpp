@@ -355,10 +355,10 @@ UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, b
 #else
 UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
 #endif
-UDT_API int64_t sendfile(UDTSOCKET u, std::fstream& ifs, int64_t& offset, int64_t size, int block = 364000);
-UDT_API int64_t recvfile(UDTSOCKET u, std::fstream& ofs, int64_t& offset, int64_t size, int block = 7280000);
-UDT_API int64_t sendfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 364000);
-UDT_API int64_t recvfile2(UDTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 7280000);
+UDT_API std::streamsize sendfile(UDTSOCKET u, std::fstream& ifs, std::streamsize& offset, std::streamsize size, int block = 364000);
+UDT_API std::streamsize recvfile(UDTSOCKET u, std::fstream& ofs, std::streamsize& offset, std::streamsize size, int block = 7280000);
+UDT_API std::streamsize sendfile2(UDTSOCKET u, const char* path, std::streamsize* offset, std::streamsize size, int block = 364000);
+UDT_API std::streamsize recvfile2(UDTSOCKET u, const char* path, std::streamsize* offset, std::streamsize size, int block = 7280000);
 
 // select and selectEX are DEPRECATED; please use epoll.
 UDT_API int select(int nfds, UDSET* readfds, UDSET* writefds, UDSET* exceptfds, const struct timeval* timeout);
