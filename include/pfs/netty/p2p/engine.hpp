@@ -8,8 +8,11 @@
 //      2021.11.01 Complete basic version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "discovery_engine.hpp"
 #include "envelope.hpp"
+#include "file_transporter.hpp"
 #include "packet.hpp"
+#include "sockets_api.hpp"
 #include "universal_id.hpp"
 #include "pfs/log.hpp"
 #include "pfs/memory.hpp"
@@ -46,7 +49,7 @@ constexpr char const * TAG = "netty-p2p";
 template <
       typename DiscoveryEngineBackend
     , typename SocketsApiBackend
-    , typename FileTransporterBackend
+    , typename FileTransporter = file_transporter
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class engine
 {
@@ -55,8 +58,10 @@ class engine
 
 public:
     using entity_id = std::uint64_t; // Zero value is invalid entity
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
+    using sockets_api_type      = sockets_api<SocketsApiBackend>;
+    using discovery_engine_type = discovery_engine<DiscoveryEngineBackend>;
+    using input_envelope_type   = input_envelope<>;
+    using output_envelope_type  = output_envelope<>;
 
     static constexpr entity_id INVALID_ENTITY {0};
 
@@ -107,9 +112,9 @@ public:
     };
 
 private:
-    std::unique_ptr<DiscoveryEngineBackend> _discovery;
-    std::unique_ptr<SocketsApiBackend>      _socketsapi;
-    std::unique_ptr<FileTransporterBackend> _transporter;
+    std::unique_ptr<discovery_engine_type> _discovery;
+    std::unique_ptr<sockets_api_type>      _socketsapi;
+    std::unique_ptr<FileTransporter>       _transporter;
 
 private:
     struct oqueue_item
@@ -387,9 +392,9 @@ public:
             fmt::print(stderr, "{}\n", s);
         };
 
-        _discovery = pfs::make_unique<DiscoveryEngineBackend>(_host_uuid);
-        _socketsapi = pfs::make_unique<SocketsApiBackend>();
-        _transporter = pfs::make_unique<FileTransporterBackend>();
+        _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid);
+        _socketsapi = pfs::make_unique<sockets_api_type>();
+        _transporter = pfs::make_unique<FileTransporter>();
     }
 
     ~engine () = default;

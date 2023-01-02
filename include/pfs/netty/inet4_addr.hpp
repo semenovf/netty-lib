@@ -10,8 +10,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "exports.hpp"
-#include <string>
 #include <functional>
+#include <string>
+#include <utility>
 
 namespace netty {
 
@@ -23,8 +24,8 @@ namespace netty {
 class inet4_addr
 {
 public:
-    static constexpr uint32_t briadcast_addr_value = 0xFFFFFFFF;
-    static constexpr uint32_t any_addr_value       = 0x00000000;
+    static constexpr std::uint32_t briadcast_addr_value = 0xFFFFFFFF;
+    static constexpr std::uint32_t any_addr_value       = 0x00000000;
 
 private:
     std::uint32_t _addr {0};
@@ -114,7 +115,6 @@ public:
         _addr |= b;
     }
 
-
     /**
      * @brief Constructs inet4_addr from one numeric part.
      *
@@ -133,6 +133,17 @@ public:
     {
         return _addr;
     }
+
+public: // static
+    /**
+     * Parses IPv4 address from string.
+     */
+    static std::pair<bool, inet4_addr> parse (char const * s);
+
+    /**
+     * Parses IPv4 address from string.
+     */
+    static std::pair<bool, inet4_addr> parse (std::string const & s);
 };
 
     /**

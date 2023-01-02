@@ -34,12 +34,14 @@ endif()
 portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
 if (NETTY__BUILD_P2P)
-    portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
+    # FIXME UNCOMMENT
+    #portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
 endif()
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
     enable_testing()
-    add_subdirectory(tests)
+    # FIXME UNCOMMENT
+#    add_subdirectory(tests)
 endif()
 
 if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/demo)

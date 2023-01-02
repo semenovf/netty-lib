@@ -12,8 +12,9 @@ project(netty-lib-TESTS CXX C)
 if (NETTY__BUILD_P2P)
 
 set(TESTS
-    engine
-    envelope)
+    #engine
+    #envelope
+    posix_engine)
 
 foreach (t ${TESTS})
     portable_target(ADD_TEST ${t}

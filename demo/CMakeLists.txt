@@ -12,6 +12,8 @@ add_subdirectory(mtu)
 #     add_subdirectory(lazypirate)
 # endif(ENABLE_LIBZMQ)
 
+add_subdirectory(posix_sockets)
+
 if (NETTY__BUILD_P2P)
-    add_subdirectory(p2p)
+    #add_subdirectory(p2p) #  FIXME
 endif(NETTY__BUILD_P2P)
