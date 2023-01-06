@@ -14,22 +14,18 @@ namespace posix {
 
 class tcp_server;
 
+enum class conn_status: std::int8_t {
+      failure     = -1
+    , success     =  0
+    , in_progress =  1
+};
+
 /**
  * POSIX Inet TCP socket
  */
 class tcp_socket: public inet_socket
 {
     friend class tcp_server;
-
-private:
-    enum class state_enum {
-          unconnected // The socket is not connected (initial state).
-        , connecting  // The socket has started establishing a connection.
-        , connected   // A connection is established.
-    };
-
-private:
-    state_enum _state {state_enum::unconnected};
 
 protected:
     /**
@@ -55,27 +51,15 @@ public:
     /**
      * Connects to the TCP server.
      *
-     * @return @c true if socket immediatly connected, or @c false if connection
-     *         in progress or if an error occurred and @a perr is not @c nullptr.
+     * @return @c -1 if error occurred while connecting, @c 0 if connection
+     *         established successfully or @c 1 if connection in progress.
      */
-    NETTY__EXPORT bool connect (socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT conn_status connect (socket4_addr const & saddr, error * perr = nullptr);
 
     /**
-     * Checks if the TCP socket in a connected state.
+     * Shutdown connection.
      */
-    NETTY__EXPORT bool connected () const;
-
-    /**
-     * Checks if the TCP socket connected.
-     *
-     * @details If socket has last state `connecting`, then a check is perfomed
-     *          if it already connected. Must be called in poller's `on_error`
-     *          handler to correct triggering state and filtering unnecessary
-     *          events.
-     *
-     * @return @c true if socket in a connected state, @c false otherwise.
-     */
-    NETTY__EXPORT bool ensure_connected ();
+    NETTY__EXPORT void disconnect (error * perr = nullptr);
 };
 
 }} // namespace netty::posix

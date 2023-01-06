@@ -11,157 +11,53 @@
 #include "pfs/integer.hpp"
 #include "pfs/log.hpp"
 #include "pfs/string_view.hpp"
-#include "pfs/netty/inet4_addr.hpp"
-#include "pfs/netty/poller.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/posix/tcp_server.hpp"
-#include "pfs/netty/posix/tcp_socket.hpp"
+#include <algorithm>
 #include <map>
+#include <string>
+#include <vector>
 #include <cstdlib>
 
-#if NETTY__EPOLL_ENABLED
-#   include "pfs/netty/linux/epoll_poller.hpp"
-using poller_type = netty::poller<netty::linux_ns::epoll_poller>;
-#endif
-
-
 static char const * TAG = "POSIX_SOCKETS";
+
+#include "poller.hpp"
+#include "tcp_client_routine.hpp"
+#include "tcp_server_routine.hpp"
+
 using string_view = pfs::string_view;
 
-void print_usage (char const * program)
+static struct program_context {
+    std::string program;
+    std::vector<std::string> poller_variants;
+    std::string poller_variants_string;
+} __pctx;
+
+static void print_usage ()
 {
-    fmt::print(stdout, "Usage\n\t{} --tcp|--udp [--server] --addr=ip4_addr [--port=port]\n", program);
-    fmt::print(stdout, "\nRun TCP server\n\t{} --tcp --server --addr=127.0.0.1\n", program);
-    fmt::print(stdout, "\nSend echo packets to TCP server\n\t{} --tcp --addr=127.0.0.1\n", program);
-    fmt::print(stdout, "\nRun UDP server\n\t{} --udp --server --addr=127.0.0.1\n", program);
-    fmt::print(stdout, "\nSend echo packets to UDP server\n\t{} --udp --addr=127.0.0.1\n", program);
+    fmt::print(stdout, "Usage\n\t{} --poller={} --tcp|--udp [--server]\n"
+        , __pctx.program, __pctx.poller_variants_string);
+    fmt::print(stdout, "\t\t--addr=ip4_addr [--port=port]\n");
+    fmt::print(stdout, "\nRun TCP server\n\t{} --tcp --server --addr=127.0.0.1\n", __pctx.program);
+    fmt::print(stdout, "\nSend echo packets to TCP server\n\t{} --tcp --addr=127.0.0.1\n", __pctx.program);
+    fmt::print(stdout, "\nRun UDP server\n\t{} --udp --server --addr=127.0.0.1\n", __pctx.program);
+    fmt::print(stdout, "\nSend echo packets to UDP server\n\t{} --udp --addr=127.0.0.1\n", __pctx.program);
 }
 
-void start_tcp_server (netty::socket4_addr const & saddr)
+template <typename Iter>
+static std::string concat (Iter first, Iter last, std::string const & separator)
 {
-    LOGD(TAG, "Starting TCP server on: {}", to_string(saddr));
+    std::string result;
 
-    try {
-        netty::posix::tcp_server tcp_server {saddr, 10};
-        poller_type server_poller;
-        poller_type client_poller;
-        std::chrono::milliseconds poller_timeout {1000};
-        std::chrono::milliseconds poller_immediate {0};
-
-        std::map<netty::posix::tcp_socket::native_type, netty::posix::tcp_socket> _clients;
-
-        server_poller.on_error = [] (netty::posix::tcp_server::native_type) {
-            LOGE(TAG, "Error on server");
-        };
-
-        server_poller.ready_read = [& tcp_server, & client_poller, & _clients] (
-            netty::posix::tcp_server::native_type sock) {
-
-            int n = 0;
-
-            do {
-                auto client = tcp_server.accept();
-
-                if (!client)
-                    break;
-
-                _clients[sock] = std::move(client);
-                client_poller.add(sock);
-                n++;
-            } while (true);
-
-            LOGD(TAG, "Client(s) accepted: {}", n);
-        };
-
-        client_poller.on_error = [] (netty::posix::tcp_socket::native_type) {
-            LOGE(TAG, "Error on client");
-        };
-
-        client_poller.disconnected = [& client_poller, & _clients] (
-            netty::posix::tcp_socket::native_type sock) {
-
-            LOGD(TAG, "Client disconnected");
-            client_poller.remove(sock);
-            _clients.erase(sock);
-        };
-
-        client_poller.ready_read = [] (netty::posix::tcp_socket::native_type) {
-            LOGD(TAG, "Client ready_read");
-        };
-
-        client_poller.can_write = [] (netty::posix::tcp_socket::native_type) {
-            LOGD(TAG, "Client can_write");
-        };
-
-        client_poller.unsupported_event = [] (netty::posix::tcp_socket::native_type, int revents) {
-            LOGD(TAG, "Has unsupported event(s): {}", revents);
-        };
-
-        server_poller.add(tcp_server.native());
-
-        while (true) {
-            client_poller.poll(poller_immediate);
-            server_poller.poll(poller_timeout);
-        }
-    } catch (netty::error const & ex) {
-        LOGE(TAG, "ERROR: {}", ex.what());
+    if (first != last) {
+        result += *first;
+        ++first;
     }
-}
 
-void start_tcp_client (netty::socket4_addr const & saddr)
-{
-    LOGD(TAG, "Starting TCP client");
-
-    try {
-        bool finish = false;
-        netty::posix::tcp_socket tcp_socket;
-        poller_type connecting_poller;
-        poller_type client_poller;
-        std::chrono::milliseconds poller_timeout {1000};
-        std::chrono::milliseconds poller_immediate {0};
-
-        connecting_poller.can_write = [& tcp_socket, & connecting_poller, & client_poller] (
-            netty::posix::tcp_server::native_type sock) {
-
-            if (tcp_socket.ensure_connected()) {
-                LOGD(TAG, "Client connected");
-                connecting_poller.remove(sock);
-                client_poller.add(sock);
-            }
-        };
-
-        client_poller.on_error = [] (netty::posix::tcp_server::native_type) {
-            LOGE(TAG, "Error on client");
-        };
-
-        client_poller.disconnected = [& finish] (netty::posix::tcp_server::native_type) {
-            LOGD(TAG, "Client disconnected");
-            finish = true;
-        };
-
-        client_poller.ready_read = [] (netty::posix::tcp_server::native_type) {
-            LOGD(TAG, "Client ready_read");
-        };
-
-        client_poller.can_write = [] (netty::posix::tcp_server::native_type) {
-            ;
-        };
-
-        connecting_poller.add(tcp_socket.native());
-
-        LOGD(TAG, "Socket connected (before connecting): {}", tcp_socket.connected());
-        LOGD(TAG, "Connecting server: {}", to_string(saddr));
-
-        tcp_socket.connect(saddr);
-
-        while (!finish) {
-            if (!connecting_poller.empty())
-                connecting_poller.poll(poller_immediate);
-            client_poller.poll(poller_timeout);
-        }
-    } catch (netty::error const & ex) {
-        LOGE(TAG, "ERROR: {}", ex.what());
+    for (; first != last; ++first) {
+        result += separator;
+        result += *first;
     }
+
+    return result;
 }
 
 int main (int argc, char * argv[])
@@ -169,53 +65,89 @@ int main (int argc, char * argv[])
     bool is_server = false;
     bool is_tcp = false;
     bool is_udp = false;
-    std::string addr_str;
-    std::string port_str;
+    std::string addr_value;
+    std::string port_value;
+    std::string poller_value;
+
+    __pctx.program = argv[0];
+
+#if NETTY__POLL_ENABLED
+    __pctx.poller_variants.push_back("poll");
+#endif
+
+#if NETTY__EPOLL_ENABLED
+    __pctx.poller_variants.push_back("select");
+#endif
+
+#if NETTY__SELECT_ENABLED
+    __pctx.poller_variants.push_back("epoll");
+#endif
+
+    __pctx.poller_variants_string = concat(
+          __pctx.poller_variants.begin()
+        , __pctx.poller_variants.end()
+        , std::string{"|"});
 
     if (argc == 1) {
-        print_usage(argv[0]);
+        print_usage();
         return EXIT_SUCCESS;
     }
 
     for (int i = 1; i < argc; i++) {
-        if (std::string{"-h"} == argv[i] || std::string{"--help"} == argv[i]) {
-            print_usage(argv[0]);
+        if (string_view{"-h"} == argv[i] || string_view{"--help"} == argv[i]) {
+            print_usage();
             return EXIT_SUCCESS;
-        } else if (std::string{"--server"} == argv[i]) {
+        } else if (string_view{"--server"} == argv[i]) {
             is_server = true;
-        } else if (std::string{"--udp"} == argv[i]) {
+        } else if (string_view{"--udp"} == argv[i]) {
             if (is_tcp) {
                 LOGE(TAG, "Only one of --udp or --tcp must be specified");
                 return EXIT_FAILURE;
             }
             is_udp = true;
-        } else if (std::string{"--tcp"} == argv[i]) {
+        } else if (string_view{"--tcp"} == argv[i]) {
             if (is_udp) {
                 LOGE(TAG, "Only one of --udp or --tcp must be specified");
                 return EXIT_FAILURE;
             }
 
             is_tcp = true;
+        } else if (string_view{argv[i]}.starts_with("--poller=")) {
+            poller_value = std::string{argv[i] + 9};
         } else if (string_view{argv[i]}.starts_with("--addr=")) {
-            addr_str = std::string{argv[i] + 7};
+            addr_value = std::string{argv[i] + 7};
         } else if (string_view{argv[i]}.starts_with("--port=")) {
-            port_str = std::string{argv[i] + 7};
+            port_value = std::string{argv[i] + 7};
         } else {
             auto arglen = std::strlen(argv[i]);
 
             if (arglen > 0 && argv[i][0] == '-') {
-                LOGE(TAG, "Bad option");
+                LOGE(TAG, "Bad option: {}", argv[i]);
                 return EXIT_FAILURE;
             }
         }
     }
 
-    if (addr_str.empty()) {
+    if (poller_value.empty()) {
+        LOGE(TAG, "No poller specified");
+        return EXIT_FAILURE;
+    }
+
+    auto is_valid_poller = (std::find(__pctx.poller_variants.begin()
+        , __pctx.poller_variants.end(), poller_value)
+        != __pctx.poller_variants.end());
+
+    if (!is_valid_poller) {
+        LOGE(TAG, "Invalid poller");
+        return EXIT_FAILURE;
+    }
+
+    if (addr_value.empty()) {
         LOGE(TAG, "No address specified");
         return EXIT_FAILURE;
     }
 
-    auto res = netty::inet4_addr::parse(addr_str);
+    auto res = netty::inet4_addr::parse(addr_value);
 
     if (!res.first) {
         LOGE(TAG, "Bad address");
@@ -225,9 +157,9 @@ int main (int argc, char * argv[])
     auto addr = res.second;
     std::uint16_t port = 42942;
 
-    if (!port_str.empty()) {
+    if (!port_value.empty()) {
         std::error_code ec;
-        port = pfs::to_integer(port_str.begin(), port_str.end()
+        port = pfs::to_integer(port_value.begin(), port_value.end()
             , std::uint16_t{1024}, std::uint16_t{65535}, ec);
 
         if (ec) {
@@ -238,13 +170,23 @@ int main (int argc, char * argv[])
 
     if (is_server) {
         if (is_tcp) {
-            start_tcp_server(netty::socket4_addr{addr, port});
+            if (poller_value == "select")
+                start_tcp_server<server_select_poller_type>(netty::socket4_addr{addr, port});
+            else if (poller_value == "poll")
+                start_tcp_server<server_poll_poller_type>(netty::socket4_addr{addr, port});
+            else if (poller_value == "epoll")
+                start_tcp_server<server_epoll_poller_type>(netty::socket4_addr{addr, port});
         } else {
             LOGE(TAG, "UDP server not implemented yet");
         }
     } else {
         if (is_tcp) {
-            start_tcp_client(netty::socket4_addr{addr, port});
+            if (poller_value == "select")
+                start_tcp_client<client_select_poller_type>(netty::socket4_addr{addr, port});
+            else if (poller_value == "poll")
+                start_tcp_client<client_poll_poller_type>(netty::socket4_addr{addr, port});
+            else if (poller_value == "epoll")
+                start_tcp_client<client_epoll_poller_type>(netty::socket4_addr{addr, port});
         } else if (is_udp) {
             LOGE(TAG, "UDP client not implemented yet");
         }

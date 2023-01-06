@@ -45,4 +45,3 @@ public:
 };
 
 }} // namespace netty::posix
-

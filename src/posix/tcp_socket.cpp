@@ -30,9 +30,7 @@ tcp_socket::tcp_socket (bool) : inet_socket() {}
 // Accepted socket
 tcp_socket::tcp_socket (native_type sock, socket4_addr const & saddr)
     : inet_socket(sock, saddr)
-{
-    _state = state_enum::connected;
-}
+{}
 
 tcp_socket::tcp_socket (tcp_socket && other)
     : inet_socket(std::move(other))
@@ -41,14 +39,12 @@ tcp_socket::tcp_socket (tcp_socket && other)
 tcp_socket & tcp_socket::operator = (tcp_socket && other)
 {
     inet_socket::operator = (std::move(other));
-    _state = other._state;
-    other._state = state_enum::unconnected;
     return *this;
 }
 
 tcp_socket::~tcp_socket () = default;
 
-bool tcp_socket::connect (socket4_addr const & saddr, error * perr)
+conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -80,52 +76,34 @@ bool tcp_socket::connect (socket4_addr const & saddr, error * perr)
                 throw err;
             }
 
-            return false;
+            return conn_status::failure;
         }
-    }
-
-    if (in_progress) {
-        _state = state_enum::connecting;
-    } else {
-        _state = state_enum::connected;
     }
 
     _saddr = saddr;
 
-    return (_state == state_enum::connected);
+    return in_progress ? conn_status::in_progress : conn_status::success;
 }
 
-bool tcp_socket::connected () const
+void tcp_socket::disconnect (error * perr)
 {
-    return _state == state_enum::connected;
-}
-
-bool tcp_socket::ensure_connected ()
-{
-    if (_state == state_enum::connected)
-        return true;
-
-    if (_state == state_enum::connecting) {
-        int val;
-        socklen_t len = sizeof(val);
-
-        auto rc = getsockopt(_socket, SOL_SOCKET, SO_ERROR, & val, & len);
+    if (_socket > 0) {
+        auto rc = ::shutdown(_socket, SHUT_RDWR);
 
         if (rc != 0) {
             error err {
                 make_error_code(errc::socket_error)
-                , tr::_("get socket option failure")
+                , tr::_("socket shutdown error")
                 , pfs::system_error_text()
             };
 
-            throw err;
+            if (perr) {
+                *perr = std::move(err);
+            } else {
+                throw err;
+            }
         }
-
-        if (val == 0)
-            _state = state_enum::connected;
     }
-
-    return (_state == state_enum::connected);
 }
 
 }} // namespace netty::posix

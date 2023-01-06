@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -12,19 +12,6 @@
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include <system_error>
-
-// #include "pfs/i18n.hpp"
-// #include "pfs/log.hpp"
-
-// #if _MSC_VER
-// #   include <winsock2.h>
-// #else
-// #   include <sys/types.h>
-// #   include <sys/socket.h>
-// #   include <netinet/in.h>
-// #   include <string.h>
-// #   include <unistd.h>
-// #endif
 
 namespace netty {
 namespace posix {

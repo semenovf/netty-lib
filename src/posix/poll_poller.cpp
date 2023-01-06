@@ -4,118 +4,93 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
+//      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../client_poller.hpp"
 #include "../server_poller.hpp"
 #include "pfs/assert.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
 #include "pfs/netty/poller.hpp"
-#include "pfs/netty/linux/epoll_poller.hpp"
+#include "pfs/netty/posix/poll_poller.hpp"
 #include <algorithm>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <string.h>
 
 namespace netty {
 
-static constexpr std::size_t const DEFAULT_INCREMENT = 32;
-using BACKEND = linux_ns::epoll_poller;
+// static constexpr std::size_t const DEFAULT_INCREMENT = 32;
+using BACKEND = posix::poll_poller;
 
 template <>
 poller<BACKEND>::poller ()
-{
-    // Since Linux 2.6.8, the size argument is ignored, but must be greater than zero;
-    int size = 1024;
-    _rep.eid = epoll_create(size);
-
-    if (_rep.eid < 0) {
-        throw error {
-              make_error_code(errc::poller_error)
-            , tr::_("epoll create failure")
-            , pfs::system_error_text()
-        };
-    }
-}
+{}
 
 template <>
 poller<BACKEND>::~poller ()
-{
-    if (_rep.eid > 0) {
-        ::close(_rep.eid);
-        _rep.eid = -1;
-    }
-}
+{}
 
 template <>
 void poller<BACKEND>::add (native_socket_type sock, error * perr)
 {
-    struct epoll_event ev;
-    ev.events = EPOLLERR | EPOLLHUP | EPOLLRDHUP
-        | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND
-        | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND;
-    ev.data.fd = sock;
+    (void)perr;
 
-    int rc = epoll_ctl(_rep.eid, EPOLL_CTL_ADD, sock, & ev);
+    _rep.events.push_back(pollfd{});
+    auto & ev = _rep.events.back();
+    ev.fd = sock;
+    ev.revents = 0;
+    ev.events = POLLERR | POLLHUP | POLLIN | POLLOUT;
 
-    if (rc != 0) {
-        error err {
-              make_error_code(errc::poller_error)
-            , tr::_("epoll add socket failure")
-            , pfs::system_error_text()
-        };
+#ifdef POLLRDHUP
+    ev.events |= POLLRDHUP;
+#endif
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
-    }
+#ifdef POLLRDNORM
+    ev.events |= POLLRDNORM;
+#endif
 
-    if (_rep.events.size() % DEFAULT_INCREMENT == 0 )
-        _rep.events.reserve(_rep.events.capacity() + DEFAULT_INCREMENT);
+#ifdef POLLRDBAND
+    ev.events |= POLLRDBAND;
+#endif
 
-    _rep.events.resize(_rep.events.size() + 1);
+#ifdef POLLWRNORM
+    ev.events |= POLLWRNORM;
+#endif
+
+#ifdef POLLWRBAND
+    ev.events |= POLLWRBAND;
+#endif
 }
 
 template <>
 void poller<BACKEND>::remove (native_socket_type sock, error * perr)
 {
-    auto rc = epoll_ctl(_rep.eid, EPOLL_CTL_DEL, sock, nullptr);
+    (void)perr;
 
-    if (rc != 0) {
-        error err {
-              make_error_code(errc::poller_error)
-            , tr::_("epoll delete failure")
-            , pfs::system_error_text()
-        };
+    auto pos = std::find_if(_rep.events.begin(), _rep.events.end()
+        , [& sock] (pollfd const & p) { return sock == p.fd;});
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
+    if (pos != _rep.events.end()) {
+        // pollfd is POD, so we can simply shift tail to the left and do resize
+        // instead of call `erase` method
+        auto index = std::distance(_rep.events.begin(), pos);
+        auto ptr = _rep.events.data();
+        auto sz = _rep.events.size();
+        auto n = sz - 1 - index;
+
+        memcpy(ptr + index, ptr + index + 1, n);
+        _rep.events.resize(sz - 1);
     }
 }
 
 template <>
 int poller<BACKEND>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto maxevents = static_cast<int>(_rep.events.size());
-
-    if (maxevents == 0)
-        return 0;
-
-    auto n = epoll_wait(_rep.eid, _rep.events.data(), maxevents, millis.count());
+    auto n = ::poll(_rep.events.data(), _rep.events.size(), millis.count());
 
     if (n < 0) {
         error err {
               make_error_code(errc::poller_error)
-            , tr::_("epoll wait failure")
+            , tr::_("poll failure")
             , pfs::system_error_text()
         };
 
@@ -129,13 +104,13 @@ int poller<BACKEND>::poll (std::chrono::milliseconds millis, error * perr)
 
     if (n > 0) {
         for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].events;
-            auto fd = _rep.events[i].data.fd;
+            auto revents = _rep.events[i].revents;
+            auto fd = _rep.events[i].fd;
 
             // 1. Occured while tcp socket attempts to connect to non-existance server socket (connection_refused)
             // 2. ... ?
-            // Identical to `poll_poller`
-            if (revents & EPOLLERR) {
+            // Identical to `epoll_poller`
+            if (revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
                 auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
@@ -172,8 +147,12 @@ int poller<BACKEND>::poll (std::chrono::milliseconds millis, error * perr)
             //
             // For compatibility with `client_poller` handle this event  by
             // `ready_read` callback
-            // Identical to `poll_poller`
-            if (revents & (EPOLLHUP | EPOLLRDHUP)) {
+            // Identical to `epoll_poller`
+            if (revents & (POLLHUP
+#ifdef POLLRDHUP
+                | POLLRDHUP
+#endif
+            )) {
                 PFS__ASSERT(ready_read != nullptr, "ready_read must be set for poll");
                 // disconnected(fd);
                 // remove(fd);
@@ -182,27 +161,38 @@ int poller<BACKEND>::poll (std::chrono::milliseconds millis, error * perr)
             }
 
             // There is data to read
-            // Identical to `poll_poller`
-            if (revents & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
+            // Identical to `epoll_poller`
+            if (revents & (POLLIN
+#ifdef POLLRDNORM
+                | POLLRDNORM
+#endif
+#ifdef POLLRDBAND
+                | POLLRDBAND
+#endif
+            )) {
                 PFS__ASSERT(ready_read != nullptr, "ready_read must be set for poll");
                 ready_read(fd, ready_read_flag::good); // May be pending data
             }
 
             // Writing is now possible, though a write larger than the available space
             // in a socket or pipe will still block (unless O_NONBLOCK is set).
-            // Identical to `poll_poller`
-            if (revents & (EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)) {
+            // Identical to `epoll_poller`
+            if (revents & (POLLOUT
+#ifdef POLLWRNORM
+                | POLLWRNORM
+#endif
+#ifdef POLLWRBAND
+                | POLLWRBAND
+#endif
+            )) {
                 if (can_write)
                     can_write(fd);
             }
 
             // These events are ignored.
-            //  * EPOLLPRI
-            //  * EPOLLMSG
-            //  * EPOLLEXCLUSIVE
-            //  * EPOLLWAKEUP
-            //  * EPOLLONESHOT
-            //  * EPOLLET
+            //  * POLLPRI
+            //  * POLLET
+            //  * POLLNVAL
         }
     }
 
@@ -219,3 +209,4 @@ template class server_poller<BACKEND>;
 template class client_poller<BACKEND>;
 
 } // namespace netty
+

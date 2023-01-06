@@ -21,16 +21,17 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
 
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp)
+    ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/static_initializer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_socket.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp)
 
 if (UNIX)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_socket.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
 elseif (MSVC)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
@@ -54,6 +55,24 @@ if (MSVC)
     portable_target(LINK ${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
     portable_target(LINK ${PROJECT_NAME}-static PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
+
+CHECK_INCLUDE_FILE("poll.h" __has_poll)
+
+if (__has_poll)
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__POLL_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__POLL_ENABLED=1")
+endif()
+
+CHECK_INCLUDE_FILE("sys/select.h" __has_sys_select)
+
+if (__has_sys_select)
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__SELECT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__SELECT_ENABLED=1")
+endif()
 
 if (UNIX)
     CHECK_INCLUDE_FILE("sys/epoll.h" __has_sys_epoll)

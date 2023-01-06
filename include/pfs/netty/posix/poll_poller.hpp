@@ -4,20 +4,20 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
+//      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <vector>
-#include <sys/epoll.h>
+#include <poll.h>
 
 namespace netty {
-namespace linux_ns {
+namespace posix {
 
-struct epoll_poller
+struct poll_poller
 {
     using native_socket_type = int;
-    int eid {-1};
-    std::vector<epoll_event> events;
+    std::vector<pollfd> events;
 };
 
-}} // namespace netty::linux_ns
+}} // namespace netty::posix
+
