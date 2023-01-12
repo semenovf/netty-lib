@@ -4,22 +4,24 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
+//      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <vector>
-#include <sys/epoll.h>
+#include "pfs/netty/error.hpp"
+#include <set>
 
 namespace netty {
-namespace linux {
+namespace udt {
 
 class epoll_poller
 {
 public:
     using native_socket_type = int;
 
-    int eid {-1};
-    std::vector<epoll_event> events;
+    int eid {-1}; // -1 is same as CUDT::ERROR
+    int counter {0}; // number of sockets polled currently
+    std::set<native_socket_type> readfds;
+    std::set<native_socket_type> writefds;
 
 public:
     epoll_poller ();
@@ -28,7 +30,9 @@ public:
     void add (native_socket_type sock, error * perr = nullptr);
     void remove (native_socket_type sock, error * perr = nullptr);
     bool empty () const noexcept;
-    int poll (std::chrono::milliseconds millis, error * perr = nullptr);
+    int poll (int eid, std::set<native_socket_type> * readfds
+        , std::set<native_socket_type> * writefds
+        , std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
-}} // namespace netty::linux
+}} // namespace netty::udt

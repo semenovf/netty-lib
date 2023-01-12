@@ -82,7 +82,7 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
 
     _saddr = saddr;
 
-    return in_progress ? conn_status::in_progress : conn_status::success;
+    return in_progress ? conn_status::connecting : conn_status::connected;
 }
 
 void tcp_socket::disconnect (error * perr)

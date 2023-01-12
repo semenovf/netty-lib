@@ -11,7 +11,6 @@
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/socket4_addr.hpp"
-#include <system_error>
 
 namespace netty {
 namespace posix {

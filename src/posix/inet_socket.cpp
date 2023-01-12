@@ -61,7 +61,7 @@ inet_socket::inet_socket (type_enum socktype)
     if (_socket < 0) {
         throw error {
               make_error_code(errc::socket_error)
-            , tr::_("create socket failure")
+            , tr::_("create INET socket failure")
             , pfs::system_error_text()
         };
     }
@@ -105,6 +105,7 @@ inet_socket & inet_socket::operator = (inet_socket && other)
 inet_socket::~inet_socket ()
 {
     if (_socket >= 0) {
+        ::shutdown(_socket, SHUT_RDWR);
         ::close(_socket);
         _socket = INVALID_SOCKET;
     }
@@ -125,7 +126,7 @@ std::streamsize inet_socket::recv (char * data, std::streamsize len)
     auto rc = ::recv(_socket, data, len, MSG_DONTWAIT);
 
     if (rc < 0) {
-        if (errno == EAGAIN)
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
             rc = 0;
     }
 
@@ -145,8 +146,7 @@ std::streamsize inet_socket::send (char const * data, std::streamsize len)
         auto n = ::send(_socket, data + total_sent, len, MSG_NOSIGNAL);
 
         if (n < 0) {
-            if (errno == EAGAIN
-                    || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 continue;
 
             total_sent = -1;

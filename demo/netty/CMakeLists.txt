@@ -1,14 +1,12 @@
 ################################################################################
-# Copyright (c) 2019,2022 Vladislav Trifochkin
+# Copyright (c) 2019-2023 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
 # Changelog:
-#      2021.06.21 Initial version.
+#      2023.01.01 Initial version.
 ################################################################################
-add_subdirectory(mtu)
-add_subdirectory(netty)
+project(netty-demo)
 
-if (NETTY__BUILD_P2P)
-    #add_subdirectory(p2p) #  FIXME
-endif(NETTY__BUILD_P2P)
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} pfs::netty::static)

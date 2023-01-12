@@ -11,8 +11,9 @@
 
 namespace netty {
 
-template <typename Backend>
-server_poller<Backend>::server_poller (server_poller_callbacks<Backend> && callbacks)
+template <typename Backend, typename ServerType, typename SocketType>
+server_poller<Backend, ServerType, SocketType>::server_poller (
+    server_poller_callbacks<Backend, SocketType> && callbacks)
     : _listener_poller()
     , _client_poller()
 {
@@ -28,13 +29,13 @@ server_poller<Backend>::server_poller (server_poller_callbacks<Backend> && callb
     }
 
     if (callbacks.accepted == nullptr)
-        accepted = [] (posix::tcp_socket &&) {};
+        accepted = [] (SocketType &&) {};
     else
         accepted = std::move(callbacks.accepted);
 
     ready_read = std::move(callbacks.ready_read);
 
-    _client_poller.ready_read = [this] (netty::posix::tcp_server::native_type sock
+    _client_poller.ready_read = [this] (typename ServerType::native_type sock
         , ready_read_flag /*flag*/) {
         if (ready_read)
             ready_read(sock);
@@ -42,7 +43,7 @@ server_poller<Backend>::server_poller (server_poller_callbacks<Backend> && callb
 
     _client_poller.can_write = std::move(callbacks.can_write);
 
-    _listener_poller.ready_read = [this] (netty::posix::tcp_server::native_type sock
+    _listener_poller.ready_read = [this] (typename ServerType::native_type sock
         , ready_read_flag /*flag*/) {
         int n = 0;
 
@@ -66,11 +67,11 @@ server_poller<Backend>::server_poller (server_poller_callbacks<Backend> && callb
     };
 }
 
-template <typename Backend>
-server_poller<Backend>::~server_poller () = default;
+template <typename Backend, typename ServerType, typename SocketType>
+server_poller<Backend, ServerType, SocketType>::~server_poller () = default;
 
-template <typename Backend>
-void server_poller<Backend>::add (posix::tcp_server & sock, error * perr)
+template <typename Backend, typename ServerType, typename SocketType>
+void server_poller<Backend, ServerType, SocketType>::add (ServerType & sock, error * perr)
 {
     _listener_poller.add(sock.native(), perr);
 
@@ -80,15 +81,15 @@ void server_poller<Backend>::add (posix::tcp_server & sock, error * perr)
     _servers.emplace(sock.native(), & sock);
 }
 
-template <typename Backend>
-void server_poller<Backend>::remove (posix::tcp_server const & server, error * perr)
+template <typename Backend, typename ServerType, typename SocketType>
+void server_poller<Backend, ServerType, SocketType>::remove (ServerType const & server, error * perr)
 {
     _servers.erase(server.native());
     _listener_poller.remove(server.native(), perr);
 }
 
-template <typename Backend>
-int server_poller<Backend>::poll (std::chrono::milliseconds millis, error * perr)
+template <typename Backend, typename ServerType, typename SocketType>
+int server_poller<Backend, ServerType, SocketType>::poll (std::chrono::milliseconds millis, error * perr)
 {
     if (!_listener_poller.empty())
         _listener_poller.poll(millis, perr);

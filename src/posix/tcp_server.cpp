@@ -77,12 +77,12 @@ bool tcp_server::listen (int backlog, error * perr)
     return true;
 }
 
-tcp_socket tcp_server::accept (error * perr)
+tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
 {
     sockaddr sa;
     socklen_t addrlen;
 
-    auto sock = ::accept(_socket, & sa, & addrlen);
+    auto sock = ::accept(listener_sock, & sa, & addrlen);
 
     if (sock > 0) {
         if (sa.sa_family == AF_INET) {
@@ -95,6 +95,18 @@ tcp_socket tcp_server::accept (error * perr)
                 static_cast<std::uint16_t>(addr_in4_ptr->sin_port));
 
             return tcp_socket{sock, socket4_addr{addr, port}};
+        } else {
+            error err {
+                make_error_code(errc::socket_error)
+                , tr::_("socket accept failure: unsupported sockaddr family"
+                        " (AF_INET supported only)")
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+            } else {
+                throw err;
+            }
         }
     }
 
@@ -104,8 +116,7 @@ tcp_socket tcp_server::accept (error * perr)
 
     error err {
           make_error_code(errc::socket_error)
-        , tr::_("socket accept failure: may be unsupported sockaddr family"
-                " (AF_INET supported only)")
+        , tr::_("socket accept failure")
         , pfs::system_error_text()
     };
 
@@ -118,5 +129,9 @@ tcp_socket tcp_server::accept (error * perr)
     return tcp_socket{false};
 }
 
-}} // namespace netty::posix
+tcp_socket tcp_server::accept (error * perr)
+{
+    return accept(_socket, perr);
+}
 
+}} // namespace netty::posix

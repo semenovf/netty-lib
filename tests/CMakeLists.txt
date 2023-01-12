@@ -9,18 +9,18 @@
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
-if (NETTY__BUILD_P2P)
+#if (NETTY__BUILD_P2P)
 
-set(TESTS
-    #engine
-    #envelope
-    posix_engine)
+#set(TESTS
+    ##engine
+    ##envelope
+    #posix_engine)
 
-foreach (t ${TESTS})
-    portable_target(ADD_TEST ${t}
-        ENABLE_COVERAGE ${NETTY__ENABLE_COVERAGE}
-        SOURCES ${t}.cpp ${${t}_SOURCES}
-        LINK pfs::netty::p2p)
-endforeach()
+#foreach (t ${TESTS})
+    #portable_target(ADD_TEST ${t}
+        #ENABLE_COVERAGE ${NETTY__ENABLE_COVERAGE}
+        #SOURCES ${t}.cpp ${${t}_SOURCES}
+        #LINK pfs::netty::p2p)
+#endforeach()
 
-endif(NETTY__BUILD_P2P)
+#endif(NETTY__BUILD_P2P)

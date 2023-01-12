@@ -13,10 +13,20 @@
 namespace netty {
 namespace posix {
 
-struct poll_poller
+class poll_poller
 {
+public:
     using native_socket_type = int;
     std::vector<pollfd> events;
+
+public:
+    poll_poller ();
+    ~poll_poller ();
+
+    void add (native_socket_type sock, error * perr = nullptr);
+    void remove (native_socket_type sock, error * perr = nullptr);
+    bool empty () const noexcept;
+    int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
 }} // namespace netty::posix

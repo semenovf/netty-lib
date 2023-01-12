@@ -36,4 +36,3 @@ udp_socket & udp_socket::operator = (udp_socket && s)
 udp_socket::~udp_socket () = default;
 
 }} // namespace netty::posix
-

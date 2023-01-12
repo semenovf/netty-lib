@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,18 +7,13 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/conn_status.hpp"
 #include "pfs/netty/posix/inet_socket.hpp"
 
 namespace netty {
 namespace posix {
 
 class tcp_server;
-
-enum class conn_status: std::int8_t {
-      failure     = -1
-    , success     =  0
-    , in_progress =  1
-};
 
 /**
  * POSIX Inet TCP socket
@@ -51,8 +46,9 @@ public:
     /**
      * Connects to the TCP server.
      *
-     * @return @c -1 if error occurred while connecting, @c 0 if connection
-     *         established successfully or @c 1 if connection in progress.
+     * @return @c conn_status::failure if error occurred while connecting,
+     *         @c conn_status::success if connection established successfully or
+     *         @c conn_status::in_progress if connection in progress.
      */
     NETTY__EXPORT conn_status connect (socket4_addr const & saddr, error * perr = nullptr);
 

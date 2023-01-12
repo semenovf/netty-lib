@@ -15,8 +15,8 @@
 
 namespace netty {
 
-template <typename Backend>
-client_poller<Backend>::client_poller (client_poller_callbacks<Backend> && callbacks)
+template <typename Backend, typename SocketType>
+client_poller<Backend, SocketType>::client_poller (client_poller_callbacks<Backend> && callbacks)
     : _connecting_poller()
     , _regular_poller()
 {
@@ -90,37 +90,24 @@ client_poller<Backend>::client_poller (client_poller_callbacks<Backend> && callb
     };
 }
 
-template <typename Backend>
-client_poller<Backend>::~client_poller () = default;
+template <typename Backend, typename SocketType>
+client_poller<Backend, SocketType>::~client_poller () = default;
 
-template <typename Backend>
-void client_poller<Backend>::add (posix::tcp_socket & sock, error * perr)
+template <typename Backend, typename SocketType>
+void client_poller<Backend, SocketType>::add (SocketType & sock, error * perr)
 {
     _connecting_poller.add(sock.native(), perr);
 }
 
-template <typename Backend>
-void client_poller<Backend>::add (posix::udp_socket & sock, error * perr)
-{
-    _regular_poller.add(sock.native(), perr);
-}
-
-template <typename Backend>
-void client_poller<Backend>::remove (posix::tcp_socket const & sock, error * perr)
+template <typename Backend, typename SocketType>
+void client_poller<Backend, SocketType>::remove (SocketType const & sock, error * perr)
 {
     _connecting_poller.remove(sock.native(), perr);
     _regular_poller.remove(sock.native(), perr);
 }
 
-template <typename Backend>
-void client_poller<Backend>::remove (posix::udp_socket const & sock, error * perr)
-{
-    _connecting_poller.remove(sock.native(), perr);
-    _regular_poller.remove(sock.native(), perr);
-}
-
-template <typename Backend>
-int client_poller<Backend>::poll (std::chrono::milliseconds millis, error * perr)
+template <typename Backend, typename SocketType>
+int client_poller<Backend, SocketType>::poll (std::chrono::milliseconds millis, error * perr)
 {
     if (!_connecting_poller.empty())
         _connecting_poller.poll(std::chrono::milliseconds{0}, perr);

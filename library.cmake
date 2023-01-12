@@ -13,6 +13,11 @@ project(netty CXX)
 
 include(CheckIncludeFile)
 
+option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
+option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
+
+set(PFS__LOG_LEVEL 3)
+
 portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
     EXPORTS NETTY__EXPORTS
     BIND_STATIC ${PROJECT_NAME}-static
@@ -22,7 +27,7 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/static_initializer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/startup.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_socket.cpp
@@ -60,6 +65,9 @@ CHECK_INCLUDE_FILE("poll.h" __has_poll)
 
 if (__has_poll)
     portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/regular_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__POLL_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__POLL_ENABLED=1")
@@ -69,6 +77,9 @@ CHECK_INCLUDE_FILE("sys/select.h" __has_sys_select)
 
 if (__has_sys_select)
     portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/regular_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__SELECT_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__SELECT_ENABLED=1")
@@ -79,8 +90,50 @@ if (UNIX)
 
     if (__has_sys_epoll)
         portable_target(SOURCES ${PROJECT_NAME}
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp)
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/listener_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/connecting_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/regular_poller.cpp)
         portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__EPOLL_ENABLED=1")
         portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__EPOLL_ENABLED=1")
     endif()
 endif()
+
+if (NETTY__ENABLE_UDT)
+    set(NETTY__UDT_ENABLED ON CACHE BOOL "UDT (modified) enabled")
+    set(NETTY__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/newlib")
+
+    # UDT sources
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${NETTY__UDT_ROOT}/api.cpp
+        ${NETTY__UDT_ROOT}/buffer.cpp
+        ${NETTY__UDT_ROOT}/cache.cpp
+        ${NETTY__UDT_ROOT}/ccc.cpp
+        ${NETTY__UDT_ROOT}/channel.cpp
+        ${NETTY__UDT_ROOT}/common.cpp
+        ${NETTY__UDT_ROOT}/core.cpp
+        ${NETTY__UDT_ROOT}/epoll.cpp
+        ${NETTY__UDT_ROOT}/list.cpp
+        ${NETTY__UDT_ROOT}/md5.cpp
+        ${NETTY__UDT_ROOT}/packet.cpp
+        ${NETTY__UDT_ROOT}/queue.cpp
+        ${NETTY__UDT_ROOT}/window.cpp)
+
+    portable_target(SOURCES ${PROJECT_NAME}
+        #${CMAKE_CURRENT_LIST_DIR}/src/udt/sockets_api.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/listener_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/regular_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_server.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_socket.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
+
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__UDT_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__UDT_ENABLED=1")
+
+    if (NETTY__UDT_PATCHED)
+        portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE "NETTY__UDT_PATCHED=1")
+        portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE "NETTY__UDT_PATCHED=1")
+    endif(NETTY__UDT_PATCHED)
+endif(NETTY__ENABLE_UDT)

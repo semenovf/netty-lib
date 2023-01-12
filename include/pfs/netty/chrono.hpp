@@ -11,15 +11,30 @@
 #include <chrono>
 
 namespace netty {
-namespace p2p {
 
-inline std::chrono::milliseconds current_timepoint ()
+using clock_type = std::chrono::steady_clock;
+
+inline clock_type::time_point current_timepoint ()
+{
+    return clock_type::now();
+}
+
+inline clock_type::time_point future_timepoint (std::chrono::milliseconds increment)
+{
+    return current_timepoint() + increment;
+}
+
+inline bool timepoint_expired (clock_type::time_point sample)
+{
+    return current_timepoint() > sample;
+}
+
+inline std::chrono::milliseconds current_millis ()
 {
     using std::chrono::duration_cast;
     using std::chrono::milliseconds;
-    using std::chrono::steady_clock;
 
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch());
+    return duration_cast<milliseconds>(clock_type::now().time_since_epoch());
 }
 
-}} // namespace netty::p2p
+} // namespace netty
