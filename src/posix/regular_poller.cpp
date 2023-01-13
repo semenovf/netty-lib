@@ -18,6 +18,10 @@
 
 #include <sys/socket.h>
 
+#include "pfs/log.hpp"
+
+static char const * TAG = "POSIX";
+
 namespace netty {
 
 #if NETTY__SELECT_ENABLED
@@ -38,13 +42,34 @@ int regular_poller<posix::select_poller>::poll (std::chrono::milliseconds millis
 
         for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
             if (FD_ISSET(fd, & rfds)) {
-                if (ready_read)
-                    ready_read(fd);
+                bool disconnect = false;
+                char buf[1];
+                auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+
+                if (n > 0) {
+                    if (ready_read)
+                        ready_read(fd);
+                } else if ( n == 0) {
+                    disconnect = true;
+                } else {
+                    on_error(fd, tr::f_("read socket failure: {}"
+                        , pfs::system_error_text(errno)));
+                    disconnect = true;
+                }
+
+                if (disconnect) {
+                    remove(fd);
+
+                    if (disconnected)
+                        disconnected(fd);
+                }
 
                 --rcounter;
             }
 
             if (FD_ISSET(fd, & wfds)) {
+                //LOGD(TAG, "CAN WRITE");
+
                 if (can_write)
                     can_write(fd);
 
@@ -73,19 +98,8 @@ int regular_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, 
             auto revents = _rep.events[i].revents;
             auto fd = _rep.events[i].fd;
 
-            // Writing is now possible, though a write larger than the available space
-            // in a socket or pipe will still block (unless O_NONBLOCK is set).
-            // Identical to `epoll_poller`
-            if (revents & (POLLOUT
-#ifdef POLLWRNORM
-                | POLLWRNORM
-#endif
-#ifdef POLLWRBAND
-                | POLLWRBAND
-#endif
-            )) {
-                if (ready_read)
-                    ready_read(fd);
+            if (revents & POLLERR) {
+                LOGD(TAG, "POLL POLLER ERROR");
             }
 
             // There is data to read - can accept
@@ -96,6 +110,42 @@ int regular_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, 
 #endif
 #ifdef POLLRDBAND
                 | POLLRDBAND
+#endif
+            )) {
+                // Same as for select_poller
+
+                bool disconnect = false;
+                char buf[1];
+                auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+
+                if (n > 0) {
+                    if (ready_read)
+                        ready_read(fd);
+                } else if ( n == 0) {
+                    disconnect = true;
+                } else {
+                    on_error(fd, tr::f_("read socket failure: {}"
+                        , pfs::system_error_text(errno)));
+                    disconnect = true;
+                }
+
+                if (disconnect) {
+                    remove(fd);
+
+                    if (disconnected)
+                        disconnected(fd);
+                }
+            }
+
+            // Writing is now possible, though a write larger than the available space
+            // in a socket or pipe will still block (unless O_NONBLOCK is set).
+            // Identical to `epoll_poller`
+            if (revents & (POLLOUT
+#ifdef POLLWRNORM
+                | POLLWRNORM
+#endif
+#ifdef POLLWRBAND
+                | POLLWRBAND
 #endif
             )) {
                 if (can_write)

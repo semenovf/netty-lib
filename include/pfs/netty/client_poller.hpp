@@ -28,6 +28,7 @@ public:
         std::function<void(native_socket_type, std::string const &)> on_error;
         std::function<void(native_socket_type)> connection_refused;
         std::function<void(native_socket_type)> connected;
+        std::function<void(native_socket_type)> disconnected;
         std::function<void(native_socket_type)> ready_read;
         std::function<void(native_socket_type)> can_write;
     };
@@ -37,11 +38,7 @@ private:
     regular_poller<Backend>    _poller;
 
 private:
-    std::function<void(native_socket_type, std::string const &)> on_error;
-    std::function<void(native_socket_type)> connection_refused;
     std::function<void(native_socket_type)> connected;
-    std::function<void(native_socket_type)> ready_read;
-    std::function<void(native_socket_type)> can_write;
 
 public:
     client_poller (callbacks && cbs)
@@ -54,11 +51,17 @@ public:
         }
 
         _connecting_poller.connection_refused = std::move(cbs.connection_refused);
-        _connecting_poller.connected = std::move(cbs.connected);
+        connected = std::move(cbs.connected);
 
+        _connecting_poller.connected = [this] (native_socket_type sock) {
+            // sock already removed from _connecting_poller
+            _poller.add(sock);
+            this->connected(sock);
+        };
+
+        _poller.disconnected = std::move(cbs.disconnected);
         _poller.ready_read = std::move(cbs.ready_read);
         _poller.can_write  = std::move(cbs.can_write);
-
     }
 
     ~client_poller () = default;

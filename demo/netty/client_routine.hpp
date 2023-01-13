@@ -10,7 +10,6 @@
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 #include "pfs/netty/udt/udt_socket.hpp"
-// #include <thread>
 #include <sys/socket.h>
 
 template <typename PollerType, typename SocketType>
@@ -42,11 +41,20 @@ void start_client (netty::socket4_addr const & saddr)
 //         LOGD(TAG, "-- CONNECTED: recv: n={}, error={}", n, errno);
     };
 
-//     callbacks.disconnected = [& finish] (typename SocketType::native_type sock) {
-//         LOGD(TAG, "Disconnected: socket={}", sock);
-//         finish = true;
-//     };
+    callbacks.connected = [] (typename PollerType::native_socket_type sock) {
+        LOGD(TAG, "Connected: {}", sock);
+
+//         char buf[1];
+//         auto n = ::recv(sock, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 //
+//         LOGD(TAG, "-- CONNECTED: recv: n={}, error={}", n, errno);
+    };
+
+    callbacks.disconnected = [& finish] (typename SocketType::native_type sock) {
+        LOGD(TAG, "Disconnected: socket={}", sock);
+        finish = true;
+    };
+
     callbacks.ready_read = [/*& socket, & counter*/] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Client ready_read");
 
@@ -81,7 +89,7 @@ void start_client (netty::socket4_addr const & saddr)
 
     try {
         PollerType poller {std::move(callbacks)};
-        std::chrono::milliseconds poller_timeout {1000};
+        std::chrono::milliseconds poller_timeout {100};
         auto conn_state = socket.connect(saddr);
         poller.add(socket.native(), conn_state);
 
@@ -90,16 +98,14 @@ void start_client (netty::socket4_addr const & saddr)
         while (!finish) {
             poller.poll(poller_timeout);
 
-//             std::this_thread::sleep_for(std::chrono::seconds{5});
+//             char data[4] = {'H', 'e', 'l', 'o'};
+//             auto n = socket.send(data, sizeof(data));
+//
+//             if (n < 0) {
+//                 break;
+//             }
 
-            char data[4] = {'H', 'e', 'l', 'o'};
-            auto n = socket.send(data, sizeof(data));
-
-            if (n < 0) {
-                break;
-            }
-
-            LOGD(TAG, "-- SEND: n={}, errno={}", n, errno);
+//             LOGD(TAG, "-- SEND: n={}, errno={}", n, errno);
 
             // //         char buf[1];
 // //         auto n = ::recv(sock, buf, 1, MSG_PEEK);

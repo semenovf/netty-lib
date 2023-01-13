@@ -21,6 +21,8 @@ namespace udt {
 
 class basic_udt_server;
 
+struct unitialized {};
+
 class basic_socket
 {
 protected:
@@ -34,6 +36,10 @@ protected:
         , stream = 0x001
         , dgram  = 0x002
     };
+
+protected: // static
+    static int default_exp_counter ();
+    static std::chrono::milliseconds default_exp_threshold ();
 
 public:
     using native_type = UDTSOCKET;
@@ -58,6 +64,8 @@ protected:
     basic_socket (native_type sock, socket4_addr const & saddr);
 
 public:
+    ~basic_socket ();
+
     native_type native () const noexcept;
 
     std::vector<std::pair<std::string, std::string>> dump_options () const;
@@ -79,7 +87,7 @@ protected:
     /**
      * Constructs unitialized (invalid) UDT socket.
      */
-    NETTY__EXPORT basic_udt_socket (bool);
+    NETTY__EXPORT basic_udt_socket (unitialized);
 
     /**
      * Constructs new UDT socket.
@@ -94,21 +102,21 @@ protected:
         , std::chrono::milliseconds exp_threshold);
 
 public:
-    basic_udt_socket (basic_udt_socket const & s) = delete;
-    basic_udt_socket & operator = (basic_udt_socket const & s) = delete;
+    basic_udt_socket (basic_udt_socket const &) = delete;
+    basic_udt_socket & operator = (basic_udt_socket const &) = delete;
 
-    NETTY__EXPORT basic_udt_socket (basic_udt_socket && s);
-    NETTY__EXPORT basic_udt_socket & operator = (basic_udt_socket && s);
+    NETTY__EXPORT basic_udt_socket (basic_udt_socket && other);
+    NETTY__EXPORT basic_udt_socket & operator = (basic_udt_socket && other);
     NETTY__EXPORT ~basic_udt_socket ();
 
     /**
      *  Checks if socket is valid
      */
-    operator bool () const noexcept;
+    NETTY__EXPORT operator bool () const noexcept;
 
-    native_type native () const noexcept;
-    std::streamsize recv (char * data, std::streamsize len);
-    std::streamsize send (char const * data, std::streamsize len);
+    NETTY__EXPORT native_type native () const noexcept;
+    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len);
+    NETTY__EXPORT std::streamsize send (char const * data, std::streamsize len);
 
     /**
      * Connects to the UDT server.
@@ -125,13 +133,21 @@ public:
     NETTY__EXPORT void disconnect (error * perr = nullptr);
 };
 
-template <int MTU = 1500, int EXP_MAX_COUNTER = 16, int EXP_THRESHOLD_MILLIS = 5000>
+template <int MTU = 1500>
 class udt_socket: public basic_udt_socket
 {
 public:
-    udt_socket ()
-        : basic_udt_socket(MTU, EXP_MAX_COUNTER, std::chrono::milliseconds{EXP_THRESHOLD_MILLIS})
+    udt_socket (unitialized) : basic_udt_socket(unitialized{})
     {}
+
+    udt_socket (int exp_max_counter = default_exp_counter()
+        , std::chrono::milliseconds exp_threshold = default_exp_threshold())
+        : basic_udt_socket(MTU, exp_max_counter, exp_threshold)
+    {}
+
+    udt_socket (udt_socket &&) = default;
+    udt_socket & operator = (udt_socket &&) = default;
+    ~udt_socket () = default;
 };
 
 }} // namespace netty::udt

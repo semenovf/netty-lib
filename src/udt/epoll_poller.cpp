@@ -11,6 +11,10 @@
 #include "pfs/netty/udt/epoll_poller.hpp"
 #include <set>
 
+#include "pfs/log.hpp"
+
+static char const * TAG = "UDT";
+
 namespace netty {
 namespace udt {
 
@@ -55,12 +59,16 @@ void epoll_poller::add (native_socket_type sock, error * perr)
         }
     }
 
+    LOGD(TAG, "ADD SOCKET: eid={}, sock={}", eid, sock);
+
     ++counter;
 }
 
 void epoll_poller::remove (native_socket_type sock, error * perr)
 {
     auto rc = UDT::epoll_remove_usock(eid, sock);
+
+    LOGD(TAG, "REMOVE SOCKET: eid={}, sock={}", eid, sock);
 
     if (rc == UDT::ERROR) {
         error err {
@@ -79,12 +87,19 @@ void epoll_poller::remove (native_socket_type sock, error * perr)
 
     --counter;
 
-    PFS__TERMINATE(counter >= 0, "UDT epoll_poller: counter management not consistent");
+    if (counter < 0) {
+        error err {
+              make_error_code(errc::poller_error)
+            , tr::_("UDT epoll_poller: counter management not consistent")
+            , UDT::getlasterror_desc()
+        };
+
+        throw err;
+    }
 }
 
 bool epoll_poller::empty () const noexcept
 {
-    PFS__TERMINATE(counter >= 0, "UDT epoll_poller: counter management not consistent");
     return counter == 0;
 }
 

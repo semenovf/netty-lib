@@ -50,6 +50,8 @@ protected:
         , basic_udt_socket & result, error * perr = nullptr);
 
 public:
+    NETTY__EXPORT ~basic_udt_server ();
+
     /**
      * Listen for connections on a socket.
      *
@@ -59,26 +61,36 @@ public:
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 };
 
-template <int MTU = 1500, int EXP_MAX_COUNTER = 16, int EXP_THRESHOLD_MILLIS = 5000>
+template <int MTU = 1500>
 class udt_server: public basic_udt_server
 {
 public:
-    using udt_socket_type = udt_socket<MTU, EXP_MAX_COUNTER, EXP_THRESHOLD_MILLIS>;
+    using udt_socket_type = udt_socket<MTU>;
 
 public:
+    udt_server (socket4_addr const & saddr, int exp_max_counter
+        , std::chrono::milliseconds exp_threshold)
+        : basic_udt_server(saddr, MTU, exp_max_counter, exp_threshold)
+    {}
+
+    udt_server (socket4_addr const & saddr, int backlog, int exp_max_counter
+        , std::chrono::milliseconds exp_threshold)
+        : basic_udt_server(saddr, backlog, MTU, exp_max_counter, exp_threshold)
+    {}
+
     udt_server (socket4_addr const & saddr)
-        : basic_udt_server(saddr, MTU, EXP_MAX_COUNTER
-            , std::chrono::milliseconds{EXP_THRESHOLD_MILLIS})
+        : basic_udt_server(saddr, MTU, default_exp_counter(), default_exp_threshold())
     {}
 
     udt_server (socket4_addr const & saddr, int backlog)
-        : basic_udt_server(saddr, backlog, MTU, EXP_MAX_COUNTER
-            , std::chrono::milliseconds{EXP_THRESHOLD_MILLIS})
+        : basic_udt_server(saddr, backlog, MTU, default_exp_counter(), default_exp_threshold())
     {}
+
+    ~udt_server () = default;
 
     udt_socket_type accept (error * perr = nullptr)
     {
-        udt_socket_type result;
+        udt_socket_type result(unitialized{});
         basic_udt_server::accept(result, perr);
         return result;
     }
@@ -89,7 +101,7 @@ public:
     static udt_socket_type accept (native_type listener_sock
         , error * perr = nullptr)
     {
-        udt_socket_type result;
+        udt_socket_type result(unitialized{});
         basic_udt_server::accept(listener_sock, result, perr);
         return result;
     }

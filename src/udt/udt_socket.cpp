@@ -29,6 +29,21 @@ static constexpr char const * TAG = "UDT";
 namespace netty {
 namespace udt {
 
+// ping -c 50
+//              avg RTT (ms) | exp_max_counter | exp_threshold (ms)
+// -----------------------------------------------------------------------------
+// Home Wi-Fi   1.499        | 2               | 625
+
+int basic_socket::default_exp_counter ()
+{
+    return 2;
+}
+
+std::chrono::milliseconds basic_socket::default_exp_threshold ()
+{
+    return std::chrono::milliseconds{625};
+}
+
 basic_socket::basic_socket () = default;
 
 basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
@@ -69,26 +84,21 @@ basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
     //UDT::setsockopt(_socket, 0, UDT_RCVBUF, new int(10000000), sizeof(int));
     //UDT::setsockopt(_socket, 0, UDP_RCVBUF, new int(10000000), sizeof(int));
 
-    if (rc == UDT::ERROR) {
-        throw error {
-              make_error_code(errc::socket_error)
-            , tr::_("UDT get socket option failure")
-            , UDT::getlasterror_desc()
-        };
+    if (rc != UDT::ERROR) {
+        if (exp_max_counter < 0)
+            exp_max_counter = default_exp_counter();
+
+        if (exp_threshold < std::chrono::milliseconds{0})
+            exp_threshold = default_exp_threshold();
+
+        std::uint64_t exp_threshold_usecs = static_cast<std::uint64_t>(exp_threshold.count()) * 1000;
+
+        rc = UDT::setsockopt(_socket, 0, UDT_EXP_MAX_COUNTER, & exp_max_counter, sizeof(exp_max_counter));
+
+        if (rc != UDT::ERROR)
+            rc = UDT::setsockopt(_socket, 0, UDT_EXP_THRESHOLD, & exp_threshold_usecs, sizeof(exp_threshold_usecs));
+
     }
-
-    if (exp_max_counter < 0)
-        exp_max_counter = 16;
-
-    if (exp_threshold < std::chrono::milliseconds{0})
-        exp_threshold = std::chrono::milliseconds{5000};
-
-    std::uint64_t exp_threshold_usecs = static_cast<std::uint64_t>(exp_threshold.count()) * 1000;
-
-    rc = UDT::setsockopt(_socket, 0, UDT_EXP_MAX_COUNTER, & exp_max_counter, sizeof(exp_max_counter));
-
-    if (rc != UDT::ERROR)
-        rc = UDT::setsockopt(_socket, 0, UDT_EXP_THRESHOLD, & exp_threshold_usecs, sizeof(exp_threshold_usecs));
 
     if (rc == UDT::ERROR) {
         throw error {
@@ -103,6 +113,14 @@ basic_socket::basic_socket (native_type sock, socket4_addr const & saddr)
     : _socket(sock)
     , _saddr(saddr)
 {}
+
+basic_socket::~basic_socket ()
+{
+    if (_socket >= 0) {
+        UDT::close(_socket);
+        _socket = INVALID_SOCKET;
+    }
+}
 
 basic_socket::native_type basic_socket::native () const noexcept
 {
@@ -196,7 +214,7 @@ basic_udt_socket::basic_udt_socket (int mtu, int exp_max_counter
     : basic_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
 {}
 
-basic_udt_socket::basic_udt_socket (bool): basic_socket() {}
+basic_udt_socket::basic_udt_socket (unitialized): basic_socket() {}
 
 basic_udt_socket::basic_udt_socket (native_type sock, socket4_addr const & saddr)
     : basic_socket(sock, saddr)
@@ -216,13 +234,7 @@ basic_udt_socket & basic_udt_socket::operator = (basic_udt_socket && other)
     return *this;
 }
 
-basic_udt_socket::~basic_udt_socket ()
-{
-    if (_socket >= 0) {
-        UDT::close(_socket);
-        _socket = INVALID_SOCKET;
-    }
-}
+basic_udt_socket::~basic_udt_socket () = default;
 
 basic_udt_socket::operator bool () const noexcept
 {
@@ -260,8 +272,10 @@ std::streamsize basic_udt_socket::send (char const * data, std::streamsize len)
     // -1              - on error
     auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
+    //LOGD(TAG, "state={}", UDT::getsockstate(_socket));
+
     if (rc == UDT::ERROR) {
-        LOGE(TAG, "code={}, text={}", UDT::getlasterror_code(), UDT::getlasterror_desc());
+        LOGE(TAG, "SEND: code={}, text={}", UDT::getlasterror_code(), UDT::getlasterror_desc());
 
         // Error code: 6001
         // Error desc: Non-blocking call failure: no buffer available for sending.

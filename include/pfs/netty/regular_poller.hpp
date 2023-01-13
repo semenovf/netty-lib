@@ -26,6 +26,7 @@ private:
 
 public:
     mutable std::function<void(native_socket_type, std::string const &)> on_error;
+    mutable std::function<void(native_socket_type)> disconnected;
     mutable std::function<void(native_socket_type)> ready_read;
     mutable std::function<void(native_socket_type)> can_write;
 

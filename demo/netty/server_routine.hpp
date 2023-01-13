@@ -26,7 +26,7 @@ void start_server (netty::socket4_addr const & saddr)
     };
 
     callbacks.accept = [& server, & sockets] (typename PollerType::native_socket_type sock) {
-        LOGD(TAG, "Accept client: socket={}", sock);
+        LOGD(TAG, "Accept client: server socket={}", sock);
 
         auto pos = sockets.find(sock);
 
@@ -46,6 +46,10 @@ void start_server (netty::socket4_addr const & saddr)
         // LOGD(TAG, "-- SEND: n={}, errno={}", n, errno);
     };
 
+//     callbacks.disconnected = [] (typename PollerType::native_socket_type sock) {
+//         LOGD(TAG, "Disconnected: socket={}", sock);
+//     };
+
     callbacks.ready_read = [& sockets] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Client ready_read");
 
@@ -56,10 +60,6 @@ void start_server (netty::socket4_addr const & saddr)
             LOGE(TAG, "Release entry erroneously: socket={}", sock);
             return;
         }
-
-        //char data[2];
-        //auto n = pos->second.recv(data, sizeof(data));
-        //LOGD(TAG, "-- RECV: n={}, errno={}, data=[{}{}]", n, errno, data[0], data[1]);
     };
 
     callbacks.can_write = [] (typename PollerType::native_socket_type sock) {

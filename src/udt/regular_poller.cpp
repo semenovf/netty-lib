@@ -32,18 +32,37 @@ int regular_poller<Backend>::poll (std::chrono::milliseconds millis, error * per
     if (n > 0) {
         if (!_rep.readfds.empty()) {
             for (UDTSOCKET u: _rep.readfds) {
-                auto status = UDT::getsockstate(u);
-                LOGD(TAG, "UDT read socket state: {}", status);
+                auto state = UDT::getsockstate(u);
+                //LOGD(TAG, "UDT read socket state: {}", status);
 
-                if (ready_read)
-                    ready_read(u);
+                if (state == CONNECTED || state == OPENED) {
+                    if (ready_read)
+                        ready_read(u);
+                } else {
+                    auto disconnect = false;
+
+                    if (state == CLOSED) {
+                        disconnect = true;
+                    } else {
+                        disconnect = true;
+                        on_error(u, tr::f_("read socket failure: state={}"
+                            " (TODO: handle properly)", state));
+                    }
+
+                    if (disconnect) {
+                        remove(u);
+
+                        if (disconnected)
+                            disconnected(u);
+                    }
+                }
             }
         }
 
         if (!_rep.writefds.empty()) {
             for (UDTSOCKET u: _rep.writefds) {
-                auto status = UDT::getsockstate(u);
-                LOGD(TAG, "UDT write socket state: {}", status);
+                //auto state = UDT::getsockstate(u);
+                //LOGD(TAG, "UDT write socket state: {}", state);
 
                 if (can_write)
                     can_write(u);

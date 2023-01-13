@@ -21,7 +21,7 @@ namespace udt {
 //    None.
 void debug_CCC::init ()
 {
-    LOG_TRACE_3("--- debug_CCC::init() ---", 0);
+    LOG_TRACE_3("debug_CCC::init()", 0);
 }
 
 // Functionality:
@@ -32,7 +32,7 @@ void debug_CCC::init ()
 //    None.
 void debug_CCC::close ()
 {
-    LOG_TRACE_3("--- debug_CCC::close() ---", 0);
+    LOG_TRACE_3("debug_CCC::close()", 0);
 }
 
 // Functionality:
@@ -43,7 +43,7 @@ void debug_CCC::close ()
 //    None.
 void debug_CCC::onACK (int32_t ackno)
 {
-    LOG_TRACE_3("--- debug_CCC::onACK(ackno={}) ---", ackno);
+    LOG_TRACE_3("debug_CCC::onACK(ackno={})", ackno);
 }
 
 // Functionality:
@@ -55,7 +55,7 @@ void debug_CCC::onACK (int32_t ackno)
 //    None.
 void debug_CCC::onLoss (int32_t const *, std::streamsize)
 {
-    LOG_TRACE_3("--- debug_CCC::onLoss() ---", 0);
+    LOG_TRACE_3("debug_CCC::onLoss()", 0);
 }
 
 // Functionality:
@@ -66,7 +66,7 @@ void debug_CCC::onLoss (int32_t const *, std::streamsize)
 //    None.
 void debug_CCC::onTimeout ()
 {
-    LOG_TRACE_3("--- debug_CCC::onTimeout() ---", 0);
+    LOG_TRACE_3("debug_CCC::onTimeout()", 0);
 }
 
 // Functionality:
@@ -78,7 +78,7 @@ void debug_CCC::onTimeout ()
 //    None.
 void debug_CCC::onPktSent (CPacket const *)
 {
-    LOG_TRACE_3("--- debug_CCC::onPktSent() ---", 0);
+    LOG_TRACE_3("debug_CCC::onPktSent()", 0);
 }
 
 // Functionality:
@@ -90,7 +90,7 @@ void debug_CCC::onPktSent (CPacket const *)
 //    None.
 void debug_CCC::onPktReceived (CPacket const *)
 {
-    LOG_TRACE_3("--- debug_CCC::onPktReceived() ---", 0);
+    LOG_TRACE_3("debug_CCC::onPktReceived()", 0);
 }
 
 // Functionality:
@@ -101,7 +101,7 @@ void debug_CCC::onPktReceived (CPacket const *)
 //    None.
 void debug_CCC::processCustomMsg (CPacket const *)
 {
-    LOG_TRACE_3("--- debug_CCC::processCustomMsg() ---", 0);
+    LOG_TRACE_3("debug_CCC::processCustomMsg()", 0);
 }
 
 }} // namespace netty::p2p::udt

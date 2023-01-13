@@ -28,6 +28,7 @@ public:
     {
         std::function<void(native_socket_type, std::string const &)> on_error;
         std::function<void(native_socket_type)> accept;
+        //std::function<void(native_socket_type)> disconnected;
         std::function<void(native_socket_type)> ready_read;
         std::function<void(native_socket_type)> can_write;
     };
@@ -37,10 +38,7 @@ private:
     regular_poller<Backend>  _poller;
 
 private: // callbacks
-    std::function<void(native_socket_type, std::string const &)> on_error;
     std::function<void(native_socket_type)> accept;
-    std::function<void(native_socket_type)> ready_read;
-    std::function<void(native_socket_type)> can_write;
 
 public:
     server_poller (callbacks && cbs)
@@ -52,7 +50,15 @@ public:
             _poller.on_error = std::move(cbs.on_error);
         }
 
-        _listener_poller.accept   = std::move(cbs.accept);
+        accept = std::move(cbs.accept);
+
+        _listener_poller.accept = [this] (native_socket_type sock) {
+            // sock already removed from _listener_poller
+            _poller.add(sock);
+            this->accept(sock);
+        };
+
+        //_poller.disconnected = std::move(cbs.disconnected);
         _poller.ready_read = std::move(cbs.ready_read);
         _poller.can_write  = std::move(cbs.can_write);
     }

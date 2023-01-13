@@ -48,6 +48,8 @@ basic_udt_server::basic_udt_server (socket4_addr const & saddr, int backlog
     listen(backlog);
 }
 
+basic_udt_server::~basic_udt_server () = default;
+
 bool basic_udt_server::listen (int backlog, error * perr)
 {
     auto rc = UDT::listen(_socket, backlog);
@@ -98,7 +100,7 @@ void basic_udt_server::accept (native_type listener_sock
             std::uint64_t exp_threshold = 5000000;
             int exp_threshold_size = sizeof(exp_threshold);
             int mtu = 1500;
-            UDT::getsockopt(listener_sock, 0, UDT_EXP_MAX_COUNTER, & exp_threshold, & exp_threshold_size);
+            UDT::getsockopt(listener_sock, 0, UDT_EXP_THRESHOLD, & exp_threshold, & exp_threshold_size);
 
             UDT::setsockopt(u, 0, UDT_EXP_MAX_COUNTER, & exp_max_counter, sizeof(exp_max_counter));
             UDT::setsockopt(u, 0, UDT_EXP_THRESHOLD  , & exp_threshold, sizeof(exp_threshold));
@@ -133,7 +135,7 @@ void basic_udt_server::accept (native_type listener_sock
         }
     }
 
-    result = basic_udt_socket{false};
+    result = basic_udt_socket{unitialized{}};
 }
 
 void basic_udt_server::accept (basic_udt_socket & result, error * perr)

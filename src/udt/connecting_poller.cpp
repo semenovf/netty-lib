@@ -41,7 +41,7 @@ void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error *
 
     // Need to observe connecting process and catch connection refused
     if (status == CONNECTING) {
-        // Use UDT_EXP_MAX_COUNTER option to set connection refused interval
+        // Use UDT_EXP_MAX_COUNTER option to tune connection refused interval
         std::uint64_t exp_threshold = 0; // microseconds
         int exp_threshold_size = sizeof(exp_threshold);
         auto rc = UDT::getsockopt(sock, 0, UDT_EXP_THRESHOLD, & exp_threshold, & exp_threshold_size);
@@ -82,9 +82,12 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
         if (!_rep.writefds.empty()) {
             for (UDTSOCKET u: _rep.writefds) {
                 auto status = UDT::getsockstate(u);
-                LOGD(TAG, "UDT connected socket state: {}", status);
+                LOGD(TAG, "UDT connected socket state: {} ({})"
+                    , status, status == CONNECTED ? "CONNECTED" : "?");
 
                 remove(u);
+
+                _connecting_sockets.erase(u);
 
                 if (connected)
                     connected(u);
@@ -103,11 +106,13 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
 
                 remove(u);
 
+                pos = _connecting_sockets.erase(pos);
+
                 if (connection_refused)
                     connection_refused(u);
+            } else {
+                ++pos;
             }
-
-            ++pos;
         }
     }
 
