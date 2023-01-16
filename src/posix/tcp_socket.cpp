@@ -25,7 +25,7 @@ namespace posix {
 
 tcp_socket::tcp_socket () : inet_socket(type_enum::stream) {}
 
-tcp_socket::tcp_socket (bool) : inet_socket() {}
+tcp_socket::tcp_socket (uninitialized) : inet_socket() {}
 
 // Accepted socket
 tcp_socket::tcp_socket (native_type sock, socket4_addr const & saddr)

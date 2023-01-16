@@ -135,7 +135,7 @@ void basic_udt_server::accept (native_type listener_sock
         }
     }
 
-    result = basic_udt_socket{unitialized{}};
+    result = basic_udt_socket{uninitialized{}};
 }
 
 void basic_udt_server::accept (basic_udt_socket & result, error * perr)

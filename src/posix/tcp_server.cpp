@@ -25,27 +25,8 @@ namespace posix {
 tcp_server::tcp_server (socket4_addr const & saddr)
     : inet_socket(inet_socket::type_enum::stream)
 {
-    sockaddr_in addr_in4;
-
-    memset(& addr_in4, 0, sizeof(addr_in4));
-
-    addr_in4.sin_family      = AF_INET;
-    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
-    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
-
-    auto rc = ::bind(_socket
-        , reinterpret_cast<sockaddr *>(& addr_in4)
-        , sizeof(addr_in4));
-
-    if (rc != 0) {
-        throw error {
-              make_error_code(errc::socket_error)
-            , tr::f_("bind name to socket failure: {}", to_string(saddr))
-            , pfs::system_error_text()
-        };
-    }
-
-    _saddr = saddr;
+    if (bind(_socket, saddr))
+        _saddr = saddr;
 }
 
 tcp_server::tcp_server (socket4_addr const & saddr, int backlog)
@@ -111,7 +92,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
     }
 
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        return tcp_socket{false};
+        return tcp_socket{uninitialized{}};
     }
 
     error err {
@@ -126,7 +107,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
         throw err;
     }
 
-    return tcp_socket{false};
+    return tcp_socket{uninitialized{}};
 }
 
 tcp_socket tcp_server::accept (error * perr)

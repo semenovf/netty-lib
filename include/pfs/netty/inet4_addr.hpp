@@ -24,7 +24,7 @@ namespace netty {
 class inet4_addr
 {
 public:
-    static constexpr std::uint32_t briadcast_addr_value = 0xFFFFFFFF;
+    static constexpr std::uint32_t broadcast_addr_value = 0xFFFFFFFF;
     static constexpr std::uint32_t any_addr_value       = 0x00000000;
 
 private:
@@ -222,6 +222,15 @@ inline bool is_multicast (inet4_addr const & addr)
 {
     return addr >= inet4_addr{224, 0, 0, 0}
         && addr <= inet4_addr{239, 255, 255, 255};
+}
+
+/**
+ * Checks if @a addr is not multicast and last octet equals to @c 255.
+ */
+inline bool is_broadcast (inet4_addr const & addr)
+{
+    return !is_multicast(addr)
+        && ((static_cast<std::uint32_t>(addr) & 0x000000FF) == 0x000000FF);
 }
 
 /**

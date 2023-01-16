@@ -15,6 +15,8 @@
 namespace netty {
 namespace posix {
 
+struct uninitialized {};
+
 /**
  * POSIX inet socket
  */
@@ -62,15 +64,28 @@ protected:
     inet_socket (inet_socket &&);
     inet_socket & operator = (inet_socket &&);
 
+protected:
+    static bool bind (native_type sock, socket4_addr const & saddr, error * perr = nullptr);
+
 public:
     /**
      *  Checks if socket is valid
      */
-    operator bool () const noexcept;
+    NETTY__EXPORT operator bool () const noexcept;
 
-    native_type native () const noexcept;
-    std::streamsize recv (char * data, std::streamsize len);
-    std::streamsize send (char const * data, std::streamsize len);
+    NETTY__EXPORT native_type native () const noexcept;
+
+    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len
+        , error * perr = nullptr);
+
+    NETTY__EXPORT std::streamsize send (char const * data, std::streamsize len
+        , error * perr = nullptr);
+
+    NETTY__EXPORT std::streamsize recv_from (socket4_addr const & src_addr
+        , char * data, std::streamsize len, error * perr = nullptr);
+
+    NETTY__EXPORT std::streamsize send_to (socket4_addr const & dest
+        , char const * data, std::streamsize len, error * perr = nullptr);
 };
 
 }} // namespace netty::posix

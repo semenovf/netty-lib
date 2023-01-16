@@ -29,16 +29,15 @@ protected:
     tcp_socket (native_type sock, socket4_addr const & saddr);
 
     /**
-     * Constructs unitialized (invalid) TCP socket.
+     * Constructs uninitialized (invalid) TCP socket.
      */
-    tcp_socket (bool);
+    tcp_socket (uninitialized);
 
 public:
     tcp_socket (tcp_socket const & s) = delete;
     tcp_socket & operator = (tcp_socket const & s) = delete;
 
     NETTY__EXPORT tcp_socket ();
-
     NETTY__EXPORT tcp_socket (tcp_socket && s);
     NETTY__EXPORT tcp_socket & operator = (tcp_socket && s);
     NETTY__EXPORT ~tcp_socket ();

@@ -6,9 +6,10 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
+#include "pfs/endian.hpp"
+#include "pfs/i18n.hpp"
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/posix/inet_socket.hpp"
-#include "pfs/i18n.hpp"
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -75,7 +76,8 @@ inet_socket::inet_socket (type_enum socktype)
 
 #if defined(SO_KEEPALIVE)
     if (ai_socktype & SOCK_STREAM) {
-        if (rc == 0) rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE, & yes, sizeof(int));
+        if (rc == 0)
+            rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE, & yes, sizeof(int));
     }
 #endif
 
@@ -121,19 +123,66 @@ inet_socket::native_type inet_socket::native () const noexcept
     return _socket;
 }
 
-std::streamsize inet_socket::recv (char * data, std::streamsize len)
+bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * perr)
+{
+    sockaddr_in addr_in4;
+
+    memset(& addr_in4, 0, sizeof(addr_in4));
+
+    addr_in4.sin_family      = AF_INET;
+    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
+    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
+
+    auto rc = ::bind(sock
+        , reinterpret_cast<sockaddr *>(& addr_in4)
+        , sizeof(addr_in4));
+
+    if (rc != 0) {
+        error err {
+              make_error_code(errc::socket_error)
+            , tr::f_("bind name to socket failure: {}", to_string(saddr))
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+            return false;
+        } else {
+            throw err;
+        }
+    }
+
+    return true;
+}
+
+std::streamsize inet_socket::recv (char * data, std::streamsize len, error * perr)
 {
     auto rc = ::recv(_socket, data, len, MSG_DONTWAIT);
 
     if (rc < 0) {
-        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
             rc = 0;
+        } else {
+            error err {
+                make_error_code(errc::socket_error)
+                , tr::_("receive data failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return false;
+            } else {
+                throw err;
+            }
+        }
     }
 
     return rc;
 }
 
-std::streamsize inet_socket::send (char const * data, std::streamsize len)
+std::streamsize inet_socket::send (char const * data, std::streamsize len
+    , error * perr)
 {
     std::streamsize total_sent = 0;
 
@@ -143,13 +192,111 @@ std::streamsize inet_socket::send (char const * data, std::streamsize len)
         // when the other end breaks the connection.
         // The EPIPE error is still returned.
         //
-        auto n = ::send(_socket, data + total_sent, len, MSG_NOSIGNAL);
+        auto n = ::send(_socket, data + total_sent, len, MSG_NOSIGNAL | MSG_DONTWAIT);
 
         if (n < 0) {
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 continue;
 
             total_sent = -1;
+
+            error err {
+                make_error_code(errc::socket_error)
+                , tr::_("send failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return false;
+            } else {
+                throw err;
+            }
+
+            break;
+        }
+
+        total_sent += n;
+        len -= n;
+    }
+
+    return total_sent;
+}
+
+std::streamsize inet_socket::recv_from (socket4_addr const & saddr
+    , char * data, std::streamsize len, error * perr)
+{
+    sockaddr_in addr_in4;
+
+    memset(& addr_in4, 0, sizeof(addr_in4));
+
+    addr_in4.sin_family      = AF_INET;
+    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
+    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
+
+    socklen_t addr_in4_len = sizeof(addr_in4);
+
+    auto n = ::recvfrom(_socket, data, len, MSG_DONTWAIT
+        , reinterpret_cast<sockaddr *>(& addr_in4), & addr_in4_len);
+
+    if (n < 0) {
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+            n = 0;
+        } else {
+            error err {
+                make_error_code(errc::socket_error)
+                , tr::_("receive data failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return n;
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    return n;
+}
+
+std::streamsize inet_socket::send_to (socket4_addr const & saddr
+    , char const * data, std::streamsize len, error * perr)
+{
+    sockaddr_in addr_in4;
+
+    memset(& addr_in4, 0, sizeof(addr_in4));
+
+    addr_in4.sin_family      = AF_INET;
+    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
+    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
+
+    std::streamsize total_sent = 0;
+
+    while (len) {
+        auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT
+            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
+
+        if (n < 0) {
+            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+                continue;
+
+            total_sent = -1;
+
+            error err {
+                make_error_code(errc::socket_error)
+                , tr::f_("send to socket failure: {}", to_string(saddr))
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return false;
+            } else {
+                throw err;
+            }
+
             break;
         }
 

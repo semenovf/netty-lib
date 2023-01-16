@@ -16,8 +16,6 @@ include(CheckIncludeFile)
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 
-set(PFS__LOG_LEVEL 3)
-
 portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
     EXPORTS NETTY__EXPORTS
     BIND_STATIC ${PROJECT_NAME}-static
@@ -31,7 +29,9 @@ portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_socket.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp)
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_receiver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_sender.cpp)
 
 if (UNIX)
     portable_target(SOURCES ${PROJECT_NAME}

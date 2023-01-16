@@ -8,6 +8,7 @@
 ################################################################################
 add_subdirectory(mtu)
 add_subdirectory(netty)
+add_subdirectory(udp)
 
 if (NETTY__BUILD_P2P)
     #add_subdirectory(p2p) #  FIXME

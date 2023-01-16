@@ -90,7 +90,7 @@ public:
 
     udt_socket_type accept (error * perr = nullptr)
     {
-        udt_socket_type result(unitialized{});
+        udt_socket_type result(uninitialized{});
         basic_udt_server::accept(result, perr);
         return result;
     }
@@ -101,7 +101,7 @@ public:
     static udt_socket_type accept (native_type listener_sock
         , error * perr = nullptr)
     {
-        udt_socket_type result(unitialized{});
+        udt_socket_type result(uninitialized{});
         basic_udt_server::accept(listener_sock, result, perr);
         return result;
     }

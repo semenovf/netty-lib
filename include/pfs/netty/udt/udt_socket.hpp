@@ -21,7 +21,7 @@ namespace udt {
 
 class basic_udt_server;
 
-struct unitialized {};
+struct uninitialized {};
 
 class basic_socket
 {
@@ -85,9 +85,9 @@ protected:
     NETTY__EXPORT basic_udt_socket (native_type sock, socket4_addr const & saddr);
 
     /**
-     * Constructs unitialized (invalid) UDT socket.
+     * Constructs uninitialized (invalid) UDT socket.
      */
-    NETTY__EXPORT basic_udt_socket (unitialized);
+    NETTY__EXPORT basic_udt_socket (uninitialized);
 
     /**
      * Constructs new UDT socket.
@@ -137,7 +137,7 @@ template <int MTU = 1500>
 class udt_socket: public basic_udt_socket
 {
 public:
-    udt_socket (unitialized) : basic_udt_socket(unitialized{})
+    udt_socket (uninitialized) : basic_udt_socket(uninitialized{})
     {}
 
     udt_socket (int exp_max_counter = default_exp_counter()

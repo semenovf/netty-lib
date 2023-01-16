@@ -214,7 +214,7 @@ basic_udt_socket::basic_udt_socket (int mtu, int exp_max_counter
     : basic_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
 {}
 
-basic_udt_socket::basic_udt_socket (unitialized): basic_socket() {}
+basic_udt_socket::basic_udt_socket (uninitialized): basic_socket() {}
 
 basic_udt_socket::basic_udt_socket (native_type sock, socket4_addr const & saddr)
     : basic_socket(sock, saddr)
