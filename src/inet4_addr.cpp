@@ -191,12 +191,12 @@ std::string to_string (inet4_addr const & addr, std::string const & format, int 
     return r;
 }
 
-std::pair<bool, inet4_addr> inet4_addr::parse (char const * s)
+std::pair<bool, inet4_addr> inet4_addr::parse (char const * s, std::size_t n)
 {
     std::regex rx(R"(^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$)");
     std::cmatch m;
 
-    if (!std::regex_match(s, m, rx))
+    if (!std::regex_match(s, s + n, m, rx))
         return std::make_pair(false, inet4_addr{});
 
     auto count = m.size();
@@ -229,9 +229,14 @@ std::pair<bool, inet4_addr> inet4_addr::parse (char const * s)
     return std::make_pair(true, inet4_addr{a, b, c, d});
 }
 
+std::pair<bool, inet4_addr> inet4_addr::parse (char const * s)
+{
+    return parse(s, std::char_traits<char>::length(s));
+}
+
 std::pair<bool, inet4_addr> inet4_addr::parse (std::string const & s)
 {
-    return parse(s.c_str());
+    return parse(s.c_str(), s.size());
 }
 
 } // namespace netty

@@ -11,13 +11,13 @@
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/regular_poller.hpp"
 #include "pfs/netty/posix/poll_poller.hpp"
-#include "pfs/netty/posix/udp_receiver.hpp"
 #include <map>
 #include <cstring>
 
 using receiver_poller_type = netty::regular_poller<netty::posix::poll_poller>;
 
 // `local_addr` for multicast only
+template <typename Receiver>
 void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr local_addr)
 {
     LOGD(TAG, "Run {} receiver on: {}"
@@ -32,22 +32,24 @@ void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr loca
     receiver_poller_type poller;
 
     bool finish = false;
-    netty::posix::udp_socket receiver;
+    Receiver receiver;
 
     try {
         if (netty::is_multicast(src_saddr.addr) || netty::is_broadcast(src_saddr.addr))
-            receiver = netty::posix::udp_receiver{src_saddr, local_addr};
+            receiver = Receiver{src_saddr, local_addr};
         else
-            receiver = netty::posix::udp_receiver{src_saddr};
+            receiver = Receiver{src_saddr};
 
-        poller.ready_read = [& receiver, & finish, & src_saddr] (receiver_poller_type::native_socket_type /*sock*/) {
+        poller.ready_read = [& receiver, & finish] (receiver_poller_type::native_socket_type /*sock*/) {
             char buffer[5];
             ::memset(buffer, 0, sizeof(buffer));
 
-            auto n = receiver.recv_from(src_saddr, buffer, sizeof(buffer));
+
+            netty::socket4_addr sender_addr;
+            auto n = receiver.recv_from(buffer, sizeof(buffer), & sender_addr);
 
             if (n > 0) {
-                LOGD(TAG, "Received data: {}", buffer);
+                LOGD(TAG, "Received data from: {}: {}", to_string(sender_addr), buffer);
 
                 if (buffer[0] == 'Q' && buffer[1] == 'U'
                         && buffer[2] == 'I' && buffer[3] == 'T') {

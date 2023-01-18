@@ -15,6 +15,7 @@ include(CheckIncludeFile)
 
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
+option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
 
 portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
     EXPORTS NETTY__EXPORTS
@@ -25,6 +26,7 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/socket4_addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/startup.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
@@ -120,7 +122,6 @@ if (NETTY__ENABLE_UDT)
         ${NETTY__UDT_ROOT}/window.cpp)
 
     portable_target(SOURCES ${PROJECT_NAME}
-        #${CMAKE_CURRENT_LIST_DIR}/src/udt/sockets_api.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/listener_poller.cpp
@@ -137,3 +138,15 @@ if (NETTY__ENABLE_UDT)
         portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE "NETTY__UDT_PATCHED=1")
     endif(NETTY__UDT_PATCHED)
 endif(NETTY__ENABLE_UDT)
+
+if (NETTY_P2P__ENABLE_QT5)
+    portable_target(SOURCES ${PROJECT_NAME}
+        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_recever.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_sender.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_socket.cpp)
+
+    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PUBLIC Core Network)
+    portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME}-static Core Network)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__QT5_ENABLED=1")
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__QT5_ENABLED=1")
+endif(NETTY_P2P__ENABLE_QT5)

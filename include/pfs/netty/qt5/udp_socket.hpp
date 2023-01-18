@@ -4,19 +4,32 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
+//      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/posix/inet_socket.hpp"
+#include "pfs/netty/error.hpp"
+#include "pfs/netty/exports.hpp"
+#include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/socket4_addr.hpp"
+#include <QUdpSocket>
+#include <memory>
 
 namespace netty {
-namespace posix {
+namespace qt5 {
+
+struct uninitialized {};
 
 /**
- * POSIX Inet UDP socket
+ * Qt5 Inet UDP socket
  */
-class udp_socket: public inet_socket
+class udp_socket
 {
+public:
+    using native_type = qintptr; // See QAbstractSocket::socketDescriptor()
+
+protected:
+    std::unique_ptr<QUdpSocket> _socket;
+
 protected:
     /**
      * Constructs uninitialized (invalid) UDP socket.
@@ -54,6 +67,22 @@ public:
     NETTY__EXPORT udp_socket (udp_socket &&);
     NETTY__EXPORT udp_socket & operator = (udp_socket &&);
     NETTY__EXPORT ~udp_socket ();
+
+    /**
+     *  Checks if socket is valid
+     */
+    NETTY__EXPORT operator bool () const noexcept;
+
+    NETTY__EXPORT native_type native () const noexcept;
+
+    NETTY__EXPORT std::streamsize available (error * perr = nullptr) const;
+
+    NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize len
+        , socket4_addr * saddr = nullptr, error * perr = nullptr);
+
+    NETTY__EXPORT std::streamsize send_to (socket4_addr const & dest
+        , char const * data, std::streamsize len, error * perr = nullptr);
 };
 
-}} // namespace netty::posix
+}} // namespace netty::qt5
+

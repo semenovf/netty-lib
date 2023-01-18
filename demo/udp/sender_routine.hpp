@@ -9,11 +9,11 @@
 #pragma once
 #include "pfs/log.hpp"
 #include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/posix/udp_sender.hpp"
 #include <chrono>
 #include <map>
 #include <thread>
 
+template <typename Sender>
 void run_sender (netty::socket4_addr const & dest_saddr, netty::inet4_addr local_addr)
 {
     LOGD(TAG, "Run {} sender to: {}"
@@ -25,7 +25,7 @@ void run_sender (netty::socket4_addr const & dest_saddr, netty::inet4_addr local
         , to_string(dest_saddr));
 
     try {
-        netty::posix::udp_sender sender;
+        Sender sender;
 
         if (netty::is_multicast(dest_saddr.addr)) {
             sender.set_multicast_interface(local_addr);

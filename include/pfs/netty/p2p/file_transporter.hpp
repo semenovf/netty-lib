@@ -9,11 +9,11 @@
 #pragma once
 #include "envelope.hpp"
 #include "file.hpp"
+#include "packet.hpp"
 #include "universal_id.hpp"
 #include "pfs/filesystem.hpp"
 #include "pfs/sha256.hpp"
 #include "pfs/netty/exports.hpp"
-#include "pfs/netty/p2p/packet.hpp"
 #include <functional>
 #include <unordered_map>
 #include <vector>

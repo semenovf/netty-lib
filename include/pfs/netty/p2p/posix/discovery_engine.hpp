@@ -1,20 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2022.12.31 Initial version.
+//      2023.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "discovery_socket.hpp"
-#include "pfs/time_point.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/p2p/envelope.hpp"
-#include <chrono>
-#include <functional>
+#include "pfs/netty/regular_poller.hpp"
+#include "pfs/netty/posix/poll_poller.hpp"
+#include "pfs/netty/posix/udp_receiver.hpp"
+#include "pfs/netty/posix/udp_sender.hpp"
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace netty {
@@ -24,63 +22,46 @@ namespace posix {
 class discovery_engine
 {
 public:
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
-    using socket_type = discovery_socket;
+    using receiver_type = discovery_engine;
+    using sender_type   = discovery_engine;
 
-// private:
-//     void process_discovery_data (socket4_addr saddr, char const * data
-//         , std::size_t size);
-//
-//     void broadcast_discovery_data ();
-//     void check_expiration ();
+private:
+    using poller_type = netty::regular_poller<netty::posix::poll_poller>;
 
-// private:
-//     discovery_engine () = delete;
-//     discovery_engine (discovery_engine const &) = delete;
-//     discovery_engine (discovery_engine &&) = delete;
-//     discovery_engine & operator = (discovery_engine const &) = delete;
-//     discovery_engine & operator = (discovery_engine &&) = delete;
+private:
+    poller_type _poller;
+    std::map<poller_type::native_socket_type, netty::posix::udp_receiver> _listeners;
+    std::vector<std::pair<socket4_addr, netty::posix::udp_sender>> _targets;
 
 public:
-    /**
-     * @param host_uuid Host unique identifier.
-     * @param transmit_interval Discovery packet sending interval.
-     * @param server_port The port on which the server will accept remote
-     *        connections.
-     */
-    NETTY__EXPORT discovery_engine (universal_id host_uuid);
+    std::function<void (socket4_addr /*saddr*/, std::vector<char> /*data*/)> data_ready;
 
+public:
+    NETTY__EXPORT discovery_engine ();
     NETTY__EXPORT ~discovery_engine ();
 
     /**
-     * Sets boolean or integer type options.
+     * Add listener.
      *
-     * @return @c true on success, or @c false if option is unsuitable or
-     *         value is bad.
+     * @param src_saddr Listener address (unicast, multicast or broadcast).
+     * @param local_addr Local address for multicast or broadcast.
      */
-    NETTY__EXPORT bool set_option (option_enum opttype, std::intmax_t value);
+    NETTY__EXPORT void add_listener (socket4_addr src_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value);
 
     /**
-     * Sets socket address type options.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, socket4_addr sa);
-
-    /**
-     * Sets chrono type option.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, std::chrono::milliseconds msecs);
-
-    /**
-     * Initiates discovery procedure.
+     * Add target.
      *
-     * @param saddr The address to which the listener socket is bound.
+     * @param dest_saddr Target address (unicast, multicast or broadcast).
+     * @param local_addr Multicast interface.
      */
-    NETTY__EXPORT void listen ();
+    NETTY__EXPORT void add_target (socket4_addr dest_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value);
 
-    NETTY__EXPORT void add_target (socket4_addr saddr);
-    NETTY__EXPORT void loop ();
+    NETTY__EXPORT void poll (std::chrono::milliseconds timeout);
+
+    NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
+        , std::size_t size, netty::error * perr);
 };
 
-}}} // namespace netty::p2p::qt5
-
+}}} // namespace netty::p2p::posix

@@ -11,6 +11,13 @@
 #include "pfs/log.hpp"
 #include "pfs/string_view.hpp"
 #include "pfs/netty/startup.hpp"
+#include "pfs/netty/posix/udp_receiver.hpp"
+#include "pfs/netty/posix/udp_sender.hpp"
+
+#if NETTY__QT5_ENABLED
+#   include "pfs/netty/qt5/udp_receiver.hpp"
+#   include "pfs/netty/qt5/udp_sender.hpp"
+#endif
 
 static char const * TAG = "UDP";
 
@@ -25,7 +32,7 @@ static struct program_context {
 
 static void print_usage ()
 {
-    fmt::print(stdout, "Usage\n\t{} --sender | --receiver --addr=ADDR --port=PORT [--local-addr=ADDR]\n", __pctx.program);
+    fmt::print(stdout, "Usage\n\t{} [--qt5] --sender | --receiver --addr=ADDR --port=PORT [--local-addr=ADDR]\n", __pctx.program);
     fmt::print(stdout, "--sender\n\tRun as sender\n");
     fmt::print(stdout, "--receiver\n\tRun as receiver\n");
     fmt::print(stdout, "--addr=ADDR\n\tSource address for receiver, destination address for sender\n");
@@ -40,6 +47,7 @@ int main (int argc, char * argv[])
     netty::startup_guard netty_startup;
 
     bool is_sender = false; // false - for receiver, true - for sender
+    bool is_qt5 = false;
     std::string addr_value;
     std::string local_addr_value;
     std::string port_value;
@@ -59,6 +67,8 @@ int main (int argc, char * argv[])
             is_sender = true;
         } else if (string_view{"--receiver"} == argv[i]) {
             is_sender = false;
+        } else if (string_view{"--qt5"} == argv[i]) {
+            is_qt5 = true;
         } else if (string_view{argv[i]}.starts_with("--addr=")) {
             addr_value = std::string{argv[i] + 7};
         } else if (string_view{argv[i]}.starts_with("--local-addr=")) {
@@ -114,11 +124,23 @@ int main (int argc, char * argv[])
         local_addr = res.second;
     }
 
-    if (is_sender) {
-        run_sender(netty::socket4_addr{addr, port}, local_addr);
+#if NETTY__QT5_ENABLED
+    if (is_qt5) {
+        if (is_sender) {
+            run_sender<netty::qt5::udp_sender>(netty::socket4_addr{addr, port}, local_addr);
+        } else {
+            run_receiver<netty::qt5::udp_receiver>(netty::socket4_addr{addr, port}, local_addr);
+        }
     } else {
-        run_receiver(netty::socket4_addr{addr, port}, local_addr);
+#endif
+    if (is_sender) {
+        run_sender<netty::posix::udp_sender>(netty::socket4_addr{addr, port}, local_addr);
+    } else {
+        run_receiver<netty::posix::udp_receiver>(netty::socket4_addr{addr, port}, local_addr);
     }
+#if NETTY__QT5_ENABLED
+    }
+#endif
 
     return EXIT_SUCCESS;
 }

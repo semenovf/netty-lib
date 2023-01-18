@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,7 +7,6 @@
 //      2021.09.13 Initial version
 //      2021.11.01 New version using UDT.
 ////////////////////////////////////////////////////////////////////////////////
-#define PFS__LOG_LEVEL 2
 #include "pfs/log.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include "pfs/netty/p2p/engine.hpp"

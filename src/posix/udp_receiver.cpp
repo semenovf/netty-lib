@@ -73,6 +73,10 @@ udp_receiver & udp_receiver::operator = (udp_receiver && s)
     return *this;
 }
 
-udp_receiver::~udp_receiver () = default;
+udp_receiver::~udp_receiver ()
+{
+    if (_dtor)
+        _dtor();
+}
 
 }} // namespace netty::posix

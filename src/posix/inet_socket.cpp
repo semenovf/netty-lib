@@ -13,7 +13,9 @@
 
 #if _MSC_VER
 #   include <winsock2.h>
+#   include <vector>
 #else
+#   include <sys/ioctl.h>
 #   include <sys/types.h>
 #   include <sys/socket.h>
 #   include <netinet/in.h>
@@ -155,6 +157,91 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
     return true;
 }
 
+std::streamsize inet_socket::available (error * perr) const
+{
+#if _MSC_VER
+    char peek_buffer[1500];
+    std::vector<WSABUF> buf;
+    DWORD n = 0;
+
+    for (;;) {
+        buf.resize(buf.size() + 5, {sizeof(peek_buffer), peek_buffer});
+
+        DWORD flags = MSG_PEEK;
+        DWORD bytes_read = 0;
+        auto rc = ::WSARecv(_socket, buf.data(), DWORD(buf.size()), & bytes_read, & flags, nullptr, nullptr);
+
+        if (rc != SOCKET_ERROR) {
+            n = bytes_read;
+            break;
+        } else {
+            auto errn = WSAGetLastError();
+
+            switch (errn) {
+                case WSAEMSGSIZE:
+                    continue;
+                case WSAECONNRESET:
+                case WSAENETRESET:
+                    n = 0;
+                    break;
+                default: {
+                    error err {
+                        make_error_code(errc::socket_error)
+                        , tr::_("read available data size from socket failure")
+                        , pfs::system_error_text()
+                    };
+
+                    if (perr) {
+                        *perr = std::move(err);
+                        n = -1;
+                    } else {
+                        throw err;
+                    }
+                    break;
+                }
+            }
+
+            break;
+        }
+    }
+
+    return static_cast<std::streamsize>(n);
+#else
+    // Check if any data available on socket
+    std::uint8_t c;
+    auto rc = ::recv(_socket, & c, 1, MSG_PEEK);
+
+    if (rc < 0
+        && errno == EAGAIN
+                || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+        return 0;
+    }
+
+    if (rc <= 0)
+        return rc;
+
+    int n = 0;
+    auto rc1 = ::ioctl(_socket, FIONREAD, & n);
+
+    if (rc1 != 0) {
+        error err {
+              make_error_code(errc::socket_error)
+            , tr::_("read available data size from socket failure")
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+            return -1;
+        } else {
+            throw err;
+        }
+    }
+
+    return static_cast<std::streamsize>(n);
+#endif
+}
+
 std::streamsize inet_socket::recv (char * data, std::streamsize len, error * perr)
 {
     auto rc = ::recv(_socket, data, len, MSG_DONTWAIT);
@@ -164,7 +251,7 @@ std::streamsize inet_socket::recv (char * data, std::streamsize len, error * per
             rc = 0;
         } else {
             error err {
-                make_error_code(errc::socket_error)
+                  make_error_code(errc::socket_error)
                 , tr::_("receive data failure")
                 , pfs::system_error_text()
             };
@@ -223,17 +310,11 @@ std::streamsize inet_socket::send (char const * data, std::streamsize len
     return total_sent;
 }
 
-std::streamsize inet_socket::recv_from (socket4_addr const & saddr
-    , char * data, std::streamsize len, error * perr)
+std::streamsize inet_socket::recv_from (char * data, std::streamsize len
+    , socket4_addr * saddr, error * perr)
 {
     sockaddr_in addr_in4;
-
     memset(& addr_in4, 0, sizeof(addr_in4));
-
-    addr_in4.sin_family      = AF_INET;
-    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
-    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
-
     socklen_t addr_in4_len = sizeof(addr_in4);
 
     auto n = ::recvfrom(_socket, data, len, MSG_DONTWAIT
@@ -256,6 +337,12 @@ std::streamsize inet_socket::recv_from (socket4_addr const & saddr
                 throw err;
             }
         }
+    }
+
+
+    if (saddr) {
+        saddr->port = pfs::to_native_order(static_cast<std::uint16_t>(addr_in4.sin_port));
+        saddr->addr = pfs::to_native_order(static_cast<std::uint32_t>(addr_in4.sin_addr.s_addr));
     }
 
     return n;

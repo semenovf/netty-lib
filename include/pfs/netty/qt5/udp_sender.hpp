@@ -4,17 +4,14 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.15 Initial version.
+//      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "udp_socket.hpp"
 
 namespace netty {
-namespace posix {
+namespace qt5 {
 
-/**
- * POSIX UDP sender socket
- */
 class udp_sender: public udp_socket
 {
 public:
@@ -46,5 +43,6 @@ public:
     NETTY__EXPORT bool enable_broadcast (bool enable, error * perr = nullptr);
 };
 
-}} // namespace netty::posix
+}} // namespace netty::qt5
+
 

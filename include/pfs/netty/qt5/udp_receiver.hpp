@@ -4,17 +4,17 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.15 Initial version.
+//      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "udp_socket.hpp"
 #include <functional>
 
 namespace netty {
-namespace posix {
+namespace qt5 {
 
 /**
- * POSIX UDP receiver socket
+ * Qt5 UDP receiver socket
  */
 class udp_receiver: public udp_socket
 {
@@ -55,6 +55,4 @@ public:
     NETTY__EXPORT ~udp_receiver ();
 };
 
-}} // namespace netty::posix
-
-
+}} // namespace netty::qt5

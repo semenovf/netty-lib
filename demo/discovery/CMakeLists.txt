@@ -4,13 +4,10 @@
 # This file is part of `netty-lib`.
 #
 # Changelog:
-#      2021.06.21 Initial version.
+#      2023.01.17 Initial version.
 ################################################################################
-add_subdirectory(mtu)
-add_subdirectory(netty)
-add_subdirectory(udp)
+project(discovery-demo)
 
-if (NETTY__BUILD_P2P)
-    add_subdirectory(discovery)
-    #add_subdirectory(p2p)
-endif(NETTY__BUILD_P2P)
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} pfs::netty::p2p::static pfs::common)
+target_compile_definitions(${PROJECT_NAME} PUBLIC PFS__LOG_LEVEL=2)

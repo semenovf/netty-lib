@@ -75,14 +75,16 @@ public:
 
     NETTY__EXPORT native_type native () const noexcept;
 
+    NETTY__EXPORT std::streamsize available (error * perr = nullptr) const;
+
     NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len
         , error * perr = nullptr);
 
     NETTY__EXPORT std::streamsize send (char const * data, std::streamsize len
         , error * perr = nullptr);
 
-    NETTY__EXPORT std::streamsize recv_from (socket4_addr const & src_addr
-        , char * data, std::streamsize len, error * perr = nullptr);
+    NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize len
+        , socket4_addr * saddr = nullptr, error * perr = nullptr);
 
     NETTY__EXPORT std::streamsize send_to (socket4_addr const & dest
         , char const * data, std::streamsize len, error * perr = nullptr);

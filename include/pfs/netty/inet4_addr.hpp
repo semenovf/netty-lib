@@ -138,6 +138,11 @@ public: // static
     /**
      * Parses IPv4 address from string.
      */
+    static std::pair<bool, inet4_addr> parse (char const * s, std::size_t n);
+
+    /**
+     * Parses IPv4 address from string.
+     */
     static std::pair<bool, inet4_addr> parse (char const * s);
 
     /**

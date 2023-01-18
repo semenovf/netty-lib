@@ -1,20 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2022.09.20 Initial version.
+//      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "udp_socket.hpp"
-#include "pfs/time_point.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/p2p/envelope.hpp"
-#include <chrono>
-#include <functional>
+#include "pfs/netty/regular_poller.hpp"
+#include "pfs/netty/posix/poll_poller.hpp"
+#include "pfs/netty/qt5/udp_receiver.hpp"
+#include "pfs/netty/qt5/udp_sender.hpp"
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace netty {
@@ -23,134 +21,47 @@ namespace qt5 {
 
 class discovery_engine
 {
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
+public:
+    using receiver_type = discovery_engine;
+    using sender_type   = discovery_engine;
+
+private:
+    using poller_type = netty::regular_poller<netty::qt5::poll_poller>;
+
+private:
+    poller_type _poller;
+    std::map<poller_type::native_socket_type, netty::qt5::udp_receiver> _listeners;
+    std::vector<std::pair<socket4_addr, netty::qt5::udp_sender>> _targets;
 
 public:
-    using socket_type = udp_socket;
-    using milliseconds_type = std::chrono::milliseconds;
-    using timediff_type     = std::chrono::milliseconds;
-
-    enum option_enum: std::int16_t
-    {
-          discovery_address     // socket4_addr
-        , listener_port         // std::uint16_t
-        , transmit_interval     // std::chrono::milliseconds
-        , timestamp_error_limit // std::chrono::milliseconds
-    };
-
-private:
-    struct options {
-        socket4_addr discovery_address;
-        std::uint16_t listener_port;
-        milliseconds_type transmit_interval;
-        milliseconds_type timestamp_error_limit;
-    };
-
-    struct target_item {
-        socket4_addr saddr;
-        std::uint32_t counter;
-    };
-
-private:
-    options _opts;
-    universal_id _host_uuid;
-    socket_type  _receiver;
-    socket_type  _transmitter;
-    milliseconds_type _transmit_timepoint;
-    std::vector<target_item> _targets;
-
-    struct peer_credentials
-    {
-        socket4_addr saddr;
-
-        // Expiration timepoint to monitor if the peer is alive
-        milliseconds_type expiration_timepoint;
-
-        // Peers time difference
-        timediff_type timediff;
-    };
-
-    // Contains discovered peers with additional information
-    std::map<universal_id, peer_credentials> _discovered_peers;
+    std::function<void (socket4_addr /*saddr*/, std::vector<char> /*data*/)> data_ready;
 
 public:
-    mutable std::function<void (std::string const &)> log_error
-        = [] (std::string const &) {};
-
-    /**
-     * Called when peer discovery (hello) packet received.
-     * It happens periodically (defined by _transmit_interval on the remote host).
-     */
-    mutable std::function<void (universal_id, socket4_addr, timediff_type const &)>
-        peer_discovered = [] (universal_id, socket4_addr, timediff_type const &) {};
-
-    /**
-     * Called when the time difference has changed significantly.
-     */
-    mutable std::function<void (universal_id, timediff_type const &)>
-        peer_timediff = [] (universal_id, timediff_type const &) {};
-
-    /**
-     * Called when no discovery packets were received for a specified period or
-     * when any of the credential properties have changed.
-     * This is an opposite event to `peer_discovered`.
-     */
-    mutable std::function<void (universal_id, socket4_addr)> peer_expired
-        = [] (universal_id /*peer_uuid*/, socket4_addr /*saddr*/) {};
-
-private:
-    void process_discovery_data (socket4_addr saddr, char const * data
-        , std::size_t size);
-
-    void broadcast_discovery_data ();
-    void check_expiration ();
-
-private:
-    discovery_engine () = delete;
-    discovery_engine (discovery_engine const &) = delete;
-    discovery_engine (discovery_engine &&) = delete;
-    discovery_engine & operator = (discovery_engine const &) = delete;
-    discovery_engine & operator = (discovery_engine &&) = delete;
-
-public:
-    /**
-     * @param host_uuid Host unique identifier.
-     * @param transmit_interval Discovery packet sending interval.
-     * @param server_port The port on which the server will accept remote
-     *        connections.
-     */
-    NETTY__EXPORT discovery_engine (universal_id host_uuid);
-
+    NETTY__EXPORT discovery_engine ();
     NETTY__EXPORT ~discovery_engine ();
 
     /**
-     * Sets boolean or integer type options.
+     * Add listener.
      *
-     * @return @c true on success, or @c false if option is unsuitable or
-     *         value is bad.
+     * @param src_saddr Listener address (unicast, multicast or broadcast).
+     * @param local_addr Local address for multicast or broadcast.
      */
-    NETTY__EXPORT bool set_option (option_enum opttype, std::intmax_t value);
+    NETTY__EXPORT void add_listener (socket4_addr src_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value);
 
     /**
-     * Sets socket address type options.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, socket4_addr sa);
-
-    /**
-     * Sets chrono type option.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, std::chrono::milliseconds msecs);
-
-    /**
-     * Initiates discovery procedure.
+     * Add target.
      *
-     * @param saddr The address to which the listener socket is bound.
+     * @param dest_saddr Target address (unicast, multicast or broadcast).
+     * @param local_addr Multicast interface.
      */
-    NETTY__EXPORT void listen ();
+    NETTY__EXPORT void add_target (socket4_addr dest_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value);
 
-    NETTY__EXPORT void add_target (socket4_addr saddr);
-    NETTY__EXPORT void loop ();
+    NETTY__EXPORT void poll (std::chrono::milliseconds timeout);
+
+    NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
+        , std::size_t size, netty::error * perr);
 };
 
 }}} // namespace netty::p2p::qt5
