@@ -30,7 +30,7 @@ private:
 
 private:
     poller_type _poller;
-    std::map<poller_type::native_socket_type, netty::posix::udp_receiver> _listeners;
+    std::map<poller_type::native_socket_type, netty::posix::udp_receiver> _receivers;
     std::vector<std::pair<socket4_addr, netty::posix::udp_sender>> _targets;
 
 public:
@@ -41,13 +41,18 @@ public:
     NETTY__EXPORT ~discovery_engine ();
 
     /**
-     * Add listener.
+     * Add receiver.
      *
-     * @param src_saddr Listener address (unicast, multicast or broadcast).
+     * @param src_saddr Receiver address (unicast, multicast or broadcast).
      * @param local_addr Local address for multicast or broadcast.
      */
-    NETTY__EXPORT void add_listener (socket4_addr src_saddr
+    NETTY__EXPORT void add_receiver (socket4_addr src_saddr
         , inet4_addr local_addr = inet4_addr::any_addr_value);
+
+    /**
+     * Check if any receivers added to discovery engine.
+     */
+    NETTY__EXPORT bool has_receivers () const noexcept;
 
     /**
      * Add target.
@@ -58,7 +63,12 @@ public:
     NETTY__EXPORT void add_target (socket4_addr dest_saddr
         , inet4_addr local_addr = inet4_addr::any_addr_value);
 
-    NETTY__EXPORT void poll (std::chrono::milliseconds timeout);
+    /**
+     * Check if any targets added to discovery engine.
+     */
+    NETTY__EXPORT bool has_targets () const noexcept;
+
+    NETTY__EXPORT int poll (std::chrono::milliseconds timeout);
 
     NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
         , std::size_t size, netty::error * perr);

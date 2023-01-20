@@ -22,6 +22,8 @@
 namespace netty {
 namespace posix {
 
+tcp_server::tcp_server () : inet_socket() {}
+
 tcp_server::tcp_server (socket4_addr const & saddr)
     : inet_socket(inet_socket::type_enum::stream)
 {

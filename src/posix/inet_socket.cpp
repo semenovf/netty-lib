@@ -125,6 +125,11 @@ inet_socket::native_type inet_socket::native () const noexcept
     return _socket;
 }
 
+socket4_addr inet_socket::saddr () const noexcept
+{
+    return _saddr;
+}
+
 bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * perr)
 {
     sockaddr_in addr_in4;
@@ -244,11 +249,11 @@ std::streamsize inet_socket::available (error * perr) const
 
 std::streamsize inet_socket::recv (char * data, std::streamsize len, error * perr)
 {
-    auto rc = ::recv(_socket, data, len, MSG_DONTWAIT);
+    auto n = ::recv(_socket, data, len, MSG_DONTWAIT);
 
-    if (rc < 0) {
+    if (n < 0) {
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
-            rc = 0;
+            n = 0;
         } else {
             error err {
                   make_error_code(errc::socket_error)
@@ -258,20 +263,23 @@ std::streamsize inet_socket::recv (char * data, std::streamsize len, error * per
 
             if (perr) {
                 *perr = std::move(err);
-                return false;
+                return n;
             } else {
                 throw err;
             }
         }
     }
 
-    return rc;
+    return n;
 }
 
 std::streamsize inet_socket::send (char const * data, std::streamsize len
-    , error * perr)
+    , bool * overflow, error * perr)
 {
     std::streamsize total_sent = 0;
+
+    if (overflow)
+        *overflow = false;
 
     while (len) {
         // MSG_NOSIGNAL flag means:
@@ -282,10 +290,18 @@ std::streamsize inet_socket::send (char const * data, std::streamsize len
         auto n = ::send(_socket, data + total_sent, len, MSG_NOSIGNAL | MSG_DONTWAIT);
 
         if (n < 0) {
-            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-                continue;
-
-            total_sent = -1;
+            // man send:
+            // The output queue for a network interface was full. This generally
+            // indicates that the interface has stopped sending, but may be
+            // caused by transient congestion.(Normally, this does not occur in
+            // Linux. Packets are just silently dropped when a device queue
+            // overflows.)
+            if (errno == ENOBUFS || errno == EAGAIN
+                    || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+                if (overflow)
+                    *overflow = true;
+                return n;
+            }
 
             error err {
                 make_error_code(errc::socket_error)
@@ -295,7 +311,7 @@ std::streamsize inet_socket::send (char const * data, std::streamsize len
 
             if (perr) {
                 *perr = std::move(err);
-                return false;
+                return n;
             } else {
                 throw err;
             }
@@ -348,8 +364,9 @@ std::streamsize inet_socket::recv_from (char * data, std::streamsize len
     return n;
 }
 
+// See inet_socket::send
 std::streamsize inet_socket::send_to (socket4_addr const & saddr
-    , char const * data, std::streamsize len, error * perr)
+    , char const * data, std::streamsize len, bool * overflow, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -361,15 +378,20 @@ std::streamsize inet_socket::send_to (socket4_addr const & saddr
 
     std::streamsize total_sent = 0;
 
+    if (overflow)
+        *overflow = false;
+
     while (len) {
         auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT
             , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
         if (n < 0) {
-            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-                continue;
-
-            total_sent = -1;
+            if (errno == ENOBUFS || errno == EAGAIN
+                    || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+                if (overflow)
+                    *overflow = true;
+                return n;
+            }
 
             error err {
                 make_error_code(errc::socket_error)
@@ -379,7 +401,7 @@ std::streamsize inet_socket::send_to (socket4_addr const & saddr
 
             if (perr) {
                 *perr = std::move(err);
-                return false;
+                return n;
             } else {
                 throw err;
             }

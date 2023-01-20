@@ -22,7 +22,9 @@ std::string error_category::message (int ev) const
         case errc::success:
             return tr::_("no error");
         case errc::system_error:
-            return tr::_("system specific error, check errno value");
+            return tr::_("system error");
+        case errc::invalid_argument:
+            return tr::_("invalid argument");
         case errc::device_not_found:
             return tr::_("device not found");
         case errc::permissions_denied:

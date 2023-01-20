@@ -12,6 +12,7 @@
 #include "listener_poller.hpp"
 #include "regular_poller.hpp"
 #include <functional>
+#include <utility>
 
 namespace netty {
 
@@ -102,16 +103,23 @@ public:
         return _listener_poller.empty() && _poller.empty();
     }
 
-    void poll (std::chrono::milliseconds millis, error * perr = nullptr)
+    /**
+     * @return Pair of poll results of listener and regular pollers.
+     */
+    std::pair<int, int> poll (std::chrono::milliseconds millis, error * perr = nullptr)
     {
+        int n1 = 0;
+
         if (!_listener_poller.empty()) {
             if (_poller.empty())
-                _listener_poller.poll(millis, perr);
+                n1 = _listener_poller.poll(millis, perr);
             else
-                _listener_poller.poll(std::chrono::milliseconds{0}, perr);
+                n1 = _listener_poller.poll(std::chrono::milliseconds{0}, perr);
         }
 
-        _poller.poll(millis);
+        auto n2 = _poller.poll(millis);
+
+        return std::make_pair(n1, n2);
     }
 };
 

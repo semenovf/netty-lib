@@ -35,27 +35,18 @@ class discovery_engine
     using output_envelope_type = output_envelope<>;
 
 public:
-//     using receiver_type     = typename Backend::receiver_type;
-//     using sender_type       = typename Backend::sender_type;
     using milliseconds_type = std::chrono::milliseconds;
     using timediff_type     = std::chrono::milliseconds;
 
-    enum option_enum: std::int16_t
-    {
-//           discovery_address     // socket4_addr
-//         , listener_port         // std::uint16_t
-          transmit_interval     // std::chrono::milliseconds
-        , timestamp_error_limit // std::chrono::milliseconds
+    struct options {
+        milliseconds_type transmit_interval {MAX_TRANSMIT_INTERVAL_SECONDS * 1000};
+        milliseconds_type timestamp_error_limit {500};
+
+        // Port on which server will accept incoming connections (readers)
+        std::uint16_t host_port {0};
     };
 
 private:
-    struct options {
-//         socket4_addr discovery_address;
-//         std::uint16_t listener_port;
-        milliseconds_type transmit_interval;
-        milliseconds_type timestamp_error_limit;
-    };
-
     struct target_item {
         socket4_addr saddr;
         std::uint32_t counter;
@@ -73,11 +64,9 @@ private:
     };
 
 private:
-    options _opts;
     universal_id _host_uuid;
+    options      _opts;
     backend_type _backend;
-//     receiver_type _receiver;
-//     sender_type   _transmitter;
     clock_type::time_point   _transmit_timepoint;
     std::vector<target_item> _targets;
 
@@ -165,7 +154,7 @@ private:
                             if (!res.second) {
                                 throw error {
                                     make_error_code(errc::unexpected_error)
-                                    , tr::_("Unable to store discovered peer")
+                                    , tr::_("unable to store discovered peer")
                                 };
                             }
 
@@ -204,11 +193,11 @@ private:
                         }
                     }
                 } else {
-                    on_error(tr::f_("Bad CRC16 for HELO packet received from: {}"
+                    on_error(tr::f_("bad CRC16 for HELO packet received from: {}"
                         , to_string(saddr)));
                 }
             } else {
-                on_error(tr::f_("Bad HELO packet received from: {}", to_string(saddr)));
+                on_error(tr::f_("bad HELO packet received from: {}", to_string(saddr)));
             }
         }
     }
@@ -221,7 +210,7 @@ private:
         if (interval_exceeded) {
             hello_packet packet;
             packet.uuid = _host_uuid;
-//             packet.port = _opts.listener_port;
+            packet.port = _opts.host_port;
             packet.transmit_interval = static_cast<std::uint16_t>(_opts.transmit_interval.count());
 
             for (auto & t: _targets) {
@@ -286,11 +275,47 @@ public:
      * @param server_port The port on which the server will accept remote
      *        connections.
      */
-    discovery_engine (universal_id host_uuid)
+    discovery_engine (universal_id host_uuid, options && opts)
         : _host_uuid(host_uuid)
+        , _opts(std::move(opts))
     {
-        _opts.transmit_interval     = milliseconds_type{MAX_TRANSMIT_INTERVAL_SECONDS * 1000};
-        _opts.timestamp_error_limit = milliseconds_type{500};
+        auto bad = false;
+        std::string invalid_argument_desc;
+
+        do {
+            bad = _opts.transmit_interval < milliseconds_type{0}
+                || _opts.transmit_interval > std::chrono::seconds{MAX_TRANSMIT_INTERVAL_SECONDS};
+
+            if (bad) {
+                invalid_argument_desc = tr::f_("discovery transmit inteval"
+                    " must be less or equals to {} seconds"
+                    , MAX_TRANSMIT_INTERVAL_SECONDS);
+                break;
+            }
+
+            bad = opts.timestamp_error_limit < milliseconds_type{0};
+
+            if (bad) {
+                invalid_argument_desc = tr::_("discovery timestamp error limit");
+                break;
+            }
+
+            bad = opts.host_port < 1024;
+
+            if (bad) {
+                invalid_argument_desc = tr::_("host port");
+                break;
+            }
+        } while (false);
+
+        if (bad) {
+            error err {
+                  make_error_code(errc::invalid_argument)
+                , invalid_argument_desc
+            };
+
+            throw err;
+        }
 
         _backend.data_ready = [this] (socket4_addr saddr, std::vector<char> data) {
             process_discovery_data(saddr, data.data(), data.size());
@@ -300,91 +325,38 @@ public:
     ~discovery_engine () = default;
 
     /**
-     * Sets boolean or integer type options.
+     * Add receiver.
      *
-     * @return @c true on success, or @c false if option is unsuitable or
-     *         value is bad.
+     * @param src_saddr Receiver address (unicast, multicast or broadcast).
+     * @param local_addr Local address for multicast or broadcast.
      */
-    bool set_option (option_enum opttype, std::intmax_t value)
+    void add_receiver (socket4_addr src_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value)
     {
-        switch (opttype) {
-            case option_enum::listener_port:
-                if (value >= 0 && value <= (std::numeric_limits<std::uint16_t>::max)()) {
-                    _opts.listener_port = static_cast<std::uint16_t>(value);
-                    return true;
-                }
+        _backend.add_receiver(src_saddr, local_addr);
+    }
 
-                on_error(tr::_("Bad listener port"));
-                break;
-
-            default:
-                break;
-        }
-
-        return false;
+    bool has_receivers () const noexcept
+    {
+        return _backend.has_receivers();
     }
 
     /**
-     * Sets socket address type options.
+     * Add target.
+     *
+     * @param dest_saddr Target address (unicast, multicast or broadcast).
+     * @param local_addr Multicast interface.
      */
-    bool set_option (option_enum opttype, socket4_addr sa)
-    {
-        switch (opttype) {
-            case option_enum::discovery_address:
-                _opts.discovery_address = sa;
-                return true;
-            default:
-                break;
-        }
-
-        return false;
-    }
-
-    /**
-     * Sets chrono type option.
-     */
-    bool set_option (option_enum opttype, std::chrono::milliseconds msecs)
-    {
-        switch (opttype) {
-            case option_enum::transmit_interval:
-                if (msecs.count() > 0
-                        && msecs <= std::chrono::seconds{MAX_TRANSMIT_INTERVAL_SECONDS}) {
-                    _opts.transmit_interval = msecs;
-                    LOG_TRACE_2("Discovery transmit interval: {}"
-                        , _opts.transmit_interval);
-                    return true;
-                }
-
-                on_error(tr::_("Bad transmit interval, must be less or equals to 60 seconds"));
-                break;
-
-            case option_enum::timestamp_error_limit:
-                if (msecs.count() >= 0) {
-                    _opts.timestamp_error_limit = msecs;
-                    LOG_TRACE_2("Discovery timestamp error limit: {}"
-                        , _opts.timestamp_error_limit);
-                    return true;
-                }
-
-                on_error(tr::_("Bad timestamp error limit, must be greater or equals to 0 seconds"));
-                break;
-
-            default:
-                break;
-        }
-
-        return false;
-    }
-
-    void add_listener (socket4_addr src_saddr, inet4_addr local_addr)
-    {
-        _backend.add_listener(src_saddr, local_addr);
-    }
-
-    void add_target (socket4_addr target_saddr, inet4_addr local_addr)
+    void add_target (socket4_addr target_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value)
     {
         _targets.emplace_back(target_item{target_saddr, 0});
         _backend.add_target(target_saddr, local_addr);
+    }
+
+    bool has_targets () const noexcept
+    {
+        return _backend.has_targets();
     }
 
     void discover (std::chrono::milliseconds poll_timeout)
@@ -394,5 +366,8 @@ public:
         check_expiration();
     }
 };
+
+template <typename Backend> constexpr int const
+discovery_engine<Backend>::MAX_TRANSMIT_INTERVAL_SECONDS;
 
 }} // namespace netty::p2p

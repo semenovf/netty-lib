@@ -19,6 +19,11 @@ class basic_udt_server: public basic_socket
 {
 protected:
     /**
+     * Constructs invalid (uninitialized) TCP server.
+     */
+    NETTY__EXPORT basic_udt_server ();
+
+    /**
      * Constructs UDT server and bind to the specified address.
      *
      * @param saddr Bind address.
@@ -68,6 +73,11 @@ public:
     using udt_socket_type = udt_socket<MTU>;
 
 public:
+    /**
+     * Constructs invalid (uninitialized) UDT server.
+     */
+    udt_server () : basic_udt_server() {}
+
     udt_server (socket4_addr const & saddr, int exp_max_counter
         , std::chrono::milliseconds exp_threshold)
         : basic_udt_server(saddr, MTU, exp_max_counter, exp_threshold)

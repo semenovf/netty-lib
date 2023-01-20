@@ -179,27 +179,27 @@ int main (int argc, char * argv[])
 
     if (is_server) {
         if (poller_value == "udt") {
-            start_server<server_udt_poller_type, udt_server_type, udt_socket_type>(netty::socket4_addr{addr, port});
+            start_server<netty::server_udt_poller_type, udt_server_type, udt_socket_type>(netty::socket4_addr{addr, port});
         } else if (is_tcp) {
             if (poller_value == "select")
-                start_server<server_select_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_server<netty::server_select_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
             else if (poller_value == "poll")
-                start_server<server_poll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_server<netty::server_poll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
             else if (poller_value == "epoll")
-                start_server<server_epoll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_server<netty::server_epoll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
         } else {
             LOGE(TAG, "UDP server not implemented yet");
         }
     } else {
         if (poller_value == "udt") {
-            start_client<client_udt_poller_type, udt_socket_type>(netty::socket4_addr{addr, port});
+            start_client<netty::client_udt_poller_type, udt_socket_type>(netty::socket4_addr{addr, port});
         } else if (is_tcp) {
             if (poller_value == "select")
-                start_client<client_select_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_client<netty::client_select_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
             else if (poller_value == "poll")
-                start_client<client_poll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_client<netty::client_poll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
             else if (poller_value == "epoll")
-                start_client<client_epoll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+                start_client<netty::client_epoll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
         } else if (is_udp) {
             LOGE(TAG, "UDP client not implemented yet");
         }

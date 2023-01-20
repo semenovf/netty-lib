@@ -195,19 +195,15 @@ public:
      *         - netty::errc::system_error
      * @return Network interfaces
      */
-    friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (std::error_code & ec);
+    friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr);
 };
 
-NETTY__EXPORT std::vector<network_interface> fetch_interfaces (std::error_code & ec);
+NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr = nullptr);
 
 template <typename Visitor>
-std::vector<network_interface> fetch_interfaces (std::error_code & ec, Visitor && visit)
+std::vector<network_interface> fetch_interfaces (Visitor && visit, error * perr = nullptr)
 {
-    auto ifaces = fetch_interfaces(ec);
-
-    if (ec)
-        return std::vector<network_interface>{};
-
+    auto ifaces = fetch_interfaces(perr);
     std::vector<network_interface> result;
 
     for (auto & iface: ifaces) {
@@ -225,14 +221,14 @@ enum class usename {
 
 inline std::vector<network_interface> fetch_interfaces_by_name (usename un
     , std::string const & interface_name
-    , std::error_code & ec)
+    , error * perr = nullptr)
 {
-    auto ifaces = fetch_interfaces(ec, [un, & interface_name] (
+    auto ifaces = fetch_interfaces([un, & interface_name] (
             network_interface const & iface) -> bool {
         return un == usename::readable
             ? interface_name == iface.readable_name()
             : interface_name == iface.adapter_name();
-    });
+    }, perr);
 
     return ifaces;
 }

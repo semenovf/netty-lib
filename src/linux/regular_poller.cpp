@@ -44,8 +44,10 @@ int regular_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis,
                 } else if ( n == 0) {
                     disconnect = true;
                 } else {
-                    on_error(fd, tr::f_("read socket failure: {}"
-                        , pfs::system_error_text(errno)));
+                    if (errno != ECONNRESET) {
+                        on_error(fd, tr::f_("read socket failure: {}"
+                            , pfs::system_error_text(errno)));
+                    }
                     disconnect = true;
                 }
 

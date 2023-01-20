@@ -19,9 +19,9 @@ using error_code = std::error_code;
 enum class errc
 {
       success = 0
-    , engine_error       // General purpose errors.
     , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
+    , invalid_argument   // Invalid argument passed to callable entity
     , device_not_found
     , permissions_denied
     , name_too_long

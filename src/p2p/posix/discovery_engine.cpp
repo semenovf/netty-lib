@@ -16,7 +16,7 @@ namespace posix {
 discovery_engine::discovery_engine () = default;
 discovery_engine::~discovery_engine () = default;
 
-void discovery_engine::add_listener (socket4_addr src_saddr, inet4_addr local_addr)
+void discovery_engine::add_receiver (socket4_addr src_saddr, inet4_addr local_addr)
 {
     netty::posix::udp_receiver receiver;
 
@@ -26,9 +26,9 @@ void discovery_engine::add_listener (socket4_addr src_saddr, inet4_addr local_ad
         receiver = netty::posix::udp_receiver{src_saddr};
 
     _poller.ready_read = [this] (poller_type::native_socket_type sock) {
-        auto pos = _listeners.find(sock);
+        auto pos = _receivers.find(sock);
 
-        if (pos != _listeners.end()) {
+        if (pos != _receivers.end()) {
             auto & receiver = pos->second;
             auto bytes_available = receiver.available();
 
@@ -46,7 +46,12 @@ void discovery_engine::add_listener (socket4_addr src_saddr, inet4_addr local_ad
     };
 
     _poller.add(receiver.native());
-    _listeners.emplace(receiver.native(), std::move(receiver));
+    _receivers.emplace(receiver.native(), std::move(receiver));
+}
+
+bool discovery_engine::has_receivers () const noexcept
+{
+    return !_receivers.empty();
 }
 
 void discovery_engine::add_target (socket4_addr dest_saddr, inet4_addr local_addr)
@@ -62,9 +67,14 @@ void discovery_engine::add_target (socket4_addr dest_saddr, inet4_addr local_add
     _targets.emplace_back(std::make_pair(dest_saddr, std::move(sender)));
 }
 
-void discovery_engine::poll (std::chrono::milliseconds timeout)
+bool discovery_engine::has_targets () const noexcept
 {
-    _poller.poll(timeout);
+    return !_targets.empty();
+}
+
+int discovery_engine::poll (std::chrono::milliseconds timeout)
+{
+    return _poller.poll(timeout);
 }
 
 std::streamsize discovery_engine::send (socket4_addr dest_saddr, char const * data
@@ -72,7 +82,7 @@ std::streamsize discovery_engine::send (socket4_addr dest_saddr, char const * da
 {
     for (auto & p: _targets) {
         if (dest_saddr == p.first) {
-            return p.second.send_to(dest_saddr, data, size, perr);
+            return p.second.send_to(dest_saddr, data, size, nullptr, perr);
         }
     }
 

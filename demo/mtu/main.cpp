@@ -28,7 +28,7 @@ int main (int argc, char * argv[])
     std::error_code ec;
     auto interface_name = argv[1];
 
-    auto ifaces = netty::fetch_interfaces(ec, [& interface_name] (netty::network_interface const & iface) -> bool {
+    auto ifaces = netty::fetch_interfaces([& interface_name] (netty::network_interface const & iface) -> bool {
         std::cout << "Adapter name: "  << iface.adapter_name() << "\n";
         std::cout << "\tReadable name: " << iface.readable_name() << "\n";
         std::cout << "\tDescription  : " << iface.description() << "\n";
@@ -61,8 +61,7 @@ int main (int argc, char * argv[])
         using netty::fetch_interfaces_by_name;
 
         auto ifaces = fetch_interfaces_by_name(netty::usename::adapter
-            , interface_name
-            , ec);
+            , interface_name);
 
         if (ifaces.empty()) {
             std::cerr << "ERROR: interface ["

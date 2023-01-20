@@ -49,33 +49,29 @@ class file_transporter
     using input_envelope_type  = input_envelope<>;
     using output_envelope_type = output_envelope<>;
 
+    static constexpr filesize_t const DEFAULT_FILE_CHUNK_SIZE {16 * 1024};
+    static constexpr filesize_t const MIN_FILE_CHUNK_SIZE     {32};
+    static constexpr filesize_t const MAX_FILE_CHUNK_SIZE     {1024 * 1024};
+    static constexpr filesize_t const MAX_FILE_SIZE           {0x7ffff000};
+
 public:
     using checksum_type = pfs::crypto::sha256_digest;
 
-    enum option_enum: std::int16_t
-    {
-          download_directory   // pfs::filesystem::path
-        //, auto_download      // bool
-        , remove_transient_files_on_error // bool
-        , file_chunk_size      // std::int32_t
-        , max_file_size        // std::int32_t
+    struct options {
+        pfs::filesystem::path download_directory;
 
         // The dowload progress granularity (from 0 to 100) determines the
         // frequency of download progress notification. 0 means notification for
         // all download progress and 100 means notification only when the
         // download is complete.
-        , download_progress_granularity // std::int32_t (from 0 to 100)
+        int download_progress_granularity {1};
+
+        filesize_t file_chunk_size {DEFAULT_FILE_CHUNK_SIZE};
+        filesize_t max_file_size {MAX_FILE_SIZE};
+        bool remove_transient_files_on_error {false};
     };
 
 private:
-    struct options {
-        pfs::filesystem::path download_directory;
-        bool remove_transient_files_on_error;
-        filesize_t file_chunk_size;
-        filesize_t max_file_size;
-        int download_progress_granularity;
-    } _opts;
-
     struct ifile_item
     {
         universal_id addresser;
@@ -93,18 +89,21 @@ private:
         pfs::crypto::sha256 hash;
     };
 
+private:
+    options _opts;
+
     std::unordered_map<universal_id/*fileid*/, ifile_item> _ifile_pool;
     std::unordered_map<universal_id/*fileid*/, ofile_item> _ofile_pool;
 
 public:
-    mutable std::function<void (std::string const &)> log_error
+    mutable std::function<void (std::string const &)> on_error
         = [] (std::string const &) {};
 
     /**
      * Called to check if addressee is busy or not available
      */
     mutable std::function<bool (universal_id /*addressee*/)> addressee_ready
-        = [] (universal_id) { return true; };
+        = [] (universal_id) { return false; };
 
     /**
      * Called when need to send prepared data
@@ -137,7 +136,7 @@ public:
         = [] (universal_id, universal_id) {};
 
 private:
-    bool ensure_directory (pfs::filesystem::path const & dir) const;
+    bool ensure_directory (pfs::filesystem::path const & dir, error * perr = nullptr) const;
     std::vector<char> read_chunk (file const & data_file, filesize_t count);
 
     pfs::filesystem::path make_transientfilepath (universal_id addresser
@@ -205,24 +204,8 @@ private:
         , file_credentials const & fc);
 
 public:
-    NETTY__EXPORT file_transporter ();
+    NETTY__EXPORT file_transporter (options && opts);
     NETTY__EXPORT ~file_transporter ();
-
-    /**
-     * Sets @c path type options.
-     *
-     * @return @c true on success, or @c false if option is unsuitable or
-     *         value is bad.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, pfs::filesystem::path const & value);
-
-    /**
-     * Sets boolean or integer type options.
-     *
-     * @return @c true on success, or @c false if option is unsuitable or
-     *         value is bad.
-     */
-    NETTY__EXPORT bool set_option (option_enum opttype, std::intmax_t value);
 
     /**
      * Sends a dozen file chunks (fragments)

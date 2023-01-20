@@ -14,6 +14,8 @@
 namespace netty {
 namespace udt {
 
+basic_udt_server::basic_udt_server () : basic_socket() {}
+
 basic_udt_server::basic_udt_server (socket4_addr const & saddr, int mtu, int exp_max_counter
     , std::chrono::milliseconds exp_threshold)
     : basic_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)

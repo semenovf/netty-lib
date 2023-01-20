@@ -18,93 +18,86 @@ namespace p2p {
 
 namespace fs = pfs::filesystem;
 
-static constexpr filesize_t DEFAULT_FILE_CHUNK_SIZE  {16 * 1024};
-static constexpr filesize_t MAX_FILE_SIZE            {0x7ffff000};
+constexpr filesize_t const file_transporter::DEFAULT_FILE_CHUNK_SIZE;
+constexpr filesize_t const file_transporter::MIN_FILE_CHUNK_SIZE;
+constexpr filesize_t const file_transporter::MAX_FILE_CHUNK_SIZE;
+constexpr filesize_t const file_transporter::MAX_FILE_SIZE;
 
-file_transporter::file_transporter ()
+file_transporter::file_transporter (options && opts)
 {
-    _opts.remove_transient_files_on_error = false;
-    _opts.file_chunk_size = DEFAULT_FILE_CHUNK_SIZE;
-    _opts.max_file_size   = MAX_FILE_SIZE;
-    _opts.download_progress_granularity = 1;
+    ensure_directory(opts.download_directory);
+    _opts.download_directory = std::move(opts.download_directory);
+
+    auto bad = false;
+    std::string invalid_argument_desc;
+
+    do {
+        _opts.remove_transient_files_on_error = opts.remove_transient_files_on_error;
+
+        bad = opts.file_chunk_size < MIN_FILE_CHUNK_SIZE
+            || opts.file_chunk_size > MAX_FILE_CHUNK_SIZE;
+
+        if (bad) {
+            invalid_argument_desc = tr::f_("file chunk size, must be from {} to {} bytes"
+                , MIN_FILE_CHUNK_SIZE, MAX_FILE_CHUNK_SIZE);
+            break;
+        }
+
+        _opts.file_chunk_size = opts.file_chunk_size;
+
+        bad = opts.max_file_size < 0 || opts.max_file_size > MAX_FILE_SIZE;
+
+        if (bad) {
+            invalid_argument_desc = tr::f_("maximum file size must be"
+                " a positive integer and less or equals to {} bytes", MAX_FILE_SIZE);
+            break;
+        }
+
+        _opts.max_file_size   = opts.max_file_size;
+
+        bad = opts.download_progress_granularity < 0 ||
+            opts.download_progress_granularity > 100;
+
+        if (bad) {
+            invalid_argument_desc = tr::_("download granularity must be in range "
+                "from 0 to 100");
+            break;
+        }
+
+        _opts.download_progress_granularity = opts.download_progress_granularity;
+    } while (false);
+
+    if (bad) {
+        error err {
+              make_error_code(errc::invalid_argument)
+            , invalid_argument_desc
+        };
+
+        throw err;
+    }
 }
 
 file_transporter::~file_transporter ()
 {}
 
-bool file_transporter::set_option (option_enum opttype, fs::path const & value)
-{
-    switch (opttype) {
-        case option_enum::download_directory:
-            if (ensure_directory(value)) {
-                _opts.download_directory = value;
-                return true;
-            }
-            break;
-
-        default:
-            break;
-    }
-
-    return false;
-}
-
-bool file_transporter::set_option (option_enum opttype, std::intmax_t value)
-{
-    switch (opttype) {
-        //case option_enum::auto_download:
-        //  _opts.auto_download = (value != 0);
-        //  return true;
-
-        case option_enum::remove_transient_files_on_error:
-            _opts.remove_transient_files_on_error = (value != 0);
-            return true;
-
-        case option_enum::file_chunk_size:
-            if (value > 0) {
-                _opts.file_chunk_size = value;
-                return true;
-            }
-
-            log_error(tr::_("File chunk size must be a positive integer"));
-            break;
-
-        case option_enum::max_file_size:
-            if (value > 0 && value <= MAX_FILE_SIZE) {
-                _opts.max_file_size = value;
-                return true;
-            }
-
-            log_error(tr::f_("Maximum file size must be a positive integer"
-                " and less or equals to {} bytes", MAX_FILE_SIZE));
-            break;
-
-        case option_enum::download_progress_granularity:
-            if (value >= 0 && value <= 100) {
-                _opts.download_progress_granularity = value;
-                return true;
-            }
-
-            log_error(tr::_("Download granularity must be in range "
-                "from 0 to 100"));
-            break;
-
-        default:
-            break;
-    }
-
-    return false;
-}
-
-bool file_transporter::ensure_directory (fs::path const & dir) const
+bool file_transporter::ensure_directory (fs::path const & dir, error * perr) const
 {
     if (!fs::exists(dir)) {
         std::error_code ec;
 
         if (!fs::create_directories(dir, ec)) {
-            log_error(tr::f_("Create directory failure: {}: {}"
-                , dir, ec.message()));
-            return false;
+            error err = {
+                  make_error_code(errc::filesystem_error)
+                , tr::f_("create directory failure: {}", dir)
+                , ec.message()
+            };
+
+            if (perr) {
+                *perr = err;
+                return false;
+            } else {
+                throw err;
+            }
         }
 
         fs::permissions(dir
@@ -113,9 +106,18 @@ bool file_transporter::ensure_directory (fs::path const & dir) const
             , ec);
 
         if (ec) {
-            log_error(tr::f_("Set directory permissions failure: {}: {}"
-                , dir, ec.message()));
-            return false;
+            error err = {
+                  make_error_code(errc::filesystem_error)
+                , tr::f_("set directory permissions failure: {}", dir)
+                , ec.message()
+            };
+
+            if (perr) {
+                *perr = err;
+                return false;
+            } else {
+                throw err;
+            }
         }
     }
 
@@ -429,11 +431,11 @@ void file_transporter::complete_file (universal_id fileid, bool /*success*/)
 void file_transporter::process_file_credentials (universal_id sender
     , std::vector<char> const & data)
 {
-	auto fc = input_envelope_type::unseal<file_credentials>(data);
+    auto fc = input_envelope_type::unseal<file_credentials>(data);
 
-	// Cache incoming if file credentials if not exists
-	cache_incoming_file_credentials(sender, fc);
-	send_file_request(sender, fc.fileid);
+    // Cache incoming if file credentials if not exists
+    cache_incoming_file_credentials(sender, fc);
+    send_file_request(sender, fc.fileid);
 }
 
 void file_transporter::process_file_request (universal_id sender

@@ -28,7 +28,7 @@ struct hello_packet
 
     char greeting[4] = {'H', 'E', 'L', 'O'};
     universal_id uuid;
-    std::uint16_t port {0};
+    std::uint16_t port {0};  // Port that will accept connections
     std::uint16_t transmit_interval {0};
     std::uint32_t counter {0};
     std::int64_t  timestamp; // UTC timestamp in milliseconds since epoch

@@ -89,17 +89,20 @@ int main (int argc, char * argv[])
     }
 
     auto host_uuid = pfs::generate_uuid();
-    discovery_engine discovery {host_uuid};
+
+    discovery_engine::options opts;
+    opts.host_port = 42043;
+    discovery_engine discovery {host_uuid, std::move(opts)};
 
     for (auto l: listener_saddr_values) {
         auto res = netty::socket4_addr::parse(l);
 
         if (!res.first) {
-            LOGE(TAG, "Bad socket address for listener: {}", l);
+            LOGE(TAG, "Bad socket address for receiver: {}", l);
             return EXIT_FAILURE;
         }
 
-        discovery.add_listener(res.second, local_addr);
+        discovery.add_receiver(res.second, local_addr);
     }
 
     for (auto t: target_saddr_values) {

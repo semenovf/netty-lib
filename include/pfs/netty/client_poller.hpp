@@ -14,6 +14,7 @@
 #include "regular_poller.hpp"
 #include "pfs/i18n.hpp"
 #include <functional>
+#include <utility>
 
 namespace netty {
 
@@ -114,16 +115,24 @@ public:
         return _connecting_poller.empty() && _poller.empty();
     }
 
-    void poll (std::chrono::milliseconds millis, error * perr = nullptr)
+    /**
+     * @return Pair of poll results of connecting and regular pollers.
+     */
+    std::pair<int, int> poll (std::chrono::milliseconds millis, error * perr = nullptr)
     {
+        int n1 = 0;
+
         if (!_connecting_poller.empty()) {
-            if (_poller.empty())
-                _connecting_poller.poll(millis, perr);
-            else
-                _connecting_poller.poll(std::chrono::milliseconds{0}, perr);
+            if (_poller.empty()) {
+                n1 = _connecting_poller.poll(millis, perr);
+            } else {
+                n1 = _connecting_poller.poll(std::chrono::milliseconds{0}, perr);
+            }
         }
 
-        _poller.poll(millis);
+        auto n2 = _poller.poll(millis);
+
+        return std::make_pair(n1, n2);
     }
 };
 

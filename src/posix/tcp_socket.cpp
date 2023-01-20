@@ -91,16 +91,24 @@ void tcp_socket::disconnect (error * perr)
         auto rc = ::shutdown(_socket, SHUT_RDWR);
 
         if (rc != 0) {
-            error err {
-                make_error_code(errc::socket_error)
-                , tr::_("socket shutdown error")
-                , pfs::system_error_text()
-            };
+            auto ec = pfs::get_last_system_error();
 
-            if (perr) {
-                *perr = std::move(err);
-            } else {
-                throw err;
+#if _MSC_VER
+            if (ec.value() != WSAENOTCONN) {
+#else // _MSC_VER
+            if (ec.value() != ENOTCONN) {
+#endif // POSIX
+                error err {
+                    make_error_code(errc::socket_error)
+                    , tr::_("socket shutdown error")
+                    , pfs::system_error_text()
+                };
+
+                if (perr) {
+                    *perr = std::move(err);
+                } else {
+                    throw err;
+                }
             }
         }
     }

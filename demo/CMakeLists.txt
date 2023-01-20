@@ -12,5 +12,5 @@ add_subdirectory(udp)
 
 if (NETTY__BUILD_P2P)
     add_subdirectory(discovery)
-    #add_subdirectory(p2p)
+    add_subdirectory(p2p)
 endif(NETTY__BUILD_P2P)

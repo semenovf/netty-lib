@@ -7,10 +7,7 @@
 //      2023.01.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/inet4_addr.hpp"
-#include "pfs/netty/posix/tcp_socket.hpp"
-#include "pfs/netty/udt/udt_socket.hpp"
-#include <sys/socket.h>
+#include "pfs/netty/socket4_addr.hpp"
 
 template <typename PollerType, typename SocketType>
 void start_client (netty::socket4_addr const & saddr)
@@ -30,15 +27,6 @@ void start_client (netty::socket4_addr const & saddr)
     callbacks.connection_refused = [& finish] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
-    };
-
-    callbacks.connected = [] (typename PollerType::native_socket_type sock) {
-        LOGD(TAG, "Connected: {}", sock);
-
-//         char buf[1];
-//         auto n = ::recv(sock, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
-//
-//         LOGD(TAG, "-- CONNECTED: recv: n={}, error={}", n, errno);
     };
 
     callbacks.connected = [] (typename PollerType::native_socket_type sock) {

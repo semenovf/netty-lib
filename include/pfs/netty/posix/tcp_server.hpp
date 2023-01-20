@@ -21,6 +21,11 @@ class tcp_server: public inet_socket
 {
 public:
     /**
+     * Constructs invalid (uninitialized) TCP server.
+     */
+    NETTY__EXPORT tcp_server ();
+
+    /**
      * Constructs POSIX TCP server and bind to the specified address.
      */
     NETTY__EXPORT tcp_server (socket4_addr const & saddr);
