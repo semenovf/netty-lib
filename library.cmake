@@ -23,6 +23,9 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty
     STATIC_ALIAS pfs::netty::static
     STATIC_EXPORTS NETTY__STATIC)
 
+portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE PFS__LOG_LEVEL=2)
+portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE PFS__LOG_LEVEL=2)
+
 portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp

@@ -17,9 +17,7 @@
 #include "pfs/netty/p2p/posix/discovery_engine.hpp"
 #include <chrono>
 
-static char loremipsum[] = "WORLD";
-
-static char loremipsum1[] =
+static char const * loremipsum =
 "1.Lorem ipsum dolor sit amet, consectetuer adipiscing elit,    \n\
 2.sed diam nonummy nibh euismod tincidunt ut laoreet dolore     \n\
 3.magna aliquam erat volutpat. Ut wisi enim ad minim veniam,    \n\
@@ -85,22 +83,6 @@ static void print_usage ()
     fmt::print(stdout, "\t--target-saddr=ADDR:PORT...\n");
 }
 
-namespace {
-//     std::chrono::milliseconds const DISCOVERY_TRANSMIT_INTERVAL {1000};
-//     std::chrono::milliseconds const PEER_EXPIRATION_TIMEOUT {2000};
-//     std::chrono::milliseconds const POLL_INTERVAL {10};
-//     //std::chrono::milliseconds const POLL_INTERVAL {1000};
-//
-//     const netty::inet4_addr TARGET_ADDR{227, 1, 1, 255};
-//     const netty::inet4_addr DISCOVERY_ADDR{};
-//     const std::uint16_t DISCOVERY_PORT{4242u};
-}
-
-// void on_peer_closed (pfs::universal_id uuid
-//     , netty::inet4_addr const & addr
-//     , std::uint16_t port)
-// {}
-
 int main (int argc, char * argv[])
 {
     p2p::universal_id my_uuid;
@@ -109,7 +91,6 @@ int main (int argc, char * argv[])
     std::vector<netty::socket4_addr> target_saddrs;
 
 //     pfs::filesystem::path file;
-//     pfs::crypto::sha256_digest sha256;
 
     __pctx.program = fs::utf8_encode(fs::utf8_decode(argv[0]).filename());
 
@@ -198,8 +179,8 @@ int main (int argc, char * argv[])
     opts.filetransporter.remove_transient_files_on_error = false;
 
     LOGI(TAG, "My name: {}", my_uuid);
-    LOGI(TAG, "Listener socket address: {}", to_string(listener_saddr));
-    LOGI(TAG, "Discovery socket address: {}", to_string(discovery_saddr));
+    LOGI(TAG, "Listener address: {}", to_string(listener_saddr));
+    LOGI(TAG, "Discovery address: {}", to_string(discovery_saddr));
 
     engine_t engine {my_uuid, listener_saddr, std::move(opts)};
     engine.add_receiver(discovery_saddr);
@@ -217,62 +198,70 @@ int main (int argc, char * argv[])
         , std::uint16_t port
         , std::chrono::milliseconds const & timediff) {
 
-        LOGD(TAG, "Contact available: {}@{}:{}, time difference: {}"
+        LOGD(TAG, "Peer available: {}@{}:{}, time difference: {}"
             , contact_id, to_string(addr), port, timediff);
     };
 
-    engine.peer_timediff = [] (p2p::universal_id contact_id
+    engine.peer_timediff = [& engine] (p2p::universal_id peer_uuid
         , std::chrono::milliseconds const & diff) {
-        LOGD(TAG, "Contact time difference: {}: {}", contact_id, diff);
+        LOGD(TAG, "Peer time difference: {}: {}", peer_uuid, diff);
+
+        engine.send(peer_uuid, loremipsum, std::strlen(loremipsum));
     };
 
-    engine.peer_expired = [] (p2p::universal_id contact_id
+    engine.peer_expired = [] (p2p::universal_id peer_uuid
         , netty::inet4_addr addr, std::uint16_t port) {
-        LOGD(TAG, "Contact expired: {}@{}:{}", contact_id, to_string(addr), port);
+        LOGD(TAG, "Peer expired: {}@{}:{}", peer_uuid, to_string(addr), port);
     };
 
-    engine.writer_ready = [] (p2p::universal_id contact_id
+    engine.writer_ready = [] (p2p::universal_id peer_uuid
         , netty::inet4_addr addr, std::uint16_t port) {
-        LOGD(TAG, "Contact ready: {}@{}:{}", contact_id, to_string(addr), port);
+        LOGD(TAG, "Writer ready: {}@{}:{}", peer_uuid, to_string(addr), port);
 
             // FIXME
 //         if (!file.empty()) {
 //             engine.send_file(peer_uuid, file);
 //         }
-//
-//         engine.send(peer_uuid, loremipsum, std::strlen(loremipsum));
-
     };
 
-    engine.writer_closed = [] (p2p::universal_id contact_id
+    engine.writer_closed = [] (p2p::universal_id peer_uuid
         , netty::inet4_addr addr, std::uint16_t port) {
-        LOGD(TAG, "Contact closed: {}@{}:{}", contact_id, to_string(addr), port);
+        LOGD(TAG, "Writer closed: {}@{}:{}", peer_uuid, to_string(addr), port);
     };
 
-    engine.data_received = [] (p2p::universal_id sender_id, std::string data) {
-        LOGD(TAG, "Data received from: {}, {} bytes", sender_id, data.size());
+    engine.reader_ready = [] (p2p::universal_id peer_uuid
+        , netty::inet4_addr addr, std::uint16_t port) {
+        LOGD(TAG, "Reader ready: {}@{}:{}", peer_uuid, to_string(addr), port);
+    };
 
-        // FIXME
-//         if (message.size() > 20) {
-//             LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
-//                 , to_string(peer_uuid)
-//                 , message.substr(0, 20)
-//                 , message.substr(message.size() - 20)
-//                 , message.size()
-//                 , std::strlen(loremipsum));
-//         } else {
-//             LOG_TRACE_1("Message received from {}: {} ({}/{} characters (received/expected))"
-//                 , to_string(peer_uuid)
-//                 , message
-//                 , message.size()
-//                 , std::strlen(loremipsum));
-//         }
-//
-//         if (message != loremipsum) {
-//             LOGE("", "Received message and sample are different");
-//         } else {
-//             LOGI("", "Received message and sample are equal");
-//         }
+    engine.reader_closed = [] (p2p::universal_id peer_uuid
+        , netty::inet4_addr addr, std::uint16_t port) {
+        LOGD(TAG, "Reader closed: {}@{}:{}", peer_uuid, to_string(addr), port);
+    };
+
+    engine.data_received = [] (p2p::universal_id sender_uuid, std::string data) {
+        LOGD(TAG, "Data received from: {}, {} bytes", sender_uuid, data.size());
+
+        if (data.size() > 20) {
+            LOG_TRACE_1("Message received from {}: {}...{} ({}/{} characters (received/expected))"
+                , sender_uuid
+                , data.substr(0, 20)
+                , data.substr(data.size() - 20)
+                , data.size()
+                , std::strlen(loremipsum));
+        } else {
+            LOG_TRACE_1("Message received from {}: {} ({}/{} characters (received/expected))"
+                , to_string(sender_uuid)
+                , data
+                , data.size()
+                , std::strlen(loremipsum));
+        }
+
+        if (data != loremipsum) {
+            LOGE(TAG, "Received message and sample are different");
+        } else {
+            LOGI(TAG, "Received message and sample are equal");
+        }
     };
 
     engine.download_progress = [] (p2p::universal_id sender_id
@@ -296,31 +285,15 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Download interrupted: {}, file_id={}", sender_id, file_id);
     };
 
-//     success = success
-//         && engine.set_option(engine_t::option_enum::expiration_timeout
-//             , PEER_EXPIRATION_TIMEOUT)
-    // Discovery options
-//
-//         success = success
-//             && _engine->set_option(Engine::option_enum::transmit_interval
-//                 , std::chrono::milliseconds{settings.take<std::chrono::milliseconds::rep>(
-//                     K<K_P2P_DISCOVERY_TRANSMIT_INTERVAL>()
-//                     , std::chrono::milliseconds::rep{DEFAULT_DISCOVERY_INTERVAL * 1000})})
-//             && _engine->set_option(Engine::option_enum::poll_interval
-//                 , std::chrono::milliseconds{settings.take<std::chrono::milliseconds::rep>(
-//                     K<K_P2P_POLL_INTERVAL>()
-//                     , std::chrono::milliseconds::rep{10})});
-
-
-//     try {
+    try {
         if (!engine.start())
             return EXIT_FAILURE;
 
         while (true)
             engine.loop();
-//     } catch (pfs::error ex) {
-//         LOGE(TAG, "{}", ex.what());
-//     }
+    } catch (pfs::error ex) {
+        LOGE(TAG, "{}", ex.what());
+    }
 
     return EXIT_SUCCESS;
 }

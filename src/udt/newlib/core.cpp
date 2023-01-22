@@ -1159,9 +1159,11 @@ std::streamsize CUDT::sendmsg (const char* data, std::streamsize len, int msttl,
     }
 
     if ((m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize < len) {
-        if (!m_bSynSending)
+        if (!m_bSynSending) {
+            LOG_TRACE_2("UDT: m_iSndBufSize={}; m_pSndBuffer->getCurrBufSize()={}; m_iPayloadSize={}; len={}"
+                , m_iSndBufSize, m_pSndBuffer->getCurrBufSize(), m_iPayloadSize, len);
             throw CUDTException(6, 1, 0);
-        else {
+        } else {
             // wait here during a blocking sending
 #ifndef WIN32
             pthread_mutex_lock(&m_SendBlockLock);

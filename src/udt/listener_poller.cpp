@@ -34,8 +34,6 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
             auto status = UDT::getsockstate(u);
             LOGD(TAG, "UDT server socket state: {}", status);
 
-            remove(u);
-
             if (accept)
                 accept(u);
         }

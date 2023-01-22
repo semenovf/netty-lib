@@ -13,7 +13,7 @@ template <typename PollerType, typename SocketType>
 void start_client (netty::socket4_addr const & saddr)
 {
     bool finish = false;
-
+    bool can_write = false;
     LOGD(TAG, "Starting client");
 
     typename PollerType::callbacks callbacks;
@@ -43,65 +43,39 @@ void start_client (netty::socket4_addr const & saddr)
         finish = true;
     };
 
-    callbacks.ready_read = [/*& socket, & counter*/] (typename PollerType::native_socket_type sock) {
-        LOGD(TAG, "Client ready_read");
-
-//         char data[2];
-//         auto n = socket.recv(data, sizeof(data));
-//
-//         LOGD(TAG, "-- RECV: n={}, errno={}, data=[{}{}]", n, errno, data[0], data[1]);
-//
-// //         int error_val = 0;
-// //         socklen_t len = sizeof(error_val);
-// //         auto rc = getsockopt(sock, SOL_SOCKET, SO_ERROR, & error_val, & len);
-//
-// //         LOGD(TAG, "-- READY_READ: getsockopt: rc={}, SO_ERROR={}", rc, error_val);
-// //
-// //         char buf[1];
-// //         auto n = ::recv(sock, buf, 1, MSG_PEEK);
-// //
-// //         LOGD(TAG, "-- READY_READ: recv: n={}, error={}", n, errno);
-//         --counter;
+    callbacks.ready_read = [] (typename PollerType::native_socket_type sock) {
+        LOGD(TAG, "Ready read");
     };
 
-    callbacks.can_write = [/*& counter*/] (typename PollerType::native_socket_type sock) {
-//         LOGD(TAG, "Client can_write");
-
-//         int error_val = 0;
-//         socklen_t len = sizeof(error_val);
-//         auto rc = getsockopt(sock, SOL_SOCKET, SO_ERROR, & error_val, & len);
-//         LOGD(TAG, "-- CAN_WRITE: getsockopt: rc={}, SO_ERROR={}", rc, error_val);
-
-//         --counter;
+    callbacks.can_write = [& can_write] (typename PollerType::native_socket_type sock) {
+        can_write = true;
     };
 
     try {
         PollerType poller {std::move(callbacks)};
         std::chrono::milliseconds poller_timeout {100};
         auto conn_state = socket.connect(saddr);
-        poller.add(socket.native(), conn_state);
+        poller.add(socket, conn_state);
 
         LOGD(TAG, "Connecting server: {}", to_string(saddr));
 
         while (!finish) {
             poller.poll(poller_timeout);
 
-//             char data[4] = {'H', 'e', 'l', 'o'};
-//             auto n = socket.send(data, sizeof(data));
-//
-//             if (n < 0) {
-//                 break;
-//             }
+            if (can_write) {
+                can_write = false;
+                char data[4] = {'H', 'e', 'l', 'o'};
+                auto n = socket.send(data, sizeof(data));
 
-//             LOGD(TAG, "-- SEND: n={}, errno={}", n, errno);
+                if (n < 0) {
+                    LOGE(TAG, "Send failure: n={}, errno={}", n, errno);
+                    break;
+                }
 
-            // //         char buf[1];
-// //         auto n = ::recv(sock, buf, 1, MSG_PEEK);
-
-//             if (counter == 0) {
-//                 LOGD(TAG, "Shutting down ...");
-//                 tcp_socket.disconnect();
-//             }
+                LOGD(TAG, "SEND: n={}", n);
+            } else {
+                LOGW(TAG, "Cannot write");
+            }
         }
     } catch (netty::error const & ex) {
         LOGE(TAG, "ERROR: {}", ex.what());

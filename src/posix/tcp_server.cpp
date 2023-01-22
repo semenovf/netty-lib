@@ -62,27 +62,21 @@ bool tcp_server::listen (int backlog, error * perr)
 
 tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
 {
-    sockaddr sa;
-    socklen_t addrlen;
+    sockaddr_in sa;
+    socklen_t addrlen = sizeof(sa);
 
-    auto sock = ::accept(listener_sock, & sa, & addrlen);
+    auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
 
     if (sock > 0) {
-        if (sa.sa_family == AF_INET) {
-            auto addr_in4_ptr = reinterpret_cast<sockaddr_in *>(& sa);
-
-            auto addr = pfs::to_native_order(
-                static_cast<std::uint32_t>(addr_in4_ptr->sin_addr.s_addr));
-
-            auto port = pfs::to_native_order(
-                static_cast<std::uint16_t>(addr_in4_ptr->sin_port));
-
+        if (sa.sin_family == AF_INET) {
+            auto addr = pfs::to_native_order(static_cast<std::uint32_t>(sa.sin_addr.s_addr));
+            auto port = pfs::to_native_order(static_cast<std::uint16_t>(sa.sin_port));
             return tcp_socket{sock, socket4_addr{addr, port}};
         } else {
             error err {
                 make_error_code(errc::socket_error)
-                , tr::_("socket accept failure: unsupported sockaddr family"
-                        " (AF_INET supported only)")
+                , tr::f_("socket accept failure: unsupported sockaddr family: {}"
+                        " (AF_INET supported only)", sa.sin_family)
             };
 
             if (perr) {

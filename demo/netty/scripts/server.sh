@@ -14,8 +14,13 @@ CHOICE=`zenity --list \
   4 "Linux::epoll_poller"  "tcp_server" "tcp_socket"`
 
 case $CHOICE in
-  1) $NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=udt    ;;
-  2) $NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=select ;;
-  3) $NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=poll   ;;
-  4) $NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=epoll  ;;
+  1) EXEC="$NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=udt"    ;;
+  2) EXEC="$NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=select" ;;
+  3) EXEC="$NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=poll"   ;;
+  4) EXEC="$NETTY_DEMO_BIN_PATH --tcp --server --addr=$NETTY_DEMO_SERVER_ADDR --poller=epoll"  ;;
 esac
+
+if [ -n "$EXEC" ] ; then
+    echo "Executing: ${EXEC}"
+    $EXEC
+fi

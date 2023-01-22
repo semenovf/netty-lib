@@ -24,6 +24,7 @@ class inet_socket
 {
 public:
     using native_type = int;
+    static native_type constexpr INVALID_SOCKET = -1;
 
 protected:
     enum class type_enum {
@@ -31,8 +32,6 @@ protected:
         , stream = 0x001
         , dgram  = 0x002
     };
-
-    static native_type constexpr INVALID_SOCKET = -1;
 
 protected:
     native_type _socket {INVALID_SOCKET};

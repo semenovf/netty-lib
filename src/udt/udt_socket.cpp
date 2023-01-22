@@ -80,9 +80,15 @@ basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
         rc = UDT::setsockopt(_socket, 0, UDT_MSS, & mtu_value, sizeof(mtu_value));
     }
 
-    //UDT::setsockopt(_socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
-    //UDT::setsockopt(_socket, 0, UDT_RCVBUF, new int(10000000), sizeof(int));
-    //UDT::setsockopt(_socket, 0, UDP_RCVBUF, new int(10000000), sizeof(int));
+//     if (rc != UDT::ERROR) {
+//         int bufsz = 10000000;
+//         rc = UDT::setsockopt(_socket, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
+//     }
+
+//     if (rc != UDT::ERROR) {
+//         int bufsz = 10000000;
+//         rc = UDT::setsockopt(_socket, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
+//     }
 
     if (rc != UDT::ERROR) {
         if (exp_max_counter < 0)
@@ -99,6 +105,8 @@ basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
             rc = UDT::setsockopt(_socket, 0, UDT_EXP_THRESHOLD, & exp_threshold_usecs, sizeof(exp_threshold_usecs));
 
     }
+
+    //UDT::setsockopt(_socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
 
     if (rc == UDT::ERROR) {
         throw error {
@@ -271,8 +279,6 @@ std::streamsize basic_udt_socket::send (char const * data, std::streamsize len)
     //                   before the timer expires;
     // -1              - on error
     auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
-
-    //LOGD(TAG, "state={}", UDT::getsockstate(_socket));
 
     if (rc == UDT::ERROR) {
         LOGE(TAG, "SEND: code={}, text={}", UDT::getlasterror_code(), UDT::getlasterror_desc());

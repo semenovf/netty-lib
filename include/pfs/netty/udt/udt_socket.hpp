@@ -25,12 +25,13 @@ struct uninitialized {};
 
 class basic_socket
 {
-protected:
+public:
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
 
     static UDTSOCKET const INVALID_SOCKET = -1;
 
+protected:
     enum class type_enum {
           unknown
         , stream = 0x001

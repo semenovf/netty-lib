@@ -37,8 +37,6 @@ int listener_poller<posix::select_poller>::poll (std::chrono::milliseconds milli
 
         for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
             if (FD_ISSET(fd, & rfds)) {
-                remove(fd);
-
                 if (accept)
                     accept(fd);
 
@@ -78,11 +76,11 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
                 remove(fd);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed"
-                        , pfs::system_error_text()));
+                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
+                        , pfs::system_error_text(), fd));
                 } else {
-                    on_error(fd, tr::f_("accept socket error: {}, socket removed"
-                        , pfs::system_error_text(error_val)));
+                    on_error(fd, tr::f_("accept socket error: {}, socket removed: {}"
+                        , pfs::system_error_text(error_val), fd));
                 }
 
                 continue;
@@ -98,8 +96,6 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
                 | POLLRDBAND
 #endif
             )) {
-                remove(fd);
-
                 if (accept)
                     accept(fd);
             }

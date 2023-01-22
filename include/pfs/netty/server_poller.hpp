@@ -28,7 +28,7 @@ public:
     struct callbacks
     {
         std::function<void(native_socket_type, std::string const &)> on_error;
-        std::function<void(native_socket_type)> accept;
+        std::function<native_socket_type(native_socket_type, bool &)> accept;
         //std::function<void(native_socket_type)> disconnected;
         std::function<void(native_socket_type)> ready_read;
         std::function<void(native_socket_type)> can_write;
@@ -39,7 +39,7 @@ private:
     regular_poller<Backend>  _poller;
 
 private: // callbacks
-    std::function<void(native_socket_type)> accept;
+    std::function<native_socket_type(native_socket_type, bool &)> accept;
 
 public:
     server_poller (callbacks && cbs)
@@ -53,10 +53,12 @@ public:
 
         accept = std::move(cbs.accept);
 
-        _listener_poller.accept = [this] (native_socket_type sock) {
-            // sock already removed from _listener_poller
-            _poller.add(sock);
-            this->accept(sock);
+        _listener_poller.accept = [this] (native_socket_type listener_sock) {
+            bool ok = true;
+            auto sock = this->accept(listener_sock, ok);
+
+            if (ok)
+                _poller.add(sock);
         };
 
         //_poller.disconnected = std::move(cbs.disconnected);
@@ -74,25 +76,28 @@ public:
     /**
      * Add listener socket.
      */
-    void add (native_socket_type listener_sock, error * perr = nullptr)
+    template <typename Listener>
+    void add_listener (Listener const & listener, error * perr = nullptr)
     {
-        _listener_poller.add(listener_sock, perr);
+        _listener_poller.add(listener.native(), perr);
     }
 
     /**
      * Remove listener socket.
      */
-    void remove_listener (native_socket_type listener_sock, error * perr = nullptr)
+    template <typename Listener>
+    void remove_listener (Listener const & listener, error * perr = nullptr)
     {
-        _listener_poller.remove(listener_sock, perr);
+        _listener_poller.remove(listener.native(), perr);
     }
 
     /**
      * Remove client socket.
      */
-    void remove (native_socket_type sock, error * perr = nullptr)
+    template <typename Socket>
+    void remove (Socket const & sock, error * perr = nullptr)
     {
-        _poller.remove(sock, perr);
+        _poller.remove(sock.native(), perr);
     }
 
     /**

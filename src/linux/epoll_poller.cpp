@@ -77,17 +77,20 @@ void epoll_poller::remove (native_socket_type sock, error * perr)
     auto rc = epoll_ctl(eid, EPOLL_CTL_DEL, sock, nullptr);
 
     if (rc != 0) {
-        error err {
-              make_error_code(errc::poller_error)
-            , tr::_("epoll delete failure")
-            , pfs::system_error_text()
-        };
+        // ENOENT is not a failure
+        if (errno != ENOENT) {
+            error err {
+                make_error_code(errc::poller_error)
+                , tr::_("epoll delete failure")
+                , pfs::system_error_text()
+            };
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
+            if (perr) {
+                *perr = std::move(err);
+                return;
+            } else {
+                throw err;
+            }
         }
     }
 }

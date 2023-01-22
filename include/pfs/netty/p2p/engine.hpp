@@ -54,7 +54,7 @@ private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
     using client_poller_type    = typename EngineTraits::client_poller_type;
     using server_poller_type    = typename EngineTraits::server_poller_type;
-    using listener_type         = typename EngineTraits::server_type;
+    using server_type           = typename EngineTraits::server_type;
     using reader_type           = typename EngineTraits::reader_type;
     using writer_type           = typename EngineTraits::writer_type;
     using reader_id             = typename EngineTraits::reader_id;
@@ -106,12 +106,11 @@ private:
     // Host (listener) identifier.
     universal_id _host_uuid;
 
-    // Main listener and poller
-    listener_type _listener;
+    server_type _server;
 
     std::unique_ptr<discovery_engine_type> _discovery;
     std::unique_ptr<FileTransporter>       _transporter;
-    std::unique_ptr<server_poller_type>    _listener_poller;
+    std::unique_ptr<server_poller_type>    _reader_poller;
     std::unique_ptr<client_poller_type>    _writer_poller;
 
     std::bitset<4> _efficiency_loss_bits {0};
@@ -188,6 +187,12 @@ public: // Callbacks
         = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
+     * Called when new reader socket ready (handshaked).
+     */
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> reader_ready
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
+
+    /**
      * Called when reader socket closed/disconnected.
      */
     mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> reader_closed
@@ -224,9 +229,9 @@ public:
      *
      * @param uuid Unique identifier for this instance.
      */
-    engine (universal_id host_uuid, socket4_addr listener_addr, options && opts)
+    engine (universal_id host_uuid, socket4_addr server_addr, options && opts)
         : _host_uuid(host_uuid)
-        , _listener(listener_addr)
+        , _server(server_addr)
     {
         auto bad = false;
         std::string invalid_argument_desc;
@@ -303,6 +308,8 @@ public:
             };
 
             _discovery->peer_expired = [this] (universal_id peer_uuid, socket4_addr saddr) {
+                release_reader(peer_uuid);
+                release_writer(peer_uuid);
                 peer_expired(peer_uuid, saddr.addr, saddr.port);
             };
         }
@@ -364,19 +371,27 @@ public:
                 this->on_error(text);
             };
 
-            callbacks.accept = [this] (typename server_poller_type::native_socket_type sock) {
-                process_accepted_reader(sock);
+            callbacks.accept = [this] (typename server_poller_type::native_socket_type listener_sock, bool & ok) {
+                auto * reader = acquire_reader(listener_sock);
+
+                if (!reader) {
+                    ok = false;
+                    return reader->INVALID_SOCKET;
+                }
+
+                ok = true;
+                return reader->native();
             };
 
             callbacks.ready_read = [this] (typename server_poller_type::native_socket_type sock) {
                 process_reader_input(sock);
             };
 
-            callbacks.can_write = [this] (typename server_poller_type::native_socket_type) {
+            callbacks.can_write = [] (typename server_poller_type::native_socket_type) {
                 // FIXME
             };
 
-            _listener_poller = pfs::make_unique<server_poller_type>(std::move(callbacks));
+            _reader_poller = pfs::make_unique<server_poller_type>(std::move(callbacks));
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -391,17 +406,14 @@ public:
             };
 
             callbacks.connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_2("Connection refused: id={}", sock);
                 release_writer(sock);
             };
 
             callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_2("Disconnected: id={}", sock);
                 release_writer(sock);
             };
 
             callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_2("Connected: id={}", sock);
                 process_socket_connected(sock);
             };
 
@@ -428,8 +440,10 @@ public:
                 return false;
             }
 
+            _reader_poller->add_listener(_server);
+
             // Start listening on main listener
-            _listener.listen(_opts.listener_backlog);
+            _server.listen(_opts.listener_backlog);
         } catch (error ex) {
             on_error(tr::f_("start netty::p2p::engine failure: {}", ex.what()));
             return false;
@@ -446,7 +460,7 @@ public:
         // No need poll timeout
         _discovery->discover(std::chrono::milliseconds{0});
 
-        /*auto res = */_listener_poller->poll(std::chrono::milliseconds{0});
+        /*auto res = */_reader_poller->poll(std::chrono::milliseconds{0});
         /*auto res = */_writer_poller->poll(std::chrono::milliseconds{0});
 
         auto output_possible = current_timepoint() >= _output_timepoint;
@@ -499,6 +513,12 @@ public:
         , std::streamsize len)
     {
         return enqueue_packets(addressee_id, packet_type::regular, data, len);
+    }
+
+    entity_id send (universal_id addressee_id, std::string const & data)
+    {
+        return enqueue_packets(addressee_id, packet_type::regular, data.c_str()
+            , data.size());
     }
 
     /**
@@ -582,7 +602,7 @@ private:
 
         auto pos1 = _reader_ids.find(id);
 
-        if (pos1 == _writer_ids.end()) {
+        if (pos1 == _reader_ids.end()) {
             throw error {
                   make_error_code(errc::unexpected_error)
                 , tr::f_("p2p::engine::check_reader_consistency:"
@@ -593,7 +613,7 @@ private:
 
         auto index = pos1->second;
 
-        if (index >= _writers.size()) {
+        if (index >= _readers.size()) {
             throw error {
                   make_error_code(errc::unexpected_error)
                 , tr::f_("p2p::engine::check_reader_consistency:"
@@ -625,9 +645,9 @@ private:
         //          " , need to fix algorithm.", id, item.uuid));
     }
 
-    reader_type * acquire_reader (reader_id id)
+    reader_type * acquire_reader (reader_id listener_id)
     {
-        auto reader = _listener.accept(id);
+        auto reader = _server.accept(listener_id);
 
         reader_index index = 0;
         auto count = _readers.size();
@@ -654,6 +674,13 @@ private:
             _readers[index].second.b.clear();
         }
 
+        reader_id id = _readers[index].second.reader.native();
+
+        _reader_ids[id] = index;
+
+        // Will be assign when hello packet received
+        //_reader_uuids[uuid] = index;
+
         return & _readers[index].second.reader;
     }
 
@@ -666,29 +693,35 @@ private:
         return & _readers[index].second;
     }
 
-    void release_reader (reader_id id)
+    void release_reader (universal_id uuid)
     {
-        check_reader_consistency(id);
+        auto pos1 = _reader_uuids.find(uuid);
 
-        auto pos1 = _reader_ids.find(id);
+        if (pos1 == _reader_uuids.end())
+            return;
+
         auto index = pos1->second;
+        auto & item = _readers[index].second;
+
+        check_reader_consistency(item.reader.native());
+
+        auto pos2 = _reader_ids.find(item.reader.native());
 
         _readers[index].first = false;
 
-        auto & item = _readers[index].second;
-        auto pos2 = _reader_uuids.find(item.uuid);
+        auto saddr = item.reader.saddr();
 
         // Erase file output pool
         _transporter->expire_addressee(item.uuid);
 
-        auto saddr = item.raeder.saddr();
+        _reader_poller->remove(item.reader);
 
         // Notify
         reader_closed(item.uuid, saddr.addr, saddr.port);
 
         // All is ok, release raeder resources
-        _reader_ids.erase(pos1);
-        _reader_uuids.erase(pos2);
+        _reader_uuids.erase(pos1);
+        _reader_ids.erase(pos2);
 
         item.uuid = universal_id{};
         item.reader.~reader_type();
@@ -855,9 +888,24 @@ private:
     {
         auto * writer = acquire_writer(uuid);
         auto conn_state = writer->connect(remote_saddr);
-        _writer_poller->add(writer->native(), conn_state);
+        _writer_poller->add(*writer, conn_state);
     }
 
+    // Release writer by universal identifier
+    void release_writer (universal_id uuid)
+    {
+        auto pos = _writer_uuids.find(uuid);
+
+        if (pos == _writer_uuids.end())
+            return;
+
+        auto index = pos->second;
+        auto & item = _writers[index].second;
+
+        release_writer(item.writer.native());
+    }
+
+    // Release writer by native identifier
     void release_writer (writer_id id)
     {
         check_writer_consistency(id);
@@ -873,7 +921,14 @@ private:
         // Erase file output pool
         _transporter->expire_addressee(item.uuid);
 
+        auto do_release_reader = (_reader_uuids.find(item.uuid) != _reader_uuids.end());
+
+        if (do_release_reader)
+            release_reader(item.uuid);
+
         auto saddr = item.writer.saddr();
+
+        _writer_poller->remove(item.writer);
 
         // Notify
         writer_closed(item.uuid, saddr.addr, saddr.port);
@@ -932,8 +987,8 @@ private:
     void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr
         , std::chrono::milliseconds const & timediff)
     {
-        LOG_TRACE_2("Peer discovered: {}@{}", peer_uuid, to_string(saddr));
-        LOG_TRACE_2("Connecting to: {}@{}", peer_uuid, to_string(saddr));
+        //LOG_TRACE_2("Peer discovered: {}@{}", peer_uuid, to_string(saddr));
+        //LOG_TRACE_2("Connecting to: {}@{}", peer_uuid, to_string(saddr));
         connect_writer(peer_uuid, saddr);
         peer_discovered(peer_uuid, saddr.addr, saddr.port, timediff);
     }
@@ -948,47 +1003,38 @@ private:
         enqueue_packets(item->uuid, packet_type::hello, & h, 1);
     }
 
-    void process_accepted_reader (reader_id id)
-    {
-        acquire_reader(id);
-    }
-
     void process_reader_input (reader_id sock)
     {
         int read_iterations = 0;
 
         auto * pitem = locate_reader_item(sock);
+        auto available = pitem->reader.available();
 
         do {
+            if (available < PACKET_SIZE)
+                break;
+
             std::array<char, PACKET_SIZE> buf;
             std::streamsize rc = pitem->reader.recv(buf.data(), buf.size());
 
             if (rc == 0) {
-                // FIXME Check disconnection ?
-                LOG_TRACE_2("process_reader_input: rc == 0: sender: {}.{}"
-                    , to_string(pitem->reader.saddr()), sock);
-
-//                 if (read_iterations == 0) {
-//                     on_error(tr::f_("Expected any data from: {}:{}, but no data read"
-//                         , to_string(psock->addr())
-//                         , psock->port()));
-//                 }
+                if (read_iterations == 0) {
+                    // FIXME
+                    // Disconnected ?
+                    LOG_TRACE_2("process_reader_input: sender: {}.{}, need to DISCONNECT?"
+                        , rc, to_string(pitem->reader.saddr()), sock);
+                }
 
                 break;
             }
 
             if (rc < 0) {
-                // FIXME
-                LOG_TRACE_2("process_reader_input: rc == {}: sender: {}.{}"
-                    , rc, to_string(pitem->reader.saddr()), sock);
-
-//                 on_error(tr::f_("Receive data from: {}:{} failure: {} (code={})"
-//                     , to_string(psock->addr())
-//                     , psock->port()
-//                     , psock->error_string()
-//                     , psock->error_code()));
+                on_error(tr::f_("Receive data failure from: {}"
+                    , to_string(pitem->reader.saddr())));
                 break;
             }
+
+            available -= PACKET_SIZE;
 
             read_iterations++;
 
@@ -1022,7 +1068,7 @@ private:
 
             if (rc != packetsize) {
                 on_error(tr::f_("Unexpected packet size ({})"
-                    " received from: {}:{}, expected: {}"
+                    " received from: {}, expected: {}"
                     , rc
                     , to_string(pitem->reader.saddr())
                     , packetsize));
@@ -1048,18 +1094,35 @@ private:
                         break;
 
                     case packet_type::hello: {
+                        auto pos1 = _reader_ids.find(sock);
+
+                        if (pos1 == _reader_ids.end()) {
+                            throw error {
+                                  make_error_code(errc::unexpected_error)
+                                , tr::f_("p2p::engine::process_reader_input:"
+                                    " no reader found by socket id: {}"
+                                    " , need to fix algorithm.", sock)
+                            };
+                        }
+
+                        auto index = pos1->second;
+
                         auto pos = _reader_uuids.find(sender_uuid);
 
-                        if (pos == _reader_uuids.end()) {
-                            auto pos1 = _reader_ids.find(sock);
-                            auto index = pos1->second;
-                            _reader_uuids.emplace(sender_uuid, index);
-
-                            LOG_TRACE_2("Hello from: {}@{}.{}"
-                                , sender_uuid, to_string(pitem->reader.saddr()), sock);
-                        } else {
-                            LOG_TRACE_2("No reader found by socket id: {}", sock);
+                        if (pos != _reader_uuids.end() && pos->second != index) {
+                            throw error {
+                                  make_error_code(errc::unexpected_error)
+                                , tr::f_("p2p::engine::process_reader_input:"
+                                    " found inconsistency for reader with universal"
+                                    " identifier: {}, need to fix algorithm."
+                                    , sender_uuid)
+                            };
                         }
+
+                        _readers[index].second.uuid = sender_uuid;
+                        _reader_uuids[sender_uuid] = index;
+                         reader_ready(sender_uuid, pitem->reader.saddr().addr
+                            , pitem->reader.saddr().port);
 
                         break;
                     }

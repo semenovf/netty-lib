@@ -31,9 +31,6 @@ int listener_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis
             auto revents = _rep.events[i].events;
             auto fd = _rep.events[i].data.fd;
 
-            // 1. Occured while tcp socket attempts to connect to non-existance server socket (connection_refused)
-            // 2. ... ?
-            // Identical to `poll_poller`
             if (revents & EPOLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
@@ -42,11 +39,11 @@ int listener_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis
                 remove(fd);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed"
-                        , pfs::system_error_text()));
+                    on_error(fd, tr::f_("get socket option failure: {}, listener socket removed: {}"
+                        , pfs::system_error_text(), fd));
                 } else {
-                    on_error(fd, tr::f_("accept socket error: {}, socket removed"
-                        , pfs::system_error_text(error_val)));
+                    on_error(fd, tr::f_("accept socket error: {}, listener socket removed: {}"
+                        , pfs::system_error_text(error_val), fd));
                 }
 
                 continue;
@@ -55,8 +52,6 @@ int listener_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis
             // There is data to read - can accept
             // Identical to `poll_poller`
             if (revents & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
-                remove(fd);
-
                 if (accept)
                     accept(fd);
             }

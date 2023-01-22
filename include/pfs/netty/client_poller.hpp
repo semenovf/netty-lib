@@ -76,10 +76,11 @@ public:
      * Add socket to connecting or regular poller according to it's connection
      * status @a cs.
      */
-    void add (native_socket_type sock, conn_status state, error * perr = nullptr)
+    template <typename Socket>
+    void add (Socket const & sock, conn_status state, error * perr = nullptr)
     {
         if (state == conn_status::connecting)
-            _connecting_poller.add(sock, perr);
+            _connecting_poller.add(sock.native(), perr);
         else if (state == conn_status::connected)
             _poller.add(sock, perr);
         else {
@@ -101,10 +102,11 @@ public:
     /**
      * Remove sockets from connecting and regular pollers.
      */
-    void remove (native_socket_type sock, error * perr = nullptr)
+    template <typename Socket>
+    void remove (Socket const & sock, error * perr = nullptr)
     {
-        _connecting_poller.remove(sock, perr);
-        _poller.remove(sock, perr);
+        _connecting_poller.remove(sock.native(), perr);
+        _poller.remove(sock.native(), perr);
     }
 
     /**
