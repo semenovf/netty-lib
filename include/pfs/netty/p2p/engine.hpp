@@ -1,14 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.20 Initial version.
 //      2021.11.01 Complete basic version.
+//      2023.01.18 Version 2 started.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "discovery_engine.hpp"
+#include "engine_traits.hpp"
 #include "envelope.hpp"
+#include "file_transporter.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
 #include "pfs/log.hpp"
@@ -16,24 +20,17 @@
 #include "pfs/ring_buffer.hpp"
 #include "pfs/netty/chrono.hpp"
 #include "pfs/netty/socket4_addr.hpp"
+#include "pfs/netty/startup.hpp"
 #include <array>
 #include <bitset>
 #include <limits>
 #include <map>
-#include <set>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace netty {
 namespace p2p {
-
-namespace {
-constexpr std::int32_t DEFAULT_OVERFLOW_LIMIT {1024};
-constexpr std::chrono::milliseconds DEFAULT_OVERFLOW_TIMEOUT { 100};
-constexpr std::size_t  DEFAULT_BUFFER_BULK_SIZE {64 * 1024};
-constexpr char const * UNSUITABLE_VALUE = tr::noop_("Unsuitable value for option: {}");
-constexpr char const * BAD_VALUE        = tr::noop_("Bad value for option: {}");
-constexpr char const * TAG = "netty-p2p";
-}
 
 /**
  * @brief P2P delivery engine.
@@ -45,71 +42,47 @@ constexpr char const * TAG = "netty-p2p";
  */
 template <
       typename DiscoveryEngineBackend
-    , typename SocketsApiBackend
-    , typename FileTransporterBackend
+    , typename EngineTraits     = default_engine_traits
+    , typename FileTransporter  = file_transporter
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class engine
 {
     static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE
         && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
 
-public:
+private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
+    using client_poller_type    = typename EngineTraits::client_poller_type;
+    using server_poller_type    = typename EngineTraits::server_poller_type;
+    using server_type           = typename EngineTraits::server_type;
+    using reader_type           = typename EngineTraits::reader_type;
+    using writer_type           = typename EngineTraits::writer_type;
+    using reader_id             = typename EngineTraits::reader_id;
+    using writer_id             = typename EngineTraits::writer_id;
+    using discovery_engine_type = discovery_engine<DiscoveryEngineBackend>;
+    using input_envelope_type   = input_envelope<>;
+    using output_envelope_type  = output_envelope<>;
 
     static constexpr entity_id INVALID_ENTITY {0};
 
-    enum class option_enum: std::int16_t
+public:
+    struct options
     {
-        ////////////////////////////////////////////////////////////////////////
-        // Engine options
-        ////////////////////////////////////////////////////////////////////////
         // Limit to size for output queue
-          overflow_limit     // std::int32_t
+        std::int32_t overflow_limit = 1024;
 
-        ////////////////////////////////////////////////////////////////////////
-        // Socket API options
-        ////////////////////////////////////////////////////////////////////////
-        , listener_address   // socket4_addr
+        std::chrono::milliseconds overflow_timeout {100};
 
         // The maximum length to which the queue of pending connections
         // for listener may grow.
-        , listener_backlog   // std::int32_t
+        int listener_backlog {100};
 
-        , poll_interval      // std::chrono::milliseconds
+        bool check_reader_consistency {true};
+        bool check_writer_consistency {true};
 
-        ////////////////////////////////////////////////////////////////////////
-        // Discovery options
-        ////////////////////////////////////////////////////////////////////////
-        , discovery_address  // socket4_addr
-
-        // Discovery transmit interval
-        , transmit_interval  // std::chrono::milliseconds
-
-        ////////////////////////////////////////////////////////////////////////
-        // File transporter options
-        ////////////////////////////////////////////////////////////////////////
-        // Directory to store received files
-        , download_directory // fs::path
-
-        // Automatically remove transient files on error
-        , remove_transient_files_on_error // bool
-
-        , file_chunk_size    // std::int32_t
-        , max_file_size      // std::int32_t
-
-        // The dowload progress granularity (from 0 to 100) determines the
-        // frequency of download progress notification. 0 means notification for
-        // all download progress and 100 means notification only when the
-        // download is complete.
-        , download_progress_granularity // std::int32_t (from 0 to 100)
-    };
-
-private:
-    std::unique_ptr<DiscoveryEngineBackend> _discovery;
-    std::unique_ptr<SocketsApiBackend>      _socketsapi;
-    std::unique_ptr<FileTransporterBackend> _transporter;
+        typename FileTransporter::options filetransporter;
+        typename discovery_engine_type::options discovery;
+    } _opts;
 
 private:
     struct oqueue_item
@@ -127,63 +100,57 @@ private:
         , file_output  // Loss of the file output operations.
     };
 
-    using socket_type = typename SocketsApiBackend::socket_type;
-    using socket_id   = typename SocketsApiBackend::socket_id;
-
-    using oqueue_type = pfs::ring_buffer<oqueue_item, DEFAULT_BUFFER_BULK_SIZE>;
+    using oqueue_type = pfs::ring_buffer<oqueue_item, 64 * 1024>;
 
 private:
-    struct options
-    {
-        std::int32_t overflow_limit {DEFAULT_OVERFLOW_LIMIT};
-    } _opts;
+    // Host (listener) identifier.
+    universal_id _host_uuid;
+
+    server_type _server;
+
+    std::unique_ptr<discovery_engine_type> _discovery;
+    std::unique_ptr<FileTransporter>       _transporter;
+    std::unique_ptr<server_poller_type>    _reader_poller;
+    std::unique_ptr<client_poller_type>    _writer_poller;
 
     std::bitset<4> _efficiency_loss_bits {0};
 
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
-    // Host (listener) identifier.
-    universal_id _host_uuid;
-
     // Used to solve problems with output overflow.
-    std::chrono::milliseconds _output_timepoint;
+    clock_type::time_point _output_timepoint;
 
-    // Mapping from writer contact identifier to socket identifier.
-    // Contains element if the writer connected to peer.
-    std::map<universal_id, socket_id> _writer_ids;
+    struct writer_item {
+        universal_id uuid;
+        writer_type writer;
 
-    // Mapping from writer socket identifier to contact identifier.
-    // Contains the element if peer discovered and started connection to it.
-    std::map<socket_id, universal_id> _writer_uuids;
-
-    // Mapping from reader contact identifier to socket identifier.
-    // Contains element if the reader received hello packet.
-    std::map<universal_id, socket_id> _reader_ids;
-
-    // Mapping from reader socket identifier to contact identifier.
-    // Contains element if the reader received data from peer.
-    // Filled in / modified in process_socket_input while receiving packets
-    std::map<socket_id, universal_id> _reader_uuids;
-
-    // Input buffers pool
-    // Buffers to accumulate payload from input packets
-    struct ipool_item
-    {
-        std::vector<char> b;
-    };
-
-    // Packet output queue
-    struct opool_item
-    {
+        // Packet output queue
         oqueue_type q;
     };
 
-    std::unordered_map<socket_id, ipool_item>    _ipool;
-    std::unordered_map<universal_id, opool_item> _opool;
+    using writer_collection_type = std::vector<std::pair<bool, writer_item>>;
+    using writer_index = typename writer_collection_type::size_type;
+    writer_collection_type               _writers;
+    std::map<writer_id, writer_index>    _writer_ids;
+    std::map<universal_id, writer_index> _writer_uuids;
+
+    struct reader_item {
+        universal_id uuid;
+        reader_type reader;
+
+        // Buffer to accumulate payload from input packets
+        std::vector<char> b;
+    };
+
+    using reader_collection_type = std::vector<std::pair<bool, reader_item>>;
+    using reader_index = typename reader_collection_type::size_type;
+    reader_collection_type               _readers;
+    std::map<reader_id, reader_index>    _reader_ids;
+    std::map<universal_id, reader_index> _reader_uuids;
 
 public: // Callbacks
-    mutable std::function<void (std::string const &)> log_error
+    mutable std::function<void (std::string const &)> on_error
         = [] (std::string const &) {};
 
     /**
@@ -220,6 +187,12 @@ public: // Callbacks
         = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
+     * Called when new reader socket ready (handshaked).
+     */
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> reader_ready
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
+
+    /**
      * Called when reader socket closed/disconnected.
      */
     mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> reader_closed
@@ -250,149 +223,58 @@ public: // Callbacks
         , universal_id /*fileid*/)> download_interrupted
         = [] (universal_id, universal_id) {};
 
-private:
-    inline entity_id next_entity_id () noexcept
-    {
-        ++_entity_id;
-        return _entity_id == INVALID_ENTITY ? ++_entity_id : _entity_id;
-    }
-
-    // UNUSED YET
-    inline void loss_efficiency (efficiency value) noexcept
-    {
-        _efficiency_loss_bits.set(static_cast<std::size_t>(value));
-    }
-
-    // UNUSED YET
-    inline void restore_efficiency (efficiency value) noexcept
-    {
-        _efficiency_loss_bits.reset(static_cast<std::size_t>(value));
-    }
-
-    inline bool test_efficiency (efficiency value) const noexcept
-    {
-        return !_efficiency_loss_bits.test(static_cast<std::size_t>(value));
-    }
-
-    inline void append_chunk (std::vector<char> & vec
-        , char const * buf, std::size_t len)
-    {
-        if (len > 0)
-            vec.insert(vec.end(), buf, buf + len);
-    }
-
-    socket_type * locate_writer (universal_id const & uuid)
-    {
-        // _writer_ids contains the element by uuid if the writer already
-        // in connected
-        auto pos = _writer_ids.find(uuid);
-
-        return (pos == _writer_ids.end())
-            ? nullptr
-            : _socketsapi->locate(pos->second);
-    }
-
-    ipool_item * locate_ipool_item (socket_id sock_id)
-    {
-        auto pos = _ipool.find(sock_id);
-
-        if (pos == _ipool.end()) {
-            log_error(tr::f_("Cannot locate input pool item by socket identifier: {}"
-                , sock_id));
-            return nullptr;
-        }
-
-        return & pos->second;
-    }
-
-    opool_item * locate_opool_item (universal_id peer_uuid)
-    {
-        auto pos = _opool.find(peer_uuid);
-
-        if (pos == _opool.end()) {
-            log_error(tr::f_("Cannot locate output pool item by identifier: {}"
-                , peer_uuid));
-            return nullptr;
-        }
-
-        return & pos->second;
-    }
-
-    opool_item * ensure_opool_item (universal_id peer_uuid)
-    {
-        auto pos = _opool.find(peer_uuid);
-
-        if (pos == _opool.end()) {
-            auto res = _opool.emplace(peer_uuid, opool_item{});
-            PFS__ASSERT(res.second, "");
-            pos = res.first;
-        }
-
-        return & pos->second;
-    }
-
-    /**
-     * Splits @a data into packets and enqueue them into output queue.
-     */
-    entity_id enqueue_packets (universal_id addressee
-        , packet_type packettype
-        , char const * data, std::streamsize len)
-    {
-        auto * pitem = ensure_opool_item(addressee);
-
-        PFS__ASSERT(pitem, "");
-
-        auto payload_size = PACKET_SIZE - packet::PACKET_HEADER_SIZE;
-        auto remain_len   = len;
-        char const * remain_data = data;
-        std::uint32_t partindex  = 1;
-        std::uint32_t partcount  = len / payload_size
-            + (len % payload_size ? 1 : 0);
-
-        auto entityid = next_entity_id();
-
-        while (remain_len) {
-            packet p;
-            p.packettype  = packettype;
-            p.packetsize  = PACKET_SIZE;
-            p.addresser   = _host_uuid;
-            p.payloadsize = remain_len > payload_size
-                ? payload_size
-                : static_cast<std::uint16_t>(remain_len);
-            p.partcount   = partcount;
-            p.partindex   = partindex++;
-            std::memset(p.payload, 0, payload_size);
-            std::memcpy(p.payload, remain_data, p.payloadsize);
-
-            remain_len -= p.payloadsize;
-            remain_data += p.payloadsize;
-
-            // May throw std::bad_alloc
-            pitem->q.push(oqueue_item{entityid, addressee, std::move(p)});
-        }
-
-        return entityid;
-    }
-
 public:
     /**
      * Initializes underlying APIs and constructs engine instance.
      *
      * @param uuid Unique identifier for this instance.
      */
-    engine (universal_id host_uuid)
+    engine (universal_id host_uuid, socket4_addr server_addr, options && opts)
         : _host_uuid(host_uuid)
+        , _server(server_addr)
     {
-        log_error = [] (std::string const & s) {
+        auto bad = false;
+        std::string invalid_argument_desc;
+        _opts = std::move(opts);
+
+        do {
+            bad = _opts.overflow_limit <= 0
+                && _opts.overflow_limit > (std::numeric_limits<std::int32_t>::max)();
+
+            if (bad) {
+                invalid_argument_desc = tr::_("overflow limit must be a positive integer");
+                break;
+            }
+
+        } while (false);
+
+        if (bad) {
+            error err {
+                  make_error_code(errc::invalid_argument)
+                , invalid_argument_desc
+            };
+
+            throw err;
+        }
+
+        // Call befor any network operations
+        startup();
+
+        _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid
+            , std::move(_opts.discovery));
+
+        _transporter = pfs::make_unique<FileTransporter>(
+            std::move(_opts.filetransporter));
+
+        on_error = [] (std::string const & s) {
             fmt::print(stderr, "{}\n", s);
         };
-
-        _discovery = pfs::make_unique<DiscoveryEngineBackend>(_host_uuid);
-        _socketsapi = pfs::make_unique<SocketsApiBackend>();
-        _transporter = pfs::make_unique<FileTransporterBackend>();
     }
 
-    ~engine () = default;
+    ~engine ()
+    {
+        cleanup();
+    }
 
     engine (engine const &) = delete;
     engine & operator = (engine const &) = delete;
@@ -407,218 +289,167 @@ public:
 
     bool start ()
     {
-        _discovery->log_error = [this] (std::string const & errstr) {
-            log_error(errstr);
-        };
+        ////////////////////////////////////////////////////////////////////////
+        // Configure discovery
+        ////////////////////////////////////////////////////////////////////////
+        {
+            _discovery->on_error = [this] (std::string const & errstr) {
+                this->on_error(errstr);
+            };
 
-        _discovery->peer_discovered = [this] (universal_id peer_uuid
-                , socket4_addr saddr, std::chrono::milliseconds const & timediff) {
-            process_peer_discovered(peer_uuid, saddr, timediff);
-        };
+            _discovery->peer_discovered = [this] (universal_id peer_uuid
+                    , socket4_addr saddr, std::chrono::milliseconds const & timediff) {
+                this->process_peer_discovered(peer_uuid, saddr, timediff);
+            };
 
-        _discovery->peer_timediff = [this] (universal_id peer_uuid
-                , std::chrono::milliseconds const & timediff) {
-            peer_timediff(peer_uuid, timediff);
-        };
+            _discovery->peer_timediff = [this] (universal_id peer_uuid
+                    , std::chrono::milliseconds const & timediff) {
+                this->peer_timediff(peer_uuid, timediff);
+            };
 
-        _discovery->peer_expired = [this] (universal_id peer_uuid
-                , socket4_addr saddr) {
+            _discovery->peer_expired = [this] (universal_id peer_uuid, socket4_addr saddr) {
+                release_reader(peer_uuid);
+                release_writer(peer_uuid);
+                peer_expired(peer_uuid, saddr.addr, saddr.port);
+            };
+        }
 
-            // Close writer
-            {
-                auto pos = _writer_ids.find(peer_uuid);
+        ////////////////////////////////////////////////////////////////////////
+        // Configure file transporter
+        ////////////////////////////////////////////////////////////////////////
+        {
+            _transporter->on_error = [this] (std::string const & errstr) {
+                this->on_error(errstr);
+            };
 
-                if (pos == std::end(_writer_ids)) {
-                    ; // Do nothing, socket may be closed earlier when peer socket
-                      // closed before
-                } else {
-                    LOG_TRACE_2("Peer expired, closing writer: {}@{}.{}"
-                        , peer_uuid, to_string(saddr), pos->second);
+            _transporter->addressee_ready = [this] (universal_id addressee) {
+                auto * pitem = locate_writer_item(addressee);
+                return pitem && (pitem->q.size() <= _opts.overflow_limit)
+                    ? true: false;
+            };
 
-                    _socketsapi->close(pos->second);
+            _transporter->ready_to_send = [this] (universal_id addressee
+                    , packet_type packettype
+                    , char const * data, std::streamsize len) {
+                enqueue_packets(addressee, packettype, data, len);
+            };
+
+            _transporter->download_progress = [this] (universal_id addresser
+                    , universal_id fileid
+                    , filesize_t downloaded_size
+                    , filesize_t total_size) {
+                download_progress(addresser, fileid, downloaded_size, total_size);
+            };
+
+            _transporter->download_complete = [this] (universal_id addresser
+                    , universal_id fileid
+                    , pfs::filesystem::path const & path
+                    , bool success) {
+
+                if (!success) {
+                    on_error(tr::f_("Checksum does not match for income file: {} from {}"
+                        , fileid, addresser));
                 }
-            }
 
-            // Close reader
-            {
-                auto pos = _reader_ids.find(peer_uuid);
+                download_complete(addresser, fileid, path, success);
+            };
 
-                if (pos == std::end(_reader_ids)) {
-                    ; // Do nothing, socket may be closed earlier when peer socket
-                      // closed before
-                } else {
-                    LOG_TRACE_2("Peer expired, closing reader: {}@{}.{}"
-                        , peer_uuid, to_string(saddr), pos->second);
+            _transporter->download_interrupted = [this] (universal_id addresser
+                    , universal_id fileid) {
+                download_interrupted(addresser, fileid);
+            };
+        }
 
-                    _socketsapi->close(pos->second);
+        ////////////////////////////////////////////////////////////////////////
+        // Create and configure main listener poller
+        ////////////////////////////////////////////////////////////////////////
+        {
+            typename server_poller_type::callbacks callbacks;
+
+            callbacks.on_error = [this] (typename server_poller_type::native_socket_type
+                , std::string const & text) {
+                this->on_error(text);
+            };
+
+            callbacks.accept = [this] (typename server_poller_type::native_socket_type listener_sock, bool & ok) {
+                auto * reader = acquire_reader(listener_sock);
+
+                if (!reader) {
+                    ok = false;
+                    return reader->INVALID_SOCKET;
                 }
-            }
 
-            peer_expired(peer_uuid, saddr.addr, saddr.port);
-        };
+                ok = true;
+                return reader->native();
+            };
 
-        _socketsapi->log_error = [this] (std::string const & errstr) {
-            log_error(errstr);
-        };
+            callbacks.ready_read = [this] (typename server_poller_type::native_socket_type sock) {
+                process_reader_input(sock);
+            };
 
-        _socketsapi->socket_accepted = [this] (socket_id sid, socket4_addr saddr) {
-            process_accepted(sid, saddr);
-        };
+            callbacks.can_write = [] (typename server_poller_type::native_socket_type) {
+                // FIXME
+            };
 
-        _socketsapi->socket_connected = [this] (socket_id sid, socket4_addr saddr) {
-            process_socket_connected(sid, saddr);
-        };
+            _reader_poller = pfs::make_unique<server_poller_type>(std::move(callbacks));
+        }
 
-        _socketsapi->socket_closed = [this] (socket_id sid, socket4_addr saddr) {
-            process_socket_closed(sid, saddr);
-        };
+        ////////////////////////////////////////////////////////////////////////
+        // Create and configure writer poller
+        ////////////////////////////////////////////////////////////////////////
+        {
+            typename client_poller_type::callbacks callbacks;
 
-        _socketsapi->ready_read = [this] (socket_id sid, socket_type * psock) {
-            process_socket_input(sid, psock);
-        };
+            callbacks.on_error = [this] (typename client_poller_type::native_socket_type
+                , std::string const & text) {
+                this->on_error(text);
+            };
 
-        _transporter->log_error = [this] (std::string const & errstr) {
-            log_error(errstr);
-        };
+            callbacks.connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
+                release_writer(sock);
+            };
 
-        _transporter->addressee_ready = [this] (universal_id addressee) {
-            auto * pitem = locate_opool_item(addressee);
-            return pitem && (pitem->q.size() <= _opts.overflow_limit)
-                ? true: false;
-        };
+            callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
+                release_writer(sock);
+            };
 
-        _transporter->ready_to_send = [this] (universal_id addressee
-                , packet_type packettype
-                , char const * data, std::streamsize len) {
-            enqueue_packets(addressee, packettype, data, len);
-        };
+            callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
+                process_socket_connected(sock);
+            };
 
-        _transporter->download_progress = [this] (universal_id addresser
-                , universal_id fileid
-                , filesize_t downloaded_size
-                , filesize_t total_size) {
-            download_progress(addresser, fileid, downloaded_size, total_size);
-        };
+            // No need, writer sockets for write only
+            callbacks.ready_read = [] (typename client_poller_type::native_socket_type sock) {};
 
-        _transporter->download_complete = [this] (universal_id addresser
-                , universal_id fileid
-                , pfs::filesystem::path const & path
-                , bool success) {
+            // No need yet
+            callbacks.can_write = [] (typename client_poller_type::native_socket_type) {};
 
-            if (!success) {
-                log_error(tr::f_("Checksum does not match for income file: {} from {}"
-                    , fileid, addresser));
-            }
-
-            download_complete(addresser, fileid, path, success);
-        };
-
-        _transporter->download_interrupted = [this] (universal_id addresser
-                , universal_id fileid) {
-            download_interrupted(addresser, fileid);
-        };
+            _writer_poller = pfs::make_unique<client_poller_type>(std::move(callbacks));
+        }
 
         auto now = current_timepoint();
         _output_timepoint = now;
 
         try {
-            _discovery->listen();
-            _socketsapi->listen();
+            if (!_discovery->has_receivers()) {
+                on_error(tr::_("no receivers specified for discovery"));
+                return false;
+            }
+
+            if (!_discovery->has_targets()) {
+                on_error(tr::_("no targets specified for discovery"));
+                return false;
+            }
+
+            _reader_poller->add_listener(_server);
+
+            // Start listening on main listener
+            _server.listen(_opts.listener_backlog);
         } catch (error ex) {
-            log_error(tr::f_("Start netty::p2p::engine failure: {}", ex.what()));
+            on_error(tr::f_("start netty::p2p::engine failure: {}", ex.what()));
             return false;
         }
 
         return true;
-    }
-
-    bool set_option (option_enum opttype, fs::path const & path)
-    {
-        switch (opttype) {
-            case option_enum::download_directory:
-                return _transporter->set_option(_transporter->download_directory, path);
-
-            default:
-                break;
-        }
-
-        log_error(tr::f_(UNSUITABLE_VALUE, opttype));
-        return false;
-    }
-
-    bool set_option (option_enum opttype, socket4_addr sa)
-    {
-        switch (opttype) {
-            case option_enum::discovery_address:
-                return _discovery->set_option(_discovery->discovery_address, sa);
-            case option_enum::listener_address:
-                return _socketsapi->set_option(_socketsapi->listener_address, sa)
-                    && _discovery->set_option(_discovery->listener_port, sa.port);
-            default:
-                break;
-        }
-
-        log_error(tr::f_(UNSUITABLE_VALUE, opttype));
-        return false;
-    }
-
-    bool set_option (option_enum opttype, std::chrono::milliseconds msecs)
-    {
-        switch (opttype) {
-            case option_enum::transmit_interval:
-                return _discovery->set_option(_discovery->transmit_interval, msecs);
-
-            case option_enum::poll_interval:
-                return _socketsapi->set_option(_socketsapi->poll_interval, msecs);
-
-            default:
-                break;
-        }
-
-        log_error(tr::f_(UNSUITABLE_VALUE, opttype));
-        return false;
-    }
-
-    bool set_option (option_enum opttype, std::intmax_t value)
-    {
-        switch (opttype) {
-            case option_enum::overflow_limit:
-            if (value > 0 && value <= (std::numeric_limits<std::int32_t>::max)()) {
-                _opts.overflow_limit = static_cast<std::int32_t>(value);
-                return true;
-            }
-
-            log_error(tr::_("Overflow limit must be a positive integer"));
-            break;
-
-            case option_enum::remove_transient_files_on_error:
-                return _transporter->set_option(
-                    _transporter->remove_transient_files_on_error
-                    , value);
-
-            case option_enum::file_chunk_size:
-                return _transporter->set_option(
-                    _transporter->file_chunk_size
-                    , value);
-
-            case option_enum::max_file_size:
-                return _transporter->set_option(_transporter->max_file_size
-                    , value);
-
-            case option_enum::download_progress_granularity:
-                return _transporter->set_option(
-                    _transporter->download_progress_granularity, value);
-
-            case option_enum::listener_backlog:
-                return _socketsapi->set_option(_socketsapi->listener_backlog
-                    , value);
-
-            default:
-                break;
-        }
-
-        log_error(tr::f_(UNSUITABLE_VALUE, opttype));
-        return false;
     }
 
     /**
@@ -626,8 +457,11 @@ public:
      */
     void loop ()
     {
-        _discovery->loop();
-        _socketsapi->loop();
+        // No need poll timeout
+        _discovery->discover(std::chrono::milliseconds{0});
+
+        /*auto res = */_reader_poller->poll(std::chrono::milliseconds{0});
+        /*auto res = */_writer_poller->poll(std::chrono::milliseconds{0});
 
         auto output_possible = current_timepoint() >= _output_timepoint;
 
@@ -649,24 +483,18 @@ public:
     }
 
     /**
-     * Break internal loop while call @c run() method.
+     * Add discovery receiver.
      */
-    // TODO Only for standalone mode
-    //void quit () noexcept
-    //{
-    //    _running_flag.clear(std::memory_order_relaxed);
-    //}
-
-    // TODO Only for standalone mode
-    //void run ()
-    //{
-    //    while (_running_flag.test_and_set(std::memory_order_relaxed))
-    //        loop();
-    //}
-
-    void add_discovery_target (inet4_addr const & addr, std::uint16_t port)
+    void add_receiver (socket4_addr src_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value)
     {
-        _discovery->add_target(socket4_addr{addr, port});
+        _discovery->add_receiver(src_saddr, local_addr);
+    }
+
+    void add_target (socket4_addr src_saddr
+        , inet4_addr local_addr = inet4_addr::any_addr_value)
+    {
+        _discovery->add_target(src_saddr, local_addr);
     }
 
     /**
@@ -685,6 +513,12 @@ public:
         , std::streamsize len)
     {
         return enqueue_packets(addressee_id, packet_type::regular, data, len);
+    }
+
+    entity_id send (universal_id addressee_id, std::string const & data)
+    {
+        return enqueue_packets(addressee_id, packet_type::regular, data.c_str()
+            , data.size());
     }
 
     /**
@@ -724,133 +558,485 @@ public:
         _transporter->stop_file(addressee, fileid);
     }
 
+public: // static
+    static options default_options () noexcept
+    {
+        return options{};
+    }
+
 private:
+    inline entity_id next_entity_id () noexcept
+    {
+        ++_entity_id;
+        return _entity_id == INVALID_ENTITY ? ++_entity_id : _entity_id;
+    }
+
+    // UNUSED YET
+    inline void loss_efficiency (efficiency value) noexcept
+    {
+        _efficiency_loss_bits.set(static_cast<std::size_t>(value));
+    }
+
+    // UNUSED YET
+    inline void restore_efficiency (efficiency value) noexcept
+    {
+        _efficiency_loss_bits.reset(static_cast<std::size_t>(value));
+    }
+
+    inline bool test_efficiency (efficiency value) const noexcept
+    {
+        return !_efficiency_loss_bits.test(static_cast<std::size_t>(value));
+    }
+
+    static inline void append_chunk (std::vector<char> & vec
+        , char const * buf, std::size_t len)
+    {
+        if (len > 0)
+            vec.insert(vec.end(), buf, buf + len);
+    }
+
+    void check_reader_consistency (reader_id id)
+    {
+        if (!_opts.check_reader_consistency)
+            return;
+
+        auto pos1 = _reader_ids.find(id);
+
+        if (pos1 == _reader_ids.end()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_reader_consistency:"
+                    " reader socket not found in collection (id={})"
+                    " , need to fix algorithm.", id)
+            };
+        }
+
+        auto index = pos1->second;
+
+        if (index >= _readers.size()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_reader_consistency:"
+                    " index for reader item is out of bounds (id={})"
+                    " , need to fix algorithm.", id)
+            };
+        }
+
+        auto alive = _readers[index].first;
+
+        if (!alive) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_reader_consistency:"
+                    " invalid reader in collection found (id={})"
+                    " , need to fix algorithm.", id)
+            };
+        }
+
+        // NOTE: The reader may not have been associated with universal
+        //       identifier yet.
+        //
+        // auto & item = _readers[index].second;
+        // auto pos2 = _reader_uuids.find(item.uuid);
+        //
+        // PFS__TERMINATE(pos2 != _reader_uuids.end()
+        //      , tr::f_("p2p::engine::check_reader_consistency:"
+        //          " reader universal identifier not found in collection (id={}, uuid={})"
+        //          " , need to fix algorithm.", id, item.uuid));
+    }
+
+    reader_type * acquire_reader (reader_id listener_id)
+    {
+        auto reader = _server.accept(listener_id);
+
+        reader_index index = 0;
+        auto count = _readers.size();
+
+        if (_readers.empty()) {
+            _readers.reserve(32);
+        } else {
+            for (reader_index i = 0; i < count; i++) {
+                if (!_readers[i].first) {
+                    index = i;
+                    break;
+                }
+            }
+        }
+
+        if (_readers.empty() || index == count) {
+            _readers.emplace_back(true, reader_item{universal_id{}
+                , std::move(reader), std::vector<char>{}});
+            index = _readers.size() - 1;
+        } else {
+            _readers[index].first = true;
+            _readers[index].second.uuid = universal_id{};
+            _readers[index].second.reader = std::move(reader);
+            _readers[index].second.b.clear();
+        }
+
+        reader_id id = _readers[index].second.reader.native();
+
+        _reader_ids[id] = index;
+
+        // Will be assign when hello packet received
+        //_reader_uuids[uuid] = index;
+
+        return & _readers[index].second.reader;
+    }
+
+    reader_item * locate_reader_item (reader_id id)
+    {
+        check_reader_consistency(id);
+
+        auto pos = _reader_ids.find(id);
+        auto index = pos->second;
+        return & _readers[index].second;
+    }
+
+    void release_reader (universal_id uuid)
+    {
+        auto pos1 = _reader_uuids.find(uuid);
+
+        if (pos1 == _reader_uuids.end())
+            return;
+
+        auto index = pos1->second;
+        auto & item = _readers[index].second;
+
+        check_reader_consistency(item.reader.native());
+
+        auto pos2 = _reader_ids.find(item.reader.native());
+
+        _readers[index].first = false;
+
+        auto saddr = item.reader.saddr();
+
+        // Erase file output pool
+        _transporter->expire_addressee(item.uuid);
+
+        _reader_poller->remove(item.reader);
+
+        // Notify
+        reader_closed(item.uuid, saddr.addr, saddr.port);
+
+        // All is ok, release raeder resources
+        _reader_uuids.erase(pos1);
+        _reader_ids.erase(pos2);
+
+        item.uuid = universal_id{};
+        item.reader.~reader_type();
+        item.b.clear(); // No need to destroy, can be reused later
+    }
+
+    void check_writer_consistency (writer_id id)
+    {
+        if (!_opts.check_writer_consistency)
+            return;
+
+        auto pos1 = _writer_ids.find(id);
+
+        if (pos1 == _writer_ids.end()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " writer socket not found in collection (id={})"
+                    " , need to fix algorithm.", id)
+            };
+        }
+
+        auto index = pos1->second;
+
+        if (index >= _writers.size()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                " index for writer item is out of bounds (id={})"
+                " , need to fix algorithm.", id)
+            };
+        }
+
+        auto alive = _writers[index].first;
+
+        if (!alive) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " invalid writer in collection found (id={})"
+                    " , need to fix algorithm.", id)
+            };
+        }
+
+        auto & item = _writers[index].second;
+
+        auto pos2 = _writer_uuids.find(item.uuid);
+
+        if (pos2 == _writer_uuids.end()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " writer universal identifier not found in collection (id={}, uuid={})"
+                    " , need to fix algorithm.", id, item.uuid)
+            };
+        }
+    }
+
+    void check_writer_consistency (universal_id uuid)
+    {
+        if (!_opts.check_writer_consistency)
+            return;
+
+        auto pos2 = _writer_uuids.find(uuid);
+
+        if (pos2 == _writer_uuids.end()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " writer universal identifier not found in collection (uuid={})"
+                    " , need to fix algorithm.", uuid)
+            };
+        }
+
+        auto index = pos2->second;
+
+        if (index >= _writers.size()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " index for writer item is out of bounds (uuid={})"
+                    " , need to fix algorithm.", uuid)
+            };
+        }
+
+        auto alive = _writers[index].first;
+
+        if (!alive) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " invalid writer in collection found (uuid={})"
+                    " , need to fix algorithm.", uuid)
+            };
+        }
+
+        auto & item = _writers[index].second;
+
+        auto pos1 = _writer_ids.find(item.writer.native());
+
+        if (pos1 == _writer_ids.end()) {
+            throw error {
+                  make_error_code(errc::unexpected_error)
+                , tr::f_("p2p::engine::check_writer_consistency:"
+                    " writer socket not found in collection (uuid={})"
+                    " , need to fix algorithm.", uuid)
+            };
+        }
+    }
+
+    writer_type * acquire_writer (universal_id uuid)
+    {
+        writer_index index = 0;
+        auto count = _writers.size();
+
+        if (_writers.empty()) {
+            _writers.reserve(32);
+        } else {
+            for (writer_index i = 0; i < count; i++) {
+                if (!_writers[i].first) {
+                    index = i;
+                    break;
+                }
+            }
+        }
+
+        if (_writers.empty() || index == count) {
+            _writers.emplace_back(true, writer_item{uuid, writer_type{}, oqueue_type{}});
+            index = _writers.size() - 1;
+        } else {
+            _writers[index].first = true;
+            _writers[index].second.uuid = uuid;
+            _writers[index].second.writer = writer_type{};
+            _writers[index].second.q.clear();
+        }
+
+        writer_id id = _writers[index].second.writer.native();
+
+        _writer_ids[id] = index;
+        _writer_uuids[uuid] = index;
+
+        return & _writers[index].second.writer;
+    }
+
+    writer_item * locate_writer_item (writer_id id)
+    {
+        check_writer_consistency(id);
+
+        auto pos = _writer_ids.find(id);
+        auto index = pos->second;
+        return & _writers[index].second;
+    }
+
+    writer_item * locate_writer_item (universal_id uuid)
+    {
+        check_writer_consistency(uuid);
+
+        auto pos = _writer_uuids.find(uuid);
+        auto index = pos->second;
+        return & _writers[index].second;
+    }
+
+    void connect_writer (universal_id uuid, socket4_addr remote_saddr)
+    {
+        auto * writer = acquire_writer(uuid);
+        auto conn_state = writer->connect(remote_saddr);
+        _writer_poller->add(*writer, conn_state);
+    }
+
+    // Release writer by universal identifier
+    void release_writer (universal_id uuid)
+    {
+        auto pos = _writer_uuids.find(uuid);
+
+        if (pos == _writer_uuids.end())
+            return;
+
+        auto index = pos->second;
+        auto & item = _writers[index].second;
+
+        release_writer(item.writer.native());
+    }
+
+    // Release writer by native identifier
+    void release_writer (writer_id id)
+    {
+        check_writer_consistency(id);
+
+        auto pos1 = _writer_ids.find(id);
+        auto index = pos1->second;
+
+        _writers[index].first = false;
+
+        auto & item = _writers[index].second;
+        auto pos2 = _writer_uuids.find(item.uuid);
+
+        // Erase file output pool
+        _transporter->expire_addressee(item.uuid);
+
+        auto do_release_reader = (_reader_uuids.find(item.uuid) != _reader_uuids.end());
+
+        if (do_release_reader)
+            release_reader(item.uuid);
+
+        auto saddr = item.writer.saddr();
+
+        _writer_poller->remove(item.writer);
+
+        // Notify
+        writer_closed(item.uuid, saddr.addr, saddr.port);
+
+        // All is ok, release writer resources
+        _writer_ids.erase(pos1);
+        _writer_uuids.erase(pos2);
+
+        item.uuid = universal_id{};
+        item.writer.disconnect();
+        item.writer.~writer_type();
+        item.q.clear(); // No need to destroy, can be reused later
+    }
+
+    /**
+     * Splits @a data into packets and enqueue them into output queue.
+     */
+    entity_id enqueue_packets (universal_id addressee
+        , packet_type packettype
+        , char const * data, std::streamsize len)
+    {
+        auto * pitem = locate_writer_item(addressee);
+
+        auto payload_size = PACKET_SIZE - packet::PACKET_HEADER_SIZE;
+        auto remain_len   = len;
+        char const * remain_data = data;
+        std::uint32_t partindex  = 1;
+        std::uint32_t partcount  = len / payload_size
+            + (len % payload_size ? 1 : 0);
+
+        auto entityid = next_entity_id();
+
+        while (remain_len) {
+            packet p;
+            p.packettype  = packettype;
+            p.packetsize  = PACKET_SIZE;
+            p.addresser   = _host_uuid;
+            p.payloadsize = remain_len > payload_size
+                ? payload_size
+                : static_cast<std::uint16_t>(remain_len);
+            p.partcount   = partcount;
+            p.partindex   = partindex++;
+            std::memset(p.payload, 0, payload_size);
+            std::memcpy(p.payload, remain_data, p.payloadsize);
+
+            remain_len -= p.payloadsize;
+            remain_data += p.payloadsize;
+
+            // May throw std::bad_alloc
+            pitem->q.push(oqueue_item{entityid, addressee, std::move(p)});
+        }
+
+        return entityid;
+    }
+
     void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr
         , std::chrono::milliseconds const & timediff)
     {
+        //LOG_TRACE_2("Peer discovered: {}@{}", peer_uuid, to_string(saddr));
+        //LOG_TRACE_2("Connecting to: {}@{}", peer_uuid, to_string(saddr));
+        connect_writer(peer_uuid, saddr);
         peer_discovered(peer_uuid, saddr.addr, saddr.port, timediff);
-        auto sid = _socketsapi->connect(saddr);
-
-        _writer_uuids.emplace(sid, peer_uuid);
-
-        // Connecting to peer
-        LOG_TRACE_2("Connecting to: {}@{}", peer_uuid, to_string(saddr.addr));
     }
 
-    void process_socket_connected (socket_id sid, socket4_addr saddr)
+    void process_socket_connected (writer_id id)
     {
-        auto pos = _writer_uuids.find(sid);
-
-        if (pos == std::end(_writer_uuids)) {
-            log_error(tr::f_("Unexpected socket connected to: {}", to_string(saddr)));
-            return;
-        }
-
-        _writer_ids.emplace(pos->second, sid);
-        writer_ready(pos->second, saddr.addr, saddr.port);
+        auto * item = locate_writer_item(id);
+        writer_ready(item->uuid, item->writer.saddr().addr, item->writer.saddr().port);
 
         // Payload doesn't matter, but length must be greater than zero.
-        char h = 0;
-        enqueue_packets(pos->second, packet_type::hello, & h, 1);
+        char h = 'H';
+        enqueue_packets(item->uuid, packet_type::hello, & h, 1);
     }
 
-    void process_socket_closed (socket_id sid, socket4_addr saddr)
-    {
-        auto pos = _writer_uuids.find(sid);
-
-        if (pos != std::end(_writer_uuids)) {
-            LOG_TRACE_2("Writer socket closed: {}", sid);
-
-            // Erase item from output pool for specified socket
-            _opool.erase(pos->second);
-
-            // Erase file output pool
-            _transporter->expire_addressee(pos->second);
-
-            writer_closed(pos->second, saddr.addr, saddr.port);
-            _writer_ids.erase(pos->second);
-            _writer_uuids.erase(pos);
-        } else {
-            auto pos = _reader_uuids.find(sid);
-
-            // Erase item from input pool for specified socket
-            _ipool.erase(sid);
-
-            if (pos != std::end(_reader_uuids)) {
-                LOG_TRACE_2("Reader socket closed: {}", sid);
-
-                if (pos->second != universal_id{}) {
-                    // Erase file input pool
-                    _transporter->expire_addresser(pos->second);
-                    reader_closed(pos->second, saddr.addr, saddr.port);
-                } else {
-                    LOGE(TAG, "Unknown universal identifier for reader with sockect id: {}"
-                        ", maybe `hello` packet was not received", sid);
-                }
-
-                _reader_ids.erase(pos->second);
-                _reader_uuids.erase(pos);
-            } else {
-                LOGW(TAG, "Unknown socket closed: {} (need investigation)", sid);
-            }
-        }
-    }
-
-    void process_accepted (socket_id sid, socket4_addr saddr)
-    {
-        // Insert item to input pool or reset it
-        auto res = _ipool.emplace(sid, ipool_item{});
-
-        if (res.second) {
-            // New inserted
-            LOG_TRACE_2("Accepted socket added to input pool: {} (size={})"
-                , to_string(saddr)
-                , _ipool.size());
-
-            _reader_uuids.emplace(sid, universal_id{});
-        } else {
-            auto & item = res.first->second;
-
-            // Already exists
-            item.b.clear();
-            LOG_TRACE_2("Accepted socket reset in input pool: {}", to_string(saddr));
-        }
-    }
-
-    void process_socket_input (socket_id sid, socket_type * psock)
+    void process_reader_input (reader_id sock)
     {
         int read_iterations = 0;
 
-        auto * pitem = locate_ipool_item(sid);
+        auto * pitem = locate_reader_item(sock);
+        auto available = pitem->reader.available();
 
         do {
+            if (available < PACKET_SIZE)
+                break;
+
             std::array<char, PACKET_SIZE> buf;
-            std::streamsize rc = psock->recvmsg(buf.data(), buf.size());
+            std::streamsize rc = pitem->reader.recv(buf.data(), buf.size());
 
             if (rc == 0) {
                 if (read_iterations == 0) {
-                    log_error(tr::f_("Expected any data from: {}:{}, but no data read"
-                        , to_string(psock->addr())
-                        , psock->port()));
+                    // FIXME
+                    // Disconnected ?
+                    LOG_TRACE_2("process_reader_input: sender: {}.{}, need to DISCONNECT?"
+                        , rc, to_string(pitem->reader.saddr()), sock);
                 }
 
                 break;
             }
 
             if (rc < 0) {
-                log_error(tr::f_("Receive data from: {}:{} failure: {} (code={})"
-                    , to_string(psock->addr())
-                    , psock->port()
-                    , psock->error_string()
-                    , psock->error_code()));
+                on_error(tr::f_("Receive data failure from: {}"
+                    , to_string(pitem->reader.saddr())));
                 break;
             }
 
-            read_iterations++;
+            available -= PACKET_SIZE;
 
-            // Ignore input
-            if (!pitem)
-                continue;
+            read_iterations++;
 
             input_envelope_type in {buf.data(), buf.size()};
 
@@ -869,11 +1055,10 @@ private:
                 || packettype == packet_type::file_stop;
 
             if (!valid_packettype) {
-                log_error(tr::f_("Unexpected packet type ({})"
-                    " received from: {}:{}, ignored."
+                on_error(tr::f_("Unexpected packet type ({})"
+                    " received from: {}, ignored."
                     , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
-                    , to_string(psock->addr())
-                    , psock->port()));
+                    , to_string(pitem->reader.saddr())));
                 continue;
             }
 
@@ -882,11 +1067,10 @@ private:
             packetsize = pkt.packetsize;
 
             if (rc != packetsize) {
-                log_error(tr::f_("Unexpected packet size ({})"
-                    " received from: {}:{}, expected: {}"
+                on_error(tr::f_("Unexpected packet size ({})"
+                    " received from: {}, expected: {}"
                     , rc
-                    , to_string(psock->addr())
-                    , psock->port()
+                    , to_string(pitem->reader.saddr())
                     , packetsize));
 
                 // Ignore
@@ -901,65 +1085,73 @@ private:
 
             // Message complete
             if (pkt.partindex == pkt.partcount) {
-                auto sender = pkt.addresser;
+                auto sender_uuid = pkt.addresser;
 
                 switch (packettype) {
                     case packet_type::regular:
-                        this->data_received(sender
+                        this->data_received(sender_uuid
                             , std::string(pitem->b.data(), pitem->b.size()));
                         break;
 
                     case packet_type::hello: {
-                        auto pos = _reader_uuids.find(sid);
+                        auto pos1 = _reader_ids.find(sock);
 
-                        if (pos != std::end(_reader_uuids)) {
-                            pos->second = sender;
-                            LOG_TRACE_2("Hello from: {}@{}:{}.{}"
-                                , pos->second, to_string(psock->addr())
-                                , psock->port(), sid);
-                        } else {
-                            LOGE(TAG, "No reader found by socket id: {}", sid);
+                        if (pos1 == _reader_ids.end()) {
+                            throw error {
+                                  make_error_code(errc::unexpected_error)
+                                , tr::f_("p2p::engine::process_reader_input:"
+                                    " no reader found by socket id: {}"
+                                    " , need to fix algorithm.", sock)
+                            };
                         }
 
-                        auto pos1 = _reader_ids.find(sender);
+                        auto index = pos1->second;
 
-                        if (pos1 == std::end(_reader_ids)) {
-                            _reader_ids.emplace(sender, sid);
-                        } else {
-                            if (pos1->second != sid) {
-                                _socketsapi->close(pos1->second);
-                                pos1->second = sid;
-                            }
+                        auto pos = _reader_uuids.find(sender_uuid);
+
+                        if (pos != _reader_uuids.end() && pos->second != index) {
+                            throw error {
+                                  make_error_code(errc::unexpected_error)
+                                , tr::f_("p2p::engine::process_reader_input:"
+                                    " found inconsistency for reader with universal"
+                                    " identifier: {}, need to fix algorithm."
+                                    , sender_uuid)
+                            };
                         }
+
+                        _readers[index].second.uuid = sender_uuid;
+                        _reader_uuids[sender_uuid] = index;
+                         reader_ready(sender_uuid, pitem->reader.saddr().addr
+                            , pitem->reader.saddr().port);
 
                         break;
                     }
 
                     // Initiating file sending from peer
                     case packet_type::file_credentials:
-                        _transporter->process_file_credentials(sender, pitem->b);
+                        _transporter->process_file_credentials(sender_uuid, pitem->b);
                         break;
 
                     case packet_type::file_request:
-                        _transporter->process_file_request(sender, pitem->b);
+                        _transporter->process_file_request(sender_uuid, pitem->b);
                         break;
 
                     case packet_type::file_stop:
-                        _transporter->process_file_stop(sender, pitem->b);
+                        _transporter->process_file_stop(sender_uuid, pitem->b);
                         break;
 
                     // File chunk received
                     case packet_type::file_chunk:
-                        _transporter->process_file_chunk(sender, pitem->b);
+                        _transporter->process_file_chunk(sender_uuid, pitem->b);
                         break;
 
                     // File received completely
                     case packet_type::file_end:
-                        _transporter->process_file_end(sender, pitem->b);
+                        _transporter->process_file_end(sender_uuid, pitem->b);
                         break;
 
                     case packet_type::file_state:
-                        _transporter->process_file_state(sender, pitem->b);
+                        _transporter->process_file_state(sender_uuid, pitem->b);
                         break;
                 }
             }
@@ -968,19 +1160,17 @@ private:
 
     void send_outgoing_packets ()
     {
-        for (auto & pool_item: _opool) {
-            auto & output_queue = pool_item.second.q;
+        for (auto & item: _writers) {
+            auto & output_queue = item.second.q;
 
             if (output_queue.empty())
                 continue;
 
             std::size_t total_bytes_sent = 0;
-            auto * sock = locate_writer(pool_item.first);
-
-            if (!sock)
-                continue;
+            auto & writer = item.second.writer;
 
             output_envelope_type out;
+            error err;
 
             while (!output_queue.empty()) {
                 auto & item = output_queue.front();
@@ -994,31 +1184,21 @@ private:
 
                 PFS__ASSERT(size <= PACKET_SIZE, "");
 
-                auto bytes_sent = sock->sendmsg(data.data(), size);
+                bool overflow = false;
+                auto bytes_sent = writer.send(data.data(), size, & overflow, & err);
 
                 if (bytes_sent > 0) {
                     total_bytes_sent += bytes_sent;
 
-//                     // Message sent complete
-//                     if (pkt.partindex == pkt.partcount)
-//                         data_dispatched(item.id);
                 } else if (bytes_sent < 0) {
                     // Output queue overflow
-                    if (sock->overflow()) {
+                    if (overflow) {
                         // Skip sending for some milliseconds
-                        _output_timepoint = current_timepoint() + DEFAULT_OVERFLOW_TIMEOUT;
+                        _output_timepoint = current_timepoint() + _opts.overflow_timeout;
                         return;
                     } else {
-                        // Is socket is non-functional because of broken or closed
-                        // do not log error, ignore silently.
-                        if (sock->state() != sock->CONNECTED) {
-                            ;
-                        } else {
-                            log_error(tr::f_("Sending failure to {}@{}: {}"
-                                , pool_item.first
-                                , to_string(sock->saddr())
-                                , sock->error_string()));
-                        }
+                        on_error(tr::f_("send failure to {}: {}"
+                            , to_string(writer.saddr()), err.what()));
                     }
                 } else {
                     // FIXME Need to handle this state (broken connection ?)

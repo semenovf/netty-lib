@@ -6,16 +6,10 @@
 // Changelog:
 //      2021.11.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/fmt.hpp"
-
-#if NETTY_P2P__NEW_UDT_ENABLED
-#   include "newlib/ccc.hpp"
-#else
-#   include "lib/ccc.h"
-#endif
+#pragma once
+#include "newlib/ccc.hpp"
 
 namespace netty {
-namespace p2p {
 namespace udt {
 
 class debug_CCC: public ::CCC
@@ -31,4 +25,4 @@ public:
     void processCustomMsg (CPacket const *) override;
 };
 
-}}} // namespace netty::p2p::udt
+}} // namespace netty::udt

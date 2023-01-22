@@ -61,15 +61,24 @@ static bool ioctl_helper (int fd
 // is not a privileged operation.
 //
 
-std::vector<network_interface> fetch_interfaces (std::error_code & ec)
+std::vector<network_interface> fetch_interfaces (error * perr)
 {
     std::vector<network_interface> result;
 
     struct ifaddrs * ifaddr;
 
     if (getifaddrs(& ifaddr) != 0) {
-        ec = make_error_code(errc::system_error);
-        return result;
+        error err {
+              make_error_code(errc::system_error)
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = err;
+            return std::vector<network_interface>{};
+        } else {
+            throw err;
+        }
     }
 
     bool success = true;
@@ -80,8 +89,17 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
     auto sock = socket(PF_INET, SOCK_DGRAM, 0);
 
     if (sock < 0) {
-        ec = make_error_code(errc::system_error);
-        success = false;
+        error err {
+              make_error_code(errc::socket_error)
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = err;
+            return std::vector<network_interface>{};
+        } else {
+            throw err;
+        }
     }
 
     if (success) {
@@ -100,6 +118,7 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
             network_interface * iface = nullptr;
 
             if (it == ifaces_map.end()) {
+                std::error_code ec;
                 result.emplace_back();
                 iface = & result.back();
                 ifaces_map.insert({name, result.size() - 1});
@@ -146,6 +165,21 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
                     // IFF_DORMANT       Driver signals dormant (since Linux 2.6.17)
                     // IFF_ECHO          Echo sent packets (since Linux 2.6.25)
                 }
+
+                if (ec) {
+                    error err {
+                          make_error_code(errc::system_error)
+                        , ec.message()
+                    };
+
+                    if (perr) {
+                        *perr = err;
+                        return std::vector<network_interface>{};
+                    } else {
+                        throw err;
+                    }
+                }
+
             } else {
                 iface = & result[it->second];
             }

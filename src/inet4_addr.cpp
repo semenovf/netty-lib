@@ -8,8 +8,11 @@
 // Changelog:
 //      2017.07.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
+#include "pfs/integer.hpp"
 #include "pfs/netty/inet4_addr.hpp"
 #include <cassert>
+#include <regex>
+#include <utility>
 
 namespace netty {
 
@@ -186,6 +189,54 @@ std::string to_string (inet4_addr const & addr, std::string const & format, int 
     }
 
     return r;
+}
+
+std::pair<bool, inet4_addr> inet4_addr::parse (char const * s, std::size_t n)
+{
+    std::regex rx(R"(^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$)");
+    std::cmatch m;
+
+    if (!std::regex_match(s, s + n, m, rx))
+        return std::make_pair(false, inet4_addr{});
+
+    auto count = m.size();
+
+    if (count != 5)
+        return std::make_pair(false, inet4_addr{});
+
+    std::error_code ec;
+
+    auto a = pfs::to_integer(m[1].first, m[1].second, std::uint8_t{0}, std::uint8_t{255}, ec);
+
+    if (ec)
+        return std::make_pair(false, inet4_addr{});
+
+    auto b = pfs::to_integer(m[2].first, m[2].second, std::uint8_t{0}, std::uint8_t{255}, ec);
+
+    if (ec)
+        return std::make_pair(false, inet4_addr{});
+
+    auto c = pfs::to_integer(m[3].first, m[3].second, std::uint8_t{0}, std::uint8_t{255}, ec);
+
+    if (ec)
+        return std::make_pair(false, inet4_addr{});
+
+    auto d = pfs::to_integer(m[4].first, m[4].second, std::uint8_t{0}, std::uint8_t{255}, ec);
+
+    if (ec)
+        return std::make_pair(false, inet4_addr{});
+
+    return std::make_pair(true, inet4_addr{a, b, c, d});
+}
+
+std::pair<bool, inet4_addr> inet4_addr::parse (char const * s)
+{
+    return parse(s, std::char_traits<char>::length(s));
+}
+
+std::pair<bool, inet4_addr> inet4_addr::parse (std::string const & s)
+{
+    return parse(s.c_str(), s.size());
 }
 
 } // namespace netty

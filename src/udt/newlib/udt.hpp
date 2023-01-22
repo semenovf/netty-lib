@@ -350,7 +350,7 @@ UDT_API int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optv
 UDT_API std::streamsize send (UDTSOCKET u, const char* buf, std::streamsize  len, int flags);
 UDT_API std::streamsize recv (UDTSOCKET u, char* buf, std::streamsize  len, int flags);
 UDT_API std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
-#if NETTY_P2P__UDT_PATCHED
+#if NETTY__UDT_PATCHED
 UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
 #else
 UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);

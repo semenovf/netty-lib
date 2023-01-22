@@ -132,7 +132,7 @@ int CEPoll::add_ssock(const int eid, const SYSSOCKET& s, const int* events)
          ev.events |= EPOLLERR;
    }
 
-#if NETTY_P2P__UDT_PATCHED
+#if NETTY__UDT_PATCHED
     // Requests edge-triggered notification for the associated file descriptor.
     // The default behavior for epoll is level-triggered.
     // See epoll(7) for more detailed information about edge-triggered and

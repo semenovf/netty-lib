@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2019,2022 Vladislav Trifochkin
+# Copyright (c) 2019-2023 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -7,11 +7,10 @@
 #      2021.06.21 Initial version.
 ################################################################################
 add_subdirectory(mtu)
-
-# if (ENABLE_LIBZMQ)
-#     add_subdirectory(lazypirate)
-# endif(ENABLE_LIBZMQ)
+add_subdirectory(netty)
+add_subdirectory(udp)
 
 if (NETTY__BUILD_P2P)
+    add_subdirectory(discovery)
     add_subdirectory(p2p)
 endif(NETTY__BUILD_P2P)

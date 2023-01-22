@@ -14,15 +14,42 @@
 
 namespace netty {
 
-struct socket4_addr
+class socket4_addr
 {
+public:
     inet4_addr    addr;
     std::uint16_t port;
+
+public:
+    /**
+     * Parses IPv4 address from string.
+     */
+    static std::pair<bool, socket4_addr> parse (char const * s, std::size_t n);
+
+    /**
+     * Parses IPv4 address from string.
+     */
+    static std::pair<bool, socket4_addr> parse (char const * s);
+
+    /**
+     * Parses IPv4 address from string.
+     */
+    static std::pair<bool, socket4_addr> parse (std::string const & s);
 };
 
 inline std::string to_string (socket4_addr const & saddr)
 {
     return to_string(saddr.addr) + ':' + std::to_string(saddr.port);
+}
+
+inline bool operator == (socket4_addr const & a, socket4_addr const & b)
+{
+    return a.addr == b.addr && a.port == b.port;
+}
+
+inline bool operator != (socket4_addr const & a, socket4_addr const & b)
+{
+    return a.addr != b.addr || a.port != b.port;
 }
 
 } // namespace netty

@@ -1,53 +1,29 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2023 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2022.09.20 Initial version.
+//      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/p2p/qt5/udp_socket.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
-#include <array>
+#include "pfs/netty/qt5/udp_socket.hpp"
+#include <QNetworkInterface>
+
+#if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
+#   include <QNetworkDatagram>
+#endif
 
 namespace netty {
-namespace p2p {
 namespace qt5 {
 
-udp_socket::udp_socket () = default;
-udp_socket::~udp_socket () = default;
-
-inet4_addr udp_socket::addr () const noexcept
-{
-    // FIXME Is this true?
-    return (state() == udp_socket::BOUND)
-        ? _socket.localAddress().toIPv4Address()
-        : _socket.peerAddress().toIPv4Address();
-}
-
-std::uint16_t udp_socket::port () const noexcept
-{
-    // FIXME Is this true?
-    return (state() == udp_socket::BOUND)
-        ? _socket.localPort()
-        : _socket.peerPort();
-}
-
-socket4_addr udp_socket::saddr () const noexcept
-{
-    return socket4_addr{addr(), port()};
-}
-
-QNetworkInterface udp_socket::iface_by_address (std::string const & addr)
+QNetworkInterface iface_by_inet4_addr (inet4_addr addr)
 {
     QNetworkInterface defaultInterface;
     QList<QNetworkInterface> ifaces(QNetworkInterface::allInterfaces());
-    QString addrstr = QString::fromStdString(addr);
 
-    LOG_TRACE_3("Searching network interface by address: {}"
-        , addr.empty() ? "<empty>" : addr);
+    LOG_TRACE_3("Searching network interface by address: {}", addr);
     LOG_TRACE_3("Scan available network interfaces: {}", ifaces.size());
 
     for (int i = 0; i < ifaces.size(); i++) {
@@ -71,7 +47,7 @@ QNetworkInterface udp_socket::iface_by_address (std::string const & addr)
         for (int j = 0; j < address_entries.size(); j++) {
             bool match = false;
 
-            if (address_entries[j].ip().toString() == addrstr)
+            if (address_entries[j].ip().toIPv4Address() == addr)
                 match = true;
 
             LOG_TRACE_3("        Address entry {} {} {}"
@@ -93,173 +69,156 @@ QNetworkInterface udp_socket::iface_by_address (std::string const & addr)
     return defaultInterface;
 }
 
-void udp_socket::process_multicast_group (inet4_addr addr
-    , std::string const & network_iface
-    , muticast_group_op op)
+udp_socket::udp_socket (uninitialized) {}
+udp_socket::udp_socket (): _socket(new QUdpSocket) {}
+udp_socket::udp_socket (udp_socket &&) = default;
+udp_socket & udp_socket::operator = (udp_socket &&) = default;
+udp_socket::~udp_socket () = default;
+
+bool udp_socket::join (socket4_addr const & group_saddr
+    , inet4_addr const & local_addr, error * perr)
 {
-    auto group_addr = (addr == inet4_addr{})
+    auto group_addr = (group_saddr.addr == inet4_addr{})
         ? QHostAddress::AnyIPv4
-        : QHostAddress{static_cast<quint32>(addr)};
+        : QHostAddress{static_cast<quint32>(group_saddr.addr)};
 
-    if (!group_addr.isMulticast()) {
-        throw error {
+    auto iface = iface_by_inet4_addr(local_addr);
+
+    auto rc = iface.isValid()
+        ? _socket->joinMulticastGroup(group_addr, iface)
+        : _socket->joinMulticastGroup(group_addr);
+
+    if (!rc) {
+        error err {
               make_error_code(errc::socket_error)
-            , tr::f_("bad multicast address: {}", to_string(addr))
+            , tr::f_("join multicast group error: {}"
+                , to_string(group_saddr.addr))
+            , _socket->errorString().toStdString()
         };
-    }
 
-    QNetworkInterface iface;
-
-    if (!network_iface.empty() && network_iface != "*") {
-        iface = QNetworkInterface::interfaceFromName(QString::fromStdString(network_iface));
-    } else {
-        iface = iface_by_address(network_iface);
-    }
-
-    if (!iface.isValid()) {
-        throw error {
-              make_error_code(errc::socket_error)
-            , tr::_("bad interface specified")
-        };
-    }
-
-    LOG_TRACE_2("{} multicast interface: {} [{}]"
-        , op == muticast_group_op::join ? "Join" : "Leave"
-        , iface.humanReadableName().toStdString()
-        , iface.hardwareAddress().toStdString());
-
-    if (_socket.state() != QUdpSocket::BoundState) {
-        throw error {
-              make_error_code(errc::socket_error)
-            , tr::_("listener is not in bound state")
-        };
-    }
-
-    if (op == muticast_group_op::join) {
-        auto joining_result = iface.isValid()
-            ? _socket.joinMulticastGroup(group_addr, iface)
-            : _socket.joinMulticastGroup(group_addr);
-
-        if (!joining_result) {
-            throw error {
-                  make_error_code(errc::socket_error)
-                , tr::f_("joining listener to multicast group failure: {}"
-                    , group_addr.toString().toStdString())
-            };
-        }
-    } else {
-        auto leaving_result = iface.isValid()
-            ? _socket.leaveMulticastGroup(group_addr, iface)
-            : _socket.leaveMulticastGroup(group_addr);
-
-        if (!leaving_result) {
-            throw error {
-                  make_error_code(errc::socket_error)
-                , tr::f_("leaving listener from multicast group failure: {}"
-                    , group_addr.toString().toStdString())
-            };
+        if (perr) {
+            *perr = std::move(err);
+            return false;
+        } else {
+            throw err;
         }
     }
+
+    return true;
 }
 
-void udp_socket::bind (socket4_addr saddr)
+bool udp_socket::leave (socket4_addr const & group_saddr
+    , inet4_addr const & local_addr, error * perr)
 {
-    QUdpSocket::BindMode bind_mode = QUdpSocket::ShareAddress
-        | QUdpSocket::ReuseAddressHint;
-
-    auto hostaddr = (saddr.addr == inet4_addr{})
+    auto group_addr = (group_saddr.addr == inet4_addr{})
         ? QHostAddress::AnyIPv4
-        : QHostAddress{static_cast<quint32>(saddr.addr)};
+        : QHostAddress{static_cast<quint32>(group_saddr.addr)};
 
-    if (!_socket.bind(hostaddr, saddr.port, bind_mode)) {
-        throw error {
-                make_error_code(errc::socket_error)
-            , tr::f_("listener socket binding failure: {}:{}"
-                , to_string(saddr.addr), saddr.port)
-        };
-    }
+    auto iface = iface_by_inet4_addr(local_addr);
 
-    if (_socket.state() != QUdpSocket::BoundState) {
-        throw error {
+    auto rc = iface.isValid()
+        ? _socket->leaveMulticastGroup(group_addr, iface)
+        : _socket->leaveMulticastGroup(group_addr);
+
+    if (!rc) {
+        error err {
               make_error_code(errc::socket_error)
-            , tr::f_("listener socket expected in bound state: {}:{}"
-                , to_string(saddr.addr), saddr.port)
+            , tr::f_("join multicast group error: {}"
+                , to_string(group_saddr.addr))
+            , _socket->errorString().toStdString()
         };
+
+        if (perr) {
+            *perr = std::move(err);
+            return false;
+        } else {
+            throw err;
+        }
     }
+
+    return true;
 }
 
-void udp_socket::process_incoming_data ()
+bool udp_socket::enable_broadcast (bool enable, error * perr)
 {
-    while (_socket.hasPendingDatagrams()) {
-
-#if QT_VERSION < QT_VERSION_CHECK(5,8,0)
-        // using QUdpSocket::readDatagram (API since Qt 4)
-        QByteArray packet_data;
-        QHostAddress sender_hostaddr;
-        std::uint16_t sender_port;
-        packet_data.resize(static_cast<int>(_socket.pendingDatagramSize()));
-        _socket.readDatagram(datagram.data(), datagram.size()
-            , & sender_hostaddr, & sender_port);
-#else
-        // using QUdpSocket::receiveDatagram (API since Qt 5.8)
-        QNetworkDatagram datagram = _socket.receiveDatagram();
-        QByteArray packet_data = datagram.data();
-        auto sender_hostaddr = datagram.senderAddress();
-
-        if (datagram.senderPort() < 0) {
-            // FIXME
-//             throw error {
-//                   make_error_code(errc::socket_error)
-//                 , tr::_("no sender port associated with datagram")
-//             };
-            continue;
-        }
-
-        auto sender_port = static_cast<std::uint16_t>(datagram.senderPort());
-#endif
-
-        bool ok {true};
-        inet4_addr sender_inet4_addr = sender_hostaddr.toIPv4Address(& ok);
-
-        if (!ok) {
-            // FIXME
-//             throw error {
-//                   make_error_code(errc::socket_error)
-//                 , tr::_("bad remote address (expected IPv4)")
-//             };
-
-            continue;
-        }
-
-        data_ready(socket4_addr{sender_inet4_addr, sender_port}
-            , packet_data.data()
-            , static_cast<std::size_t>(packet_data.size()));
-    }
+    // TODO Implement
+    return true;
 }
 
-std::streamsize udp_socket::send (char const * data, std::streamsize size
-    , socket4_addr saddr)
+udp_socket::operator bool () const noexcept
 {
-    auto hostaddr = (saddr.addr == inet4_addr{})
+    return _socket.get() != nullptr;
+}
+
+udp_socket::native_type udp_socket::native () const noexcept
+{
+    return _socket.get() == nullptr ? -1 : _socket->socketDescriptor();
+}
+
+std::streamsize udp_socket::available (error * /*perr*/) const
+{
+    return _socket.get() == nullptr
+        ? 0
+        : static_cast<std::streamsize>(_socket->pendingDatagramSize());
+}
+
+std::streamsize udp_socket::recv_from (char * data, std::streamsize len
+    , socket4_addr * saddr, error * perr)
+{
+// #if QT_VERSION < QT_VERSION_CHECK(5,8,0)
+    // using QUdpSocket::readDatagram (API since Qt 4)
+    QHostAddress sender_hostaddr;
+    std::uint16_t sender_port;
+    auto n = _socket->readDatagram(data, len, & sender_hostaddr, & sender_port);
+
+    if (n < 0) {
+        error err {
+              make_error_code(errc::socket_error)
+            , tr::_("receive data failure")
+            , _socket->errorString().toStdString()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+            return static_cast<std::streamsize>(n);
+        } else {
+            throw err;
+        }
+    }
+
+    if (saddr) {
+        saddr->addr = sender_hostaddr.toIPv4Address();
+        saddr->port = sender_port;
+    }
+
+// #else
+//     // using QUdpSocket::receiveDatagram (API since Qt 5.8)
+//     QNetworkDatagram datagram = _socket.receiveDatagram();
+//     QByteArray packet_data = datagram.data();
+//     auto sender_hostaddr = datagram.senderAddress();
+//
+//         if (datagram.senderPort() < 0) {
+//             // FIXME
+// //             throw error {
+// //                   make_error_code(errc::socket_error)
+// //                 , tr::_("no sender port associated with datagram")
+// //             };
+//         }
+//
+//         auto sender_port = static_cast<std::uint16_t>(datagram.senderPort());
+// #endif
+
+    return static_cast<std::streamsize>(n);
+}
+
+std::streamsize udp_socket::send_to (socket4_addr const & dest
+    , char const * data, std::streamsize len, error * perr)
+{
+    auto hostaddr = (dest.addr == inet4_addr{})
         ? QHostAddress::AnyIPv4
-        : QHostAddress{static_cast<quint32>(saddr.addr)};
+        : QHostAddress{static_cast<quint32>(dest.addr)};
 
-    return _socket.writeDatagram(data, size, hostaddr, saddr.port);
+    return _socket->writeDatagram(data, len, hostaddr, dest.port);
 }
 
-std::string udp_socket::state_string (state_enum status)
-{
-    static std::array<char const *, std::size_t{LISTENING + 1}> __status_strings = {
-          "UNCONNECTED"
-        , "HOSTLOOKUP"
-        , "CONNECTING"
-        , "CONNECTED"
-        , "BOUND"
-        , "CLOSING"
-        , "LISTENING"
-    };
-
-    return std::string{__status_strings[status]};
-}
-
-}}} // namespace netty::p2p::qt5
+}} // namespace netty::qt5

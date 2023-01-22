@@ -37,6 +37,7 @@
 7. [Reliable User Datagram Protocol](https://en.wikipedia.org/wiki/Reliable_User_Datagram_Protocol)
 8. [Plan 9 implementation of RUDP](https://9p.io/sources/plan9/sys/src/9/ip/rudp.c)
 9. [RELIABLE UDP PROTOCOL](https://tools.ietf.org/id/draft-ietf-sigtran-reliable-udp-00.txt)
+10. [Secure Reliable Transport (SRT) Protocol](https://github.com/Haivision/srt)
 
 ## QUIC
 
@@ -48,3 +49,7 @@
 1. [Rendezvous protocol](https://en.wikipedia.org/wiki/Rendezvous_protocol)
 2. [Transmission BitTorrent](https://github.com/transmission/transmission)
 3. [libtorrent - bittorrent implementation](https://github.com/arvidn/libtorrent)
+
+## Android
+
+1. [android-ifaddrs](https://github.com/morristech/android-ifaddrs)

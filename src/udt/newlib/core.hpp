@@ -89,7 +89,7 @@ public: //API
    static std::streamsize send (UDTSOCKET u, const char * buf, std::streamsize len, int flags);
    static std::streamsize recv (UDTSOCKET u, char * buf, std::streamsize len, int flags);
    static std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
-#if NETTY_P2P__UDT_PATCHED
+#if NETTY__UDT_PATCHED
    static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
 #else
    static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
@@ -207,7 +207,7 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-#if NETTY_P2P__UDT_PATCHED
+#if NETTY__UDT_PATCHED
    std::streamsize recvmsg (char * data, std::streamsize len, bool * pHaveMsgStill = nullptr);
 #else
    std::streamsize recvmsg (char * data, std::streamsize len);
