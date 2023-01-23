@@ -14,7 +14,7 @@
 #include <sys/socket.h>
 
 namespace netty {
-namespace linux {
+namespace linux_os {
 
 static constexpr std::size_t const DEFAULT_INCREMENT = 32;
 
@@ -127,4 +127,4 @@ bool epoll_poller::empty () const noexcept
     return events.size() == 0;
 }
 
-}} // namespace netty::linux
+}} // namespace netty::linux_os

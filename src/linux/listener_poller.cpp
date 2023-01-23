@@ -19,7 +19,7 @@ namespace netty {
 #if NETTY__EPOLL_ENABLED
 
 template <>
-int listener_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
+int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     auto n = _rep.poll(millis, perr);
 
@@ -64,7 +64,7 @@ int listener_poller<linux::epoll_poller>::poll (std::chrono::milliseconds millis
 #endif // NETTY__EPOLL_ENABLED
 
 #if NETTY__EPOLL_ENABLED
-template class listener_poller<linux::epoll_poller>;
+template class listener_poller<linux_os::epoll_poller>;
 #endif // NETTY__EPOLL_ENABLED
 
 } // namespace netty

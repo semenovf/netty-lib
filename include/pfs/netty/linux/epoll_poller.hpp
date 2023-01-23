@@ -11,7 +11,7 @@
 #include <sys/epoll.h>
 
 namespace netty {
-namespace linux {
+namespace linux_os {
 
 class epoll_poller
 {
@@ -31,4 +31,4 @@ public:
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
-}} // namespace netty::linux
+}} // namespace netty::linux_os

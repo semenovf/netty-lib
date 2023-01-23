@@ -29,8 +29,8 @@ using server_poll_poller_type = server_poller<posix::poll_poller>;
 #if NETTY__EPOLL_ENABLED
 #   include "linux/epoll_poller.hpp"
 namespace netty {
-using client_epoll_poller_type = client_poller<linux::epoll_poller>;
-using server_epoll_poller_type = server_poller<linux::epoll_poller>;
+using client_epoll_poller_type = client_poller<linux_os::epoll_poller>;
+using server_epoll_poller_type = server_poller<linux_os::epoll_poller>;
 } // namespace netty
 #endif
 
