@@ -50,6 +50,10 @@ class engine
     static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE
         && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
 
+public:
+    using input_envelope_type   = input_envelope<>;
+    using output_envelope_type  = output_envelope<>;
+
 private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
     using client_poller_type    = typename EngineTraits::client_poller_type;
@@ -60,8 +64,6 @@ private:
     using reader_id             = typename EngineTraits::reader_id;
     using writer_id             = typename EngineTraits::writer_id;
     using discovery_engine_type = discovery_engine<DiscoveryEngineBackend>;
-    using input_envelope_type   = input_envelope<>;
-    using output_envelope_type  = output_envelope<>;
 
     static constexpr entity_id INVALID_ENTITY {0};
 
