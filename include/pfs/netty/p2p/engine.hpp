@@ -435,9 +435,10 @@ public:
                 return false;
             }
 
+            // This is not a failure
             if (!_discovery->has_targets()) {
                 on_error(tr::_("no targets specified for discovery"));
-                return false;
+                //return false;
             }
 
             _reader_poller->add_listener(_server);
