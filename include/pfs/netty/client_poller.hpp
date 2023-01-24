@@ -11,7 +11,8 @@
 #include "error.hpp"
 #include "conn_status.hpp"
 #include "connecting_poller.hpp"
-#include "regular_poller.hpp"
+#include "reader_poller.hpp"
+#include "writer_poller.hpp"
 #include "pfs/i18n.hpp"
 #include <functional>
 #include <utility>
@@ -36,19 +37,19 @@ public:
 
 private:
     connecting_poller<Backend> _connecting_poller;
-    regular_poller<Backend>    _poller;
+    reader_poller<Backend>     _reader_poller;
+    writer_poller<Backend>     _writer_poller;
 
 private:
     std::function<void(native_socket_type)> connected;
 
 public:
     client_poller (callbacks && cbs)
-        : _connecting_poller()
-        , _poller()
     {
         if (cbs.on_error) {
             _connecting_poller.on_error = cbs.on_error;
-            _poller.on_error = std::move(cbs.on_error);
+            _reader_poller.on_error = cbs.on_error;
+            _writer_poller.on_error = std::move(cbs.on_error);
         }
 
         _connecting_poller.connection_refused = std::move(cbs.connection_refused);
@@ -56,13 +57,13 @@ public:
 
         _connecting_poller.connected = [this] (native_socket_type sock) {
             // sock already removed from _connecting_poller
-            _poller.add(sock);
+            _reader_poller.add(sock);
             this->connected(sock);
         };
 
-        _poller.disconnected = std::move(cbs.disconnected);
-        _poller.ready_read = std::move(cbs.ready_read);
-        _poller.can_write  = std::move(cbs.can_write);
+        _reader_poller.disconnected = std::move(cbs.disconnected);
+        _reader_poller.ready_read   = std::move(cbs.ready_read);
+        _writer_poller.can_write    = std::move(cbs.can_write);
     }
 
     ~client_poller () = default;
@@ -82,7 +83,7 @@ public:
         if (state == conn_status::connecting)
             _connecting_poller.add(sock.native(), perr);
         else if (state == conn_status::connected)
-            _poller.add(sock, perr);
+            _reader_poller.add(sock, perr);
         else {
             error err {
                   make_error_code(errc::poller_error)
@@ -106,7 +107,18 @@ public:
     void remove (Socket const & sock, error * perr = nullptr)
     {
         _connecting_poller.remove(sock.native(), perr);
-        _poller.remove(sock.native(), perr);
+        _reader_poller.remove(sock.native(), perr);
+        _writer_poller.remove(sock.native(), perr);
+    }
+
+    /**
+     * Add socket to writer poller to waiting for socket to be able to write.
+     * It will be removed automatically from writer poller.
+     */
+    template <typename Socket>
+    void wait_for_write (Socket const & sock, error * perr = nullptr)
+    {
+        _writer_poller.add(sock.native(), perr);
     }
 
     /**
@@ -114,27 +126,44 @@ public:
      */
     bool empty () const noexcept
     {
-        return _connecting_poller.empty() && _poller.empty();
+        return _connecting_poller.empty()
+            && _reader_poller.empty()
+            && _writer_poller.empty() ;
     }
 
     /**
-     * @return Pair of poll results of connecting and regular pollers.
+     * @return Total number of positive events: number of connected sockets
+     *         plus number of read and write events.
      */
-    std::pair<int, int> poll (std::chrono::milliseconds millis, error * perr = nullptr)
+    int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
     {
         int n1 = 0;
+        int n2 = 0;
+        int n3 = 0;
+
+        auto empty_reader_poller = _reader_poller.empty();
 
         if (!_connecting_poller.empty()) {
-            if (_poller.empty()) {
+            if (empty_reader_poller) {
                 n1 = _connecting_poller.poll(millis, perr);
             } else {
                 n1 = _connecting_poller.poll(std::chrono::milliseconds{0}, perr);
             }
         }
 
-        auto n2 = _poller.poll(millis);
+        if (!_writer_poller.empty())
+            n2 = _writer_poller.poll(std::chrono::milliseconds{0}, perr);
 
-        return std::make_pair(n1, n2);
+        if (!empty_reader_poller)
+            n3 = _reader_poller.poll(millis, perr);
+
+        if (n1 < 0 && n2 < 0 && n3 < 0)
+            return n1;
+
+        return (n1 > 0 ? n1 : 0)
+            + (n2 > 0 ? n2 : 0)
+            + (n3 > 0 ? n3 : 0);
     }
 };
 

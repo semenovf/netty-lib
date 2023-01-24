@@ -28,8 +28,8 @@ udp_receiver::udp_receiver (socket4_addr const & src_saddr
 //
 //         join(src_saddr, local_addr);
 //
-//         _dtor = [this, src_saddr, local_addr] () {
-//             leave(src_saddr, local_addr);
+//         _dtor = [src_saddr, local_addr] (udp_receiver * that) {
+//             that->leave(src_saddr, local_addr);
 //         };
     } else if (is_broadcast(src_saddr.addr)) {
 //         bind(_socket, src_saddr);

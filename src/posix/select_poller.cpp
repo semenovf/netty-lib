@@ -12,7 +12,9 @@
 namespace netty {
 namespace posix {
 
-select_poller::select_poller ()
+select_poller::select_poller (bool oread, bool owrite)
+    : observe_read(oread)
+    , observe_write(owrite)
 {
     FD_ZERO(& readfds);
     FD_ZERO(& writefds);
@@ -30,8 +32,11 @@ void select_poller::add (native_socket_type sock, error * perr)
 {
     (void)perr;
 
-    FD_SET(sock, & readfds);
-    FD_SET(sock, & writefds);
+    if (observe_read)
+        FD_SET(sock, & readfds);
+
+    if (observe_write)
+        FD_SET(sock, & writefds);
 
     max_fd = (std::max)(sock, max_fd);
     min_fd = (std::min)(sock, min_fd);
@@ -41,8 +46,11 @@ void select_poller::remove (native_socket_type sock, error * perr)
 {
     (void)perr;
 
-    FD_CLR(sock, & readfds);
-    FD_CLR(sock, & writefds);
+    if (observe_read)
+        FD_CLR(sock, & readfds);
+
+    if (observe_write)
+        FD_CLR(sock, & writefds);
 
     if (sock == max_fd)
         --max_fd;
@@ -61,6 +69,12 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds
 
     timeout.tv_sec  = millis.count() / 1000;
     timeout.tv_usec = (millis.count() - timeout.tv_sec * 1000) * 1000;
+
+    if (!observe_read)
+        rfds = nullptr;
+
+    if (!observe_write)
+        wfds = nullptr;
 
     if (rfds)
         memcpy(rfds, & readfds, sizeof(readfds));

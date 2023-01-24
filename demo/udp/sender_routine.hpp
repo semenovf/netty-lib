@@ -39,10 +39,10 @@ void run_sender (netty::socket4_addr const & dest_saddr, netty::inet4_addr local
 
         while (counter--) {
             char helo[] = {'H', 'e', 'l', 'o'};
-            auto n = sender.send_to(dest_saddr, helo, sizeof(helo));
+            auto send_result = sender.send_to(dest_saddr, helo, sizeof(helo));
 
-            LOGD(TAG, "Send data (counter={}) to: {}, size={}", counter
-                , to_string(dest_saddr), n);
+            LOGD(TAG, "Send data (counter={}) to: {}, size={}"
+                , counter, to_string(dest_saddr), send_result.n);
 
             std::this_thread::sleep_for(std::chrono::seconds{1});
         }

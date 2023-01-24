@@ -32,6 +32,7 @@ udp_socket::udp_socket (udp_socket && s)
 
 udp_socket & udp_socket::operator = (udp_socket && s)
 {
+    this->~udp_socket();
     inet_socket::operator = (std::move(s));
     return *this;
 }

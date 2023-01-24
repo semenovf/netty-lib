@@ -10,6 +10,7 @@
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 
 namespace netty {
@@ -88,13 +89,9 @@ public:
      * @param size Data size to send.
      * @param overflow Flag that the send buffer is overflow (@c true).
      * @param perr Pointer to structure to store error if occurred.
-     *
-     * @return > 0 on success sending,
-     *         = 0 if socket disconnected,
-     *         < 0 on error or buffer is overflow.
      */
-    NETTY__EXPORT std::streamsize send (char const * data, std::streamsize size
-        , bool * overflow = nullptr, error * perr = nullptr);
+    NETTY__EXPORT send_result send (char const * data, std::streamsize size
+        , error * perr = nullptr);
 
     NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize size
         , socket4_addr * saddr = nullptr, error * perr = nullptr);
@@ -102,9 +99,8 @@ public:
     /**
      * See send description.
      */
-    NETTY__EXPORT std::streamsize send_to (socket4_addr const & dest
-        , char const * data, std::streamsize size, bool * overflow = nullptr
-        , error * perr = nullptr);
+    NETTY__EXPORT send_result send_to (socket4_addr const & dest
+        , char const * data, std::streamsize size, error * perr = nullptr);
 };
 
 }} // namespace netty::posix

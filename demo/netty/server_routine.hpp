@@ -51,6 +51,11 @@ void start_server (netty::socket4_addr const & saddr)
             return client.INVALID_SOCKET;
         };
 
+        callbacks.disconnected = [] (typename PollerType::native_socket_type sock)
+        {
+            LOGD(TAG, "Disconnected: socket={}", sock);
+        };
+
         callbacks.ready_read = [& sockets] (typename PollerType::native_socket_type sock) {
             auto pos = sockets.find(sock);
 
@@ -69,10 +74,6 @@ void start_server (netty::socket4_addr const & saddr)
             } else {
                 LOGE(TAG, "Data received failure: {}", n);
             }
-        };
-
-        callbacks.can_write = [] (typename PollerType::native_socket_type sock) {
-            //LOGD(TAG, "Client can_write: socket={}", sock);
         };
 
         PollerType poller{std::move(callbacks)};

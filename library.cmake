@@ -72,8 +72,9 @@ if (__has_poll)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/regular_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__POLL_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__POLL_ENABLED=1")
 endif()
@@ -84,8 +85,9 @@ if (__has_sys_select)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/regular_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__SELECT_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__SELECT_ENABLED=1")
 endif()
@@ -95,10 +97,11 @@ if (UNIX)
 
     if (__has_sys_epoll)
         portable_target(SOURCES ${PROJECT_NAME}
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/listener_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/connecting_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/regular_poller.cpp)
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/listener_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/reader_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
         portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__EPOLL_ENABLED=1")
         portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__EPOLL_ENABLED=1")
     endif()
@@ -128,10 +131,11 @@ if (NETTY__ENABLE_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/listener_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/regular_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_server.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_socket.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)
 
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__UDT_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__UDT_ENABLED=1")

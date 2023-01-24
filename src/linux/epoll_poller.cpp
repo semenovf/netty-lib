@@ -18,7 +18,8 @@ namespace linux_os {
 
 static constexpr std::size_t const DEFAULT_INCREMENT = 32;
 
-epoll_poller::epoll_poller ()
+epoll_poller::epoll_poller (std::uint32_t observable_events)
+    : oevents(observable_events)
 {
     // Since Linux 2.6.8, the size argument is ignored, but must be greater than zero;
     int size = 1024;
@@ -44,9 +45,7 @@ epoll_poller::~epoll_poller ()
 void epoll_poller::add (native_socket_type sock, error * perr)
 {
     struct epoll_event ev;
-    ev.events = EPOLLERR | EPOLLHUP | EPOLLRDHUP
-        | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND
-        | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND;
+    ev.events = oevents;
     ev.data.fd = sock;
 
     int rc = epoll_ctl(eid, EPOLL_CTL_ADD, sock, & ev);

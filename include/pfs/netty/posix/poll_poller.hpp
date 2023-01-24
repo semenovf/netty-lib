@@ -7,6 +7,7 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/error.hpp"
 #include <vector>
 #include <poll.h>
 
@@ -18,9 +19,10 @@ class poll_poller
 public:
     using native_socket_type = int;
     std::vector<pollfd> events;
+    short int oevents; // Observable events
 
 public:
-    poll_poller ();
+    poll_poller (short int observable_events);
     ~poll_poller ();
 
     void add (native_socket_type sock, error * perr = nullptr);

@@ -16,7 +16,8 @@
 namespace netty {
 namespace posix {
 
-poll_poller::poll_poller ()
+poll_poller::poll_poller (short int observable_events)
+    : oevents(observable_events)
 {}
 
 poll_poller::~poll_poller ()
@@ -30,27 +31,7 @@ void poll_poller::add (native_socket_type sock, error * perr)
     auto & ev = events.back();
     ev.fd = sock;
     ev.revents = 0;
-    ev.events = POLLERR | POLLHUP | POLLIN | POLLOUT;
-
-#ifdef POLLRDHUP
-    ev.events |= POLLRDHUP;
-#endif
-
-#ifdef POLLRDNORM
-    ev.events |= POLLRDNORM;
-#endif
-
-#ifdef POLLRDBAND
-    ev.events |= POLLRDBAND;
-#endif
-
-#ifdef POLLWRNORM
-    ev.events |= POLLWRNORM;
-#endif
-
-#ifdef POLLWRBAND
-    ev.events |= POLLWRBAND;
-#endif
+    ev.events = oevents;
 }
 
 void poll_poller::remove (native_socket_type sock, error * perr)

@@ -10,7 +10,7 @@
 #include "chrono.hpp"
 #include "error.hpp"
 #include "listener_poller.hpp"
-#include "regular_poller.hpp"
+#include "reader_poller.hpp"
 #include <functional>
 #include <utility>
 
@@ -29,26 +29,23 @@ public:
     {
         std::function<void(native_socket_type, std::string const &)> on_error;
         std::function<native_socket_type(native_socket_type, bool &)> accept;
-        //std::function<void(native_socket_type)> disconnected;
+        std::function<void(native_socket_type)> disconnected;
         std::function<void(native_socket_type)> ready_read;
-        std::function<void(native_socket_type)> can_write;
     };
 
 private:
     listener_poller<Backend> _listener_poller;
-    regular_poller<Backend>  _poller;
+    reader_poller<Backend>   _reader_poller;
 
 private: // callbacks
     std::function<native_socket_type(native_socket_type, bool &)> accept;
 
 public:
     server_poller (callbacks && cbs)
-        : _listener_poller()
-        , _poller()
     {
         if (cbs.on_error) {
             _listener_poller.on_error = cbs.on_error;
-            _poller.on_error = std::move(cbs.on_error);
+            _reader_poller.on_error = std::move(cbs.on_error);
         }
 
         accept = std::move(cbs.accept);
@@ -58,12 +55,11 @@ public:
             auto sock = this->accept(listener_sock, ok);
 
             if (ok)
-                _poller.add(sock);
+                _reader_poller.add(sock);
         };
 
-        //_poller.disconnected = std::move(cbs.disconnected);
-        _poller.ready_read = std::move(cbs.ready_read);
-        _poller.can_write  = std::move(cbs.can_write);
+        _reader_poller.disconnected = std::move(cbs.disconnected);
+        _reader_poller.ready_read = std::move(cbs.ready_read);
     }
 
     ~server_poller () = default;
@@ -92,12 +88,12 @@ public:
     }
 
     /**
-     * Remove client socket.
+     * Remove reader socket.
      */
     template <typename Socket>
     void remove (Socket const & sock, error * perr = nullptr)
     {
-        _poller.remove(sock.native(), perr);
+        _reader_poller.remove(sock.native(), perr);
     }
 
     /**
@@ -105,26 +101,37 @@ public:
      */
     bool empty () const noexcept
     {
-        return _listener_poller.empty() && _poller.empty();
+        return _listener_poller.empty() && _reader_poller.empty();
     }
 
     /**
-     * @return Pair of poll results of listener and regular pollers.
+     * @return Total number of positive events: number of pending connections
+     *         plus number of read events.
      */
-    std::pair<int, int> poll (std::chrono::milliseconds millis, error * perr = nullptr)
+    int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
     {
         int n1 = 0;
+        int n2 = 0;
+
+        auto empty_reader_poller = _reader_poller.empty();
 
         if (!_listener_poller.empty()) {
-            if (_poller.empty())
+            if (empty_reader_poller)
                 n1 = _listener_poller.poll(millis, perr);
             else
                 n1 = _listener_poller.poll(std::chrono::milliseconds{0}, perr);
         }
 
-        auto n2 = _poller.poll(millis);
+        if (!empty_reader_poller) {
+            n2 = _reader_poller.poll(millis, perr);
+        }
 
-        return std::make_pair(n1, n2);
+        if (n1 < 0 && n2 < 0)
+            return n1;
+
+        return (n1 > 0 ? n1 : 0)
+            + (n2 > 0 ? n2 : 0);
     }
 };
 

@@ -4,56 +4,52 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.09 Initial version.
+//      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
 #include <functional>
-#include <map>
 
 namespace netty {
 
 template <typename Backend>
-class connecting_poller
+class reader_poller
 {
 public:
     using native_socket_type = typename Backend::native_socket_type;
 
 private:
     Backend _rep;
-    std::map<native_socket_type, clock_type::time_point> _connecting_sockets;
 
 public:
     mutable std::function<void(native_socket_type, std::string const &)> on_error;
-    mutable std::function<void(native_socket_type)> connection_refused;
-    mutable std::function<void(native_socket_type)> connected;
+    mutable std::function<void(native_socket_type)> disconnected;
+    mutable std::function<void(native_socket_type)> ready_read;
 
 protected:
     struct specialized {};
 
     // Specialized poller
-    connecting_poller (specialized);
+    reader_poller (specialized);
 
 public:
-    NETTY__EXPORT connecting_poller ();
-    NETTY__EXPORT ~connecting_poller ();
+    NETTY__EXPORT reader_poller ();
+    NETTY__EXPORT ~reader_poller ();
 
-    connecting_poller (connecting_poller const &) = delete;
-    connecting_poller & operator = (connecting_poller const &) = delete;
-    connecting_poller (connecting_poller &&) = delete;
-    connecting_poller & operator = (connecting_poller &&) = delete;
+    reader_poller (reader_poller const &) = delete;
+    reader_poller & operator = (reader_poller const &) = delete;
+    reader_poller (reader_poller &&) = delete;
+    reader_poller & operator = (reader_poller &&) = delete;
 
     NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
 
-    /**
-     * @return Number of connected sockets.
-     */
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 
     NETTY__EXPORT bool empty () const noexcept;
 };
 
 } // namespace netty
+

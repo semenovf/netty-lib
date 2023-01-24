@@ -4,9 +4,9 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.09 Initial version.
+//      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../regular_poller.hpp"
+#include "../reader_poller.hpp"
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -27,21 +27,29 @@ namespace netty {
 #if NETTY__SELECT_ENABLED
 
 template <>
-int regular_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
+reader_poller<posix::select_poller>::reader_poller (specialized)
+    : _rep(true, false)
+{}
+
+template <>
+int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     fd_set rfds;
-    fd_set wfds;
 
-    auto n = _rep.poll(& rfds, & wfds, millis, perr);
+    auto n = _rep.poll(& rfds, nullptr, millis, perr);
 
     if (n < 0)
         return n;
+
+    auto res = 0;
 
     if (n > 0) {
         int rcounter = n;
 
         for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
             if (FD_ISSET(fd, & rfds)) {
+                res++;
+
                 bool disconnect = false;
                 char buf[1];
                 auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
@@ -68,19 +76,10 @@ int regular_poller<posix::select_poller>::poll (std::chrono::milliseconds millis
 
                 --rcounter;
             }
-
-            if (FD_ISSET(fd, & wfds)) {
-                //LOGD(TAG, "CAN WRITE");
-
-                if (can_write)
-                    can_write(fd);
-
-                --rcounter;
-            }
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // NETTY__SELECT_ENABLED
@@ -88,12 +87,29 @@ int regular_poller<posix::select_poller>::poll (std::chrono::milliseconds millis
 #if NETTY__POLL_ENABLED
 
 template <>
-int regular_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
+reader_poller<posix::poll_poller>::reader_poller (specialized)
+    : _rep(POLLERR | POLLIN
+
+#ifdef POLLRDNORM
+        | POLLRDNORM
+#endif
+
+#ifdef POLLRDBAND
+        | POLLRDBAND
+#endif
+    )
+
+{}
+
+template <>
+int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     auto n = _rep.poll(millis, perr);
 
     if (n < 0)
         return n;
+
+    auto res = 0;
 
     if (n > 0) {
         for (int i = 0; i < n; i++) {
@@ -114,8 +130,9 @@ int regular_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, 
                 | POLLRDBAND
 #endif
             )) {
-                // Same as for select_poller
+                res++;
 
+                // Same as for select_poller
                 bool disconnect = false;
                 char buf[1];
                 auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
@@ -140,35 +157,20 @@ int regular_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, 
                         disconnected(fd);
                 }
             }
-
-            // Writing is now possible, though a write larger than the available space
-            // in a socket or pipe will still block (unless O_NONBLOCK is set).
-            // Identical to `epoll_poller`
-            if (revents & (POLLOUT
-#ifdef POLLWRNORM
-                | POLLWRNORM
-#endif
-#ifdef POLLWRBAND
-                | POLLWRBAND
-#endif
-            )) {
-                if (can_write)
-                    can_write(fd);
-            }
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // NETTY__POLL_ENABLED
 
 #if NETTY__SELECT_ENABLED
-template class regular_poller<posix::select_poller>;
+template class reader_poller<posix::select_poller>;
 #endif
 
 #if NETTY__POLL_ENABLED
-template class regular_poller<posix::poll_poller>;
+template class reader_poller<posix::poll_poller>;
 #endif
 
 } // namespace netty

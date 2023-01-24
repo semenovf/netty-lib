@@ -36,8 +36,8 @@ udp_receiver::udp_receiver (socket4_addr const & src_saddr
 
         join(src_saddr, local_addr);
 
-        _dtor = [this, src_saddr, local_addr] () {
-            leave(src_saddr, local_addr);
+        _dtor = [src_saddr, local_addr] (udp_receiver * that) {
+            that->leave(src_saddr, local_addr);
         };
     } else if (is_broadcast(src_saddr.addr)) {
         bind(_socket, src_saddr);
@@ -65,18 +65,21 @@ udp_receiver::udp_receiver (socket4_addr const & local_saddr)
 
 udp_receiver::udp_receiver (udp_receiver && s)
     : udp_socket(std::move(s))
+    , _dtor(std::move(s._dtor))
 {}
 
 udp_receiver & udp_receiver::operator = (udp_receiver && s)
 {
+    this->~udp_receiver();
     udp_socket::operator = (std::move(s));
+    _dtor = std::move(s._dtor);
     return *this;
 }
 
 udp_receiver::~udp_receiver ()
 {
     if (_dtor)
-        _dtor();
+        _dtor(this);
 }
 
 }} // namespace netty::posix

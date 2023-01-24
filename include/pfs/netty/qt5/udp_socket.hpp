@@ -10,6 +10,7 @@
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
+#include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include <QUdpSocket>
 #include <memory>
@@ -80,7 +81,7 @@ public:
     NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize len
         , socket4_addr * saddr = nullptr, error * perr = nullptr);
 
-    NETTY__EXPORT std::streamsize send_to (socket4_addr const & dest
+    NETTY__EXPORT send_result send_to (socket4_addr const & dest
         , char const * data, std::streamsize len, error * perr = nullptr);
 };
 

@@ -209,8 +209,10 @@ public:
 
     /**
      * Sends a dozen file chunks (fragments)
+     *
+     * @return non-zero value if there was a sending of chunks of files
      */
-    NETTY__EXPORT void loop ();
+    NETTY__EXPORT int loop ();
 
     /**
      * Sets file size upper limit.

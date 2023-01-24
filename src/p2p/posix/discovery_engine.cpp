@@ -72,21 +72,21 @@ bool discovery_engine::has_targets () const noexcept
     return !_targets.empty();
 }
 
-int discovery_engine::poll (std::chrono::milliseconds timeout)
+int discovery_engine::poll (std::chrono::milliseconds millis, error * perr)
 {
-    return _poller.poll(timeout);
+    return _poller.poll(millis, perr);
 }
 
-std::streamsize discovery_engine::send (socket4_addr dest_saddr, char const * data
+send_result discovery_engine::send (socket4_addr dest_saddr, char const * data
     , std::size_t size, netty::error * perr)
 {
     for (auto & p: _targets) {
         if (dest_saddr == p.first) {
-            return p.second.send_to(dest_saddr, data, size, nullptr, perr);
+            return p.second.send_to(dest_saddr, data, size, perr);
         }
     }
 
-    return 0;
+    return send_result{send_status::good, 0};
 }
 
 }}} // namespace netty::p2p::posix

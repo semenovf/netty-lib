@@ -18,7 +18,9 @@ static char const * TAG = "UDT";
 namespace netty {
 namespace udt {
 
-epoll_poller::epoll_poller ()
+epoll_poller::epoll_poller (bool oread, bool owrite)
+    : observe_read(oread)
+    , observe_write(owrite)
 {
     eid = UDT::epoll_create();
 
@@ -41,7 +43,14 @@ epoll_poller::~epoll_poller ()
 
 void epoll_poller::add (native_socket_type sock, error * perr)
 {
-    int events = UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR;
+    int events = UDT_EPOLL_ERR;
+
+    if (observe_read)
+        events |= UDT_EPOLL_IN;
+
+    if (observe_write)
+        events |= UDT_EPOLL_OUT;
+
     auto rc = UDT::epoll_add_usock(eid, sock, & events);
 
     if (rc == UDT::ERROR) {
@@ -106,6 +115,12 @@ bool epoll_poller::empty () const noexcept
 int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
     , std::set<UDTSOCKET> * writefds, std::chrono::milliseconds millis, error * perr)
 {
+    if (!observe_read)
+        readfds = nullptr;
+
+    if (!observe_write)
+        writefds = nullptr;
+
     auto n = UDT::epoll_wait(eid, readfds, writefds, millis.count(), nullptr, nullptr);
 
     if (n < 0) {

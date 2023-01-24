@@ -4,19 +4,19 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
-//      2023.01.11 Renamed to `regular_poller`.
+//      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
+#include <chrono>
 #include <functional>
+#include <utility>
 
 namespace netty {
 
 template <typename Backend>
-class regular_poller
+class writer_poller
 {
 public:
     using native_socket_type = typename Backend::native_socket_type;
@@ -26,18 +26,23 @@ private:
 
 public:
     mutable std::function<void(native_socket_type, std::string const &)> on_error;
-    mutable std::function<void(native_socket_type)> disconnected;
-    mutable std::function<void(native_socket_type)> ready_read;
+//     mutable std::function<void(native_socket_type)> disconnected;
     mutable std::function<void(native_socket_type)> can_write;
 
-public:
-    NETTY__EXPORT regular_poller ();
-    NETTY__EXPORT ~regular_poller ();
+protected:
+    struct specialized {};
 
-    regular_poller (regular_poller const &) = delete;
-    regular_poller & operator = (regular_poller const &) = delete;
-    regular_poller (regular_poller &&) = delete;
-    regular_poller & operator = (regular_poller &&) = delete;
+    // Specialized poller
+    writer_poller (specialized);
+
+public:
+    NETTY__EXPORT writer_poller ();
+    NETTY__EXPORT ~writer_poller ();
+
+    writer_poller (writer_poller const &) = delete;
+    writer_poller & operator = (writer_poller const &) = delete;
+    writer_poller (writer_poller &&) = delete;
+    writer_poller & operator = (writer_poller &&) = delete;
 
     NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);

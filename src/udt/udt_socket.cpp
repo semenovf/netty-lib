@@ -254,7 +254,9 @@ basic_udt_socket::native_type basic_udt_socket::native () const noexcept
     return _socket;
 }
 
-std::streamsize basic_udt_socket::recv (char * data, std::streamsize len)
+// TODO Need to correct handle error
+std::streamsize basic_udt_socket::recv (char * data, std::streamsize len
+    , error * /*perr*/)
 {
     auto rc = UDT::recvmsg(_socket, data, len);
 
@@ -268,7 +270,9 @@ std::streamsize basic_udt_socket::recv (char * data, std::streamsize len)
     return rc;
 }
 
-std::streamsize basic_udt_socket::send (char const * data, std::streamsize len)
+// TODO Need to correct handle error
+send_result basic_udt_socket::send (char const * data, std::streamsize len
+    , error * /*perr*/)
 {
     int ttl_millis = -1;
     bool inorder = true;
@@ -286,10 +290,10 @@ std::streamsize basic_udt_socket::send (char const * data, std::streamsize len)
         // Error code: 6001
         // Error desc: Non-blocking call failure: no buffer available for sending.
         if (CUDTException{6, 1, 0}.getErrorCode() == UDT::getlasterror_code())
-            return -1;
+            return send_result{send_status::failure, -1};
     }
 
-    return rc;
+    return send_result{send_status::good, rc};
 }
 
 conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)

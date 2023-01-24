@@ -9,12 +9,12 @@
 #pragma once
 #include "pfs/log.hpp"
 #include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/regular_poller.hpp"
+#include "pfs/netty/reader_poller.hpp"
 #include "pfs/netty/posix/poll_poller.hpp"
 #include <map>
 #include <cstring>
 
-using receiver_poller_type = netty::regular_poller<netty::posix::poll_poller>;
+using receiver_poller_type = netty::reader_poller<netty::posix::poll_poller>;
 
 // `local_addr` for multicast only
 template <typename Receiver>

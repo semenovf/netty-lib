@@ -166,7 +166,6 @@ int main (int argc, char * argv[])
     }
 
     engine_t::options opts = engine_t::default_options();
-    opts.discovery.transmit_interval = std::chrono::milliseconds{2 * 1000};
     opts.discovery.timestamp_error_limit = std::chrono::milliseconds{500};
 
     // Port on which server will accept incoming connections (readers)
@@ -186,7 +185,7 @@ int main (int argc, char * argv[])
     engine.add_receiver(discovery_saddr);
 
     for (auto t: target_saddrs) {
-        engine.add_target(t);
+        engine.add_target(t, std::chrono::milliseconds{2 * 1000});
     }
 
     engine.on_error = [] (std::string const & str) {

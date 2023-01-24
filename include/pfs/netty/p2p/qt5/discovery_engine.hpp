@@ -19,6 +19,7 @@ namespace netty {
 namespace p2p {
 namespace qt5 {
 
+// TODO Need complete implementation
 class discovery_engine
 {
 public:
@@ -58,7 +59,7 @@ public:
     NETTY__EXPORT void add_target (socket4_addr dest_saddr
         , inet4_addr local_addr = inet4_addr::any_addr_value);
 
-    NETTY__EXPORT void poll (std::chrono::milliseconds timeout);
+    NETTY__EXPORT std::pair<int,int> poll (std::chrono::milliseconds timeout);
 
     NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
         , std::size_t size, netty::error * perr);

@@ -7,7 +7,7 @@
 //      2023.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/regular_poller.hpp"
+#include "pfs/netty/reader_poller.hpp"
 #include "pfs/netty/posix/poll_poller.hpp"
 #include "pfs/netty/posix/udp_receiver.hpp"
 #include "pfs/netty/posix/udp_sender.hpp"
@@ -26,7 +26,7 @@ public:
     using sender_type   = discovery_engine;
 
 private:
-    using poller_type = netty::regular_poller<netty::posix::poll_poller>;
+    using poller_type = netty::reader_poller<netty::posix::poll_poller>;
 
 private:
     poller_type _poller;
@@ -68,10 +68,11 @@ public:
      */
     NETTY__EXPORT bool has_targets () const noexcept;
 
-    NETTY__EXPORT int poll (std::chrono::milliseconds timeout);
+    NETTY__EXPORT int poll (std::chrono::milliseconds millis
+        , error * perr = nullptr);
 
-    NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
-        , std::size_t size, netty::error * perr);
+    NETTY__EXPORT send_result send (socket4_addr dest_saddr, char const * data
+        , std::size_t size, error * perr);
 };
 
 }}} // namespace netty::p2p::posix

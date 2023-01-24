@@ -626,10 +626,12 @@ void file_transporter::stop_file (universal_id addressee, universal_id fileid)
     }
 
 // Send chunk of file packets
-void file_transporter::loop ()
+int file_transporter::loop ()
 {
     if (_ofile_pool.empty())
-        return;
+        return 0;
+
+    int counter = 0;
 
     for (auto pos = _ofile_pool.begin(); pos != _ofile_pool.end();) {
 
@@ -637,6 +639,8 @@ void file_transporter::loop ()
             ++pos;
             continue;
         }
+
+        counter++;
 
         auto fileid  = pos->first;
         auto * p = & pos->second;
@@ -678,6 +682,8 @@ void file_transporter::loop ()
             ++pos;
         }
     }
+
+    return counter;
 }
 
 }} // namespace netty::p2p

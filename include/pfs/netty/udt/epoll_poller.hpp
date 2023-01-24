@@ -22,9 +22,11 @@ public:
     int counter {0}; // number of sockets polled currently
     std::set<native_socket_type> readfds;
     std::set<native_socket_type> writefds;
+    bool observe_read {false};
+    bool observe_write {false};
 
 public:
-    epoll_poller ();
+    epoll_poller (bool observe_read, bool observe_write);
     ~epoll_poller ();
 
     void add (native_socket_type sock, error * perr = nullptr);

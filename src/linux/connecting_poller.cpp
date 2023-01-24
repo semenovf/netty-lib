@@ -19,12 +19,19 @@ namespace netty {
 #if NETTY__EPOLL_ENABLED
 
 template <>
+connecting_poller<linux_os::epoll_poller>::connecting_poller (specialized)
+    : _rep(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)
+{}
+
+template <>
 int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     auto n = _rep.poll(millis, perr);
 
     if (n < 0)
         return n;
+
+    int res = 0;
 
     if (n > 0) {
         for (int i = 0; i < n; i++) {
@@ -88,13 +95,15 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
             if (revents & (EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)) {
                 remove(fd);
 
+                res++;
+
                 if (connected)
                     connected(fd);
             }
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // #NETTY__EPOLL_ENABLED

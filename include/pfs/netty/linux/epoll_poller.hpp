@@ -7,6 +7,7 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/error.hpp"
 #include <vector>
 #include <sys/epoll.h>
 
@@ -20,9 +21,10 @@ public:
 
     int eid {-1};
     std::vector<epoll_event> events;
+    std::uint32_t oevents; // Observable events
 
 public:
-    epoll_poller ();
+    epoll_poller (std::uint32_t observable_events);
     ~epoll_poller ();
 
     void add (native_socket_type sock, error * perr = nullptr);

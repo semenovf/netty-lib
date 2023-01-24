@@ -19,7 +19,7 @@ namespace posix {
 class udp_receiver: public udp_socket
 {
     // Destructor handler, used by for multicast sender
-    std::function<void()> _dtor;
+    std::function<void(udp_receiver *)> _dtor;
 
 public:
     /**
@@ -56,5 +56,3 @@ public:
 };
 
 }} // namespace netty::posix
-
-

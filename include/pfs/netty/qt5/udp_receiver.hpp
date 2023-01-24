@@ -18,9 +18,6 @@ namespace qt5 {
  */
 class udp_receiver: public udp_socket
 {
-    // Destructor handler, used by for multicast sender
-    std::function<void()> _dtor;
-
 public:
     /**
      * Constructs uninitialized (invalid) UDP receiver.

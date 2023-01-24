@@ -26,8 +26,11 @@ public:
     fd_set readfds;
     fd_set writefds;
 
+    bool observe_read {false};
+    bool observe_write {false};
+
 public:
-    select_poller ();
+    select_poller (bool observe_read, bool observe_write);
     ~select_poller ();
 
     void add (native_socket_type sock, error * perr = nullptr);

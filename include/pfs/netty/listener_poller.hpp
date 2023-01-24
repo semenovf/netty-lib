@@ -27,6 +27,12 @@ public:
     mutable std::function<void(native_socket_type, std::string const &)> on_error;
     mutable std::function<void(native_socket_type)> accept;
 
+protected:
+    struct specialized {};
+
+    // Specialized poller
+    listener_poller (specialized);
+
 public:
     NETTY__EXPORT listener_poller ();
     NETTY__EXPORT ~listener_poller ();
@@ -38,10 +44,13 @@ public:
 
     NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
+
+    /**
+     * @resturn Number of pending connections, or negative value on error.
+     */
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
+
     NETTY__EXPORT bool empty () const noexcept;
 };
 
 } // namespace netty
-
-

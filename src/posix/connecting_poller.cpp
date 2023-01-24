@@ -23,6 +23,11 @@ namespace netty {
 #if NETTY__SELECT_ENABLED
 
 template <>
+connecting_poller<posix::select_poller>::connecting_poller (specialized)
+    : _rep(true, true)
+{}
+
+template <>
 int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     fd_set rfds;
@@ -32,6 +37,8 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 
     if (n < 0)
         return n;
+
+    int res = 0;
 
     if (n > 0) {
         int rcounter = n;
@@ -76,6 +83,8 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 
             if (FD_ISSET(fd, & wfds)) {
                 if (!removed) {
+                    res++;
+
                     remove(fd);
 
                     if (connected)
@@ -87,12 +96,30 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // NETTY__SELECT_ENABLED
 
 #if NETTY__POLL_ENABLED
+
+template <>
+connecting_poller<posix::poll_poller>::connecting_poller (specialized)
+    : _rep(POLLERR | POLLHUP | POLLOUT
+
+#ifdef POLLRDHUP
+        | POLLRDHUP
+#endif
+
+#ifdef POLLWRNORM
+        | POLLWRNORM
+#endif
+
+#ifdef POLLWRBAND
+        | POLLWRBAND
+#endif
+    )
+{}
 
 template <>
 int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -101,6 +128,8 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
 
     if (n < 0)
         return n;
+
+    int res = 0;
 
     if (n > 0) {
         for (int i = 0; i < n; i++) {
@@ -173,6 +202,8 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 | POLLWRBAND
 #endif
             )) {
+                res++;
+
                 remove(fd);
 
                 if (connected)
@@ -181,7 +212,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // NETTY__POLL_ENABLED

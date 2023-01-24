@@ -11,6 +11,7 @@
 #include "pfs/netty/conn_status.hpp"
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
+#include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include <chrono>
 #include <string>
@@ -116,8 +117,8 @@ public:
     NETTY__EXPORT operator bool () const noexcept;
 
     NETTY__EXPORT native_type native () const noexcept;
-    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len);
-    NETTY__EXPORT std::streamsize send (char const * data, std::streamsize len);
+    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len, error * perr = nullptr);
+    NETTY__EXPORT send_result send (char const * data, std::streamsize len, error * perr = nullptr);
 
     /**
      * Connects to the UDT server.

@@ -39,8 +39,13 @@ CHOICE=`zenity --list \
   4 "Global broadcast" "255.255.255.255:${UDP_DEMO_RECEIVER_PORT}"`
 
 case $CHOICE in
-  1) $UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_UNICAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR ;;
-  2) $UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_MULTICAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR ;;
-  3) $UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_BROADCAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR ;;
-  4) $UDP_DEMO_BIN_PATH --receiver --addr=255.255.255.255 --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR ;;
+  1) EXEC="$UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_UNICAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR" ;;
+  2) EXEC="$UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_MULTICAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR" ;;
+  3) EXEC="$UDP_DEMO_BIN_PATH --receiver --addr=$UDP_DEMO_BROADCAST_RECEIVER_ADDR --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR" ;;
+  4) EXEC="$UDP_DEMO_BIN_PATH --receiver --addr=255.255.255.255 --port=$UDP_DEMO_RECEIVER_PORT --local-addr=$UDP_DEMO_LOCAL_ADDR" ;;
 esac
+
+if [ -n "$EXEC" ] ; then
+    echo "Executing: ${EXEC}"
+    $EXEC
+fi

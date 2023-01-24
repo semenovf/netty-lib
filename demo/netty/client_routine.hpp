@@ -13,7 +13,7 @@ template <typename PollerType, typename SocketType>
 void start_client (netty::socket4_addr const & saddr)
 {
     bool finish = false;
-    bool can_write = false;
+    bool can_write = true;
     LOGD(TAG, "Starting client");
 
     typename PollerType::callbacks callbacks;
@@ -63,18 +63,28 @@ void start_client (netty::socket4_addr const & saddr)
             poller.poll(poller_timeout);
 
             if (can_write) {
-                can_write = false;
-                char data[4] = {'H', 'e', 'l', 'o'};
-                auto n = socket.send(data, sizeof(data));
+                char data[100000] = {'H', 'e', 'l', 'o'};
+                auto send_result = socket.send(data, sizeof(data));
 
-                if (n < 0) {
-                    LOGE(TAG, "Send failure: n={}, errno={}", n, errno);
-                    break;
+                switch (send_result.state) {
+                    case netty::send_status::failure:
+                        LOGE(TAG, "Send failure: n={}, errno={}", send_result.n, errno);
+                        finish = true;
+                        break;
+                    case netty::send_status::again:
+                        LOGD(TAG, "Wait for write: again");
+                        can_write = false;
+                        poller.wait_for_write(socket);
+                        break;
+                    case netty::send_status::overflow:
+                        LOGD(TAG, "Wait for write: overflow");
+                        can_write = false;
+                        poller.wait_for_write(socket);
+                        break;
+                    case netty::send_status::good:
+                        LOGD(TAG, "Sent: bytes_written={}", send_result.n);
+                        break;
                 }
-
-                LOGD(TAG, "SEND: n={}", n);
-            } else {
-                LOGW(TAG, "Cannot write");
             }
         }
     } catch (netty::error const & ex) {

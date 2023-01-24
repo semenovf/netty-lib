@@ -22,6 +22,11 @@ namespace netty {
 #if NETTY__UDT_ENABLED
 
 template <>
+listener_poller<udt::epoll_poller>::listener_poller (specialized)
+    : _rep(true, false)
+{}
+
+template <>
 int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     auto n = _rep.poll(_rep.eid, & _rep.readfds, nullptr, millis, perr);
@@ -29,10 +34,14 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
     if (n < 0)
         return n;
 
+    int res = 0;
+
     if (n > 0) {
         for (UDTSOCKET u: _rep.readfds) {
             auto status = UDT::getsockstate(u);
             LOGD(TAG, "UDT server socket state: {}", status);
+
+            res++;
 
             if (accept)
                 accept(u);

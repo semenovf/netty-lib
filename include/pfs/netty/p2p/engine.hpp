@@ -25,6 +25,7 @@
 #include <bitset>
 #include <limits>
 #include <map>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -120,15 +121,13 @@ private:
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
-    // Used to solve problems with output overflow.
-    clock_type::time_point _output_timepoint;
-
     struct writer_item {
         universal_id uuid;
         writer_type writer;
 
         // Packet output queue
         oqueue_type q;
+        bool can_write;
     };
 
     using writer_collection_type = std::vector<std::pair<bool, writer_item>>;
@@ -363,7 +362,7 @@ public:
         }
 
         ////////////////////////////////////////////////////////////////////////
-        // Create and configure main listener poller
+        // Create and configure main server poller
         ////////////////////////////////////////////////////////////////////////
         {
             typename server_poller_type::callbacks callbacks;
@@ -387,10 +386,6 @@ public:
 
             callbacks.ready_read = [this] (typename server_poller_type::native_socket_type sock) {
                 process_reader_input(sock);
-            };
-
-            callbacks.can_write = [] (typename server_poller_type::native_socket_type) {
-                // FIXME
             };
 
             _reader_poller = pfs::make_unique<server_poller_type>(std::move(callbacks));
@@ -422,14 +417,17 @@ public:
             // No need, writer sockets for write only
             callbacks.ready_read = [] (typename client_poller_type::native_socket_type sock) {};
 
-            // No need yet
-            callbacks.can_write = [] (typename client_poller_type::native_socket_type) {};
+            callbacks.can_write = [this] (typename client_poller_type::native_socket_type sock) {
+                auto pos = _writer_ids.find(sock);
+
+                if (pos != _writer_ids.end()) {
+                    auto index = pos->second;
+                    _writers[index].second.can_write = true;
+                }
+            };
 
             _writer_poller = pfs::make_unique<client_poller_type>(std::move(callbacks));
         }
-
-        auto now = current_timepoint();
-        _output_timepoint = now;
 
         try {
             if (!_discovery->has_receivers()) {
@@ -454,26 +452,33 @@ public:
         return true;
     }
 
+private:
+    std::chrono::milliseconds _current_poller_timeout {0};
+
+public:
     /**
      * @return @c false if some error occurred, otherwise return @c true.
      */
     void loop ()
     {
         // No need poll timeout
-        _discovery->discover(std::chrono::milliseconds{0});
+        auto n1 = _discovery->discover(_current_poller_timeout);
+        auto n2 = _writer_poller->poll(std::chrono::milliseconds{0});
+        auto n3 = _reader_poller->poll(std::chrono::milliseconds{0});
 
-        /*auto res = */_reader_poller->poll(std::chrono::milliseconds{0});
-        /*auto res = */_writer_poller->poll(std::chrono::milliseconds{0});
+        if (test_efficiency(efficiency::file_output))
+            _transporter->loop();
 
-        auto output_possible = current_timepoint() >= _output_timepoint;
+        send_outgoing_packets();
 
-        if (test_efficiency(efficiency::file_output)) {
-            if (output_possible)
-                _transporter->loop();
+        if (n1 == 0 && n2 == 0 && n3 == 0) {
+            _current_poller_timeout += std::chrono::milliseconds{1};
+
+            if (_current_poller_timeout > std::chrono::milliseconds{10})
+                _current_poller_timeout = std::chrono::milliseconds{10};
+        } else {
+            _current_poller_timeout = std::chrono::milliseconds{0};
         }
-
-        if (output_possible)
-            send_outgoing_packets();
     }
 
     /**
@@ -493,10 +498,15 @@ public:
         _discovery->add_receiver(src_saddr, local_addr);
     }
 
-    void add_target (socket4_addr src_saddr
-        , inet4_addr local_addr = inet4_addr::any_addr_value)
+    void add_target (socket4_addr src_saddr, inet4_addr local_addr
+        , std::chrono::milliseconds transmit_interval)
     {
-        _discovery->add_target(src_saddr, local_addr);
+        _discovery->add_target(src_saddr, local_addr, transmit_interval);
+    }
+
+    void add_target (socket4_addr src_saddr, std::chrono::milliseconds transmit_interval)
+    {
+        _discovery->add_target(src_saddr, transmit_interval);
     }
 
     /**
@@ -713,8 +723,8 @@ private:
 
         auto saddr = item.reader.saddr();
 
-        // Erase file output pool
-        _transporter->expire_addressee(item.uuid);
+        // Erase file input pool
+        _transporter->expire_addresser(item.uuid);
 
         _reader_poller->remove(item.reader);
 
@@ -851,7 +861,7 @@ private:
         }
 
         if (_writers.empty() || index == count) {
-            _writers.emplace_back(true, writer_item{uuid, writer_type{}, oqueue_type{}});
+            _writers.emplace_back(true, writer_item{uuid, writer_type{}, oqueue_type{}, true});
             index = _writers.size() - 1;
         } else {
             _writers[index].first = true;
@@ -1162,22 +1172,25 @@ private:
 
     void send_outgoing_packets ()
     {
-        for (auto & item: _writers) {
-            auto & output_queue = item.second.q;
+        for (auto & witem: _writers) {
+            if (!witem.second.can_write)
+                continue;
+
+            auto & output_queue = witem.second.q;
 
             if (output_queue.empty())
                 continue;
 
             std::size_t total_bytes_sent = 0;
-            auto & writer = item.second.writer;
+            auto & writer = witem.second.writer;
 
             output_envelope_type out;
             error err;
 
             while (!output_queue.empty()) {
-                auto & item = output_queue.front();
+                auto & oitem = output_queue.front();
 
-                auto const & pkt = item.pkt;
+                auto const & pkt = oitem.pkt;
                 out.reset();   // Empty envelope
                 out.seal(pkt); // Seal new data
 
@@ -1186,28 +1199,23 @@ private:
 
                 PFS__ASSERT(size <= PACKET_SIZE, "");
 
-                bool overflow = false;
-                auto bytes_sent = writer.send(data.data(), size, & overflow, & err);
+                auto send_result = writer.send(data.data(), size, & err);
 
-                if (bytes_sent > 0) {
-                    total_bytes_sent += bytes_sent;
-
-                } else if (bytes_sent < 0) {
-                    // Output queue overflow
-                    if (overflow) {
-                        // Skip sending for some milliseconds
-                        _output_timepoint = current_timepoint() + _opts.overflow_timeout;
-                        return;
-                    } else {
+                switch (send_result.state) {
+                    case netty::send_status::failure:
                         on_error(tr::f_("send failure to {}: {}"
                             , to_string(writer.saddr()), err.what()));
-                    }
-                } else {
-                    // FIXME Need to handle this state (broken connection ?)
-                    ;
+                        break;
+                    case netty::send_status::again:
+                    case netty::send_status::overflow:
+                        witem.second.can_write = false;
+                        _writer_poller->wait_for_write(writer);
+                        break;
+                    case netty::send_status::good:
+                        total_bytes_sent += send_result.n;
+                        output_queue.pop();
+                        break;
                 }
-
-                output_queue.pop();
             }
         }
     }

@@ -46,3 +46,7 @@ portable_target(SOURCES ${PROJECT_NAME}
     #portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd26812")
     #portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd26812")
 #endif(MSVC)
+
+portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE PFS__LOG_LEVEL=2)
+portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE PFS__LOG_LEVEL=2)
+

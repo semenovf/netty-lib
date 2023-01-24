@@ -14,7 +14,7 @@ namespace netty {
 
 template <typename Backend>
 connecting_poller<Backend>::connecting_poller ()
-    : _rep()
+    : connecting_poller(specialized{})
 {
     on_error = [] (native_socket_type, std::string const & text) {
         fmt::print(stderr, tr::f_("ERROR: connecting poller: {}\n"), text);

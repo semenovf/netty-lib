@@ -21,6 +21,12 @@ namespace netty {
 
 #if NETTY__UDT_ENABLED
 
+template <>
+connecting_poller<udt::epoll_poller>::connecting_poller (specialized)
+    : _rep(false, true)
+{}
+
+
 template<>
 void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error * perr)
 {
@@ -63,10 +69,6 @@ void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error *
 
         auto exp_timepoint = future_timepoint(std::chrono::milliseconds{exp_threshold / 1000});
         _connecting_sockets.emplace(sock, exp_timepoint);
-
-//         LOGD(TAG, "exp_threshold: {}, current: {}, future: {}"
-//             , exp_threshold, current_timepoint().time_since_epoch()
-//             , exp_timepoint.time_since_epoch());
     }
 }
 
@@ -78,6 +80,8 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
     if (n < 0)
         return n;
 
+    int res = 0;
+
     if (n > 0) {
         if (!_rep.writefds.empty()) {
             for (UDTSOCKET u: _rep.writefds) {
@@ -88,6 +92,8 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
                 remove(u);
 
                 _connecting_sockets.erase(u);
+
+                res++;
 
                 if (connected)
                     connected(u);
@@ -116,7 +122,7 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
         }
     }
 
-    return n;
+    return res;
 }
 
 #endif // NETTY__UDT_ENABLED

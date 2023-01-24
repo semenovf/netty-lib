@@ -30,6 +30,7 @@ udp_sender::udp_sender (udp_sender && s)
 
 udp_sender & udp_sender::operator = (udp_sender && s)
 {
+    this->~udp_sender();
     udp_sender::operator = (std::move(s));
     return *this;
 }

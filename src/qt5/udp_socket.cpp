@@ -211,14 +211,15 @@ std::streamsize udp_socket::recv_from (char * data, std::streamsize len
     return static_cast<std::streamsize>(n);
 }
 
-std::streamsize udp_socket::send_to (socket4_addr const & dest
+send_result udp_socket::send_to (socket4_addr const & dest
     , char const * data, std::streamsize len, error * perr)
 {
     auto hostaddr = (dest.addr == inet4_addr{})
         ? QHostAddress::AnyIPv4
         : QHostAddress{static_cast<quint32>(dest.addr)};
 
-    return _socket->writeDatagram(data, len, hostaddr, dest.port);
+    return send_result{send_status::good
+        , _socket->writeDatagram(data, len, hostaddr, dest.port)};
 }
 
 }} // namespace netty::qt5

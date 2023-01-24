@@ -4,9 +4,9 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.10 Initial version.
+//      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../listener_poller.hpp"
+#include "../writer_poller.hpp"
 
 #if NETTY__EPOLL_ENABLED
 #   include "pfs/netty/linux/epoll_poller.hpp"
@@ -19,12 +19,12 @@ namespace netty {
 #if NETTY__EPOLL_ENABLED
 
 template <>
-listener_poller<linux_os::epoll_poller>::listener_poller (specialized)
-    : _rep(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)
+writer_poller<linux_os::epoll_poller>::writer_poller (specialized)
+    : _rep(EPOLLERR | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)
 {}
 
 template <>
-int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
+int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     auto n = _rep.poll(millis, perr);
 
@@ -38,6 +38,9 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
             auto revents = _rep.events[i].events;
             auto fd = _rep.events[i].data.fd;
 
+            // This event is also reported for the write end of a pipe when
+            // the read end has been closed.
+            // TODO Recognize disconnection (EPIPE ?)
             if (revents & EPOLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
@@ -46,23 +49,26 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
                 remove(fd);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, listener socket removed: {}"
+                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
                         , pfs::system_error_text(), fd));
                 } else {
-                    on_error(fd, tr::f_("accept socket error: {}, listener socket removed: {}"
+                    on_error(fd, tr::f_("write socket failure: {}, socket removed: {}"
                         , pfs::system_error_text(error_val), fd));
                 }
 
                 continue;
             }
 
-            // There is data to read - can accept
-            // Identical to `poll_poller`
-            if (revents & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
+            // Writing is now possible, though a write larger than the available space
+            // in a socket or pipe will still block (unless O_NONBLOCK is set).
+            // Identical to `posix::poll_poller`
+            if (revents & (EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)) {
                 res++;
 
-                if (accept)
-                    accept(fd);
+                remove(fd);
+
+                if (can_write)
+                    can_write(fd);
             }
         }
     }
@@ -70,10 +76,12 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
     return res;
 }
 
-#endif // NETTY__EPOLL_ENABLED
+#endif // #NETTY__EPOLL_ENABLED
 
 #if NETTY__EPOLL_ENABLED
-template class listener_poller<linux_os::epoll_poller>;
+template class writer_poller<linux_os::epoll_poller>;
 #endif // NETTY__EPOLL_ENABLED
 
 } // namespace netty
+
+

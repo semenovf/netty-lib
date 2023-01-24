@@ -15,6 +15,7 @@
 #include "pfs/netty/chrono.hpp"
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
+#include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/p2p/envelope.hpp"
 #include <chrono>
@@ -28,8 +29,9 @@ namespace p2p {
 template <typename Backend>
 class discovery_engine
 {
-    // Maximum transmit interval in seconds
-    static constexpr int MAX_TRANSMIT_INTERVAL_SECONDS = 60;
+    // Maximum and minimum transmit interval in seconds
+    static constexpr int MAX_TRANSMIT_INTERVAL_SECONDS = 300;
+    static constexpr int MIN_TRANSMIT_INTERVAL_SECONDS =   1;
 
     using backend_type         = Backend;
     using input_envelope_type  = input_envelope<>;
@@ -40,7 +42,7 @@ public:
     using timediff_type     = std::chrono::milliseconds;
 
     struct options {
-        milliseconds_type transmit_interval {MAX_TRANSMIT_INTERVAL_SECONDS * 1000};
+        //milliseconds_type transmit_interval {MAX_TRANSMIT_INTERVAL_SECONDS * 1000};
         milliseconds_type timestamp_error_limit {500};
 
         // Port on which server will accept incoming connections (readers)
@@ -51,6 +53,8 @@ private:
     struct target_item {
         socket4_addr saddr;
         std::uint32_t counter;
+        milliseconds_type transmit_interval;
+        clock_type::time_point transmit_timepoint;
     };
 
     struct peer_credentials
@@ -68,7 +72,7 @@ private:
     universal_id _host_uuid;
     options      _opts;
     backend_type _backend;
-    clock_type::time_point   _transmit_timepoint;
+    clock_type::time_point   _nearest_transmit_timepoint;
     std::vector<target_item> _targets;
 
     // Contains discovered peers with additional information
@@ -147,14 +151,14 @@ private:
                         if (pos == std::end(_discovered_peers)) {
                             auto res = _discovered_peers.emplace(packet.uuid
                                 , peer_credentials {
-                                    socket4_addr{saddr.addr, packet.port}
+                                      socket4_addr{saddr.addr, packet.port}
                                     , expiration_timepoint
                                     , timediff
                                 });
 
                             if (!res.second) {
                                 throw error {
-                                    make_error_code(errc::unexpected_error)
+                                      make_error_code(errc::unexpected_error)
                                     , tr::_("unable to store discovered peer")
                                 };
                             }
@@ -206,17 +210,22 @@ private:
     void broadcast_discovery_data ()
     {
         auto now = current_timepoint();
-        auto interval_exceeded = (_transmit_timepoint <= now);
+        auto interval_exceeded = (_nearest_transmit_timepoint <= now);
 
         if (interval_exceeded) {
             hello_packet packet;
             packet.uuid = _host_uuid;
             packet.port = _opts.host_port;
-            packet.transmit_interval = static_cast<std::uint16_t>(_opts.transmit_interval.count());
 
             for (auto & t: _targets) {
+                interval_exceeded = (t.transmit_timepoint <= now);
+
+                if (!interval_exceeded)
+                    continue;
+
                 auto now = std::chrono::duration_cast<milliseconds_type>(
                     pfs::utc_time::now().time_since_epoch());
+                packet.transmit_interval = static_cast<std::uint16_t>(t.transmit_interval.count());
                 packet.timestamp = static_cast<decltype(packet.timestamp)>(now.count());
 
                 packet.counter = ++t.counter;
@@ -231,15 +240,17 @@ private:
                 PFS__ASSERT(size == hello_packet::PACKET_SIZE, "");
 
                 netty::error err;
-                auto bytes_written = _backend.send(t.saddr, data.data(), size, & err);
+                auto res = _backend.send(t.saddr, data.data(), size, & err);
 
-                if (bytes_written < 0) {
+                if (res.state != netty::send_status::good) {
                     on_error(tr::f_("Transmit failure to: {}: {}"
                         , to_string(t.saddr), err.what()));
                 }
-            }
 
-            _transmit_timepoint = current_timepoint() + _opts.transmit_interval;
+                t.transmit_timepoint = current_timepoint() + t.transmit_interval;
+                _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
+                    , t.transmit_timepoint);
+            }
         }
     }
 
@@ -284,16 +295,6 @@ public:
         std::string invalid_argument_desc;
 
         do {
-            bad = _opts.transmit_interval < milliseconds_type{0}
-                || _opts.transmit_interval > std::chrono::seconds{MAX_TRANSMIT_INTERVAL_SECONDS};
-
-            if (bad) {
-                invalid_argument_desc = tr::f_("discovery transmit inteval"
-                    " must be less or equals to {} seconds"
-                    , MAX_TRANSMIT_INTERVAL_SECONDS);
-                break;
-            }
-
             bad = opts.timestamp_error_limit < milliseconds_type{0};
 
             if (bad) {
@@ -349,10 +350,43 @@ public:
      * @param local_addr Multicast interface.
      */
     void add_target (socket4_addr target_saddr
-        , inet4_addr local_addr = inet4_addr::any_addr_value)
+        , inet4_addr local_addr
+        , milliseconds_type transmit_interval
+        , error * perr = nullptr)
     {
-        _targets.emplace_back(target_item{target_saddr, 0});
+        auto bad = transmit_interval < milliseconds_type{MIN_TRANSMIT_INTERVAL_SECONDS}
+            || transmit_interval > std::chrono::seconds{MAX_TRANSMIT_INTERVAL_SECONDS};
+
+        if (bad) {
+            error err {
+                  make_error_code(errc::invalid_argument)
+                , tr::f_("discovery transmit inteval"
+                    " must greater or equals to {} and less or equals to {} seconds"
+                    , MIN_TRANSMIT_INTERVAL_SECONDS
+                    , MAX_TRANSMIT_INTERVAL_SECONDS)
+            };
+
+            if (perr) {
+                *perr = err;
+                return;
+            } else {
+                throw err;
+            }
+        }
+
+        // There is no problem if the discovery process starts much later.
+        auto transmit_timepoint = current_timepoint() + transmit_interval;
+        _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
+            , transmit_timepoint);
+
+        _targets.emplace_back(target_item{target_saddr, 0, transmit_interval, transmit_timepoint});
         _backend.add_target(target_saddr, local_addr);
+    }
+
+    void add_target (socket4_addr target_saddr, milliseconds_type transmit_interval
+        , error * perr = nullptr)
+    {
+        add_target(target_saddr, inet4_addr::any_addr_value, transmit_interval, perr);
     }
 
     bool has_targets () const noexcept
@@ -360,13 +394,22 @@ public:
         return _backend.has_targets();
     }
 
-    void discover (std::chrono::milliseconds poll_timeout)
+    /**
+     * @return Pair of number of input and output events (this is a result of
+     *         call of backend's poll routine).
+     */
+    int discover (milliseconds_type poll_timeout = milliseconds_type{0}
+        , error * perr = nullptr)
     {
         broadcast_discovery_data();
-        _backend.poll(poll_timeout);
+        auto n = _backend.poll(poll_timeout, perr);
         check_expiration();
+        return n;
     }
 };
+
+template <typename Backend> constexpr int const
+discovery_engine<Backend>::MIN_TRANSMIT_INTERVAL_SECONDS;
 
 template <typename Backend> constexpr int const
 discovery_engine<Backend>::MAX_TRANSMIT_INTERVAL_SECONDS;

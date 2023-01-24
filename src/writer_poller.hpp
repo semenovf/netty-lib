@@ -4,40 +4,40 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.11 Initial version.
+//      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/i18n.hpp"
-#include "pfs/netty/listener_poller.hpp"
+#include "pfs/netty/writer_poller.hpp"
 
 namespace netty {
 
 template <typename Backend>
-listener_poller<Backend>::listener_poller ()
-    : listener_poller(specialized{})
+writer_poller<Backend>::writer_poller ()
+    : writer_poller(specialized{})
 {
     on_error = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::f_("ERROR: listener poller: {}\n"), text);
+        fmt::print(stderr, tr::f_("ERROR: writer poller: {}\n"), text);
     };
 }
 
 template <typename Backend>
-listener_poller<Backend>::~listener_poller () = default;
+writer_poller<Backend>::~writer_poller () = default;
 
 template <typename Backend>
-void listener_poller<Backend>::add (native_socket_type sock, error * perr)
+void writer_poller<Backend>::add (native_socket_type sock, error * perr)
 {
     _rep.add(sock, perr);
 }
 
 template <typename Backend>
-void listener_poller<Backend>::remove (native_socket_type sock, error * perr)
+void writer_poller<Backend>::remove (native_socket_type sock, error * perr)
 {
     _rep.remove(sock, perr);
 }
 
 template <typename Backend>
-bool listener_poller<Backend>::empty () const noexcept
+bool writer_poller<Backend>::empty () const noexcept
 {
     return _rep.empty();
 }
