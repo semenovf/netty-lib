@@ -41,6 +41,8 @@ if "%BUILD_GENERATOR%" == "" (
     if "%VisualStudioVersion%" == "" (
         @echo ERROR: script must be run inside Visual Studio Command Prompt >&2
         exit /b 1
+    ) else if "%VisualStudioVersion:~0,3%" == "17." (
+        set "BUILD_GENERATOR=Visual Studio 17 2022"
     ) else if "%VisualStudioVersion:~0,3%" == "16." (
         set "BUILD_GENERATOR=Visual Studio 16 2019"
     ) else if "%VisualStudioVersion:~0,3%" == "15." (

@@ -16,7 +16,11 @@
 #   include "pfs/netty/posix/poll_poller.hpp"
 #endif
 
-#include <sys/socket.h>
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <sys/select.h>
+#endif
 
 #include "pfs/log.hpp"
 
@@ -52,12 +56,16 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
                 bool disconnect = false;
                 char buf[1];
-                auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+#if _MSC_VER
+                auto n1 = ::recv(fd, buf, sizeof(buf), MSG_PEEK);
+#else
+                auto n1 = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+#endif
 
-                if (n > 0) {
+                if (n1 > 0) {
                     if (ready_read)
                         ready_read(fd);
-                } else if ( n == 0) {
+                } else if (n1 == 0) {
                     disconnect = true;
                 } else {
                     if (errno != ECONNRESET) {

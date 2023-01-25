@@ -57,7 +57,7 @@ basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
 
     if (_socket == UDT::INVALID_SOCK) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("create UDT socket failure")
             , UDT::getlasterror_desc()
         };
@@ -110,7 +110,7 @@ basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
 
     if (rc == UDT::ERROR) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("UDT set socket option failure")
             , UDT::getlasterror_desc()
         };
@@ -126,7 +126,7 @@ basic_socket::~basic_socket ()
 {
     if (_socket >= 0) {
         UDT::close(_socket);
-        _socket = INVALID_SOCKET;
+        _socket = kINVALID_SOCKET;
     }
 }
 
@@ -238,7 +238,7 @@ basic_udt_socket & basic_udt_socket::operator = (basic_udt_socket && other)
     this->~basic_udt_socket();
     _socket = other._socket;
     _saddr  = other._saddr;
-    other._socket = INVALID_SOCKET;
+    other._socket = kINVALID_SOCKET;
     return *this;
 }
 
@@ -246,7 +246,7 @@ basic_udt_socket::~basic_udt_socket () = default;
 
 basic_udt_socket::operator bool () const noexcept
 {
-    return _socket != INVALID_SOCKET;
+    return _socket != kINVALID_SOCKET;
 }
 
 basic_udt_socket::native_type basic_udt_socket::native () const noexcept
@@ -255,8 +255,7 @@ basic_udt_socket::native_type basic_udt_socket::native () const noexcept
 }
 
 // TODO Need to correct handle error
-std::streamsize basic_udt_socket::recv (char * data, std::streamsize len
-    , error * /*perr*/)
+int basic_udt_socket::recv (char * data, int len, error * /*perr*/)
 {
     auto rc = UDT::recvmsg(_socket, data, len);
 
@@ -271,8 +270,7 @@ std::streamsize basic_udt_socket::recv (char * data, std::streamsize len
 }
 
 // TODO Need to correct handle error
-send_result basic_udt_socket::send (char const * data, std::streamsize len
-    , error * /*perr*/)
+send_result basic_udt_socket::send (char const * data, int len, error * /*perr*/)
 {
     int ttl_millis = -1;
     bool inorder = true;
@@ -312,7 +310,7 @@ conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
 
     if (rc == UDT::ERROR) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("socket connect error")
             , UDT::getlasterror_desc()
         };
@@ -337,7 +335,7 @@ conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
         return conn_status::connected;
 
     error err {
-          make_error_code(errc::socket_error)
+          errc::socket_error
         , tr::f_("unexpected UDT socket state while connecting: {}"
             , status)
     };
@@ -355,7 +353,7 @@ void basic_udt_socket::disconnect (error * perr)
 {
     (void)perr;
     UDT::close(_socket);
-    _socket = INVALID_SOCKET;
+    _socket = kINVALID_SOCKET;
 }
 
 }} // namespace netty::udt

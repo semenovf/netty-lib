@@ -86,7 +86,7 @@ public:
             _reader_poller.add(sock, perr);
         else {
             error err {
-                  make_error_code(errc::poller_error)
+                  errc::poller_error
                 , tr::_("socket must be in a connecting or connected state to be"
                     " added to the client poller")
             };

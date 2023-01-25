@@ -27,7 +27,7 @@ epoll_poller::epoll_poller (std::uint32_t observable_events)
 
     if (eid < 0) {
         throw error {
-              make_error_code(errc::poller_error)
+              errc::poller_error
             , tr::_("epoll create failure")
             , pfs::system_error_text()
         };
@@ -52,7 +52,7 @@ void epoll_poller::add (native_socket_type sock, error * perr)
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::poller_error)
+              errc::poller_error
             , tr::_("epoll add socket failure")
             , pfs::system_error_text()
         };
@@ -79,7 +79,7 @@ void epoll_poller::remove (native_socket_type sock, error * perr)
         // ENOENT is not a failure
         if (errno != ENOENT) {
             error err {
-                make_error_code(errc::poller_error)
+                  errc::poller_error
                 , tr::_("epoll delete failure")
                 , pfs::system_error_text()
             };
@@ -105,7 +105,7 @@ int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)
 
     if (n < 0) {
         error err {
-              make_error_code(errc::poller_error)
+              errc::poller_error
             , tr::_("epoll wait failure")
             , pfs::system_error_text()
         };

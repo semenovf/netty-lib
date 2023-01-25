@@ -13,6 +13,10 @@
 #include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 
+#if _MSC_VER
+#   include <winsock2.h>
+#endif
+
 namespace netty {
 namespace posix {
 
@@ -24,8 +28,13 @@ struct uninitialized {};
 class inet_socket
 {
 public:
+#if _MSC_VER
+    using native_type = SOCKET;
+    static native_type const kINVALID_SOCKET = INVALID_SOCKET;
+#else
     using native_type = int;
-    static native_type constexpr INVALID_SOCKET = -1;
+    static native_type constexpr kINVALID_SOCKET = -1;
+#endif
 
 protected:
     enum class type_enum {
@@ -35,7 +44,7 @@ protected:
     };
 
 protected:
-    native_type _socket {INVALID_SOCKET};
+    native_type _socket { kINVALID_SOCKET };
 
     // Bound address for server.
     // Server address for connected socket.
@@ -60,7 +69,8 @@ protected:
     inet_socket (inet_socket const &) = delete;
     inet_socket & operator = (inet_socket const &) = delete;
 
-    ~inet_socket ();
+    NETTY__EXPORT ~inet_socket ();
+
     inet_socket (inet_socket &&);
     inet_socket & operator = (inet_socket &&);
 
@@ -77,10 +87,9 @@ public:
 
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
-    NETTY__EXPORT std::streamsize available (error * perr = nullptr) const;
+    NETTY__EXPORT int available (error * perr = nullptr) const;
 
-    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len
-        , error * perr = nullptr);
+    NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
 
     /**
      * Send @a data message with @a size on a socket.
@@ -90,17 +99,16 @@ public:
      * @param overflow Flag that the send buffer is overflow (@c true).
      * @param perr Pointer to structure to store error if occurred.
      */
-    NETTY__EXPORT send_result send (char const * data, std::streamsize size
-        , error * perr = nullptr);
+    NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 
-    NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize size
-        , socket4_addr * saddr = nullptr, error * perr = nullptr);
+    NETTY__EXPORT int recv_from (char * data, int len, socket4_addr * saddr = nullptr
+        , error * perr = nullptr);
 
     /**
      * See send description.
      */
     NETTY__EXPORT send_result send_to (socket4_addr const & dest
-        , char const * data, std::streamsize size, error * perr = nullptr);
+        , char const * data, int len, error * perr = nullptr);
 };
 
 }} // namespace netty::posix

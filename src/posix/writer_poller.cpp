@@ -16,7 +16,11 @@
 #   include "pfs/netty/posix/poll_poller.hpp"
 #endif
 
-#include <sys/socket.h>
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <sys/socket.h>
+#endif
 
 #include "pfs/log.hpp"
 

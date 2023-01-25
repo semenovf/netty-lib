@@ -13,6 +13,7 @@
 
 #if _MSC_VER
 #   include <winsock2.h>
+#   include <ws2tcpip.h>
 #else
 #   include <sys/types.h>
 #   include <sys/socket.h>
@@ -47,11 +48,15 @@ bool udp_socket::join (socket4_addr const & group_saddr
     mreq.imr_multiaddr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(group_saddr.addr));
     mreq.imr_interface.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(local_addr));
 
-    auto rc = setsockopt(_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, & mreq, sizeof(mreq));
+#if _MSC_VER
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<char const *>(& mreq), sizeof(mreq));
+#else
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, & mreq, sizeof(mreq));
+#endif
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("join multicast group: {}", to_string(group_saddr))
             , pfs::system_error_text()
         };
@@ -74,11 +79,15 @@ bool udp_socket::leave (socket4_addr const & group_saddr
     mreq.imr_multiaddr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(group_saddr.addr));
     mreq.imr_interface.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(local_addr));
 
-    auto rc = setsockopt(_socket, IPPROTO_IP, IP_DROP_MEMBERSHIP, & mreq, sizeof(mreq));
+#if _MSC_VER
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_DROP_MEMBERSHIP, reinterpret_cast<char const *>(& mreq), sizeof(mreq));
+#else
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_DROP_MEMBERSHIP, & mreq, sizeof(mreq));
+#endif
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("leave multicast group: {}", to_string(group_saddr))
             , pfs::system_error_text()
         };
@@ -98,11 +107,16 @@ bool udp_socket::leave (socket4_addr const & group_saddr
 bool udp_socket::enable_broadcast (bool enable, error * perr)
 {
     const int on = enable ? 1 : 0;
-    auto rc = setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, & on, sizeof(on));
+
+#if _MSC_VER
+    auto rc = ::setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<char const *>(& on), sizeof(on));
+#else
+    auto rc = ::setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, & on, sizeof(on));
+#endif
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("{} broadcast"
                 , (enable ? tr::_("enable") : tr::_("disable")))
             , pfs::system_error_text()

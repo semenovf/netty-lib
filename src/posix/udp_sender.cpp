@@ -13,6 +13,7 @@
 
 #if _MSC_VER
 #   include <winsock2.h>
+#   include <ws2tcpip.h>
 #else
 #   include <sys/types.h>
 #   include <sys/socket.h>
@@ -31,7 +32,7 @@ udp_sender::udp_sender (udp_sender && s)
 udp_sender & udp_sender::operator = (udp_sender && s)
 {
     this->~udp_sender();
-    udp_sender::operator = (std::move(s));
+    udp_socket::operator = (std::move(s));
     return *this;
 }
 
@@ -49,12 +50,17 @@ bool udp_sender::set_multicast_interface (inet4_addr const & local_addr
 
     local_interface.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(local_addr));
 
-    auto rc = setsockopt(_socket, IPPROTO_IP, IP_MULTICAST_IF, & local_interface
+#if _MSC_VER
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_MULTICAST_IF
+        , reinterpret_cast<char const* >(& local_interface), sizeof(local_interface));
+#else
+    auto rc = ::setsockopt(_socket, IPPROTO_IP, IP_MULTICAST_IF, & local_interface
         , sizeof(local_interface));
+#endif
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("set multicast interface to: {}", to_string(local_addr))
             , pfs::system_error_text()
         };

@@ -16,7 +16,11 @@
 #   include "pfs/netty/posix/poll_poller.hpp"
 #endif
 
-#include <sys/socket.h>
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <sys/socket.h>
+#endif
 
 namespace netty {
 
@@ -48,8 +52,14 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 
             if (FD_ISSET(fd, & rfds)) {
                 int error_val = 0;
+#if _MSC_VER
+                int len = sizeof(error_val);
+                auto rc = ::getsockopt(fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(& error_val), &len);
+
+#else
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
+                auto rc = ::getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
+#endif
 
                 if (rc != 0) {
                     remove(fd);

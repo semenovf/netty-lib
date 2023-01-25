@@ -61,8 +61,8 @@ public:
 
     NETTY__EXPORT std::pair<int,int> poll (std::chrono::milliseconds timeout);
 
-    NETTY__EXPORT std::streamsize send (socket4_addr dest_saddr, char const * data
-        , std::size_t size, netty::error * perr);
+    NETTY__EXPORT int send (socket4_addr dest_saddr, char const * data
+        , std::size_t len, netty::error * perr);
 };
 
 }}} // namespace netty::p2p::qt5

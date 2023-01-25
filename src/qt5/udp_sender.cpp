@@ -27,7 +27,8 @@ udp_sender::udp_sender (udp_sender && s)
 
 udp_sender & udp_sender::operator = (udp_sender && s)
 {
-    udp_sender::operator = (std::move(s));
+    this->~udp_sender();
+    udp_socket::operator = (std::move(s));
     return *this;
 }
 
@@ -47,7 +48,7 @@ bool udp_sender::set_multicast_interface (inet4_addr const & local_addr
 
     if (!success) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("bind UDP socket failure to: {}", to_string(local_addr))
             , pfs::system_error_text()
         };
@@ -64,7 +65,7 @@ bool udp_sender::set_multicast_interface (inet4_addr const & local_addr
 
     if (!iface.isValid()) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("interface not found  for local address: {}"
                 , to_string(local_addr))
         };

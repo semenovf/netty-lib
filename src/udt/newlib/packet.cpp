@@ -171,18 +171,18 @@ CPacket::~CPacket()
 {
 }
 
-std::streamsize CPacket::getLength () const
+int CPacket::getLength () const
 {
    return m_PacketVector[1].iov_len;
 }
 
-void CPacket::setLength (std::streamsize len)
+void CPacket::setLength (int len)
 {
     assert(len <= (std::numeric_limits<int>::max)());
     m_PacketVector[1].iov_len = static_cast<int>(len);
 }
 
-void CPacket::pack(int pkttype, void* lparam, void* rparam, std::streamsize size)
+void CPacket::pack(int pkttype, void* lparam, void* rparam, int size)
 {
    // Set (bit-0 = 1) and (bit-1~15 = type)
    m_nHeader[0] = 0x80000000 | (pkttype << 16);
@@ -368,7 +368,7 @@ m_iCookie(0)
       m_piPeerIP[i] = 0;
 }
 
-int CHandShake::serialize (char * buf, std::streamsize & size)
+int CHandShake::serialize (char * buf, int & size)
 {
    if (size < m_iContentSize)
       return -1;
@@ -390,7 +390,7 @@ int CHandShake::serialize (char * buf, std::streamsize & size)
    return 0;
 }
 
-int CHandShake::deserialize (const char* buf, std::streamsize size)
+int CHandShake::deserialize (const char* buf, int size)
 {
    if (size < m_iContentSize)
       return -1;

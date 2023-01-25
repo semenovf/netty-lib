@@ -86,16 +86,16 @@ public: //API
    static int getsockname(UDTSOCKET u, sockaddr* name, int* namelen);
    static int getsockopt(UDTSOCKET u, int level, UDTOpt optname, void* optval, int* optlen);
    static int setsockopt(UDTSOCKET u, int level, UDTOpt optname, const void* optval, int optlen);
-   static std::streamsize send (UDTSOCKET u, const char * buf, std::streamsize len, int flags);
-   static std::streamsize recv (UDTSOCKET u, char * buf, std::streamsize len, int flags);
-   static std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
+   static int send (UDTSOCKET u, const char * buf, int len, int flags);
+   static int recv (UDTSOCKET u, char * buf, int len, int flags);
+   static int sendmsg (UDTSOCKET u, const char * buf, int len, int ttl = -1, bool inorder = false);
 #if NETTY__UDT_PATCHED
-   static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
+   static int recvmsg (UDTSOCKET u, char * buf, int len, bool * pHaveMsgStill = nullptr);
 #else
-   static std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
+   static int recvmsg (UDTSOCKET u, char * buf, int len);
 #endif
-   static std::streamsize sendfile (UDTSOCKET u, std::fstream & ifs, std::streamsize & offset, std::streamsize size, int block = 364000);
-   static std::streamsize recvfile (UDTSOCKET u, std::fstream & ofs, std::streamsize & offset, std::streamsize size, int block = 7280000);
+   static int sendfile (UDTSOCKET u, std::fstream & ifs, int & offset, int size, int block = 364000);
+   static int recvfile (UDTSOCKET u, std::fstream & ofs, int & offset, int size, int block = 7280000);
    static int select(int nfds, ud_set* readfds, ud_set* writefds, ud_set* exceptfds, const timeval* timeout);
    static int selectEx(const std::vector<UDTSOCKET>& fds, std::vector<UDTSOCKET>* readfds, std::vector<UDTSOCKET>* writefds, std::vector<UDTSOCKET>* exceptfds, int64_t msTimeOut);
    static int epoll_create();
@@ -176,7 +176,7 @@ private:
       // Returned value:
       //    Actual size of data sent.
 
-   std::streamsize send(const char* data, std::streamsize len);
+   int send(const char* data, int len);
 
       // Functionality:
       //    Request UDT to receive data to a memory block "data" with size of "len".
@@ -186,7 +186,7 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-   std::streamsize recv (char * data, std::streamsize len);
+   int recv (char * data, int len);
 
       // Functionality:
       //    send a message of a memory block "data" with size of "len".
@@ -197,7 +197,7 @@ private:
       //    3) [in] inorder: if the message should be delivered in order.
       // Returned value:
       //    Actual size of data sent.
-   std::streamsize sendmsg(const char * data, std::streamsize len, int ttl, bool inorder);
+   int sendmsg(const char * data, int len, int ttl, bool inorder);
 
       // Functionality:
       //    Receive a message to buffer "data".
@@ -208,9 +208,9 @@ private:
       //    Actual size of data received.
 
 #if NETTY__UDT_PATCHED
-   std::streamsize recvmsg (char * data, std::streamsize len, bool * pHaveMsgStill = nullptr);
+   int recvmsg (char * data, int len, bool * pHaveMsgStill = nullptr);
 #else
-   std::streamsize recvmsg (char * data, std::streamsize len);
+   int recvmsg (char * data, int len);
 #endif
       // Functionality:
       //    Request UDT to send out a file described as "fd", starting from "offset", with size of "size".
@@ -222,8 +222,8 @@ private:
       // Returned value:
       //    Actual size of data sent.
 
-   std::streamsize sendfile (std::fstream& ifs, std::streamsize & offset
-      , std::streamsize size, int block = 366000);
+   int sendfile (std::fstream& ifs, int & offset
+      , int size, int block = 366000);
 
       // Functionality:
       //    Request UDT to receive data into a file described as "fd", starting from "offset", with expected size of "size".
@@ -235,8 +235,8 @@ private:
       // Returned value:
       //    Actual size of data received.
 
-   std::streamsize recvfile (std::fstream & ofs, std::streamsize & offset
-      , std::streamsize size, int block = 7320000);
+   int recvfile (std::fstream & ofs, int & offset
+      , int size, int block = 7320000);
 
       // Functionality:
       //    Configure UDT options.
@@ -396,9 +396,9 @@ private: // synchronization: mutexes and conditions
    void releaseSynch();
 
 private: // Generation and processing of packets
-   void sendCtrl(int pkttype, void* lparam = NULL, void* rparam = NULL, std::streamsize size = 0);
+   void sendCtrl(int pkttype, void* lparam = NULL, void* rparam = NULL, int size = 0);
    void processCtrl(CPacket& ctrlpkt);
-   std::streamsize packData(CPacket& packet, uint64_t& ts);
+   int packData(CPacket& packet, uint64_t& ts);
    int processData(CUnit* unit);
    int listen(sockaddr* addr, CPacket& packet);
 

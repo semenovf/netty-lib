@@ -110,8 +110,8 @@ public:
      */
     mutable std::function<void (universal_id /*addressee*/
         , packet_type /*packettype*/
-        , char const * /*data*/, std::streamsize /*len*/)> ready_to_send
-        = [] (universal_id, packet_type, char const *, std::streamsize) {};
+        , char const * /*data*/, int /*len*/)> ready_to_send
+        = [] (universal_id, packet_type, char const *, int) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/

@@ -38,7 +38,7 @@ portable_target(SOURCES ${PROJECT_NAME}
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_sender.cpp)
 
-if (UNIX)
+if (UNIX OR ANDROID)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
@@ -60,8 +60,8 @@ portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
 portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::common)
 
 if (MSVC)
-    portable_target(COMPILE_OPTIONS ${PROJECT_NAME} "/wd4251")
-    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static "/wd4251")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME} PUBLIC "/wd4251" "/wd4267" "/wd4244")
+    portable_target(COMPILE_OPTIONS ${PROJECT_NAME}-static PUBLIC "/wd4251" "/wd4267" "/wd4244")
     portable_target(LINK ${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
     portable_target(LINK ${PROJECT_NAME}-static PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
@@ -79,9 +79,11 @@ if (__has_poll)
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__POLL_ENABLED=1")
 endif()
 
-CHECK_INCLUDE_FILE("sys/select.h" __has_sys_select)
+if (NOT MSVC)
+    CHECK_INCLUDE_FILE("sys/select.h" __has_sys_select) # Linux
+endif()
 
-if (__has_sys_select)
+if (MSVC OR __has_sys_select)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
@@ -137,6 +139,9 @@ if (NETTY__ENABLE_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)
 
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC UDT_EXPORTS)
+    portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE UDT_STATIC)
+
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__UDT_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__UDT_ENABLED=1")
 
@@ -146,7 +151,7 @@ if (NETTY__ENABLE_UDT)
     endif(NETTY__UDT_PATCHED)
 endif(NETTY__ENABLE_UDT)
 
-if (NETTY_P2P__ENABLE_QT5)
+if (NETTY__ENABLE_QT5)
     portable_target(SOURCES ${PROJECT_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_recever.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_sender.cpp
@@ -156,4 +161,4 @@ if (NETTY_P2P__ENABLE_QT5)
     portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME}-static Core Network)
     portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC "NETTY__QT5_ENABLED=1")
     portable_target(DEFINITIONS ${PROJECT_NAME}-static PUBLIC "NETTY__QT5_ENABLED=1")
-endif(NETTY_P2P__ENABLE_QT5)
+endif(NETTY__ENABLE_QT5)

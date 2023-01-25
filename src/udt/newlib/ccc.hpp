@@ -91,7 +91,7 @@ public:
       // Returned value:
       //    None.
 
-   virtual void onLoss(const int32_t*, std::streamsize) {}
+   virtual void onLoss(const int32_t*, int) {}
 
       // Functionality:
       //    Callback function to be called when a timeout event occurs.
@@ -252,7 +252,7 @@ public:
 public:
    virtual void init();
    virtual void onACK(int32_t);
-   virtual void onLoss(const int32_t*, std::streamsize);
+   virtual void onLoss(const int32_t*, int);
    virtual void onTimeout();
 
 private:

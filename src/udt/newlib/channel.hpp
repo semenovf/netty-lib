@@ -147,7 +147,7 @@ public:
       // Returned value:
       //    Actual size of data received.
 
-   std::streamsize recvfrom (sockaddr * addr, CPacket & packet) const;
+    int recvfrom (sockaddr * addr, CPacket & packet) const;
 
 private:
    void setUDPSockOpt();

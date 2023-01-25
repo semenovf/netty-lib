@@ -402,9 +402,9 @@ void CUDT::getOpt (UDTOpt optName, void * optval, int & optlen)
 
     case UDT_SNDDATA:
         if (m_pSndBuffer)
-            *static_cast<std::streamsize *>(optval) = m_pSndBuffer->getCurrBufSize();
+            *static_cast<int *>(optval) = m_pSndBuffer->getCurrBufSize();
         else
-            *static_cast<std::streamsize *>(optval) = 0;
+            *static_cast<int *>(optval) = 0;
 
         optlen = sizeof(int32_t);
         break;
@@ -571,7 +571,7 @@ void CUDT::connect(const sockaddr* serv_addr)
     // ID = 0, connection request
     request.m_iID = 0;
 
-    std::streamsize hs_size = m_iPayloadSize;
+    int hs_size = m_iPayloadSize;
     m_ConnReq.serialize(reqdata, hs_size);
     request.setLength(hs_size);
     m_pSndQueue->sendto(serv_addr, request);
@@ -859,7 +859,7 @@ void CUDT::connect(const sockaddr* peer, CHandShake* hs)
 
     //send the response to the peer, see listen() for more discussions about this
     CPacket response;
-    std::streamsize size = CHandShake::m_iContentSize;
+    int size = CHandShake::m_iContentSize;
     char *buffer = new char[size];
     hs->serialize(buffer, size);
     response.pack(0, NULL, buffer, size);
@@ -956,7 +956,7 @@ void CUDT::close()
     m_bOpened = false;
 }
 
-std::streamsize CUDT::send(const char* data, std::streamsize len)
+int CUDT::send(const char* data, int len)
 {
     if (UDT_DGRAM == m_iSockType)
         throw CUDTException(5, 10, 0);
@@ -1055,7 +1055,7 @@ std::streamsize CUDT::send(const char* data, std::streamsize len)
     return size;
 }
 
-std::streamsize CUDT::recv (char * data, std::streamsize len)
+int CUDT::recv (char * data, int len)
 {
     if (UDT_DGRAM == m_iSockType)
         throw CUDTException(5, 10, 0);
@@ -1132,7 +1132,7 @@ std::streamsize CUDT::recv (char * data, std::streamsize len)
     return res;
 }
 
-std::streamsize CUDT::sendmsg (const char* data, std::streamsize len, int msttl, bool inorder)
+int CUDT::sendmsg (const char* data, int len, int msttl, bool inorder)
 {
     if (UDT_STREAM == m_iSockType)
         throw CUDTException(5, 9, 0);
@@ -1228,9 +1228,9 @@ std::streamsize CUDT::sendmsg (const char* data, std::streamsize len, int msttl,
 }
 
 #if NETTY__UDT_PATCHED
-std::streamsize CUDT::recvmsg (char * data, std::streamsize len, bool * pHaveMsgStill)
+int CUDT::recvmsg (char * data, int len, bool * pHaveMsgStill)
 #else
-std::streamsize CUDT::recvmsg (char * data, std::streamsize len)
+int CUDT::recvmsg (char * data, int len)
 #endif
 {
 #if NETTY__UDT_PATCHED
@@ -1291,7 +1291,7 @@ std::streamsize CUDT::recvmsg (char * data, std::streamsize len)
             return res;
     }
 
-    std::streamsize res = 0;
+    int res = 0;
     bool timeout = false;
 
     do {
@@ -1349,8 +1349,8 @@ std::streamsize CUDT::recvmsg (char * data, std::streamsize len)
     return res;
 }
 
-std::streamsize CUDT::sendfile (fstream & ifs, std::streamsize & offset
-   , std::streamsize size, int block)
+int CUDT::sendfile (fstream & ifs, int & offset
+   , int size, int block)
 {
     if (UDT_DGRAM == m_iSockType)
         throw CUDTException(5, 10, 0);
@@ -1434,8 +1434,8 @@ std::streamsize CUDT::sendfile (fstream & ifs, std::streamsize & offset
     return size - tosend;
 }
 
-std::streamsize CUDT::recvfile (fstream & ofs, std::streamsize & offset
-   , std::streamsize size, int block)
+int CUDT::recvfile (fstream & ofs, int & offset
+   , int size, int block)
 {
     if (UDT_DGRAM == m_iSockType)
         throw CUDTException(5, 10, 0);
@@ -1452,7 +1452,7 @@ std::streamsize CUDT::recvfile (fstream & ofs, std::streamsize & offset
 
     auto torecv = size;
     int unitsize = block;
-    std::streamsize recvsize;
+    int recvsize;
 
     // positioning...
     try {
@@ -1661,7 +1661,7 @@ void CUDT::releaseSynch()
 #endif
 }
 
-void CUDT::sendCtrl (int pkttype, void* lparam, void* rparam, std::streamsize size)
+void CUDT::sendCtrl (int pkttype, void* lparam, void* rparam, int size)
 {
     CPacket ctrlpkt;
 
@@ -2099,7 +2099,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
             initdata.m_iID = m_SocketID;
 
             char *hs = new char [m_iPayloadSize];
-            std::streamsize hs_size = m_iPayloadSize;
+            int hs_size = m_iPayloadSize;
             initdata.serialize(hs, hs_size);
             sendCtrl(0, NULL, hs, hs_size);
             delete [] hs;
@@ -2159,9 +2159,9 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
     }
 }
 
-std::streamsize CUDT::packData (CPacket & packet, std::uint64_t & ts)
+int CUDT::packData (CPacket & packet, std::uint64_t & ts)
 {
-    std::streamsize payload = 0;
+    int payload = 0;
     bool probe = false;
 
     uint64_t entertime;
@@ -2179,7 +2179,7 @@ std::streamsize CUDT::packData (CPacket & packet, std::uint64_t & ts)
         if (offset < 0)
             return 0;
 
-        std::streamsize msglen;
+        int msglen;
 
         payload = m_pSndBuffer->readData(&(packet.m_pcData), offset, packet.m_iMsgNo, msglen);
 
@@ -2375,7 +2375,7 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
         if ((hs.m_iVersion != m_iVersion) || (hs.m_iType != m_iSockType)) {
             // mismatch, reject the request
             hs.m_iReqType = 1002;
-            std::streamsize size = CHandShake::m_iContentSize;
+            int size = CHandShake::m_iContentSize;
             hs.serialize(packet.m_pcData, size);
             packet.m_iID = id;
             m_pSndQueue->sendto(addr, packet);
@@ -2387,7 +2387,7 @@ int CUDT::listen(sockaddr* addr, CPacket& packet)
             // send back a response if connection failed or connection already existed
             // new connection response should be sent in connect()
             if (result != 1) {
-                std::streamsize size = CHandShake::m_iContentSize;
+                int size = CHandShake::m_iContentSize;
                 hs.serialize(packet.m_pcData, size);
                 packet.m_iID = id;
                 m_pSndQueue->sendto(addr, packet);

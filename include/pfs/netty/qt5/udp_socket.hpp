@@ -76,13 +76,13 @@ public:
 
     NETTY__EXPORT native_type native () const noexcept;
 
-    NETTY__EXPORT std::streamsize available (error * perr = nullptr) const;
+    NETTY__EXPORT int available (error * perr = nullptr) const;
 
-    NETTY__EXPORT std::streamsize recv_from (char * data, std::streamsize len
+    NETTY__EXPORT int recv_from (char * data, int len
         , socket4_addr * saddr = nullptr, error * perr = nullptr);
 
     NETTY__EXPORT send_result send_to (socket4_addr const & dest
-        , char const * data, std::streamsize len, error * perr = nullptr);
+        , char const * data, int len, error * perr = nullptr);
 };
 
 }} // namespace netty::qt5

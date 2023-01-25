@@ -43,7 +43,7 @@ bool tcp_server::listen (int backlog, error * perr)
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("listen failure")
             , pfs::system_error_text()
         };
@@ -63,7 +63,7 @@ bool tcp_server::listen (int backlog, error * perr)
 tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
 {
     sockaddr_in sa;
-    socklen_t addrlen = sizeof(sa);
+    int addrlen = sizeof(sa);
 
     auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
 
@@ -74,7 +74,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
             return tcp_socket{sock, socket4_addr{addr, port}};
         } else {
             error err {
-                make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::f_("socket accept failure: unsupported sockaddr family: {}"
                         " (AF_INET supported only)", sa.sin_family)
             };
@@ -92,7 +92,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
     }
 
     error err {
-          make_error_code(errc::socket_error)
+          errc::socket_error
         , tr::_("socket accept failure")
         , pfs::system_error_text()
     };

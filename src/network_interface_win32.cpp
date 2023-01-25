@@ -8,6 +8,7 @@
 // Changelog:
 //      2021.06.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
+#include "pfs/i18n.hpp"
 #include "pfs/netty/network_interface.hpp"
 #include <vector>
 #include <winsock2.h>
@@ -43,7 +44,7 @@ struct wsa_session
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 
-std::vector<network_interface> fetch_interfaces (std::error_code & ec)
+std::vector<network_interface> fetch_interfaces (error * perr)
 {
     std::vector<network_interface> result;
 
@@ -65,26 +66,59 @@ std::vector<network_interface> fetch_interfaces (std::error_code & ec)
         addresses_ptr = static_cast<IP_ADAPTER_ADDRESSES *>(MALLOC(buffer_size));
 
         if (!addresses_ptr) {
-            ec = std::make_error_code(std::errc::not_enough_memory);
-            return result;
+            error err {
+                  errc::system_error
+                , tr::_("not enough memory")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = err;
+                return std::vector<network_interface>{};
+            } else {
+                throw err;
+            }
         }
 
         rc = GetAdaptersAddresses(family, flags, nullptr, addresses_ptr, & buffer_size);
 
         if (rc != NO_ERROR) {
+            error err;
+
             if (rc == ERROR_BUFFER_OVERFLOW) {
-                ec = std::make_error_code(std::errc::value_too_large);
+                err = error {
+                      errc::invalid_argument
+                    , pfs::system_error_text()
+                };
             } else {
-                ec = make_error_code(errc::system_error);
+                err = error {
+                      errc::system_error
+                    , pfs::system_error_text()
+                };
             }
 
             FREE(addresses_ptr);
             addresses_ptr = nullptr;
-            return result;
+
+            if (perr) {
+                *perr = err;
+                return std::vector<network_interface>{};
+            } else {
+                throw err;
+            }
         }
     } else if (rc != NO_ERROR) {
-        ec = make_error_code(errc::system_error);
-        return result;
+        error err {
+              errc::socket_error
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = err;
+            return std::vector<network_interface>{};
+        } else {
+            throw err;
+        }
     }
 
     result.reserve(buffer_size / sizeof(IP_ADAPTER_ADDRESSES));

@@ -18,7 +18,7 @@ public:
     void init () override;
     void close () override;
     void onACK (int32_t) override;
-    void onLoss (int32_t const *, std::streamsize) override;
+    void onLoss (int32_t const *, int) override;
     void onTimeout () override;
     void onPktSent (CPacket const *) override;
     void onPktReceived (CPacket const *) override;

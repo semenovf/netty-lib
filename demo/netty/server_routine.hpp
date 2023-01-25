@@ -48,7 +48,7 @@ void start_server (netty::socket4_addr const & saddr)
             }
 
             ok = false;
-            return client.INVALID_SOCKET;
+            return client.kINVALID_SOCKET;
         };
 
         callbacks.disconnected = [] (typename PollerType::native_socket_type sock)

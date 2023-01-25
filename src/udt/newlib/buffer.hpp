@@ -59,7 +59,7 @@ public:
       // Returned value:
       //    None.
 
-   void addBuffer(const char* data, std::streamsize len, int ttl = -1, bool order = false);
+   void addBuffer(const char* data, int len, int ttl = -1, bool order = false);
 
       // Functionality:
       //    Read a block of data from file and insert it into the sending list.
@@ -69,7 +69,7 @@ public:
       // Returned value:
       //    actual size of data added from the file.
 
-   std::streamsize addBufferFromFile(std::fstream& ifs, std::streamsize len);
+   int addBufferFromFile(std::fstream& ifs, int len);
 
       // Functionality:
       //    Find data position to pack a DATA packet from the furthest reading point.
@@ -79,7 +79,7 @@ public:
       // Returned value:
       //    Actual length of data read.
 
-   std::streamsize readData(char** data, int32_t& msgno);
+   int readData(char** data, int32_t& msgno);
 
       // Functionality:
       //    Find data position to pack a DATA packet for a retransmission.
@@ -91,7 +91,7 @@ public:
       // Returned value:
       //    Actual length of data read.
 
-   std::streamsize readData(char** data, const int offset, int32_t& msgno, std::streamsize & msglen);
+   int readData(char** data, const int offset, int32_t& msgno, int & msglen);
 
       // Functionality:
       //    Update the ACK point and may release/unmap/return the user data according to the flag.
@@ -109,7 +109,7 @@ public:
       // Returned value:
       //    Current size of the data in the sending list.
 
-   std::streamsize getCurrBufSize() const;
+   int getCurrBufSize() const;
 
 private:
    void increase();
@@ -146,7 +146,7 @@ private:
    int m_iSize;          // buffer size (number of packets)
    int m_iMSS;           // maximum seqment/packet size
 
-   std::streamsize m_iCount; // number of used blocks
+   int m_iCount; // number of used blocks
 
 private:
     CSndBuffer (CSndBuffer const &) = delete;
@@ -178,7 +178,7 @@ public:
     // Returned value:
     //    size of data read.
 
-    std::streamsize readBuffer (char * data, std::streamsize len);
+    int readBuffer (char * data, int len);
 
     // Functionality:
     //    Read data directly into file.
@@ -187,7 +187,7 @@ public:
     //    1) [in] len: expected length of data to write into the file.
     // Returned value:
     //    size of data read.
-    std::streamsize readBufferToFile (std::fstream & ofs, std::streamsize len);
+    int readBufferToFile (std::fstream & ofs, int len);
 
     // Functionality:
     //    Update the ACK point of the buffer.
@@ -228,7 +228,7 @@ public:
     //    1) [in] len: size of the buffer.
     // Returned value:
     //    actuall size of data read.
-    std::streamsize readMsg (char* data, std::streamsize len);
+    int readMsg (char* data, int len);
 
     // Functionality:
     //    Query how many messages are available now.
@@ -251,7 +251,7 @@ private:
                               // EMPTY: m_iStartPos = m_iLastAckPos   FULL: m_iStartPos = m_iLastAckPos + 1
     int m_iMaxPos;            // the furthest data position
 
-    std::streamsize m_iNotch; // the starting read point of the first unit
+    int m_iNotch; // the starting read point of the first unit
 
 private:
     CRcvBuffer () = delete;

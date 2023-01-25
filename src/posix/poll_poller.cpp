@@ -60,7 +60,7 @@ int poll_poller::poll (std::chrono::milliseconds millis, error * perr)
 
     if (n < 0) {
         error err {
-              make_error_code(errc::poller_error)
+              errc::poller_error
             , tr::_("poll failure")
             , pfs::system_error_text()
         };

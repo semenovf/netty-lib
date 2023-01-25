@@ -158,7 +158,7 @@ private:
 
                             if (!res.second) {
                                 throw error {
-                                      make_error_code(errc::unexpected_error)
+                                      errc::unexpected_error
                                     , tr::_("unable to store discovered peer")
                                 };
                             }
@@ -312,7 +312,7 @@ public:
 
         if (bad) {
             error err {
-                  make_error_code(errc::invalid_argument)
+                  errc::invalid_argument
                 , invalid_argument_desc
             };
 
@@ -359,7 +359,7 @@ public:
 
         if (bad) {
             error err {
-                  make_error_code(errc::invalid_argument)
+                  errc::invalid_argument
                 , tr::f_("discovery transmit inteval"
                     " must greater or equals to {} and less or equals to {} seconds"
                     , MIN_TRANSMIT_INTERVAL_SECONDS

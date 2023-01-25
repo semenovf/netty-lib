@@ -65,7 +65,7 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
 
         if (!in_progress) {
             error err {
-                make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::_("socket connect error")
                 , pfs::system_error_text()
             };
@@ -88,7 +88,12 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
 void tcp_socket::disconnect (error * perr)
 {
     if (_socket > 0) {
-        auto rc = ::shutdown(_socket, SHUT_RDWR);
+        auto rc = ::shutdown(_socket
+#if _MSC_VER
+            , SD_BOTH);
+#else
+            , SHUT_RDWR);
+#endif
 
         if (rc != 0) {
             auto ec = pfs::get_last_system_error();
@@ -99,7 +104,7 @@ void tcp_socket::disconnect (error * perr)
             if (ec.value() != ENOTCONN) {
 #endif // POSIX
                 error err {
-                    make_error_code(errc::socket_error)
+                      errc::socket_error
                     , tr::_("socket shutdown error")
                     , pfs::system_error_text()
                 };

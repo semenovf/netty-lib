@@ -85,6 +85,9 @@ public:
 
         typename FileTransporter::options filetransporter;
         typename discovery_engine_type::options discovery;
+
+        // Fixed C2512 on MSVC 2017
+        options () {}
     } _opts;
 
 private:
@@ -251,7 +254,7 @@ public:
 
         if (bad) {
             error err {
-                  make_error_code(errc::invalid_argument)
+                  errc::invalid_argument
                 , invalid_argument_desc
             };
 
@@ -331,7 +334,7 @@ public:
 
             _transporter->ready_to_send = [this] (universal_id addressee
                     , packet_type packettype
-                    , char const * data, std::streamsize len) {
+                    , char const * data, int len) {
                 enqueue_packets(addressee, packettype, data, len);
             };
 
@@ -377,7 +380,7 @@ public:
 
                 if (!reader) {
                     ok = false;
-                    return reader->INVALID_SOCKET;
+                    return reader->kINVALID_SOCKET;
                 }
 
                 ok = true;
@@ -522,8 +525,7 @@ public:
      *
      * @return Unique entity identifier.
      */
-    entity_id send (universal_id addressee_id, char const * data
-        , std::streamsize len)
+    entity_id send (universal_id addressee_id, char const * data, int len)
     {
         return enqueue_packets(addressee_id, packet_type::regular, data, len);
     }
@@ -617,7 +619,7 @@ private:
 
         if (pos1 == _reader_ids.end()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " reader socket not found in collection (id={})"
                     " , need to fix algorithm.", id)
@@ -628,7 +630,7 @@ private:
 
         if (index >= _readers.size()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " index for reader item is out of bounds (id={})"
                     " , need to fix algorithm.", id)
@@ -639,7 +641,7 @@ private:
 
         if (!alive) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " invalid reader in collection found (id={})"
                     " , need to fix algorithm.", id)
@@ -750,7 +752,7 @@ private:
 
         if (pos1 == _writer_ids.end()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer socket not found in collection (id={})"
                     " , need to fix algorithm.", id)
@@ -761,7 +763,7 @@ private:
 
         if (index >= _writers.size()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                 " index for writer item is out of bounds (id={})"
                 " , need to fix algorithm.", id)
@@ -772,7 +774,7 @@ private:
 
         if (!alive) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " invalid writer in collection found (id={})"
                     " , need to fix algorithm.", id)
@@ -785,7 +787,7 @@ private:
 
         if (pos2 == _writer_uuids.end()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer universal identifier not found in collection (id={}, uuid={})"
                     " , need to fix algorithm.", id, item.uuid)
@@ -802,7 +804,7 @@ private:
 
         if (pos2 == _writer_uuids.end()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer universal identifier not found in collection (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -813,7 +815,7 @@ private:
 
         if (index >= _writers.size()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " index for writer item is out of bounds (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -824,7 +826,7 @@ private:
 
         if (!alive) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " invalid writer in collection found (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -837,7 +839,7 @@ private:
 
         if (pos1 == _writer_ids.end()) {
             throw error {
-                  make_error_code(errc::unexpected_error)
+                  errc::unexpected_error
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer socket not found in collection (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -960,8 +962,7 @@ private:
      * Splits @a data into packets and enqueue them into output queue.
      */
     entity_id enqueue_packets (universal_id addressee
-        , packet_type packettype
-        , char const * data, std::streamsize len)
+        , packet_type packettype, char const * data, int len)
     {
         auto * pitem = locate_writer_item(addressee);
 
@@ -1028,7 +1029,7 @@ private:
                 break;
 
             std::array<char, PACKET_SIZE> buf;
-            std::streamsize rc = pitem->reader.recv(buf.data(), buf.size());
+            auto rc = pitem->reader.recv(buf.data(), buf.size());
 
             if (rc == 0) {
                 if (read_iterations == 0) {
@@ -1111,7 +1112,7 @@ private:
 
                         if (pos1 == _reader_ids.end()) {
                             throw error {
-                                  make_error_code(errc::unexpected_error)
+                                  errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " no reader found by socket id: {}"
                                     " , need to fix algorithm.", sock)
@@ -1124,7 +1125,7 @@ private:
 
                         if (pos != _reader_uuids.end() && pos->second != index) {
                             throw error {
-                                  make_error_code(errc::unexpected_error)
+                                  errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " found inconsistency for reader with universal"
                                     " identifier: {}, need to fix algorithm."

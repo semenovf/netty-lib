@@ -560,7 +560,7 @@ void CSndQueue::init(CChannel* c, CTimer* t)
    #endif
 }
 
-std::streamsize CSndQueue::sendto(const sockaddr* addr, CPacket& packet)
+int CSndQueue::sendto(const sockaddr* addr, CPacket& packet)
 {
    // send out the packet immediately (high priority), this is a control packet
    m_pChannel->sendto(addr, packet);
@@ -850,7 +850,7 @@ void CRendezvousQueue::updateConnStatus()
          request.pack(0, NULL, reqdata, i->m_pUDT->m_iPayloadSize);
          // ID = 0, connection request
          request.m_iID = !i->m_pUDT->m_bRendezvous ? 0 : i->m_pUDT->m_ConnRes.m_iID;
-         std::streamsize hs_size = i->m_pUDT->m_iPayloadSize;
+         int hs_size = i->m_pUDT->m_iPayloadSize;
          i->m_pUDT->m_ConnReq.serialize(reqdata, hs_size);
          request.setLength(hs_size);
          i->m_pUDT->m_pSndQueue->sendto(i->m_pPeerAddr, request);
@@ -1091,7 +1091,7 @@ TIMER_CHECK:
 #endif
 }
 
-std::streamsize CRcvQueue::recvfrom (int32_t id, CPacket & packet)
+int CRcvQueue::recvfrom (int32_t id, CPacket & packet)
 {
    CGuard bufferlock(m_PassLock);
 

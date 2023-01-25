@@ -30,7 +30,7 @@ public:
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
 
-    static UDTSOCKET const INVALID_SOCKET = -1;
+    static UDTSOCKET const kINVALID_SOCKET = -1;
 
 protected:
     enum class type_enum {
@@ -47,7 +47,7 @@ public:
     using native_type = UDTSOCKET;
 
 protected:
-    native_type _socket {INVALID_SOCKET};
+    native_type _socket {kINVALID_SOCKET};
 
     // Bound address for server.
     // Server address for connected socket.
@@ -117,8 +117,8 @@ public:
     NETTY__EXPORT operator bool () const noexcept;
 
     NETTY__EXPORT native_type native () const noexcept;
-    NETTY__EXPORT std::streamsize recv (char * data, std::streamsize len, error * perr = nullptr);
-    NETTY__EXPORT send_result send (char const * data, std::streamsize len, error * perr = nullptr);
+    NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
+    NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 
     /**
      * Connects to the UDT server.

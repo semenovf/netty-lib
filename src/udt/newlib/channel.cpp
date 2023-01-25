@@ -284,7 +284,7 @@ int CChannel::sendto(const sockaddr* addr, CPacket& packet) const
    return res;
 }
 
-std::streamsize CChannel::recvfrom (sockaddr * addr, CPacket & packet) const
+int CChannel::recvfrom (sockaddr * addr, CPacket & packet) const
 {
    #ifndef WIN32
       msghdr mh;

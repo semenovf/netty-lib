@@ -34,7 +34,7 @@ basic_udt_server::basic_udt_server (socket4_addr const & saddr, int mtu, int exp
 
     if (rc == UDT::ERROR) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("bind name to socket failure: {}", to_string(saddr))
             , UDT::getlasterror_desc()
         };
@@ -58,7 +58,7 @@ bool basic_udt_server::listen (int backlog, error * perr)
 
     if (rc == UDT::ERROR) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("listen failure")
             , UDT::getlasterror_desc()
         };
@@ -112,7 +112,7 @@ void basic_udt_server::accept (native_type listener_sock
             return;
         } else {
             error err {
-                  make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::_("socket accept failure: unsupported sockaddr family"
                   " (AF_INET supported only)")
             };
@@ -125,7 +125,7 @@ void basic_udt_server::accept (native_type listener_sock
         }
     } else {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("socket accept failure")
             , UDT::getlasterror_desc()
         };

@@ -69,7 +69,7 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
     if (getifaddrs(& ifaddr) != 0) {
         error err {
-              make_error_code(errc::system_error)
+              errc::system_error
             , pfs::system_error_text()
         };
 
@@ -90,7 +90,7 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
     if (sock < 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , pfs::system_error_text()
         };
 
@@ -168,7 +168,7 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
                 if (ec) {
                     error err {
-                          make_error_code(errc::system_error)
+                          errc::system_error
                         , ec.message()
                     };
 

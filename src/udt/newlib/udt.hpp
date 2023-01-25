@@ -212,8 +212,8 @@ struct CPerfMon
    int pktFlightSize;                   // number of packets on flight
    double msRTT;                        // RTT, in milliseconds
    double mbpsBandwidth;                // estimated bandwidth, in Mb/s
-   std::streamsize byteAvailSndBuf;     // available UDT sender buffer size
-   std::streamsize byteAvailRcvBuf;     // available UDT receiver buffer size
+   int byteAvailSndBuf;     // available UDT sender buffer size
+   int byteAvailRcvBuf;     // available UDT receiver buffer size
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -347,18 +347,18 @@ UDT_API int getpeername(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockname(UDTSOCKET u, struct sockaddr* name, int* namelen);
 UDT_API int getsockopt(UDTSOCKET u, int level, SOCKOPT optname, void* optval, int* optlen);
 UDT_API int setsockopt(UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int optlen);
-UDT_API std::streamsize send (UDTSOCKET u, const char* buf, std::streamsize  len, int flags);
-UDT_API std::streamsize recv (UDTSOCKET u, char* buf, std::streamsize  len, int flags);
-UDT_API std::streamsize sendmsg (UDTSOCKET u, const char * buf, std::streamsize len, int ttl = -1, bool inorder = false);
+UDT_API int send (UDTSOCKET u, const char* buf, int  len, int flags);
+UDT_API int recv (UDTSOCKET u, char* buf, int  len, int flags);
+UDT_API int sendmsg (UDTSOCKET u, const char * buf, int len, int ttl = -1, bool inorder = false);
 #if NETTY__UDT_PATCHED
-UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill = nullptr);
+UDT_API int recvmsg (UDTSOCKET u, char * buf, int len, bool * pHaveMsgStill = nullptr);
 #else
-UDT_API std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len);
+UDT_API int recvmsg (UDTSOCKET u, char * buf, int len);
 #endif
-UDT_API std::streamsize sendfile(UDTSOCKET u, std::fstream& ifs, std::streamsize& offset, std::streamsize size, int block = 364000);
-UDT_API std::streamsize recvfile(UDTSOCKET u, std::fstream& ofs, std::streamsize& offset, std::streamsize size, int block = 7280000);
-UDT_API std::streamsize sendfile2(UDTSOCKET u, const char* path, std::streamsize* offset, std::streamsize size, int block = 364000);
-UDT_API std::streamsize recvfile2(UDTSOCKET u, const char* path, std::streamsize* offset, std::streamsize size, int block = 7280000);
+UDT_API int sendfile(UDTSOCKET u, std::fstream& ifs, int& offset, int size, int block = 364000);
+UDT_API int recvfile(UDTSOCKET u, std::fstream& ofs, int& offset, int size, int block = 7280000);
+UDT_API int sendfile2(UDTSOCKET u, const char* path, int* offset, int size, int block = 364000);
+UDT_API int recvfile2(UDTSOCKET u, const char* path, int* offset, int size, int block = 7280000);
 
 // select and selectEX are DEPRECATED; please use epoll.
 UDT_API int select(int nfds, UDSET* readfds, UDSET* writefds, UDSET* exceptfds, const struct timeval* timeout);

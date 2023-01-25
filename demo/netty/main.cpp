@@ -76,16 +76,16 @@ int main (int argc, char * argv[])
 
     __pctx.program = argv[0];
 
+#if NETTY__SELECT_ENABLED
+    __pctx.poller_variants.push_back("epoll");
+#endif
+
 #if NETTY__POLL_ENABLED
     __pctx.poller_variants.push_back("poll");
 #endif
 
 #if NETTY__EPOLL_ENABLED
     __pctx.poller_variants.push_back("select");
-#endif
-
-#if NETTY__SELECT_ENABLED
-    __pctx.poller_variants.push_back("epoll");
 #endif
 
 #if NETTY__UDT_ENABLED
@@ -179,27 +179,69 @@ int main (int argc, char * argv[])
 
     if (is_server) {
         if (poller_value == "udt") {
+#if NETTY__UDT_ENABLED
             start_server<netty::server_udt_poller_type, udt_server_type, udt_socket_type>(netty::socket4_addr{addr, port});
+#else
+            LOGE(TAG, "'udt' poller unavailable on this platform");
+            return EXIT_FAILURE;
+#endif
         } else if (is_tcp) {
-            if (poller_value == "select")
-                start_server<netty::server_select_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
-            else if (poller_value == "poll")
-                start_server<netty::server_poll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
-            else if (poller_value == "epoll")
-                start_server<netty::server_epoll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+            if (poller_value == "select") {
+#if NETTY__SELECT_ENABLED
+                start_server<netty::server_select_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'select' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            } else if (poller_value == "poll") {
+#if NETTY__POLL_ENABLED
+                start_server<netty::server_poll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'poll' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            } else if (poller_value == "epoll") {
+#if NETTY__EPOLL_ENABLED
+                start_server<netty::server_epoll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'epoll' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            }
         } else {
             LOGE(TAG, "UDP server not implemented yet");
         }
     } else {
         if (poller_value == "udt") {
+#if NETTY__UDT_ENABLED
             start_client<netty::client_udt_poller_type, udt_socket_type>(netty::socket4_addr{addr, port});
+#else
+            LOGE(TAG, "'udt' poller unavailable on this platform");
+            return EXIT_FAILURE;
+#endif
         } else if (is_tcp) {
-            if (poller_value == "select")
-                start_client<netty::client_select_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
-            else if (poller_value == "poll")
-                start_client<netty::client_poll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
-            else if (poller_value == "epoll")
-                start_client<netty::client_epoll_poller_type, tcp_socket_type>(netty::socket4_addr{addr, port});
+            if (poller_value == "select") {
+#if NETTY__SELECT_ENABLED
+                start_client<netty::client_select_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'select' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            } else if (poller_value == "poll") {
+#if NETTY__POLL_ENABLED
+                start_client<netty::client_poll_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'poll' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            } else if (poller_value == "epoll") {
+#if NETTY__EPOLL_ENABLED
+                start_client<netty::client_epoll_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+#else
+                LOGE(TAG, "'epoll' poller unavailable on this platform");
+                return EXIT_FAILURE;
+#endif
+            }
         } else if (is_udp) {
             LOGE(TAG, "UDP client not implemented yet");
         }

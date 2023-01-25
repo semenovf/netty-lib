@@ -90,7 +90,7 @@ bool udp_socket::join (socket4_addr const & group_saddr
 
     if (!rc) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("join multicast group error: {}"
                 , to_string(group_saddr.addr))
             , _socket->errorString().toStdString()
@@ -122,7 +122,7 @@ bool udp_socket::leave (socket4_addr const & group_saddr
 
     if (!rc) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("join multicast group error: {}"
                 , to_string(group_saddr.addr))
             , _socket->errorString().toStdString()
@@ -155,15 +155,14 @@ udp_socket::native_type udp_socket::native () const noexcept
     return _socket.get() == nullptr ? -1 : _socket->socketDescriptor();
 }
 
-std::streamsize udp_socket::available (error * /*perr*/) const
+int udp_socket::available (error * /*perr*/) const
 {
     return _socket.get() == nullptr
         ? 0
-        : static_cast<std::streamsize>(_socket->pendingDatagramSize());
+        : _socket->pendingDatagramSize();
 }
 
-std::streamsize udp_socket::recv_from (char * data, std::streamsize len
-    , socket4_addr * saddr, error * perr)
+int udp_socket::recv_from (char * data, int len, socket4_addr * saddr, error * perr)
 {
 // #if QT_VERSION < QT_VERSION_CHECK(5,8,0)
     // using QUdpSocket::readDatagram (API since Qt 4)
@@ -173,14 +172,14 @@ std::streamsize udp_socket::recv_from (char * data, std::streamsize len
 
     if (n < 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("receive data failure")
             , _socket->errorString().toStdString()
         };
 
         if (perr) {
             *perr = std::move(err);
-            return static_cast<std::streamsize>(n);
+            return n;
         } else {
             throw err;
         }
@@ -200,7 +199,7 @@ std::streamsize udp_socket::recv_from (char * data, std::streamsize len
 //         if (datagram.senderPort() < 0) {
 //             // FIXME
 // //             throw error {
-// //                   make_error_code(errc::socket_error)
+// //                   errc::socket_error
 // //                 , tr::_("no sender port associated with datagram")
 // //             };
 //         }
@@ -208,18 +207,17 @@ std::streamsize udp_socket::recv_from (char * data, std::streamsize len
 //         auto sender_port = static_cast<std::uint16_t>(datagram.senderPort());
 // #endif
 
-    return static_cast<std::streamsize>(n);
+    return n;
 }
 
-send_result udp_socket::send_to (socket4_addr const & dest
-    , char const * data, std::streamsize len, error * perr)
+send_result udp_socket::send_to (socket4_addr const & dest, char const * data, int len, error * perr)
 {
     auto hostaddr = (dest.addr == inet4_addr{})
         ? QHostAddress::AnyIPv4
         : QHostAddress{static_cast<quint32>(dest.addr)};
 
-    return send_result{send_status::good
-        , _socket->writeDatagram(data, len, hostaddr, dest.port)};
+    auto n = _socket->writeDatagram(data, len, hostaddr, dest.port);
+    return send_result{send_status::good, static_cast<int>(n)};
 }
 
 }} // namespace netty::qt5

@@ -117,7 +117,7 @@ CSndBuffer::~CSndBuffer()
    #endif
 }
 
-void CSndBuffer::addBuffer(const char* data, std::streamsize len, int ttl, bool order)
+void CSndBuffer::addBuffer(const char* data, int len, int ttl, bool order)
 {
    auto size = len / m_iMSS;
 
@@ -165,7 +165,7 @@ void CSndBuffer::addBuffer(const char* data, std::streamsize len, int ttl, bool 
       m_iNextMsgNo = 1;
 }
 
-std::streamsize CSndBuffer::addBufferFromFile(fstream& ifs, std::streamsize len)
+int CSndBuffer::addBufferFromFile(fstream& ifs, int len)
 {
    auto size = len / m_iMSS;
 
@@ -178,14 +178,14 @@ std::streamsize CSndBuffer::addBufferFromFile(fstream& ifs, std::streamsize len)
 
    Block* s = m_pLastBlock;
 
-   std::streamsize total = 0;
+   int total = 0;
 
    for (int i = 0; i < size; ++ i)
    {
       if (ifs.bad() || ifs.fail() || ifs.eof())
          break;
 
-      std::streamsize pktlen = len - i * m_iMSS;
+      int pktlen = len - i * m_iMSS;
 
       if (pktlen > m_iMSS)
          pktlen = m_iMSS;
@@ -220,7 +220,7 @@ std::streamsize CSndBuffer::addBufferFromFile(fstream& ifs, std::streamsize len)
    return total;
 }
 
-std::streamsize CSndBuffer::readData(char** data, int32_t& msgno)
+int CSndBuffer::readData(char** data, int32_t& msgno)
 {
    // No data to read
    if (m_pCurrBlock == m_pLastBlock)
@@ -235,7 +235,7 @@ std::streamsize CSndBuffer::readData(char** data, int32_t& msgno)
    return readlen;
 }
 
-std::streamsize CSndBuffer::readData(char** data, const int offset, int32_t& msgno, std::streamsize & msglen)
+int CSndBuffer::readData(char** data, const int offset, int32_t& msgno, int & msglen)
 {
    CGuard bufferguard(m_BufLock);
 
@@ -283,7 +283,7 @@ void CSndBuffer::ackData(int offset)
    CTimer::triggerEvent();
 }
 
-std::streamsize CSndBuffer::getCurrBufSize () const
+int CSndBuffer::getCurrBufSize () const
 {
    return m_iCount;
 }
@@ -394,7 +394,7 @@ int CRcvBuffer::addData(CUnit* unit, int offset)
    return 0;
 }
 
-std::streamsize CRcvBuffer::readBuffer (char * data, std::streamsize len)
+int CRcvBuffer::readBuffer (char * data, int len)
 {
     auto p = m_iStartPos;
     auto lastack = m_iLastAckPos;
@@ -430,7 +430,7 @@ std::streamsize CRcvBuffer::readBuffer (char * data, std::streamsize len)
    return len - rs;
 }
 
-std::streamsize CRcvBuffer::readBufferToFile (fstream & ofs, std::streamsize len)
+int CRcvBuffer::readBufferToFile (fstream & ofs, int len)
 {
    auto p = m_iStartPos;
    auto lastack = m_iLastAckPos;
@@ -500,7 +500,7 @@ void CRcvBuffer::dropMsg(int32_t msgno)
          m_pUnit[i]->m_iFlag = 3;
 }
 
-std::streamsize CRcvBuffer::readMsg (char * data, std::streamsize len)
+int CRcvBuffer::readMsg (char * data, int len)
 {
    int p, q;
    bool passack;

@@ -52,40 +52,60 @@ inet_socket::inet_socket (type_enum socktype)
 
     if (ai_socktype < 0) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("bad/unsupported socket type")
         };
     }
 
+#ifndef _MSC_VER
     ai_socktype |= SOCK_NONBLOCK;
+#endif
 
     _socket = ::socket(ai_family, ai_socktype, ai_protocol);
 
     if (_socket < 0) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("create INET socket failure")
             , pfs::system_error_text()
         };
     }
 
+#if _MSC_VER
+    {
+        u_long nonblocking = 1;
+        auto rc = ::ioctlsocket(_socket, FIONBIO, & nonblocking);
+
+        throw error{
+              errc::socket_error
+            , tr::_("create INET socket failure: set non-blocking")
+            , pfs::system_error_text()
+        };
+    }
+#endif
+
     int yes = 1;
     int rc = 0;
 
 #if defined(SO_REUSEADDR)
-    if (rc == 0) rc = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR, & yes, sizeof(int));
+    // reinterpret_cast is a MSVC requirements (C2664)
+    if (rc == 0) rc = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR
+        , reinterpret_cast<char *>(& yes), sizeof(int));
 #endif
 
 #if defined(SO_KEEPALIVE)
     if (ai_socktype & SOCK_STREAM) {
-        if (rc == 0)
-            rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE, & yes, sizeof(int));
+        if (rc == 0) {
+            // reinterpret_cast is a MSVC requirements (C2664)
+            rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE
+                , reinterpret_cast<char *>(& yes), sizeof(int));
+        }
     }
 #endif
 
     if (rc != 0) {
         throw error {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("set socket option failure")
             , pfs::system_error_text()
         };
@@ -102,22 +122,28 @@ inet_socket & inet_socket::operator = (inet_socket && other)
     this->~inet_socket();
     _socket = other._socket;
     _saddr  = other._saddr;
-    other._socket = INVALID_SOCKET;
+    other._socket = kINVALID_SOCKET;
     return *this;
 }
 
 inet_socket::~inet_socket ()
 {
     if (_socket >= 0) {
+#if _MSC_VER
+		::shutdown(_socket, SD_BOTH);
+		::closesocket(_socket);
+#else
         ::shutdown(_socket, SHUT_RDWR);
-        ::close(_socket);
-        _socket = INVALID_SOCKET;
+		::close(_socket);
+#endif
+
+        _socket = kINVALID_SOCKET;
     }
 }
 
 inet_socket::operator bool () const noexcept
 {
-    return _socket != INVALID_SOCKET;
+    return _socket != kINVALID_SOCKET;
 }
 
 inet_socket::native_type inet_socket::native () const noexcept
@@ -146,7 +172,7 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
 
     if (rc != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::f_("bind name to socket failure: {}", to_string(saddr))
             , pfs::system_error_text()
         };
@@ -162,7 +188,7 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
     return true;
 }
 
-std::streamsize inet_socket::available (error * perr) const
+int inet_socket::available (error * perr) const
 {
 #if _MSC_VER
     char peek_buffer[1500];
@@ -191,7 +217,7 @@ std::streamsize inet_socket::available (error * perr) const
                     break;
                 default: {
                     error err {
-                        make_error_code(errc::socket_error)
+                          errc::socket_error
                         , tr::_("read available data size from socket failure")
                         , pfs::system_error_text()
                     };
@@ -210,7 +236,7 @@ std::streamsize inet_socket::available (error * perr) const
         }
     }
 
-    return static_cast<std::streamsize>(n);
+    return n;
 #else
     // Check if any data available on socket
     std::uint8_t c;
@@ -230,7 +256,7 @@ std::streamsize inet_socket::available (error * perr) const
 
     if (rc1 != 0) {
         error err {
-              make_error_code(errc::socket_error)
+              errc::socket_error
             , tr::_("read available data size from socket failure")
             , pfs::system_error_text()
         };
@@ -243,20 +269,20 @@ std::streamsize inet_socket::available (error * perr) const
         }
     }
 
-    return static_cast<std::streamsize>(n);
+    return n;
 #endif
 }
 
-std::streamsize inet_socket::recv (char * data, std::streamsize len, error * perr)
+int inet_socket::recv (char * data, int len, error * perr)
 {
-    auto n = ::recv(_socket, data, len, MSG_DONTWAIT);
+    auto n = ::recv(_socket, data, static_cast<int>(len), 0);
 
     if (n < 0) {
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
             n = 0;
         } else {
             error err {
-                  make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::_("receive data failure")
                 , pfs::system_error_text()
             };
@@ -273,14 +299,13 @@ std::streamsize inet_socket::recv (char * data, std::streamsize len, error * per
     return n;
 }
 
-std::streamsize inet_socket::recv_from (char * data, std::streamsize len
-    , socket4_addr * saddr, error * perr)
+int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * perr)
 {
     sockaddr_in addr_in4;
     memset(& addr_in4, 0, sizeof(addr_in4));
-    socklen_t addr_in4_len = sizeof(addr_in4);
+    int addr_in4_len = sizeof(addr_in4);
 
-    auto n = ::recvfrom(_socket, data, len, MSG_DONTWAIT
+    auto n = ::recvfrom(_socket, data, static_cast<int>(len), 0
         , reinterpret_cast<sockaddr *>(& addr_in4), & addr_in4_len);
 
     if (n < 0) {
@@ -288,14 +313,14 @@ std::streamsize inet_socket::recv_from (char * data, std::streamsize len
             n = 0;
         } else {
             error err {
-                make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::_("receive data failure")
                 , pfs::system_error_text()
             };
 
             if (perr) {
                 *perr = std::move(err);
-                return n;
+                 return n;
             } else {
                 throw err;
             }
@@ -311,9 +336,9 @@ std::streamsize inet_socket::recv_from (char * data, std::streamsize len
     return n;
 }
 
-send_result inet_socket::send (char const * data, std::streamsize len, error * perr)
+send_result inet_socket::send (char const * data, int len, error * perr)
 {
-    std::streamsize total_sent = 0;
+    int total_sent = 0;
 
     while (len) {
         // MSG_NOSIGNAL flag means:
@@ -321,7 +346,12 @@ send_result inet_socket::send (char const * data, std::streamsize len, error * p
         // when the other end breaks the connection.
         // The EPIPE error is still returned.
         //
-        auto n = ::send(_socket, data + total_sent, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        auto n = ::send(_socket, data + total_sent, len
+#if _MSC_VER
+            , 0);
+#else
+            , MSG_NOSIGNAL | MSG_DONTWAIT);
+#endif
 
         if (n < 0) {
             // man send:
@@ -337,7 +367,7 @@ send_result inet_socket::send (char const * data, std::streamsize len, error * p
                 return send_result{send_status::again, n};
 
             error err {
-                  make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::_("send failure")
                 , pfs::system_error_text()
             };
@@ -361,7 +391,7 @@ send_result inet_socket::send (char const * data, std::streamsize len, error * p
 
 // See inet_socket::send
 send_result inet_socket::send_to (socket4_addr const & saddr
-    , char const * data, std::streamsize len, error * perr)
+    , char const * data, int len, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -371,10 +401,15 @@ send_result inet_socket::send_to (socket4_addr const & saddr
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
     addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
 
-    std::streamsize total_sent = 0;
+    int total_sent = 0;
 
     while (len) {
-        auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT
+        auto n = ::sendto(_socket, data, len
+#if _MSC_VER
+            , 0
+#else
+            , MSG_NOSIGNAL | MSG_DONTWAIT
+#endif
             , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
         if (n < 0) {
@@ -385,7 +420,7 @@ send_result inet_socket::send_to (socket4_addr const & saddr
                 return send_result{send_status::again, n};
 
             error err {
-                  make_error_code(errc::socket_error)
+                  errc::socket_error
                 , tr::f_("send to socket failure: {}", to_string(saddr))
                 , pfs::system_error_text()
             };

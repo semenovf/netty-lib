@@ -87,7 +87,7 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds
 
     if (n < 0) {
         error err {
-              make_error_code(errc::poller_error)
+              errc::poller_error
             , tr::_("select failure")
             , pfs::system_error_text()
         };

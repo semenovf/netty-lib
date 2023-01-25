@@ -9,8 +9,10 @@
 //      2022.08.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "exports.hpp"
 #include "inet4_addr.hpp"
 #include <string>
+#include <utility>
 
 namespace netty {
 
@@ -24,17 +26,17 @@ public:
     /**
      * Parses IPv4 address from string.
      */
-    static std::pair<bool, socket4_addr> parse (char const * s, std::size_t n);
+    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (char const * s, std::size_t n);
 
     /**
      * Parses IPv4 address from string.
      */
-    static std::pair<bool, socket4_addr> parse (char const * s);
+    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (char const * s);
 
     /**
      * Parses IPv4 address from string.
      */
-    static std::pair<bool, socket4_addr> parse (std::string const & s);
+    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (std::string const & s);
 };
 
 inline std::string to_string (socket4_addr const & saddr)

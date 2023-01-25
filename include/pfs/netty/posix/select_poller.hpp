@@ -9,7 +9,12 @@
 #pragma once
 #include "pfs/netty/error.hpp"
 #include <limits>
-#include <sys/select.h>
+
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <sys/select.h>
+#endif
 
 namespace netty {
 namespace posix {

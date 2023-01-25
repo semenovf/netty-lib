@@ -1841,7 +1841,7 @@ int CUDT::setsockopt(UDTSOCKET u, int, UDTOpt optname, const void* optval, int o
    }
 }
 
-std::streamsize CUDT::send (UDTSOCKET u, const char * buf, std::streamsize len, int)
+int CUDT::send (UDTSOCKET u, const char * buf, int len, int)
 {
     try {
         CUDT * udt = s_UDTUnited.lookup(u);
@@ -1858,7 +1858,7 @@ std::streamsize CUDT::send (UDTSOCKET u, const char * buf, std::streamsize len, 
     }
 }
 
-std::streamsize CUDT::recv (UDTSOCKET u, char * buf, std::streamsize len, int)
+int CUDT::recv (UDTSOCKET u, char * buf, int len, int)
 {
    try {
       CUDT* udt = s_UDTUnited.lookup(u);
@@ -1872,8 +1872,8 @@ std::streamsize CUDT::recv (UDTSOCKET u, char * buf, std::streamsize len, int)
    }
 }
 
-std::streamsize CUDT::sendmsg(UDTSOCKET u, const char * buf
-    , std::streamsize len, int ttl, bool inorder)
+int CUDT::sendmsg(UDTSOCKET u, const char * buf
+    , int len, int ttl, bool inorder)
 {
     try {
         CUDT* udt = s_UDTUnited.lookup(u);
@@ -1891,9 +1891,9 @@ std::streamsize CUDT::sendmsg(UDTSOCKET u, const char * buf
 }
 
 #if NETTY__UDT_PATCHED
-std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill)
+int CUDT::recvmsg (UDTSOCKET u, char * buf, int len, bool * pHaveMsgStill)
 #else
-std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
+int CUDT::recvmsg (UDTSOCKET u, char * buf, int len)
 #endif
 {
     try {
@@ -1912,8 +1912,8 @@ std::streamsize CUDT::recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
     }
 }
 
-std::streamsize CUDT::sendfile (UDTSOCKET u, fstream & ifs, std::streamsize & offset
-   , std::streamsize size, int block)
+int CUDT::sendfile (UDTSOCKET u, fstream & ifs, int & offset
+   , int size, int block)
 {
     try {
         CUDT* udt = s_UDTUnited.lookup(u);
@@ -1930,8 +1930,8 @@ std::streamsize CUDT::sendfile (UDTSOCKET u, fstream & ifs, std::streamsize & of
     }
 }
 
-std::streamsize CUDT::recvfile (UDTSOCKET u, fstream & ofs, std::streamsize & offset
-    , std::streamsize size, int block)
+int CUDT::recvfile (UDTSOCKET u, fstream & ofs, int & offset
+    , int size, int block)
 {
     try {
         CUDT* udt = s_UDTUnited.lookup(u);
@@ -2250,47 +2250,47 @@ int setsockopt (UDTSOCKET u, int level, SOCKOPT optname, const void* optval, int
    return CUDT::setsockopt(u, level, optname, optval, optlen);
 }
 
-std::streamsize send (UDTSOCKET u, const char* buf, std::streamsize len, int flags)
+int send (UDTSOCKET u, const char* buf, int len, int flags)
 {
    return CUDT::send(u, buf, len, flags);
 }
 
-std::streamsize recv (UDTSOCKET u, char* buf, std::streamsize len, int flags)
+int recv (UDTSOCKET u, char* buf, int len, int flags)
 {
    return CUDT::recv(u, buf, len, flags);
 }
 
-std::streamsize sendmsg (UDTSOCKET u, const char* buf, std::streamsize len, int ttl, bool inorder)
+int sendmsg (UDTSOCKET u, const char* buf, int len, int ttl, bool inorder)
 {
    return CUDT::sendmsg(u, buf, len, ttl, inorder);
 }
 
 #if NETTY__UDT_PATCHED
-std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len, bool * pHaveMsgStill)
+int recvmsg (UDTSOCKET u, char * buf, int len, bool * pHaveMsgStill)
 {
     return CUDT::recvmsg(u, buf, len, pHaveMsgStill);
 }
 #else
-std::streamsize recvmsg (UDTSOCKET u, char * buf, std::streamsize len)
+int recvmsg (UDTSOCKET u, char * buf, int len)
 {
     return CUDT::recvmsg(u, buf, len);
 }
 #endif
 
-std::streamsize sendfile (UDTSOCKET u, fstream & ifs, std::streamsize & offset
-   , std::streamsize size, int block)
+int sendfile (UDTSOCKET u, fstream & ifs, int & offset
+   , int size, int block)
 {
    return CUDT::sendfile(u, ifs, offset, size, block);
 }
 
-std::streamsize recvfile(UDTSOCKET u, fstream& ofs, std::streamsize& offset
-   , std::streamsize size, int block)
+int recvfile(UDTSOCKET u, fstream& ofs, int& offset
+   , int size, int block)
 {
    return CUDT::recvfile(u, ofs, offset, size, block);
 }
 
-std::streamsize sendfile2(UDTSOCKET u, const char* path, std::streamsize* offset
-   , std::streamsize size, int block)
+int sendfile2(UDTSOCKET u, const char* path, int* offset
+   , int size, int block)
 {
    fstream ifs(path, ios::binary | ios::in);
    int64_t ret = CUDT::sendfile(u, ifs, *offset, size, block);
@@ -2298,8 +2298,8 @@ std::streamsize sendfile2(UDTSOCKET u, const char* path, std::streamsize* offset
    return ret;
 }
 
-std::streamsize recvfile2(UDTSOCKET u, const char* path, std::streamsize* offset
-   , std::streamsize size, int block)
+int recvfile2(UDTSOCKET u, const char* path, int* offset
+   , int size, int block)
 {
    fstream ofs(path, ios::binary | ios::out);
    int64_t ret = CUDT::recvfile(u, ofs, *offset, size, block);

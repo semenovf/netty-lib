@@ -186,18 +186,18 @@ public:
         return _data.type == network_interface_type::loopback;
     }
 
-    /**
-     * @brief Fetch network interfaces.
-     *
-     * @param [out] ec error code (if any errors occured):
-     *         - std::errc::not_enough_memory
-     *         - std::errc::value_too_large
-     *         - netty::errc::system_error
-     * @return Network interfaces
-     */
     friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr);
 };
 
+/**
+ * @brief Fetch network interfaces.
+ *
+ * @param [out] ec error code (if any errors occured):
+ *         - std::errc::not_enough_memory
+ *         - std::errc::value_too_large
+ *         - netty::errc::system_error
+ * @return Network interfaces
+ */
 NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr = nullptr);
 
 template <typename Visitor>

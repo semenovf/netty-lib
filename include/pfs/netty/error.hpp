@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/error.hpp"
+#include "exports.hpp"
 
 namespace netty {
 
@@ -34,8 +35,8 @@ enum class errc
 class error_category : public std::error_category
 {
 public:
-    char const * name () const noexcept override;
-    std::string message (int ev) const override;
+    NETTY__EXPORT char const * name () const noexcept override;
+    NETTY__EXPORT std::string message (int ev) const override;
 };
 
 inline std::error_category const & get_error_category ()
@@ -57,7 +58,12 @@ inline std::system_error make_exception (errc e)
 class error: public pfs::error
 {
 public:
+#if _MSC_VER
+    // MSVC 2022 C2512
+    error () : pfs::error() {}
+#else
     using pfs::error::error;
+#endif
 
     error (errc ec)
         : pfs::error(make_error_code(ec))

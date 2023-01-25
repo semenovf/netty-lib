@@ -54,7 +54,7 @@ void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error *
 
         if (rc == UDT::ERROR) {
             error err {
-                make_error_code(errc::poller_error)
+                  errc::poller_error
                 , tr::_("UDT get socket option failure")
                 , UDT::getlasterror_desc()
             };

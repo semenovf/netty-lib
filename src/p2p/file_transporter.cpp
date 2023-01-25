@@ -69,7 +69,7 @@ file_transporter::file_transporter (options && opts)
 
     if (bad) {
         error err {
-              make_error_code(errc::invalid_argument)
+              errc::invalid_argument
             , invalid_argument_desc
         };
 
@@ -87,7 +87,7 @@ bool file_transporter::ensure_directory (fs::path const & dir, error * perr) con
 
         if (!fs::create_directories(dir, ec)) {
             error err = {
-                  make_error_code(errc::filesystem_error)
+                  errc::filesystem_error
                 , tr::f_("create directory failure: {}", dir)
                 , ec.message()
             };
@@ -107,7 +107,7 @@ bool file_transporter::ensure_directory (fs::path const & dir, error * perr) con
 
         if (ec) {
             error err = {
-                  make_error_code(errc::filesystem_error)
+                  errc::filesystem_error
                 , tr::f_("set directory permissions failure: {}", dir)
                 , ec.message()
             };
@@ -220,7 +220,7 @@ fs::path file_transporter::make_targetfilepath (universal_id addresser
         // It's impossible ;)
         if (fs::exists(target_path)) {
             throw error {
-                  make_error_code(errc::filesystem_error)
+                  errc::filesystem_error
                 , tr::f_("Unable to generate unique file name for: {}", filename)
             };
         }
@@ -299,8 +299,10 @@ void file_transporter::commit_incoming_file (universal_id addresser
     auto * p = locate_ifile_item(addresser, fileid, ensure);
 
     if (!p) {
-        throw pfs::error{make_error_code(std::errc::no_such_file_or_directory)
-            , tr::f_("ifile item not found by fileid: {}", fileid)};
+        throw error{
+              errc::filesystem_error
+            , tr::f_("ifile item not found by fileid: {}", fileid)
+        };
     }
 
     auto descfilepath = make_descfilepath(addresser, fileid);

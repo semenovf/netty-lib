@@ -7,12 +7,12 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/assert.hpp"
+#include "exports.hpp"
 
 namespace netty {
 
-extern "C" void startup ();
-extern "C" void cleanup ();
+extern "C" NETTY__EXPORT void startup ();
+extern "C" NETTY__EXPORT void cleanup ();
 
 class startup_guard
 {

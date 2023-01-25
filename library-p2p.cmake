@@ -20,8 +20,6 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty::p2p
     STATIC_ALIAS pfs::netty::p2p::static
     STATIC_EXPORTS NETTY__STATIC)
 
-portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC UDT_EXPORTS)
-portable_target(DEFINITIONS ${PROJECT_NAME}-static PRIVATE UDT_STATIC)
 portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
 portable_target(LINK ${PROJECT_NAME}-static PRIVATE pfs::netty::static)
