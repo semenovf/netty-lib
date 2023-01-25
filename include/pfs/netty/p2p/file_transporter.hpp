@@ -204,7 +204,7 @@ private:
         , file_credentials const & fc);
 
 public:
-    NETTY__EXPORT file_transporter (options && opts);
+    NETTY__EXPORT file_transporter (options const & opts);
     NETTY__EXPORT ~file_transporter ();
 
     /**

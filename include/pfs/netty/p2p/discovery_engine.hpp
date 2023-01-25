@@ -209,6 +209,9 @@ private:
 
     void broadcast_discovery_data ()
     {
+        if (_targets.empty())
+            return;
+
         auto now = current_timepoint();
         auto interval_exceeded = (_nearest_transmit_timepoint <= now);
 
@@ -273,6 +276,14 @@ private:
         }
     }
 
+    void expire_all_peers ()
+    {
+        for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
+            peer_expired(pos->first, pos->second.saddr);
+            pos = _discovered_peers.erase(pos);
+        }
+    }
+
 public:
     discovery_engine () = delete;
     discovery_engine (discovery_engine const &) = delete;
@@ -287,22 +298,22 @@ public:
      * @param server_port The port on which the server will accept remote
      *        connections.
      */
-    discovery_engine (universal_id host_uuid, options && opts)
+    discovery_engine (universal_id host_uuid, options const & opts)
         : _host_uuid(host_uuid)
-        , _opts(std::move(opts))
+        , _opts(opts)
     {
         auto bad = false;
         std::string invalid_argument_desc;
 
         do {
-            bad = opts.timestamp_error_limit < milliseconds_type{0};
+            bad = _opts.timestamp_error_limit < milliseconds_type{0};
 
             if (bad) {
                 invalid_argument_desc = tr::_("discovery timestamp error limit");
                 break;
             }
 
-            bad = opts.host_port < 1024;
+            bad = _opts.host_port < 1024;
 
             if (bad) {
                 invalid_argument_desc = tr::_("host port");
@@ -324,7 +335,10 @@ public:
         };
     }
 
-    ~discovery_engine () = default;
+    ~discovery_engine ()
+    {
+        expire_all_peers();
+    }
 
     /**
      * Add receiver.

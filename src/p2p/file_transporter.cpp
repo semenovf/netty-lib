@@ -23,10 +23,10 @@ constexpr filesize_t const file_transporter::MIN_FILE_CHUNK_SIZE;
 constexpr filesize_t const file_transporter::MAX_FILE_CHUNK_SIZE;
 constexpr filesize_t const file_transporter::MAX_FILE_SIZE;
 
-file_transporter::file_transporter (options && opts)
+file_transporter::file_transporter (options const & opts)
 {
     ensure_directory(opts.download_directory);
-    _opts.download_directory = std::move(opts.download_directory);
+    _opts.download_directory = opts.download_directory;
 
     auto bad = false;
     std::string invalid_argument_desc;

@@ -181,7 +181,7 @@ int main (int argc, char * argv[])
     LOGI(TAG, "Listener address: {}", to_string(listener_saddr));
     LOGI(TAG, "Discovery address: {}", to_string(discovery_saddr));
 
-    engine_t engine {my_uuid, listener_saddr, std::move(opts)};
+    engine_t engine {my_uuid, listener_saddr, opts};
     engine.add_receiver(discovery_saddr);
 
     for (auto t: target_saddrs) {
