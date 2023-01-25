@@ -233,13 +233,17 @@ public:
      *
      * @param uuid Unique identifier for this instance.
      */
-    engine (universal_id host_uuid, socket4_addr server_addr, options && opts)
+    engine (universal_id host_uuid, socket4_addr server_addr, options const & opts)
         : _host_uuid(host_uuid)
         , _server(server_addr)
     {
         auto bad = false;
         std::string invalid_argument_desc;
-        _opts = std::move(opts);
+        _opts = opts;
+
+        on_error = [] (std::string const & s) {
+            fmt::print(stderr, "{}\n", s);
+        };
 
         do {
             bad = _opts.overflow_limit <= 0
@@ -264,15 +268,8 @@ public:
         // Call befor any network operations
         startup();
 
-        _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid
-            , std::move(_opts.discovery));
-
-        _transporter = pfs::make_unique<FileTransporter>(
-            std::move(_opts.filetransporter));
-
-        on_error = [] (std::string const & s) {
-            fmt::print(stderr, "{}\n", s);
-        };
+        configure_discovery();
+        configure_transporter();
     }
 
     ~engine ()
@@ -293,77 +290,6 @@ public:
 
     bool start ()
     {
-        ////////////////////////////////////////////////////////////////////////
-        // Configure discovery
-        ////////////////////////////////////////////////////////////////////////
-        {
-            _discovery->on_error = [this] (std::string const & errstr) {
-                this->on_error(errstr);
-            };
-
-            _discovery->peer_discovered = [this] (universal_id peer_uuid
-                    , socket4_addr saddr, std::chrono::milliseconds const & timediff) {
-                this->process_peer_discovered(peer_uuid, saddr, timediff);
-            };
-
-            _discovery->peer_timediff = [this] (universal_id peer_uuid
-                    , std::chrono::milliseconds const & timediff) {
-                this->peer_timediff(peer_uuid, timediff);
-            };
-
-            _discovery->peer_expired = [this] (universal_id peer_uuid, socket4_addr saddr) {
-                release_reader(peer_uuid);
-                release_writer(peer_uuid);
-                peer_expired(peer_uuid, saddr.addr, saddr.port);
-            };
-        }
-
-        ////////////////////////////////////////////////////////////////////////
-        // Configure file transporter
-        ////////////////////////////////////////////////////////////////////////
-        {
-            _transporter->on_error = [this] (std::string const & errstr) {
-                this->on_error(errstr);
-            };
-
-            _transporter->addressee_ready = [this] (universal_id addressee) {
-                auto * pitem = locate_writer_item(addressee);
-                return pitem && (pitem->q.size() <= _opts.overflow_limit)
-                    ? true: false;
-            };
-
-            _transporter->ready_to_send = [this] (universal_id addressee
-                    , packet_type packettype
-                    , char const * data, int len) {
-                enqueue_packets(addressee, packettype, data, len);
-            };
-
-            _transporter->download_progress = [this] (universal_id addresser
-                    , universal_id fileid
-                    , filesize_t downloaded_size
-                    , filesize_t total_size) {
-                download_progress(addresser, fileid, downloaded_size, total_size);
-            };
-
-            _transporter->download_complete = [this] (universal_id addresser
-                    , universal_id fileid
-                    , pfs::filesystem::path const & path
-                    , bool success) {
-
-                if (!success) {
-                    on_error(tr::f_("Checksum does not match for income file: {} from {}"
-                        , fileid, addresser));
-                }
-
-                download_complete(addresser, fileid, path, success);
-            };
-
-            _transporter->download_interrupted = [this] (universal_id addresser
-                    , universal_id fileid) {
-                download_interrupted(addresser, fileid);
-            };
-        }
-
         ////////////////////////////////////////////////////////////////////////
         // Create and configure main server poller
         ////////////////////////////////////////////////////////////////////////
@@ -433,17 +359,6 @@ public:
         }
 
         try {
-            if (!_discovery->has_receivers()) {
-                on_error(tr::_("no receivers specified for discovery"));
-                return false;
-            }
-
-            // This is not a failure
-            if (!_discovery->has_targets()) {
-                on_error(tr::_("no targets specified for discovery"));
-                //return false;
-            }
-
             _reader_poller->add_listener(_server);
 
             // Start listening on main listener
@@ -514,6 +429,15 @@ public:
     }
 
     /**
+     * Clears all receivers and targets for discovery manager.
+     */
+    void reset_discovery ()
+    {
+        _discovery.reset();
+        configure_discovery();
+    }
+
+    /**
      * Send data.
      *
      * @details Actually this method splits data to send into packets and
@@ -580,6 +504,77 @@ public: // static
     }
 
 private:
+    void configure_discovery ()
+    {
+        _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid, _opts.discovery);
+
+        _discovery->on_error = [this] (std::string const & errstr) {
+            this->on_error(errstr);
+        };
+
+        _discovery->peer_discovered = [this] (universal_id peer_uuid
+                , socket4_addr saddr, std::chrono::milliseconds const & timediff) {
+            this->process_peer_discovered(peer_uuid, saddr, timediff);
+        };
+
+        _discovery->peer_timediff = [this] (universal_id peer_uuid
+                , std::chrono::milliseconds const & timediff) {
+            this->peer_timediff(peer_uuid, timediff);
+        };
+
+        _discovery->peer_expired = [this] (universal_id peer_uuid, socket4_addr saddr) {
+            release_reader(peer_uuid);
+            release_writer(peer_uuid);
+            peer_expired(peer_uuid, saddr.addr, saddr.port);
+        };
+    }
+
+    void configure_transporter ()
+    {
+        _transporter = pfs::make_unique<FileTransporter>(_opts.filetransporter);
+
+        _transporter->on_error = [this] (std::string const & errstr) {
+            this->on_error(errstr);
+        };
+
+        _transporter->addressee_ready = [this] (universal_id addressee) {
+            auto * pitem = locate_writer_item(addressee);
+            return pitem && (pitem->q.size() <= _opts.overflow_limit)
+                ? true: false;
+        };
+
+        _transporter->ready_to_send = [this] (universal_id addressee
+                , packet_type packettype
+                , char const * data, int len) {
+            enqueue_packets(addressee, packettype, data, len);
+        };
+
+        _transporter->download_progress = [this] (universal_id addresser
+                , universal_id fileid
+                , filesize_t downloaded_size
+                , filesize_t total_size) {
+            download_progress(addresser, fileid, downloaded_size, total_size);
+        };
+
+        _transporter->download_complete = [this] (universal_id addresser
+                , universal_id fileid
+                , pfs::filesystem::path const & path
+                , bool success) {
+
+            if (!success) {
+                on_error(tr::f_("Checksum does not match for income file: {} from {}"
+                    , fileid, addresser));
+            }
+
+            download_complete(addresser, fileid, path, success);
+        };
+
+        _transporter->download_interrupted = [this] (universal_id addresser
+                , universal_id fileid) {
+            download_interrupted(addresser, fileid);
+        };
+    }
+
     inline entity_id next_entity_id () noexcept
     {
         ++_entity_id;
