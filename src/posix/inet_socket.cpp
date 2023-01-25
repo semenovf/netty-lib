@@ -303,10 +303,16 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 {
     sockaddr_in addr_in4;
     memset(& addr_in4, 0, sizeof(addr_in4));
-    int addr_in4_len = sizeof(addr_in4);
 
+#if _MSC_VER
+    int addr_in4_len = sizeof(addr_in4);
     auto n = ::recvfrom(_socket, data, static_cast<int>(len), 0
         , reinterpret_cast<sockaddr *>(& addr_in4), & addr_in4_len);
+#else
+    socklen_t addr_in4_len = sizeof(addr_in4);
+    auto n = ::recvfrom(_socket, data, static_cast<int>(len), 0
+        , reinterpret_cast<sockaddr *>(& addr_in4), & addr_in4_len);
+#endif
 
     if (n < 0) {
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
@@ -346,11 +352,12 @@ send_result inet_socket::send (char const * data, int len, error * perr)
         // when the other end breaks the connection.
         // The EPIPE error is still returned.
         //
-        auto n = ::send(_socket, data + total_sent, len
+
 #if _MSC_VER
-            , 0);
+        auto n = ::send(_socket, data + total_sent, len, 0);
 #else
-            , MSG_NOSIGNAL | MSG_DONTWAIT);
+        auto n = static_cast<decltype(send_result::n)>(::send(_socket
+            , data + total_sent, len, MSG_NOSIGNAL | MSG_DONTWAIT));
 #endif
 
         if (n < 0) {
@@ -404,13 +411,14 @@ send_result inet_socket::send_to (socket4_addr const & saddr
     int total_sent = 0;
 
     while (len) {
-        auto n = ::sendto(_socket, data, len
 #if _MSC_VER
-            , 0
+        auto n = ::sendto(_socket, data, len, 0
+            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4))
 #else
+        auto n = static_cast<decltype(send_result::n)>(::sendto(_socket, data, len
             , MSG_NOSIGNAL | MSG_DONTWAIT
+            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4)));
 #endif
-            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
         if (n < 0) {
             if (errno == ENOBUFS)

@@ -22,7 +22,7 @@ portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty::p2p
 
 portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
-portable_target(LINK ${PROJECT_NAME}-static PRIVATE pfs::netty::static)
+portable_target(LINK ${PROJECT_NAME}-static PUBLIC pfs::netty::static)
 
 if (NETTY_P2P__ENABLE_CEREAL)
     if (NOT TARGET cereal)

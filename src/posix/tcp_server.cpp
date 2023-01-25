@@ -63,9 +63,14 @@ bool tcp_server::listen (int backlog, error * perr)
 tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
 {
     sockaddr_in sa;
-    int addrlen = sizeof(sa);
 
+#if _MSC_VER
+    int addrlen = sizeof(sa);
     auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
+#else
+    socklen_t addrlen = sizeof(sa);
+    auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
+#endif
 
     if (sock > 0) {
         if (sa.sin_family == AF_INET) {

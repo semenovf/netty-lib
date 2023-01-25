@@ -19,7 +19,9 @@
 #if _MSC_VER
 #   include <winsock2.h>
 #else
+#   include <sys/types.h>
 #   include <sys/select.h>
+#   include <sys/socket.h>
 #endif
 
 namespace netty {

@@ -7,13 +7,25 @@
 //      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/regular_poller.hpp"
-#include "pfs/netty/posix/poll_poller.hpp"
+#include "pfs/netty/poller_types.hpp"
+#include "pfs/netty/reader_poller.hpp"
 #include "pfs/netty/qt5/udp_receiver.hpp"
 #include "pfs/netty/qt5/udp_sender.hpp"
 #include <map>
 #include <utility>
 #include <vector>
+
+#if defined(_MSC_VER) || defined(NETTY__SELECT_ENABLED)
+#   include "pfs/netty/posix/select_poller.hpp"
+#endif
+
+#if defined(ANDROID) || defined(NETTY__POLL_ENABLED)
+#   include "pfs/netty/posix/poll_poller.hpp"
+#endif
+
+#if defined(NETTY__EPOLL_ENABLED)
+#   include "pfs/netty/linux/epoll_poller.hpp"
+#endif
 
 namespace netty {
 namespace p2p {
@@ -27,7 +39,19 @@ public:
     using sender_type   = discovery_engine;
 
 private:
-    using poller_type = netty::regular_poller<netty::qt5::poll_poller>;
+#if _MSC_VER
+    using poller_type = netty::reader_poller<netty::posix::select_poller>;
+#elif ANDROID
+    using poller_type = netty::reader_poller<netty::posix::poll_poller>;
+#elif NETTY__EPOLL_ENABLED
+    using poller_type = netty::reader_poller<netty::linux_os::epoll_poller>;
+#elif NETTY__POLL_ENABLED
+    using poller_type = netty::reader_poller<netty::posix::poll_poller>;
+#elif NETTY__SELECT_ENABLED
+    using poller_type = netty::reader_poller<netty::posix::select_poller>;
+#else
+#   error "No poller for discovery engine found"
+#endif
 
 private:
     poller_type _poller;
