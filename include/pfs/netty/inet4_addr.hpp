@@ -222,6 +222,14 @@ inline bool operator >= (inet4_addr const & a, inet4_addr const & b)
     return static_cast<std::uint32_t>(a) >= static_cast<std::uint32_t>(b);
 }
 
+/**
+ * Checks if @a addr is loopback.
+ */
+inline bool is_loopback (inet4_addr const & addr)
+{
+    return addr == inet4_addr{127, 0, 0, 1};
+}
+
 // https://en.wikipedia.org/wiki/Multicast_address
 inline bool is_multicast (inet4_addr const & addr)
 {
