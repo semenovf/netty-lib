@@ -795,11 +795,16 @@ private:
 
         auto saddr = item.reader.saddr();
 
+        // Force peer expiration
+        if (_discovery)
+            _discovery->expire_peer(item.uuid);
+
         // Erase file input pool
         if (_transporter)
             _transporter->expire_addresser(item.uuid);
 
-        _reader_poller->remove(item.reader);
+        if (_reader_poller)
+            _reader_poller->remove(item.reader);
 
         // Notify
         reader_closed(item.uuid, saddr.addr, saddr.port);
@@ -1012,8 +1017,13 @@ private:
         auto & item = _writers[index].second;
         auto pos2 = _writer_uuids.find(item.uuid);
 
+        // Force peer expiration
+        if (_discovery)
+            _discovery->expire_peer(item.uuid);
+
         // Erase file output pool
-        _transporter->expire_addressee(item.uuid);
+        if (_transporter)
+            _transporter->expire_addressee(item.uuid);
 
         auto do_release_reader = (_reader_uuids.find(item.uuid) != _reader_uuids.end());
 
@@ -1022,10 +1032,14 @@ private:
 
         auto saddr = item.writer.saddr();
 
-        _writer_poller->remove(item.writer);
+        if (_writer_poller)
+            _writer_poller->remove(item.writer);
 
         // Notify
         writer_closed(item.uuid, saddr.addr, saddr.port);
+
+        // Release reader by universal identifier
+        release_reader(item.uuid);
 
         // All is ok, release writer resources
         _writer_ids.erase(pos1);

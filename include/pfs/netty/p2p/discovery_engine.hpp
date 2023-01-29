@@ -409,6 +409,19 @@ public:
     }
 
     /**
+     * Force peer expiration
+     */
+    void expire_peer (universal_id uuid)
+    {
+        auto pos = _discovered_peers.find(uuid);
+
+        if (pos != _discovered_peers.end()) {
+            peer_expired(pos->first, pos->second.saddr);
+            pos = _discovered_peers.erase(pos);
+        }
+    }
+
+    /**
      * @return Pair of number of input and output events (this is a result of
      *         call of backend's poll routine).
      */
