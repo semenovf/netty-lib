@@ -28,6 +28,7 @@
 //             |                            |
 //             |<--------file_request-------|
 //             |                            |
+//             |---------file_begin-------->|
 //             |---------file_chunk-------->|
 //             |---------file_chunk-------->|
 //             |            ...             |
@@ -109,9 +110,14 @@ public:
      * Called when need to send prepared data
      */
     mutable std::function<void (universal_id /*addressee*/
+        , universal_id /*fileid*/
         , packet_type /*packettype*/
         , char const * /*data*/, int /*len*/)> ready_to_send
-        = [] (universal_id, packet_type, char const *, int) {};
+        = [] (universal_id, universal_id, packet_type, char const *, int) {};
+
+    mutable std::function<void (universal_id /*addressee*/
+        , universal_id /*fileid*/)> upload_stopped
+        = [] (universal_id, universal_id) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
@@ -222,6 +228,7 @@ public:
     NETTY__EXPORT void process_file_credentials (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_request (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_stop (universal_id sender, std::vector<char> const & data);
+    NETTY__EXPORT void process_file_begin (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_chunk (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_end (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_state(universal_id sender, std::vector<char> const & data);

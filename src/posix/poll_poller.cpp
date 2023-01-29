@@ -27,6 +27,13 @@ void poll_poller::add (native_socket_type sock, error * perr)
 {
     (void)perr;
 
+    auto pos = std::find_if(events.begin(), events.end()
+        , [& sock] (pollfd const & p) { return sock == p.fd;});
+
+    // Already exists
+    if (pos != events.end())
+        return;
+
     events.push_back(pollfd{});
     auto & ev = events.back();
     ev.fd = sock;

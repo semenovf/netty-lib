@@ -21,7 +21,6 @@
 #include "pfs/netty/chrono.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/startup.hpp"
-#include <array>
 #include <bitset>
 #include <limits>
 #include <map>
@@ -83,6 +82,13 @@ public:
         bool check_reader_consistency {true};
         bool check_writer_consistency {true};
 
+        // Number packets send in one iteration
+        int send_packet_limit {10};
+
+        // Priority in percents of sending regular packets in relation to
+        // sending of file chunk packets. Applicable to `send_packet_limit`.
+        int regular_packets_priority {80};
+
         typename FileTransporter::options filetransporter;
         typename discovery_engine_type::options discovery;
 
@@ -103,7 +109,8 @@ private:
     // limited efficiency
     enum class efficiency {
           good = 0
-        , file_output  // Loss of the file output operations.
+        , file_output   // Loss of the file output operations.
+        , failure       // Dysfunctional
     };
 
     using oqueue_type = pfs::ring_buffer<oqueue_item, 64 * 1024>;
@@ -124,30 +131,36 @@ private:
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
-    struct writer_item {
+    struct writer_account {
         universal_id uuid;
         writer_type writer;
 
         // Packet output queue
         oqueue_type q;
         bool can_write;
+
+        // File chunks output queue (mapped by file identifier).
+        std::map<universal_id, std::pair<packet_type,oqueue_type>> chunks;
     };
 
-    using writer_collection_type = std::vector<std::pair<bool, writer_item>>;
+    using writer_collection_type = std::vector<std::pair<bool, writer_account>>;
     using writer_index = typename writer_collection_type::size_type;
     writer_collection_type               _writers;
     std::map<writer_id, writer_index>    _writer_ids;
     std::map<universal_id, writer_index> _writer_uuids;
 
-    struct reader_item {
+    struct reader_account {
         universal_id uuid;
         reader_type reader;
 
         // Buffer to accumulate payload from input packets
         std::vector<char> b;
+
+        // Buffer to accumulate raw data
+        std::vector<char> raw;
     };
 
-    using reader_collection_type = std::vector<std::pair<bool, reader_item>>;
+    using reader_collection_type = std::vector<std::pair<bool, reader_account>>;
     using reader_index = typename reader_collection_type::size_type;
     reader_collection_type               _readers;
     std::map<reader_id, reader_index>    _reader_ids;
@@ -156,6 +169,12 @@ private:
 public: // Callbacks
     mutable std::function<void (std::string const &)> on_error
         = [] (std::string const &) {};
+
+    /**
+     * Called when unrecoverable error occurred - engine became dysfunctional.
+     * It must be restarted.
+     */
+    mutable std::function<void (error err)> on_failure = [] (error) {};
 
     /**
      * Called when new peer discovered by desicover engine.
@@ -274,6 +293,18 @@ public:
 
     ~engine ()
     {
+        _reader_poller.reset();
+        _writer_poller.reset();
+        _transporter.reset();
+        _discovery.reset();
+
+//         _writers.clear();
+//         _writer_ids;
+//         _writer_uuids;
+//         _readers;
+//         _reader_ids;
+//         _reader_uuids;
+
         cleanup();
     }
 
@@ -380,12 +411,17 @@ public:
      */
     void loop ()
     {
+        if (test_efficiency(efficiency::failure)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{50});
+            return;
+        }
+
         // No need poll timeout
         auto n1 = _discovery->discover(_current_poller_timeout);
         auto n2 = _writer_poller->poll(std::chrono::milliseconds{0});
         auto n3 = _reader_poller->poll(std::chrono::milliseconds{0});
 
-        if (test_efficiency(efficiency::file_output))
+        if (!test_efficiency(efficiency::file_output))
             _transporter->loop();
 
         send_outgoing_packets();
@@ -504,6 +540,12 @@ public: // static
     }
 
 private:
+    void process_failure (error && err)
+    {
+        loss_efficiency(efficiency::failure);
+        on_failure(std::move(err));
+    }
+
     void configure_discovery ()
     {
         _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid, _opts.discovery);
@@ -538,15 +580,43 @@ private:
         };
 
         _transporter->addressee_ready = [this] (universal_id addressee) {
-            auto * pitem = locate_writer_item(addressee);
-            return pitem && (pitem->q.size() <= _opts.overflow_limit)
+            auto * paccount = locate_writer_account(addressee);
+            return paccount && (paccount->q.size() <= _opts.overflow_limit)
                 ? true: false;
         };
 
         _transporter->ready_to_send = [this] (universal_id addressee
+                , universal_id fileid
                 , packet_type packettype
                 , char const * data, int len) {
-            enqueue_packets(addressee, packettype, data, len);
+            switch (packettype) {
+                // Commands
+                case packet_type::file_credentials:
+                case packet_type::file_request:
+                case packet_type::file_stop:
+                case packet_type::file_state:
+                    enqueue_packets(addressee, packettype, data, len);
+                    break;
+                // Data
+                case packet_type::file_begin:
+                case packet_type::file_end:
+                case packet_type::file_chunk:
+                    enqueue_file_chunk(addressee, fileid, packettype, data, len);
+                    break;
+                default:
+                    return;
+            }
+        };
+
+        _transporter->upload_stopped = [this] (universal_id addressee
+            , universal_id fileid) {
+
+            auto * paccount = locate_writer_account(addressee);
+
+            if (! paccount)
+                return;
+
+            paccount->chunks.erase(fileid);
         };
 
         _transporter->download_progress = [this] (universal_id addresser
@@ -595,7 +665,7 @@ private:
 
     inline bool test_efficiency (efficiency value) const noexcept
     {
-        return !_efficiency_loss_bits.test(static_cast<std::size_t>(value));
+        return _efficiency_loss_bits.test(static_cast<std::size_t>(value));
     }
 
     static inline void append_chunk (std::vector<char> & vec
@@ -641,7 +711,7 @@ private:
                     " invalid reader in collection found (id={})"
                     " , need to fix algorithm.", id)
             };
-        }
+         }
 
         // NOTE: The reader may not have been associated with universal
         //       identifier yet.
@@ -674,8 +744,8 @@ private:
         }
 
         if (_readers.empty() || index == count) {
-            _readers.emplace_back(true, reader_item{universal_id{}
-                , std::move(reader), std::vector<char>{}});
+            _readers.emplace_back(true, reader_account{universal_id{}
+                , std::move(reader), std::vector<char>{}, std::vector<char>{}});
             index = _readers.size() - 1;
         } else {
             _readers[index].first = true;
@@ -694,11 +764,15 @@ private:
         return & _readers[index].second.reader;
     }
 
-    reader_item * locate_reader_item (reader_id id)
+    reader_account * locate_reader_account (reader_id id)
     {
+        auto pos = _reader_ids.find(id);
+
+        if (pos == _reader_ids.end())
+            return nullptr;
+
         check_reader_consistency(id);
 
-        auto pos = _reader_ids.find(id);
         auto index = pos->second;
         return & _readers[index].second;
     }
@@ -722,7 +796,8 @@ private:
         auto saddr = item.reader.saddr();
 
         // Erase file input pool
-        _transporter->expire_addresser(item.uuid);
+        if (_transporter)
+            _transporter->expire_addresser(item.uuid);
 
         _reader_poller->remove(item.reader);
 
@@ -736,6 +811,7 @@ private:
         item.uuid = universal_id{};
         item.reader.~reader_type();
         item.b.clear(); // No need to destroy, can be reused later
+        item.raw.clear();
     }
 
     void check_writer_consistency (writer_id id)
@@ -859,7 +935,7 @@ private:
         }
 
         if (_writers.empty() || index == count) {
-            _writers.emplace_back(true, writer_item{uuid, writer_type{}, oqueue_type{}, true});
+            _writers.emplace_back(true, writer_account{uuid, writer_type{}, oqueue_type{}, true});
             index = _writers.size() - 1;
         } else {
             _writers[index].first = true;
@@ -876,20 +952,28 @@ private:
         return & _writers[index].second.writer;
     }
 
-    writer_item * locate_writer_item (writer_id id)
+    writer_account * locate_writer_account (writer_id id)
     {
+        auto pos = _writer_ids.find(id);
+
+        if (pos == _writer_ids.end())
+            return nullptr;
+
         check_writer_consistency(id);
 
-        auto pos = _writer_ids.find(id);
         auto index = pos->second;
         return & _writers[index].second;
     }
 
-    writer_item * locate_writer_item (universal_id uuid)
+    writer_account * locate_writer_account (universal_id uuid)
     {
+        auto pos = _writer_uuids.find(uuid);
+
+        if (pos == _writer_uuids.end())
+            return nullptr;
+
         check_writer_consistency(uuid);
 
-        auto pos = _writer_uuids.find(uuid);
         auto index = pos->second;
         return & _writers[index].second;
     }
@@ -951,16 +1035,12 @@ private:
         item.writer.disconnect();
         item.writer.~writer_type();
         item.q.clear(); // No need to destroy, can be reused later
+        item.chunks.clear();
     }
 
-    /**
-     * Splits @a data into packets and enqueue them into output queue.
-     */
-    entity_id enqueue_packets (universal_id addressee
+    entity_id enqueue_packets_helper (oqueue_type * q, universal_id addressee
         , packet_type packettype, char const * data, int len)
     {
-        auto * pitem = locate_writer_item(addressee);
-
         auto payload_size = PACKET_SIZE - packet::PACKET_HEADER_SIZE;
         auto remain_len   = len;
         char const * remain_data = data;
@@ -987,67 +1067,116 @@ private:
             remain_data += p.payloadsize;
 
             // May throw std::bad_alloc
-            pitem->q.push(oqueue_item{entityid, addressee, std::move(p)});
+            q->push(oqueue_item{entityid, addressee, std::move(p)});
         }
 
         return entityid;
     }
 
+    /**
+     * Splits @a data into packets and enqueue them into output queue.
+     */
+    entity_id enqueue_packets (universal_id addressee
+        , packet_type packettype, char const * data, int len)
+    {
+        auto * paccount = locate_writer_account(addressee);
+
+        if (! paccount)
+            return INVALID_ENTITY;
+
+        return enqueue_packets_helper(& paccount->q, addressee, packettype, data, len);
+    }
+
+    entity_id enqueue_file_chunk (universal_id addressee, universal_id fileid
+        , packet_type packettype, char const * data, int len)
+    {
+        auto * paccount = locate_writer_account(addressee);
+
+        if (! paccount)
+            return INVALID_ENTITY;
+
+        auto pos = paccount->chunks.find(fileid);
+
+        if (pos == paccount->chunks.end()) {
+            auto res = paccount->chunks.emplace(fileid
+                , std::make_pair(packettype, oqueue_type{}));
+            pos = res.first;
+        } else {
+            pos->second.first = packettype;
+        }
+
+        oqueue_type * q = & pos->second.second;
+
+        return enqueue_packets_helper(q, addressee, packettype, data, len);
+    }
+
     void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr
         , std::chrono::milliseconds const & timediff)
     {
-        //LOG_TRACE_2("Peer discovered: {}@{}", peer_uuid, to_string(saddr));
-        //LOG_TRACE_2("Connecting to: {}@{}", peer_uuid, to_string(saddr));
         connect_writer(peer_uuid, saddr);
         peer_discovered(peer_uuid, saddr.addr, saddr.port, timediff);
     }
 
     void process_socket_connected (writer_id id)
     {
-        auto * item = locate_writer_item(id);
-        writer_ready(item->uuid, item->writer.saddr().addr, item->writer.saddr().port);
+        auto * paccount = locate_writer_account(id);
+
+        if (!paccount)
+            return;
+
+        writer_ready(paccount->uuid, paccount->writer.saddr().addr
+            , paccount->writer.saddr().port);
 
         // Payload doesn't matter, but length must be greater than zero.
         char h = 'H';
-        enqueue_packets(item->uuid, packet_type::hello, & h, 1);
+        enqueue_packets(paccount->uuid, packet_type::hello, & h, 1);
     }
 
     void process_reader_input (reader_id sock)
     {
-        int read_iterations = 0;
+        auto * paccount = locate_reader_account(sock);
 
-        auto * pitem = locate_reader_item(sock);
-        auto available = pitem->reader.available();
+        if (!paccount)
+            return;
+
+        auto * pbuffer = & paccount->raw;
+        auto available = paccount->reader.available();
+
+        auto old_size = pbuffer->size();
+
+        if (pbuffer->size() < old_size + available)
+            pbuffer->resize(old_size + available);
+
+        auto rc = paccount->reader.recv(pbuffer->data() + old_size, available);
+
+        if (rc == 0) {
+            // FIXME
+            // Disconnected ?
+            LOG_TRACE_2("RECV: sender: {}.{}, need to DISCONNECT?"
+                , rc, to_string(paccount->reader.saddr()), sock);
+            return;
+        }
+
+        if (rc < 0) {
+            on_error(tr::f_("Receive data failure from: {}"
+                , to_string(paccount->reader.saddr())));
+            release_writer(paccount->uuid);
+            release_reader(paccount->uuid);
+            return;
+        }
+
+        pbuffer->resize(old_size + rc);
+        available = pbuffer->size();
+
+        if (available < PACKET_SIZE)
+            return;
+
+        auto pbuffer_pos = pbuffer->begin();
 
         do {
-            if (available < PACKET_SIZE)
-                break;
-
-            std::array<char, PACKET_SIZE> buf;
-            auto rc = pitem->reader.recv(buf.data(), buf.size());
-
-            if (rc == 0) {
-                if (read_iterations == 0) {
-                    // FIXME
-                    // Disconnected ?
-                    LOG_TRACE_2("process_reader_input: sender: {}.{}, need to DISCONNECT?"
-                        , rc, to_string(pitem->reader.saddr()), sock);
-                }
-
-                break;
-            }
-
-            if (rc < 0) {
-                on_error(tr::f_("Receive data failure from: {}"
-                    , to_string(pitem->reader.saddr())));
-                break;
-            }
-
+            input_envelope_type in {& *pbuffer_pos, PACKET_SIZE};
             available -= PACKET_SIZE;
-
-            read_iterations++;
-
-            input_envelope_type in {buf.data(), buf.size()};
+            pbuffer_pos += PACKET_SIZE;
 
             static_assert(sizeof(packet_type) <= sizeof(char), "");
 
@@ -1059,6 +1188,7 @@ private:
                 || packettype == packet_type::file_credentials
                 || packettype == packet_type::file_request
                 || packettype == packet_type::file_chunk
+                || packettype == packet_type::file_begin
                 || packettype == packet_type::file_end
                 || packettype == packet_type::file_state
                 || packettype == packet_type::file_stop;
@@ -1067,7 +1197,7 @@ private:
                 on_error(tr::f_("Unexpected packet type ({})"
                     " received from: {}, ignored."
                     , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
-                    , to_string(pitem->reader.saddr())));
+                    , to_string(paccount->reader.saddr())));
                 continue;
             }
 
@@ -1075,11 +1205,11 @@ private:
             in.unseal(pkt);
             packetsize = pkt.packetsize;
 
-            if (rc != packetsize) {
+            if (PACKET_SIZE != packetsize) {
                 on_error(tr::f_("Unexpected packet size ({})"
                     " received from: {}, expected: {}"
-                    , rc
-                    , to_string(pitem->reader.saddr())
+                    , PACKET_SIZE
+                    , to_string(paccount->reader.saddr())
                     , packetsize));
 
                 // Ignore
@@ -1088,9 +1218,9 @@ private:
 
             // Start new sequence
             if (pkt.partindex == 1)
-                pitem->b.clear();
+                paccount->b.clear();
 
-            append_chunk(pitem->b, pkt.payload, pkt.payloadsize);
+            append_chunk(paccount->b, pkt.payload, pkt.payloadsize);
 
             // Message complete
             if (pkt.partindex == pkt.partcount) {
@@ -1099,19 +1229,21 @@ private:
                 switch (packettype) {
                     case packet_type::regular:
                         this->data_received(sender_uuid
-                            , std::string(pitem->b.data(), pitem->b.size()));
+                            , std::string(paccount->b.data(), paccount->b.size()));
                         break;
 
                     case packet_type::hello: {
                         auto pos1 = _reader_ids.find(sock);
 
                         if (pos1 == _reader_ids.end()) {
-                            throw error {
+                            process_failure(error {
                                   errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " no reader found by socket id: {}"
                                     " , need to fix algorithm.", sock)
-                            };
+                            });
+
+                            return;
                         }
 
                         auto index = pos1->second;
@@ -1119,52 +1251,128 @@ private:
                         auto pos = _reader_uuids.find(sender_uuid);
 
                         if (pos != _reader_uuids.end() && pos->second != index) {
-                            throw error {
+                            process_failure(error {
                                   errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " found inconsistency for reader with universal"
                                     " identifier: {}, need to fix algorithm."
                                     , sender_uuid)
-                            };
+                            });
+
+                            return;
                         }
 
                         _readers[index].second.uuid = sender_uuid;
                         _reader_uuids[sender_uuid] = index;
-                         reader_ready(sender_uuid, pitem->reader.saddr().addr
-                            , pitem->reader.saddr().port);
+                         reader_ready(sender_uuid, paccount->reader.saddr().addr
+                            , paccount->reader.saddr().port);
 
                         break;
                     }
 
                     // Initiating file sending from peer
                     case packet_type::file_credentials:
-                        _transporter->process_file_credentials(sender_uuid, pitem->b);
+                        _transporter->process_file_credentials(sender_uuid, paccount->b);
                         break;
 
                     case packet_type::file_request:
-                        _transporter->process_file_request(sender_uuid, pitem->b);
+                        _transporter->process_file_request(sender_uuid, paccount->b);
                         break;
 
                     case packet_type::file_stop:
-                        _transporter->process_file_stop(sender_uuid, pitem->b);
+                        _transporter->process_file_stop(sender_uuid, paccount->b);
                         break;
 
                     // File chunk received
                     case packet_type::file_chunk:
-                        _transporter->process_file_chunk(sender_uuid, pitem->b);
+                        _transporter->process_file_chunk(sender_uuid, paccount->b);
+                        break;
+
+                    // File
+                    case packet_type::file_begin:
+                        _transporter->process_file_begin(sender_uuid, paccount->b);
                         break;
 
                     // File received completely
                     case packet_type::file_end:
-                        _transporter->process_file_end(sender_uuid, pitem->b);
+                        _transporter->process_file_end(sender_uuid, paccount->b);
                         break;
 
                     case packet_type::file_state:
-                        _transporter->process_file_state(sender_uuid, pitem->b);
+                        _transporter->process_file_state(sender_uuid, paccount->b);
                         break;
                 }
             }
-        } while (true);
+        } while (available >= PACKET_SIZE);
+
+        if (available == 0) {
+            pbuffer->clear();
+        } else {
+            auto erased_length = pbuffer_pos - pbuffer->begin();
+            pbuffer->erase(pbuffer->begin(), pbuffer_pos);
+        }
+    }
+
+    void send_outgoing_packets_helper (writer_account * paccount
+        , oqueue_type * output_queue, int * limit)
+    {
+        std::size_t total_bytes_sent = 0;
+
+        output_envelope_type out;
+        error err;
+        bool break_sending = false;
+
+        // FIXME Implement throttling
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+
+        while (*limit-- && !break_sending && !output_queue->empty()) {
+            auto & oitem = output_queue->front();
+            auto const & pkt = oitem.pkt;
+
+            out.reset();   // Empty envelope
+            out.seal(pkt); // Seal new data
+
+            auto data = out.data();
+            auto size = data.size();
+
+            PFS__ASSERT(size <= PACKET_SIZE, "");
+
+            auto send_result = paccount->writer.send(data.data(), size, & err);
+
+            switch (send_result.state) {
+                case netty::send_status::failure:
+                    on_error(tr::f_("send failure to {}: {}"
+                        , to_string(paccount->writer.saddr()), err.what()));
+
+                    release_writer(paccount->uuid);
+                    release_reader(paccount->uuid);
+                    break_sending = true;
+                    break;
+
+                case netty::send_status::connreset:
+                    on_error(tr::f_("send failure to {}: connection reset by peer."
+                        , to_string(paccount->writer.saddr())));
+
+                    release_writer(paccount->uuid);
+                    release_reader(paccount->uuid);
+                    break_sending = true;
+                    break;
+
+                case netty::send_status::again:
+                case netty::send_status::overflow:
+                    if (paccount->can_write != false) {
+                        paccount->can_write = false;
+                        _writer_poller->wait_for_write(paccount->writer);
+                    }
+                    break_sending = true;
+                    break;
+
+                case netty::send_status::good:
+                    total_bytes_sent += send_result.n;
+                    output_queue->pop();
+                    break;
+            }
+        }
     }
 
     void send_outgoing_packets ()
@@ -1175,43 +1383,54 @@ private:
 
             auto & output_queue = witem.second.q;
 
-            if (output_queue.empty())
+            int limit = witem.second.chunks.empty()
+                ? _opts.send_packet_limit
+                : _opts.send_packet_limit
+                    * static_cast<double>(_opts.regular_packets_priority) / 100;
+
+            if (!output_queue.empty()) {
+                // Send regular (priority) packets
+                send_outgoing_packets_helper(& witem.second, & output_queue, & limit);
+            }
+
+            if (limit == 0)
                 continue;
 
-            std::size_t total_bytes_sent = 0;
-            auto & writer = witem.second.writer;
+            if (witem.second.chunks.empty())
+                continue;
 
-            output_envelope_type out;
-            error err;
+            // Send limit for all file chunk packets
+            limit = limit / witem.second.chunks.size();
 
-            while (!output_queue.empty()) {
-                auto & oitem = output_queue.front();
+            if (limit == 0)
+                limit = 1;
 
-                auto const & pkt = oitem.pkt;
-                out.reset();   // Empty envelope
-                out.seal(pkt); // Seal new data
+            // Need to use unused limits
+            int next_inc = 0;
 
-                auto data = out.data();
-                auto size = data.size();
+            auto pos = witem.second.chunks.begin();
+            auto last  = witem.second.chunks.end();
 
-                PFS__ASSERT(size <= PACKET_SIZE, "");
+            while (pos != last) {
+                // Individual limit for file chunk packets
+                auto chunk_limit = limit + next_inc;
+                next_inc = 0;
 
-                auto send_result = writer.send(data.data(), size, & err);
+                oqueue_type * q = & pos->second.second;
 
-                switch (send_result.state) {
-                    case netty::send_status::failure:
-                        on_error(tr::f_("send failure to {}: {}"
-                            , to_string(writer.saddr()), err.what()));
-                        break;
-                    case netty::send_status::again:
-                    case netty::send_status::overflow:
-                        witem.second.can_write = false;
-                        _writer_poller->wait_for_write(writer);
-                        break;
-                    case netty::send_status::good:
-                        total_bytes_sent += send_result.n;
-                        output_queue.pop();
-                        break;
+                if (!q->empty()) {
+                    send_outgoing_packets_helper(& witem.second, q, & chunk_limit);
+                    next_inc = chunk_limit;
+                    ++pos;
+                } else {
+                    // File transfer complete
+                    bool complete = (pos->second.first == packet_type::file_end);
+
+                    if (complete) {
+                        pos = witem.second.chunks.erase(pos);
+                    } else {
+                        ++pos;
+                    }
                 }
             }
         }

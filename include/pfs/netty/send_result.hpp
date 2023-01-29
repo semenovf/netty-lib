@@ -12,10 +12,11 @@
 namespace netty {
 
 enum class send_status {
-      failure  = -1
-    , good     =  0
-    , again    =  1
-    , overflow =  2
+      failure   = -1
+    , good      =  0
+    , again     =  1
+    , overflow  =  2
+    , connreset =  3 // Connection reset by peer
 };
 
 struct send_result

@@ -370,6 +370,9 @@ send_result inet_socket::send (char const * data, int len, error * perr)
             if (errno == ENOBUFS)
                 return send_result{send_status::overflow, n};
 
+            if (errno == ECONNRESET)
+                return send_result{send_status::connreset, n};
+
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 return send_result{send_status::again, n};
 
@@ -423,6 +426,9 @@ send_result inet_socket::send_to (socket4_addr const & saddr
         if (n < 0) {
             if (errno == ENOBUFS)
                 return send_result{send_status::overflow, n};
+
+            if (errno == ECONNRESET)
+                return send_result{send_status::connreset, n};
 
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 return send_result{send_status::again, n};

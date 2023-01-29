@@ -53,7 +53,7 @@ file_transporter::file_transporter (options const & opts)
             break;
         }
 
-        _opts.max_file_size   = opts.max_file_size;
+        _opts.max_file_size = opts.max_file_size;
 
         bad = opts.download_progress_granularity < 0 ||
             opts.download_progress_granularity > 100;
@@ -288,7 +288,7 @@ void file_transporter::notify_file_status (universal_id addressee
     output_envelope_type out;
     out << file_state {fileid, state};
 
-    ready_to_send(addressee, packet_type::file_state
+    ready_to_send(addressee, fileid, packet_type::file_state
         , out.data().data(), out.data().size());
 }
 
@@ -449,10 +449,6 @@ void file_transporter::process_file_request (universal_id sender
     auto orig_path = file::read_all(cachefilepath);
 
     if (!orig_path.empty()) {
-        LOG_TRACE_3("File request received from {}: {}"
-            " (path={}; offset={})"
-            , sender, fr.fileid, orig_path, fr.offset);
-
         auto data_file = file::open_read_only(fs::utf8_decode(orig_path));
         data_file.set_pos(fr.offset);
 
@@ -460,15 +456,40 @@ void file_transporter::process_file_request (universal_id sender
         _ofile_pool.emplace(fr.fileid, ofile_item{
             sender, std::move(data_file), false, pfs::crypto::sha256{}
         });
+
+        // Send file_begin packet
+        file_begin fb { fr.fileid, fr.offset };
+
+        output_envelope_type out;
+        out << fb;
+
+        ready_to_send(sender, fr.fileid, packet_type::file_begin
+            , out.data().data(), out.data().size());
     }
 }
 
-void file_transporter::process_file_stop (universal_id /*sender*/
+void file_transporter::process_file_stop (universal_id sender
     , std::vector<char> const & data)
 {
-    LOG_TRACE_3("=== FILE STOP ===");
     auto fs = input_envelope_type::unseal<file_stop>(data);
     remove_ofile_item(fs.fileid);
+    upload_stopped(sender, fs.fileid);
+}
+
+void file_transporter::process_file_begin (universal_id addresser
+    , std::vector<char> const & data)
+{
+    auto fb = input_envelope_type::unseal<file_begin>(data);
+
+    // Returns non-null pointer or throws an exception
+    auto ensure = false;
+    auto * p = locate_ifile_item(addresser, fb.fileid, ensure);
+
+    // May be file downloading is stopped
+    if (!p)
+        return;
+
+    download_progress(addresser, fb.fileid, 0, p->filesize);
 }
 
 void file_transporter::process_file_chunk (universal_id sender
@@ -476,8 +497,7 @@ void file_transporter::process_file_chunk (universal_id sender
 {
     auto fc = input_envelope_type::unseal<file_chunk>(data);
 
-    LOG_TRACE_3("File chunk received from: {}"
-        " ({}; offset={}; chunk size={})"
+    LOG_TRACE_3("File chunk received from: {} ({}; offset={}; chunk size={})"
         , sender, fc.fileid, fc.offset, fc.chunk.size());
 
     commit_chunk(sender, fc);
@@ -488,8 +508,7 @@ void file_transporter::process_file_end (universal_id sender
 {
     auto fe = input_envelope_type::unseal<file_end>(data);
 
-    LOG_TRACE_2("File received completely from: {} ({})"
-        , sender, fe.fileid);
+    LOG_TRACE_3("File received completely from: {} ({})", sender, fe.fileid);
 
     commit_incoming_file(sender, fe.fileid/*, fe.checksum*/);
 }
@@ -544,26 +563,26 @@ void file_transporter::expire_addresser (universal_id addresser)
     }
 }
 
-void file_transporter::send_file_request (universal_id addressee_id, universal_id file_id)
+void file_transporter::send_file_request (universal_id addressee_id, universal_id fileid)
 {
-    auto fc = incoming_file_credentials(addressee_id, file_id);
-    auto datafilepath = make_datafilepath(addressee_id, file_id);
+    auto fc = incoming_file_credentials(addressee_id, fileid);
+    auto datafilepath = make_datafilepath(addressee_id, fileid);
     auto filesize = fs::file_size(datafilepath);
 
     // Original file size is less than offset stored in description file
     if (fc.offset > filesize)
         fc.offset = filesize;
 
-    auto * p = locate_ifile_item(addressee_id, file_id, true);
+    auto * p = locate_ifile_item(addressee_id, fileid, true);
 
     if (p)
         p->filesize = fc.filesize;
 
-    file_request fr { file_id, fc.offset };
+    file_request fr { fileid, fc.offset };
     output_envelope_type out;
     out << fr;
 
-    ready_to_send(addressee_id, packet_type::file_request
+    ready_to_send(addressee_id, fileid, packet_type::file_request
         , out.data().data(), out.data().size());
 
     LOG_TRACE_3("Send file request: addressee={}; file={}; offset={}"
@@ -606,7 +625,7 @@ universal_id file_transporter::send_file (universal_id addressee
     output_envelope_type out;
     out << fc;
 
-    ready_to_send(addressee, packet_type::file_credentials
+    ready_to_send(addressee, fileid, packet_type::file_credentials
         , out.data().data(), out.data().size());
 
     return fileid;
@@ -623,7 +642,7 @@ void file_transporter::stop_file (universal_id addressee, universal_id fileid)
 
     LOG_TRACE_3("Send file stop to: {} ({})", addressee, fs.fileid);
 
-    ready_to_send(addressee, packet_type::file_stop
+    ready_to_send(addressee, fileid, packet_type::file_stop
         , out.data().data(), out.data().size());
     }
 
@@ -661,7 +680,7 @@ int file_transporter::loop ()
             output_envelope_type out;
             out << fe;
 
-            ready_to_send(pos->second.addressee, packet_type::file_end
+            ready_to_send(pos->second.addressee, fileid, packet_type::file_end
                 , out.data().data(), out.data().size());
 
             // Remove file from output pool
@@ -677,7 +696,7 @@ int file_transporter::loop ()
             LOG_TRACE_3("Send file chunk: {} (offset={}, chunk size={})"
                 , pos->first, offset, fc.chunk.size());
 
-            ready_to_send(pos->second.addressee, packet_type::file_chunk
+            ready_to_send(pos->second.addressee, fileid, packet_type::file_chunk
                 , out.data().data(), out.data().size());
 
             p->hash.update(fc.chunk.data(), fc.chunk.size());

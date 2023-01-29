@@ -51,6 +51,10 @@ void epoll_poller::add (native_socket_type sock, error * perr)
     int rc = epoll_ctl(eid, EPOLL_CTL_ADD, sock, & ev);
 
     if (rc != 0) {
+        // Is not an error
+        if (errno == EEXIST)
+            return;
+
         error err {
               errc::poller_error
             , tr::_("epoll add socket failure")

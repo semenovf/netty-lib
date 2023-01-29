@@ -127,7 +127,24 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
             auto fd = _rep.events[i].fd;
 
             if (revents & POLLERR) {
-                LOGD(TAG, "POLL POLLER ERROR");
+                int error_val = 0;
+                socklen_t len = sizeof(error_val);
+                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
+
+                remove(fd);
+
+                if (rc != 0) {
+                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
+                        , pfs::system_error_text(), fd));
+                } else {
+                    on_error(fd, tr::f_("read socket failure: {}, socket removed: {}"
+                        , pfs::system_error_text(error_val), fd));
+                }
+
+                if (disconnected)
+                    disconnected(fd);
+
+                continue;
             }
 
             // There is data to read - can accept

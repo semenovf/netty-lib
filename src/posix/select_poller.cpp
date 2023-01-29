@@ -32,11 +32,15 @@ void select_poller::add (native_socket_type sock, error * perr)
 {
     (void)perr;
 
-    if (observe_read)
-        FD_SET(sock, & readfds);
+    if (observe_read) {
+        if (!FD_ISSET(sock, & readfds))
+            FD_SET(sock, & readfds);
+    }
 
-    if (observe_write)
-        FD_SET(sock, & writefds);
+    if (observe_write) {
+        if (!FD_ISSET(sock, & writefds))
+            FD_SET(sock, & writefds);
+    }
 
     max_fd = (std::max)(sock, max_fd);
     min_fd = (std::min)(sock, min_fd);

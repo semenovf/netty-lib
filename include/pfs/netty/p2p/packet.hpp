@@ -28,6 +28,7 @@ enum class packet_type: std::uint8_t {
     , file_credentials
     , file_request
     , file_stop    // Stop/pause file transferring
+    , file_begin   // Start downloading
     , file_chunk
     , file_end
     , file_state
@@ -92,6 +93,12 @@ struct file_request
 struct file_stop
 {
     universal_id fileid;
+};
+
+struct file_begin
+{
+    universal_id fileid;
+    std::int32_t offset;
 };
 
 struct file_chunk
@@ -210,6 +217,19 @@ inline void load (cereal::BinaryInputArchive & ar, file_chunk & fc)
         >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
         >> ntoh_wrapper<decltype(fc.chunksize)>{fc.chunksize}
         >> fc.chunk;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// file_begin
+////////////////////////////////////////////////////////////////////////////////
+inline void save (cereal::BinaryOutputArchive & ar, file_begin const & fb)
+{
+    ar << fb.fileid << pfs::to_network_order(fb.offset);
+}
+
+inline void load (cereal::BinaryInputArchive & ar, file_begin & fb)
+{
+    ar >> fb.fileid >> ntoh_wrapper<decltype(fb.offset)>{fb.offset};
 }
 
 ////////////////////////////////////////////////////////////////////////////////

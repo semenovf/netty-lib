@@ -53,6 +53,9 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                         , pfs::system_error_text(error_val), fd));
                 }
 
+                if (disconnected)
+                    disconnected(fd);
+
                 continue;
             }
 
