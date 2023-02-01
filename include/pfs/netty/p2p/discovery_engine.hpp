@@ -416,8 +416,10 @@ public:
         auto pos = _discovered_peers.find(uuid);
 
         if (pos != _discovered_peers.end()) {
-            peer_expired(pos->first, pos->second.saddr);
+            // The order is matter (erase and then call callback)
+            auto saddr = pos->second.saddr;
             pos = _discovered_peers.erase(pos);
+            peer_expired(uuid, saddr);
         }
     }
 

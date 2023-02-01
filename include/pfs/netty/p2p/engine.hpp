@@ -752,6 +752,7 @@ private:
             _readers[index].second.uuid = universal_id{};
             _readers[index].second.reader = std::move(reader);
             _readers[index].second.b.clear();
+            _readers[index].second.raw.clear();
         }
 
         reader_id id = _readers[index].second.reader.native();
@@ -791,7 +792,9 @@ private:
 
         auto pos2 = _reader_ids.find(item.reader.native());
 
-        _readers[index].first = false;
+        // Release reader indices
+        _reader_uuids.erase(pos1);
+        _reader_ids.erase(pos2);
 
         auto saddr = item.reader.saddr();
 
@@ -809,9 +812,7 @@ private:
         // Notify
         reader_closed(item.uuid, saddr.addr, saddr.port);
 
-        // All is ok, release raeder resources
-        _reader_uuids.erase(pos1);
-        _reader_ids.erase(pos2);
+        _readers[index].first = false;
 
         item.uuid = universal_id{};
         item.reader.~reader_type();
@@ -1017,6 +1018,10 @@ private:
         auto & item = _writers[index].second;
         auto pos2 = _writer_uuids.find(item.uuid);
 
+        // Release writer indices
+        _writer_ids.erase(pos1);
+        _writer_uuids.erase(pos2);
+
         // Force peer expiration
         if (_discovery)
             _discovery->expire_peer(item.uuid);
@@ -1040,10 +1045,6 @@ private:
 
         // Release reader by universal identifier
         release_reader(item.uuid);
-
-        // All is ok, release writer resources
-        _writer_ids.erase(pos1);
-        _writer_uuids.erase(pos2);
 
         item.uuid = universal_id{};
         item.writer.disconnect();
