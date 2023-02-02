@@ -361,6 +361,15 @@ send_result inet_socket::send (char const * data, int len, error * perr)
 #endif
 
         if (n < 0) {
+            error err {
+                  errc::socket_error
+                , tr::_("send failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr)
+                *perr = std::move(err);
+
             // man send:
             // The output queue for a network interface was full. This generally
             // indicates that the interface has stopped sending, but may be
@@ -370,20 +379,14 @@ send_result inet_socket::send (char const * data, int len, error * perr)
             if (errno == ENOBUFS)
                 return send_result{send_status::overflow, n};
 
-            if (errno == ECONNRESET)
-                return send_result{send_status::connreset, n};
+            if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
+                    || errno == ENETUNREACH)
+                return send_result{send_status::network, n};
 
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 return send_result{send_status::again, n};
 
-            error err {
-                  errc::socket_error
-                , tr::_("send failure")
-                , pfs::system_error_text()
-            };
-
             if (perr) {
-                *perr = std::move(err);
                 return send_result{send_status::failure, n};
             } else {
                 throw err;
@@ -424,23 +427,26 @@ send_result inet_socket::send_to (socket4_addr const & saddr
 #endif
 
         if (n < 0) {
-            if (errno == ENOBUFS)
-                return send_result{send_status::overflow, n};
-
-            if (errno == ECONNRESET)
-                return send_result{send_status::connreset, n};
-
-            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-                return send_result{send_status::again, n};
-
             error err {
                   errc::socket_error
                 , tr::f_("send to socket failure: {}", to_string(saddr))
                 , pfs::system_error_text()
             };
 
-            if (perr) {
+            if (perr)
                 *perr = std::move(err);
+
+            if (errno == ENOBUFS)
+                return send_result{send_status::overflow, n};
+
+            if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
+                    || errno == ENETUNREACH)
+                return send_result{send_status::network, n};
+
+            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+                return send_result{send_status::again, n};
+
+            if (perr) {
                 return send_result{send_status::failure, n};
             } else {
                 throw err;

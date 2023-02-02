@@ -55,6 +55,9 @@ private:
         std::uint32_t counter;
         milliseconds_type transmit_interval;
         clock_type::time_point transmit_timepoint;
+
+        // Don't call on_error periodically
+        netty::send_status last_send_status;
     };
 
     struct peer_credentials
@@ -246,10 +249,13 @@ private:
                 auto res = _backend.send(t.saddr, data.data(), size, & err);
 
                 if (res.state != netty::send_status::good) {
-                    on_error(tr::f_("Transmit failure to: {}: {}"
-                        , to_string(t.saddr), err.what()));
+                    if (t.last_send_status != res.state) {
+                        on_error(tr::f_("transmit failure to: {}: {}"
+                            , to_string(t.saddr), err.what()));
+                    }
                 }
 
+                t.last_send_status = res.state;
                 t.transmit_timepoint = current_timepoint() + t.transmit_interval;
                 _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
                     , t.transmit_timepoint);
@@ -393,7 +399,8 @@ public:
         _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
             , transmit_timepoint);
 
-        _targets.emplace_back(target_item{target_saddr, 0, transmit_interval, transmit_timepoint});
+        _targets.emplace_back(target_item{target_saddr, 0, transmit_interval
+            , transmit_timepoint, netty::send_status::good});
         _backend.add_target(target_saddr, local_addr);
     }
 

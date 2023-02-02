@@ -1364,9 +1364,9 @@ private:
                     break_sending = true;
                     break;
 
-                case netty::send_status::connreset:
-                    on_error(tr::f_("send failure to {}: connection reset by peer."
-                        , to_string(paccount->writer.saddr())));
+                case netty::send_status::network:
+                    on_error(tr::f_("send failure to {}: network failure: {}"
+                        , to_string(paccount->writer.saddr()), err.what()));
 
                     release_writer(paccount->uuid);
                     release_reader(paccount->uuid);

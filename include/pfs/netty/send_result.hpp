@@ -16,7 +16,12 @@ enum class send_status {
     , good      =  0
     , again     =  1
     , overflow  =  2
-    , connreset =  3 // Connection reset by peer
+
+    // Connection reset by peer (ECONNRESET)
+    // Network is down (ENETDOWN)
+    // Network is unreachable (ENETUNREACH)
+    // Network dropped connection because of reset (ENETRESET)
+    , network   =  3
 };
 
 struct send_result
