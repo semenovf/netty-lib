@@ -13,6 +13,8 @@
 namespace netty {
 namespace posix {
 
+select_poller::native_socket_type const select_poller::kINVALID_SOCKET;
+
 select_poller::select_poller (bool oread, bool owrite)
     : observe_read(oread)
     , observe_write(owrite)
@@ -58,6 +60,10 @@ void select_poller::add (native_socket_type sock, error * perr)
             FD_SET(sock, & writefds);
         }
     }
+
+#ifndef _MSC_VER
+    max_fd = (std::max)(max_fd, sock);
+#endif
 }
 
 void select_poller::remove (native_socket_type sock, error * perr)
@@ -79,6 +85,11 @@ void select_poller::remove (native_socket_type sock, error * perr)
         *pos = kINVALID_SOCKET;
         --count;
     }
+
+#ifndef _MSC_VER
+    if (max_fd == sock)
+        --max_fd;
+#endif
 }
 
 int select_poller::poll (fd_set * rfds, fd_set * wfds
@@ -88,7 +99,10 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds
         return 0;
 
     timeval timeout;
+
+#if _MSC_VER
     bool need_select = false;
+#endif
 
     timeout.tv_sec  = millis.count() / 1000;
     timeout.tv_usec = (millis.count() - timeout.tv_sec * 1000) * 1000;
@@ -102,27 +116,31 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds
     if (rfds) {
         memcpy(rfds, & readfds, sizeof(readfds));
 
+#if _MSC_VER
         if (rfds->fd_count > 0)
             need_select = true;
+#endif
     }
 
     if (wfds) {
         memcpy(wfds, & writefds, sizeof(writefds));
 
+#if _MSC_VER
         if (wfds->fd_count > 0)
             need_select = true;
+#endif
     }
 
+    // Total number of descriptors on success
+#if _MSC_VER
     // https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-select
-    // Any two of the parameters, readfds, writefds, or exceptfds, 
-    // can be given as null. At least one must be non-null, 
-    // and any non-null descriptor set must contain at least one 
+    // Any two of the parameters, readfds, writefds, or exceptfds,
+    // can be given as null. At least one must be non-null,
+    // and any non-null descriptor set must contain at least one
     // handle to a socket.
     if (!need_select)
         return 0;
-    
-    // Total number of descriptors on success
-#if _MSC_VER
+
     // First argument ingored in WinSock2
     auto n = ::select(0, rfds, wfds, nullptr, & timeout);
 #else

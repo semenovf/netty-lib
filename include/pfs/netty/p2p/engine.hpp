@@ -133,12 +133,12 @@ private:
 
     struct writer_account {
         universal_id uuid;
-        bool can_write {false};
+        bool can_write;
         writer_type writer;
 
         // Packet output queue
         oqueue_type q;
-        
+
         // File chunks output queue (mapped by file identifier).
         std::map<universal_id, std::pair<packet_type,oqueue_type>> chunks;
     };

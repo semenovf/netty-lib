@@ -32,7 +32,9 @@ public:
     static native_socket_type const kINVALID_SOCKET = INVALID_SOCKET;
 #else
     using native_socket_type = int;
-    static native_type constexpr kINVALID_SOCKET = -1;
+    static native_socket_type constexpr kINVALID_SOCKET = -1;
+
+    native_socket_type max_fd {0};
 #endif
 
     std::vector<native_socket_type> sockets;

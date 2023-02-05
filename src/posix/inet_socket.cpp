@@ -26,6 +26,8 @@
 namespace netty {
 namespace posix {
 
+inet_socket::native_type const inet_socket::kINVALID_SOCKET;
+
 inet_socket::inet_socket () = default;
 
 inet_socket::inet_socket (native_type sock, socket4_addr const & saddr)
@@ -392,7 +394,7 @@ send_result inet_socket::send (char const * data, int len, error * perr)
             if (lastWsaError == WSAENOBUFS)
                 return send_result{send_status::overflow, n};
 
-            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET 
+            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
                     || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
                 return send_result{send_status::network, n};
 
@@ -470,7 +472,7 @@ send_result inet_socket::send_to (socket4_addr const & saddr
             if (lastWsaError == WSAENOBUFS)
                 return send_result{send_status::overflow, n};
 
-            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET 
+            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
                 || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
                 return send_result{send_status::network, n};
 
