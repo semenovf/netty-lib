@@ -297,14 +297,6 @@ public:
         _writer_poller.reset();
         _transporter.reset();
         _discovery.reset();
-
-//         _writers.clear();
-//         _writer_ids;
-//         _writer_uuids;
-//         _readers;
-//         _reader_ids;
-//         _reader_uuids;
-
         cleanup();
     }
 
@@ -363,11 +355,17 @@ public:
             };
 
             callbacks.connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
-                release_writer(sock);
+                auto paccount = locate_writer_account(sock);
+
+                if (paccount)
+                    _discovery->expire_peer(paccount->uuid);
             };
 
             callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
-                release_writer(sock);
+                auto paccount = locate_writer_account(sock);
+
+                if (paccount)
+                    _discovery->expire_peer(paccount->uuid);
             };
 
             callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
@@ -546,6 +544,18 @@ private:
         on_failure(std::move(err));
     }
 
+    void release_peer (universal_id peer_uuid, socket4_addr saddr)
+    {
+        release_reader(peer_uuid);
+        release_writer(peer_uuid);
+
+        // Erase file input pool
+        if (_transporter)
+            _transporter->expire_addresser(peer_uuid);
+
+        peer_expired(peer_uuid, saddr.addr, saddr.port);
+    }
+
     void configure_discovery ()
     {
         _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid, _opts.discovery);
@@ -565,9 +575,7 @@ private:
         };
 
         _discovery->peer_expired = [this] (universal_id peer_uuid, socket4_addr saddr) {
-            release_reader(peer_uuid);
-            release_writer(peer_uuid);
-            peer_expired(peer_uuid, saddr.addr, saddr.port);
+            this->release_peer(peer_uuid, saddr);
         };
     }
 
@@ -744,16 +752,15 @@ private:
         }
 
         if (_readers.empty() || index == count) {
-            _readers.emplace_back(true, reader_account{universal_id{}
-                , std::move(reader), std::vector<char>{}, std::vector<char>{}});
+            _readers.emplace_back(true, reader_account{});
             index = _readers.size() - 1;
-        } else {
-            _readers[index].first = true;
-            _readers[index].second.uuid = universal_id{};
-            _readers[index].second.reader = std::move(reader);
-            _readers[index].second.b.clear();
-            _readers[index].second.raw.clear();
         }
+
+        _readers[index].first = true;
+        _readers[index].second.uuid = universal_id{};
+        _readers[index].second.reader = std::move(reader);
+        _readers[index].second.b.clear();
+        _readers[index].second.raw.clear();
 
         reader_id id = _readers[index].second.reader.native();
 
@@ -798,26 +805,19 @@ private:
 
         auto saddr = item.reader.saddr();
 
-        // Force peer expiration
-        if (_discovery)
-            _discovery->expire_peer(item.uuid);
-
-        // Erase file input pool
-        if (_transporter)
-            _transporter->expire_addresser(item.uuid);
-
         if (_reader_poller)
             _reader_poller->remove(item.reader);
 
-        // Notify
-        reader_closed(item.uuid, saddr.addr, saddr.port);
-
+        // Alive is false, element at `index` can be reused
         _readers[index].first = false;
 
         item.uuid = universal_id{};
         item.reader.~reader_type();
         item.b.clear(); // No need to destroy, can be reused later
         item.raw.clear();
+
+        // Notify
+        reader_closed(uuid, saddr.addr, saddr.port);
     }
 
     void check_writer_consistency (writer_id id)
@@ -941,14 +941,14 @@ private:
         }
 
         if (_writers.empty() || index == count) {
-            _writers.emplace_back(true, writer_account{uuid, writer_type{}, oqueue_type{}, true});
+            _writers.emplace_back(true, writer_account{});
             index = _writers.size() - 1;
-        } else {
-            _writers[index].first = true;
-            _writers[index].second.uuid = uuid;
-            _writers[index].second.writer = writer_type{};
-            _writers[index].second.q.clear();
         }
+
+        _writers[index].first = true;
+        _writers[index].second.uuid = uuid;
+        _writers[index].second.writer = writer_type{};
+        _writers[index].second.q.clear();
 
         writer_id id = _writers[index].second.writer.native();
 
@@ -1013,6 +1013,7 @@ private:
         auto pos1 = _writer_ids.find(id);
         auto index = pos1->second;
 
+        // Alive is false, element at `index` can be reused
         _writers[index].first = false;
 
         auto & item = _writers[index].second;
@@ -1022,35 +1023,21 @@ private:
         _writer_ids.erase(pos1);
         _writer_uuids.erase(pos2);
 
-        // Force peer expiration
-        if (_discovery)
-            _discovery->expire_peer(item.uuid);
-
-        // Erase file output pool
-        if (_transporter)
-            _transporter->expire_addressee(item.uuid);
-
-        auto do_release_reader = (_reader_uuids.find(item.uuid) != _reader_uuids.end());
-
-        if (do_release_reader)
-            release_reader(item.uuid);
-
         auto saddr = item.writer.saddr();
 
         if (_writer_poller)
             _writer_poller->remove(item.writer);
 
-        // Notify
-        writer_closed(item.uuid, saddr.addr, saddr.port);
-
-        // Release reader by universal identifier
-        release_reader(item.uuid);
+        auto uuid = item.uuid;
 
         item.uuid = universal_id{};
         item.writer.disconnect();
         item.writer.~writer_type();
         item.q.clear(); // No need to destroy, can be reused later
         item.chunks.clear();
+
+        // Notify
+        writer_closed(uuid, saddr.addr, saddr.port);
     }
 
     entity_id enqueue_packets_helper (oqueue_type * q, universal_id addressee
@@ -1175,8 +1162,9 @@ private:
         if (rc < 0) {
             on_error(tr::f_("Receive data failure from: {}"
                 , to_string(paccount->reader.saddr())));
-            release_writer(paccount->uuid);
-            release_reader(paccount->uuid);
+
+            // Expire peer and release resources allocated for it
+            _discovery->expire_peer(paccount->uuid);
             return;
         }
 
@@ -1359,8 +1347,8 @@ private:
                     on_error(tr::f_("send failure to {}: {}"
                         , to_string(paccount->writer.saddr()), err.what()));
 
-                    release_writer(paccount->uuid);
-                    release_reader(paccount->uuid);
+                    // Expire peer and release resources allocated for it
+                    _discovery->expire_peer(paccount->uuid);
                     break_sending = true;
                     break;
 
@@ -1368,8 +1356,8 @@ private:
                     on_error(tr::f_("send failure to {}: network failure: {}"
                         , to_string(paccount->writer.saddr()), err.what()));
 
-                    release_writer(paccount->uuid);
-                    release_reader(paccount->uuid);
+                    // Expire peer and release resources allocated for it
+                    _discovery->expire_peer(paccount->uuid);
                     break_sending = true;
                     break;
 
