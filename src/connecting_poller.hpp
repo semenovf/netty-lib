@@ -17,7 +17,7 @@ connecting_poller<Backend>::connecting_poller ()
     : connecting_poller(specialized{})
 {
     on_error = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::f_("ERROR: connecting poller: {}\n"), text);
+        fmt::print(stderr, tr::_("ERROR: connecting poller: {}\n"), text);
     };
 }
 

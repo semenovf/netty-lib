@@ -22,8 +22,6 @@
 #   include <sys/socket.h>
 #endif
 
-#include "pfs/log.hpp"
-
 static char const * TAG = "POSIX";
 
 namespace netty {
@@ -50,7 +48,12 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
     if (n > 0) {
         int rcounter = n;
 
-        for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
+        auto pos  = _rep.sockets.begin();
+        auto last = _rep.sockets.end();
+
+        for (; pos != last && rcounter > 0; ++pos) {
+            auto fd = *pos;
+
             if (FD_ISSET(fd, & wfds)) {
                 res++;
 

@@ -37,7 +37,7 @@ void startup ()
         auto version_requested = MAKEWORD(2, 2);
 
         auto rc = WSAStartup(version_requested, & wsa_data);
-        PFS__TERMINATE(rc != 0, "WSAStartup failed: the Winsock 2.2 or newer dll was not found");
+        PFS__TERMINATE(rc == 0, "WSAStartup failed: the Winsock 2.2 or newer dll was not found");
 #endif // _MSC_VER
 
 #if NETTY__UDT_ENABLED
@@ -53,10 +53,10 @@ void startup ()
             // Here may be exception CUDTException(1, 0, WSAGetLastError());
             // related to WSAStartup call.
             if (CUDTException{1, 0, 0}.getErrorCode() == ex.getErrorCode()) {
-                PFS__TERMINATE(true, ex.getErrorMessage());
+                PFS__TERMINATE(false, ex.getErrorMessage());
             } else {
                 // Unexpected error
-                PFS__TERMINATE(true, ex.getErrorMessage());
+                PFS__TERMINATE(false, ex.getErrorMessage());
             }
         }
 #endif

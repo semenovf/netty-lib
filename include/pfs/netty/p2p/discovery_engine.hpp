@@ -271,8 +271,8 @@ private:
             if (pos->second.expiration_timepoint < now) {
                 LOG_TRACE_2("Discovered peer expired by timeout: {}@{}: {} < {}"
                     , pos->first, to_string(pos->second.saddr)
-                    , pos->second.expiration_timepoint.time_since_epoch()
-                    , now.time_since_epoch());
+                    , std::chrono::duration_cast<std::chrono::seconds>(pos->second.expiration_timepoint.time_since_epoch())
+                    , std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()));
 
                 peer_expired(pos->first, pos->second.saddr);
                 pos = _discovered_peers.erase(pos);

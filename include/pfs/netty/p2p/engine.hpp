@@ -133,12 +133,12 @@ private:
 
     struct writer_account {
         universal_id uuid;
+        bool can_write {false};
         writer_type writer;
 
         // Packet output queue
         oqueue_type q;
-        bool can_write;
-
+        
         // File chunks output queue (mapped by file identifier).
         std::map<universal_id, std::pair<packet_type,oqueue_type>> chunks;
     };
@@ -254,7 +254,6 @@ public:
      */
     engine (universal_id host_uuid, socket4_addr server_addr, options const & opts)
         : _host_uuid(host_uuid)
-        , _server(server_addr)
     {
         auto bad = false;
         std::string invalid_argument_desc;
@@ -286,6 +285,8 @@ public:
 
         // Call befor any network operations
         startup();
+
+        _server = server_type(server_addr);
 
         configure_discovery();
         configure_transporter();
@@ -743,6 +744,8 @@ private:
         if (_readers.empty()) {
             _readers.reserve(32);
         } else {
+            index = count;
+
             for (reader_index i = 0; i < count; i++) {
                 if (!_readers[i].first) {
                     index = i;
@@ -752,15 +755,15 @@ private:
         }
 
         if (_readers.empty() || index == count) {
-            _readers.emplace_back(true, reader_account{});
+            _readers.emplace_back(true, reader_account{universal_id{}, std::move(reader)});
             index = _readers.size() - 1;
+        } else {
+            _readers[index].first = true;
+            _readers[index].second.uuid = universal_id{};
+            _readers[index].second.reader = std::move(reader);
+            _readers[index].second.b.clear();
+            _readers[index].second.raw.clear();
         }
-
-        _readers[index].first = true;
-        _readers[index].second.uuid = universal_id{};
-        _readers[index].second.reader = std::move(reader);
-        _readers[index].second.b.clear();
-        _readers[index].second.raw.clear();
 
         reader_id id = _readers[index].second.reader.native();
 
@@ -932,6 +935,8 @@ private:
         if (_writers.empty()) {
             _writers.reserve(32);
         } else {
+            index = count;
+
             for (writer_index i = 0; i < count; i++) {
                 if (!_writers[i].first) {
                     index = i;
@@ -941,14 +946,16 @@ private:
         }
 
         if (_writers.empty() || index == count) {
-            _writers.emplace_back(true, writer_account{});
+            _writers.emplace_back(true, writer_account{uuid, false, writer_type{}});
             index = _writers.size() - 1;
+        } else {
+            _writers[index].first = true;
+            _writers[index].second.uuid = uuid;
+            _writers[index].second.can_write = false;
+            _writers[index].second.writer = writer_type{};
+            _writers[index].second.q.clear();
+            _writers[index].second.chunks.clear();
         }
-
-        _writers[index].first = true;
-        _writers[index].second.uuid = uuid;
-        _writers[index].second.writer = writer_type{};
-        _writers[index].second.q.clear();
 
         writer_id id = _writers[index].second.writer.native();
 

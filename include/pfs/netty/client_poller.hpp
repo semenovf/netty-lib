@@ -142,21 +142,18 @@ public:
         int n2 = 0;
         int n3 = 0;
 
-        auto empty_reader_poller = _reader_poller.empty();
-
-        if (!_connecting_poller.empty()) {
-            if (empty_reader_poller) {
-                n1 = _connecting_poller.poll(millis, perr);
-            } else {
-                n1 = _connecting_poller.poll(std::chrono::milliseconds{0}, perr);
-            }
-        }
+        // The order of call polls is matter
 
         if (!_writer_poller.empty())
-            n2 = _writer_poller.poll(std::chrono::milliseconds{0}, perr);
+            n1 = _writer_poller.poll(std::chrono::milliseconds{0}, perr);
 
-        if (!empty_reader_poller)
-            n3 = _reader_poller.poll(millis, perr);
+        if (!_reader_poller.empty())
+            n2 = _reader_poller.poll(millis, perr);
+        else
+            millis = std::chrono::milliseconds{0};
+
+        if (!_connecting_poller.empty())
+            n3 = _connecting_poller.poll(millis, perr);
 
         if (n1 < 0 && n2 < 0 && n3 < 0)
             return n1;

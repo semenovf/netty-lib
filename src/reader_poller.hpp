@@ -17,7 +17,7 @@ reader_poller<Backend>::reader_poller ()
     : reader_poller(specialized{})
 {
     on_error = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::f_("ERROR: reader poller: {}\n"), text);
+        fmt::print(stderr, tr::_("ERROR: reader poller: {}\n"), text);
     };
 }
 

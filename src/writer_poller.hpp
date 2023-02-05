@@ -17,7 +17,7 @@ writer_poller<Backend>::writer_poller ()
     : writer_poller(specialized{})
 {
     on_error = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::f_("ERROR: writer poller: {}\n"), text);
+        fmt::print(stderr, tr::_("ERROR: writer poller: {}\n"), text);
     };
 }
 

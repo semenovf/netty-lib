@@ -61,7 +61,13 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
     bool in_progress = false;
 
     if (rc < 0) {
-        in_progress = (errno == EINPROGRESS);
+#if _MSC_VER
+        auto lastWsaError = WSAGetLastError();
+        in_progress = lastWsaError == WSAEINPROGRESS 
+            || lastWsaError == WSAEWOULDBLOCK; 
+#else
+        in_progress = (errno == EINPROGRESS || errno == EWOULDBLOCK);
+#endif
 
         if (!in_progress) {
             error err {
@@ -96,12 +102,12 @@ void tcp_socket::disconnect (error * perr)
 #endif
 
         if (rc != 0) {
-            auto ec = pfs::get_last_system_error();
-
 #if _MSC_VER
-            if (ec.value() != WSAENOTCONN) {
+            auto lastWsaError = WSAGetLastError();
+
+            if (lastWsaError != WSAENOTCONN && lastWsaError != WSAECONNRESET) {
 #else // _MSC_VER
-            if (ec.value() != ENOTCONN) {
+            if (errno != ENOTCONN && errno != ECONNRESET) {
 #endif // POSIX
                 error err {
                       errc::socket_error

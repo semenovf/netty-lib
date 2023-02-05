@@ -42,13 +42,15 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
     if (n < 0)
         return n;
 
-    int res = 0;
-
     if (n > 0) {
         int rcounter = n;
 
-        for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
+        auto pos  = _rep.sockets.begin();
+        auto last = _rep.sockets.end();
+
+        for (; pos != last && rcounter > 0; ++pos) {
             bool removed = false;
+            auto fd = *pos;
 
             if (FD_ISSET(fd, & rfds)) {
                 int error_val = 0;
@@ -92,21 +94,18 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
             }
 
             if (FD_ISSET(fd, & wfds)) {
-                if (!removed) {
-                    res++;
-
+                if (!removed)
                     remove(fd);
 
-                    if (connected)
-                        connected(fd);
-                }
+                if (connected)
+                    connected(fd);
 
                 --rcounter;
             }
         }
     }
 
-    return res;
+    return n;
 }
 
 #endif // NETTY__SELECT_ENABLED

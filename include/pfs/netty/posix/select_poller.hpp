@@ -9,8 +9,13 @@
 #pragma once
 #include "pfs/netty/error.hpp"
 #include <limits>
+#include <vector>
 
 #if _MSC_VER
+#   ifdef FD_SETSIZE
+#       undef FD_SETSIZE
+#   endif
+#   define FD_SETSIZE 512
 #   include <winsock2.h>
 #else
 #   include <sys/select.h>
@@ -22,11 +27,16 @@ namespace posix {
 class select_poller
 {
 public:
+#if _MSC_VER
+    using native_socket_type = SOCKET;
+    static native_socket_type const kINVALID_SOCKET = INVALID_SOCKET;
+#else
     using native_socket_type = int;
+    static native_type constexpr kINVALID_SOCKET = -1;
+#endif
 
-    // Highest-numbered file descriptor in any of the three sets.
-    native_socket_type max_fd {-1};
-    native_socket_type min_fd {(std::numeric_limits<native_socket_type>::max)()};
+    std::vector<native_socket_type> sockets;
+    int count = 0;
 
     fd_set readfds;
     fd_set writefds;

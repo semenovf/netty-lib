@@ -24,8 +24,6 @@
 #   include <sys/socket.h>
 #endif
 
-#include "pfs/log.hpp"
-
 static char const * TAG = "POSIX";
 
 namespace netty {
@@ -52,7 +50,12 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
     if (n > 0) {
         int rcounter = n;
 
-        for (int fd = _rep.min_fd; fd <= _rep.max_fd && rcounter > 0; fd++) {
+        auto pos  = _rep.sockets.begin();
+        auto last = _rep.sockets.end();
+
+        for (; pos != last && rcounter > 0; ++pos) {
+            auto fd = *pos;
+
             if (FD_ISSET(fd, & rfds)) {
                 res++;
 
@@ -70,11 +73,24 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                 } else if (n1 == 0) {
                     disconnect = true;
                 } else {
-                    if (errno != ECONNRESET) {
-                        on_error(fd, tr::f_("read socket failure: {}"
-                            , pfs::system_error_text(errno)));
+#if _MSC_VER
+                    auto lastWsaError = WSAGetLastError();
+
+                    // The message was too large to fit into the specified buffer and was truncated.
+                    // Is not an error. Process this error as normal result.
+                    if (lastWsaError == WSAEMSGSIZE) {
+                        if (ready_read)
+                            ready_read(fd);
+                    } else {
+#endif
+                        if (errno != ECONNRESET) {
+                            on_error(fd, tr::f_("read socket failure: {}"
+                                , pfs::system_error_text(errno)));
+                        }
+                        disconnect = true;
+#if _MSC_VER
                     }
-                    disconnect = true;
+#endif
                 }
 
                 if (disconnect) {

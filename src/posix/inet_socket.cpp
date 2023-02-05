@@ -76,11 +76,16 @@ inet_socket::inet_socket (type_enum socktype)
         u_long nonblocking = 1;
         auto rc = ::ioctlsocket(_socket, FIONBIO, & nonblocking);
 
-        throw error{
-              errc::socket_error
-            , tr::_("create INET socket failure: set non-blocking")
-            , pfs::system_error_text()
-        };
+        if (rc != 0) {
+#if _MSC_VER
+            auto lastWsaError = WSAGetLastError();
+#endif
+            throw error {
+                  errc::socket_error
+                , tr::_("create INET socket failure: set non-blocking")
+                , pfs::system_error_text()
+            };
+        }
     }
 #endif
 
@@ -88,17 +93,25 @@ inet_socket::inet_socket (type_enum socktype)
     int rc = 0;
 
 #if defined(SO_REUSEADDR)
-    // reinterpret_cast is a MSVC requirements (C2664)
-    if (rc == 0) rc = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR
-        , reinterpret_cast<char *>(& yes), sizeof(int));
+    if (rc == 0) {
+#   if _MSC_VER
+        rc = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR
+           , reinterpret_cast<char *>(& yes), sizeof(int));
+#   else
+        rc = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR, & yes, sizeof(int));
+#   endif
+    }
 #endif
 
 #if defined(SO_KEEPALIVE)
     if (ai_socktype & SOCK_STREAM) {
         if (rc == 0) {
-            // reinterpret_cast is a MSVC requirements (C2664)
+#   if _MSC_VER
             rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE
                 , reinterpret_cast<char *>(& yes), sizeof(int));
+#else
+            rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE, & yes, sizeof(int));
+#endif
         }
     }
 #endif
@@ -128,7 +141,7 @@ inet_socket & inet_socket::operator = (inet_socket && other)
 
 inet_socket::~inet_socket ()
 {
-    if (_socket >= 0) {
+    if (_socket != kINVALID_SOCKET) {
 #if _MSC_VER
 		::shutdown(_socket, SD_BOTH);
 		::closesocket(_socket);
@@ -206,9 +219,9 @@ int inet_socket::available (error * perr) const
             n = bytes_read;
             break;
         } else {
-            auto errn = WSAGetLastError();
+            auto lastWsaError = WSAGetLastError();
 
-            switch (errn) {
+            switch (lastWsaError) {
                 case WSAEMSGSIZE:
                     continue;
                 case WSAECONNRESET:
@@ -278,7 +291,13 @@ int inet_socket::recv (char * data, int len, error * perr)
     auto n = ::recv(_socket, data, static_cast<int>(len), 0);
 
     if (n < 0) {
+#if _MSC_VER
+        auto lastWsaError = WSAGetLastError();
+
+        if (lastWsaError == WSAEWOULDBLOCK) {
+#else
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+#endif
             n = 0;
         } else {
             error err {
@@ -315,7 +334,13 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 #endif
 
     if (n < 0) {
+#if _MSC_VER
+        auto lastWsaError = WSAGetLastError();
+
+        if (lastWsaError == WSAEWOULDBLOCK) {
+#else
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+#endif
             n = 0;
         } else {
             error err {
@@ -361,15 +386,20 @@ send_result inet_socket::send (char const * data, int len, error * perr)
 #endif
 
         if (n < 0) {
-            error err {
-                  errc::socket_error
-                , tr::_("send failure")
-                , pfs::system_error_text()
-            };
+#if _MSC_VER
+            auto lastWsaError = WSAGetLastError();
 
-            if (perr)
-                *perr = std::move(err);
+            if (lastWsaError == WSAENOBUFS)
+                return send_result{send_status::overflow, n};
 
+            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET 
+                    || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+                return send_result{send_status::network, n};
+
+            if (lastWsaError == WSAEWOULDBLOCK)
+                return send_result{send_status::again, n};
+
+#else
             // man send:
             // The output queue for a network interface was full. This generally
             // indicates that the interface has stopped sending, but may be
@@ -385,8 +415,15 @@ send_result inet_socket::send (char const * data, int len, error * perr)
 
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 return send_result{send_status::again, n};
+#endif
+            error err {
+                  errc::socket_error
+                , tr::_("send failure")
+                , pfs::system_error_text()
+            };
 
             if (perr) {
+                *perr = std::move(err);
                 return send_result{send_status::failure, n};
             } else {
                 throw err;
@@ -427,15 +464,20 @@ send_result inet_socket::send_to (socket4_addr const & saddr
 #endif
 
         if (n < 0) {
-            error err {
-                  errc::socket_error
-                , tr::f_("send to socket failure: {}", to_string(saddr))
-                , pfs::system_error_text()
-            };
+#if _MSC_VER
+            auto lastWsaError = WSAGetLastError();
 
-            if (perr)
-                *perr = std::move(err);
+            if (lastWsaError == WSAENOBUFS)
+                return send_result{send_status::overflow, n};
 
+            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET 
+                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+                return send_result{send_status::network, n};
+
+            if (lastWsaError == WSAEWOULDBLOCK)
+                return send_result{send_status::again, n};
+
+#else
             if (errno == ENOBUFS)
                 return send_result{send_status::overflow, n};
 
@@ -445,8 +487,15 @@ send_result inet_socket::send_to (socket4_addr const & saddr
 
             if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
                 return send_result{send_status::again, n};
+#endif
+            error err {
+                  errc::socket_error
+                , tr::f_("send to socket failure: {}", to_string(saddr))
+                , pfs::system_error_text()
+            };
 
             if (perr) {
+                *perr = std::move(err);
                 return send_result{send_status::failure, n};
             } else {
                 throw err;
