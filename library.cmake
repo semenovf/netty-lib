@@ -14,7 +14,7 @@ project(netty CXX)
 
 include(CheckIncludeFile)
 
-option(NETTY__BUILD_SHARED "Enable build shared library" ON)
+option(NETTY__BUILD_SHARED "Enable build shared library" OFF)
 option(NETTY__BUILD_STATIC "Enable build static library" ON)
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" ON)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
