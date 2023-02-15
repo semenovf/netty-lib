@@ -71,8 +71,8 @@ protected:
 
     NETTY__EXPORT ~inet_socket ();
 
-    inet_socket (inet_socket &&);
-    inet_socket & operator = (inet_socket &&);
+    NETTY__EXPORT inet_socket (inet_socket &&);
+    NETTY__EXPORT inet_socket & operator = (inet_socket &&);
 
 protected:
     static bool bind (native_type sock, socket4_addr const & saddr, error * perr = nullptr);

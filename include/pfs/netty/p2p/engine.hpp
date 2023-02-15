@@ -1136,6 +1136,8 @@ private:
         writer_ready(paccount->uuid, paccount->writer.saddr().addr
             , paccount->writer.saddr().port);
 
+        _writer_poller->wait_for_write(paccount->writer);
+
         // Payload doesn't matter, but length must be greater than zero.
         char h = 'H';
         enqueue_packets(paccount->uuid, packet_type::hello, & h, 1);
@@ -1318,7 +1320,7 @@ private:
         if (available == 0) {
             pbuffer->clear();
         } else {
-            auto erased_length = pbuffer_pos - pbuffer->begin();
+            //auto erased_length = pbuffer_pos - pbuffer->begin();
             pbuffer->erase(pbuffer->begin(), pbuffer_pos);
         }
     }

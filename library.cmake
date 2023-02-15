@@ -67,11 +67,11 @@ endif()
 if (MSVC)
     list(APPEND _netty__compile_options "/wd4251" "/wd4267" "/wd4244")
 
-    if (NETTY__BUILD_STATIC)
+    if (NETTY__BUILD_SHARED)
         portable_target(LINK ${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
     endif()
 
-    if (NETTY__BUILD_SHARED)
+    if (NETTY__BUILD_STATIC)
         portable_target(LINK ${STATIC_PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
     endif()
 endif(MSVC)

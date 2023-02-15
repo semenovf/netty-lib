@@ -51,7 +51,7 @@ list(APPEND _netty_p2p__sources
 if (NETTY_P2P__BUILD_SHARED)
     portable_target(SOURCES ${PROJECT_NAME} ${_netty_p2p__sources})
     portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-    portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE PFS__LOG_LEVEL=2)
+    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC PFS__LOG_LEVEL=2)
 
     if (TARGET pfs::netty)
         portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::netty)
@@ -63,7 +63,7 @@ endif()
 if (NETTY_P2P__BUILD_STATIC)
     portable_target(SOURCES ${STATIC_PROJECT_NAME} ${_netty_p2p__sources})
     portable_target(INCLUDE_DIRS ${STATIC_PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-    portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PRIVATE PFS__LOG_LEVEL=2)
+    portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PUBLIC PFS__LOG_LEVEL=2)
 
     if (TARGET pfs::netty::static)
         portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::netty::static)
