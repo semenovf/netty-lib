@@ -44,6 +44,12 @@
 1. [QUICK](https://quicwg.org)
 2. [mvfst - an implementation of QUIC by Facebook](https://github.com/facebookincubator/mvfst)
 
+## Netlink
+1. [libmnl](https://www.netfilter.org/projects/libmnl/doxygen/html/index.html)
+2. [Mirror of git://git.netfilter.org/libmnl](https://github.com/justmirror/libmnl)
+3. [Netlink Library (libnl)](https://www.infradead.org/~tgr/libnl/doc/core.html)
+3. [Manipulating the Networking Environment Using RTNETLINK](https://www.linuxjournal.com/article/8498)
+
 ## Miscellaneous resources
 
 1. [Rendezvous protocol](https://en.wikipedia.org/wiki/Rendezvous_protocol)

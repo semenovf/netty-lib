@@ -114,6 +114,23 @@ if (UNIX)
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
         list(APPEND _netty__definitions "NETTY__EPOLL_ENABLED=1")
     endif()
+
+    CHECK_INCLUDE_FILE("libmnl/libmnl.h" __has_libmnl)
+
+    if (__has_libmnl)
+        list(APPEND _netty__sources
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_monitor.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_socket.cpp)
+        list(APPEND _netty__definitions "NETTY__LIBMNL_ENABLED=1")
+
+        if (NETTY__BUILD_SHARED)
+            portable_target(LINK ${PROJECT_NAME} PRIVATE mnl)
+        endif()
+
+        if (NETTY__BUILD_STATIC)
+            portable_target(LINK ${STATIC_PROJECT_NAME} PRIVATE mnl)
+        endif()
+    endif()
 endif()
 
 if (NETTY__ENABLE_UDT)

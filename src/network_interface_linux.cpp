@@ -61,10 +61,9 @@ static bool ioctl_helper (int fd
 // is not a privileged operation.
 //
 
-std::vector<network_interface> fetch_interfaces (error * perr)
+void foreach_interface (std::function<void(network_interface const &)> visitor
+    , error * perr)
 {
-    std::vector<network_interface> result;
-
     struct ifaddrs * ifaddr;
 
     if (getifaddrs(& ifaddr) != 0) {
@@ -75,7 +74,7 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
         if (perr) {
             *perr = err;
-            return std::vector<network_interface>{};
+            return;
         } else {
             throw err;
         }
@@ -96,7 +95,7 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
         if (perr) {
             *perr = err;
-            return std::vector<network_interface>{};
+            return;
         } else {
             throw err;
         }
@@ -114,81 +113,72 @@ std::vector<network_interface> fetch_interfaces (error * perr)
 
             std::string name {ifa->ifa_name};
 
-            auto it = ifaces_map.find(name);
-            network_interface * iface = nullptr;
+            network_interface iface;
 
-            if (it == ifaces_map.end()) {
-                std::error_code ec;
-                result.emplace_back();
-                iface = & result.back();
-                ifaces_map.insert({name, result.size() - 1});
-                iface->_data.adapter_name = name;
-                iface->_data.readable_name = name;
+            std::error_code ec;
+            iface._data.adapter_name = name;
+            iface._data.readable_name = name;
 
-                struct ifreq ifr;
-                std::memcpy(ifr.ifr_name, name.c_str(), name.size());
-                ifr.ifr_name[name.size()] = '\0';
+            struct ifreq ifr;
+            std::memcpy(ifr.ifr_name, name.c_str(), name.size());
+            ifr.ifr_name[name.size()] = '\0';
 
-                if (ioctl_helper(sock, SIOCGIFMTU, & ifr, ec))
-                    iface->_data.mtu = ifr.ifr_mtu;
+            if (!ec && ioctl_helper(sock, SIOCGIFMTU, & ifr, ec))
+                iface._data.mtu = ifr.ifr_mtu;
 
-                if (ioctl_helper(sock, SIOCGIFADDR, & ifr, ec)) {
-                    auto p = reinterpret_cast<struct sockaddr_in *>(& ifr.ifr_addr);
-                    iface->_data.ip4 = htonl(p->sin_addr.s_addr);
+            if (!ec && ioctl_helper(sock, SIOCGIFADDR, & ifr, ec)) {
+                auto p = reinterpret_cast<struct sockaddr_in *>(& ifr.ifr_addr);
+                iface._data.ip4 = htonl(p->sin_addr.s_addr);
+            }
+
+            if (!ec && ioctl_helper(sock, SIOCGIFFLAGS, & ifr, ec)) {
+                // Interface is a loopback interface
+                if (ifr.ifr_flags & IFF_LOOPBACK)
+                    iface._data.type = network_interface_type::loopback;
+
+                // Interface is a point-to-point link.
+                if (ifr.ifr_flags & IFF_POINTOPOINT)
+                    iface._data.type = network_interface_type::ppp;
+
+                // TODO Other flags can be important
+                // IFF_UP            Interface is running.
+                // IFF_BROADCAST     Valid broadcast address set.
+                // IFF_DEBUG         Internal debugging flag.
+                // IFF_RUNNING       Resources allocated.
+                // IFF_NOARP         No arp protocol, L2 destination address not set.
+                // IFF_PROMISC       Interface is in promiscuous mode.
+                // IFF_NOTRAILERS    Avoid use of trailers.
+                // IFF_ALLMULTI      Receive all multicast packets.
+                // IFF_MASTER        Master of a load balancing bundle.
+                // IFF_SLAVE         Slave of a load balancing bundle.
+                // IFF_MULTICAST     Supports multicast
+                // IFF_PORTSEL       Is able to select media type via ifmap.
+                // IFF_AUTOMEDIA     Auto media selection active.
+                // IFF_DYNAMIC       The addresses are lost when the interface goes down.
+                // IFF_LOWER_UP      Driver signals L1 up (since Linux 2.6.17)
+                // IFF_DORMANT       Driver signals dormant (since Linux 2.6.17)
+                // IFF_ECHO          Echo sent packets (since Linux 2.6.25)
+            }
+
+            if (ec) {
+                error err {
+                        errc::system_error
+                    , ec.message()
+                };
+
+                if (perr) {
+                    *perr = err;
+                    return;
+                } else {
+                    throw err;
                 }
-
-                if (ioctl_helper(sock, SIOCGIFFLAGS, & ifr, ec)) {
-                    // Interface is a loopback interface
-                    if (ifr.ifr_flags & IFF_LOOPBACK)
-                        iface->_data.type = network_interface_type::loopback;
-
-                    // Interface is a point-to-point link.
-                    if (ifr.ifr_flags & IFF_POINTOPOINT)
-                        iface->_data.type = network_interface_type::ppp;
-
-                    // TODO Other flags can be important
-                    // IFF_UP            Interface is running.
-                    // IFF_BROADCAST     Valid broadcast address set.
-                    // IFF_DEBUG         Internal debugging flag.
-                    // IFF_RUNNING       Resources allocated.
-                    // IFF_NOARP         No arp protocol, L2 destination address not set.
-                    // IFF_PROMISC       Interface is in promiscuous mode.
-                    // IFF_NOTRAILERS    Avoid use of trailers.
-                    // IFF_ALLMULTI      Receive all multicast packets.
-                    // IFF_MASTER        Master of a load balancing bundle.
-                    // IFF_SLAVE         Slave of a load balancing bundle.
-                    // IFF_MULTICAST     Supports multicast
-                    // IFF_PORTSEL       Is able to select media type via ifmap.
-                    // IFF_AUTOMEDIA     Auto media selection active.
-                    // IFF_DYNAMIC       The addresses are lost when the interface goes down.
-                    // IFF_LOWER_UP      Driver signals L1 up (since Linux 2.6.17)
-                    // IFF_DORMANT       Driver signals dormant (since Linux 2.6.17)
-                    // IFF_ECHO          Echo sent packets (since Linux 2.6.25)
-                }
-
-                if (ec) {
-                    error err {
-                          errc::system_error
-                        , ec.message()
-                    };
-
-                    if (perr) {
-                        *perr = err;
-                        return std::vector<network_interface>{};
-                    } else {
-                        throw err;
-                    }
-                }
-
             } else {
-                iface = & result[it->second];
+                visitor(iface);
             }
         }
     }
 
     freeifaddrs(ifaddr);
-
-    return result;
 }
 
 } // namespace netty

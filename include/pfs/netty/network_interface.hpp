@@ -10,6 +10,7 @@
 #include "exports.hpp"
 #include "error.hpp"
 #include "inet4_addr.hpp"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -186,8 +187,13 @@ public:
         return _data.type == network_interface_type::loopback;
     }
 
-    friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr);
+    //friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr);
+    friend NETTY__EXPORT void foreach_interface (std::function<void(network_interface const &)> visitor
+    , error * perr);
 };
+
+void foreach_interface (std::function<void(network_interface const &)> visitor
+    , error * perr = nullptr);
 
 /**
  * @brief Fetch network interfaces.
@@ -198,20 +204,33 @@ public:
  *         - netty::errc::system_error
  * @return Network interfaces
  */
-NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr = nullptr);
 
 template <typename Visitor>
-std::vector<network_interface> fetch_interfaces (Visitor && visit, error * perr = nullptr)
+std::vector<network_interface> fetch_interfaces (Visitor && visitor, error * perr = nullptr)
 {
-    auto ifaces = fetch_interfaces(perr);
+    error err;
     std::vector<network_interface> result;
 
-    for (auto & iface: ifaces) {
-        if (visit(iface))
+    foreach_interface([& result, & visitor] (network_interface const & iface) {
+        if (visitor(iface))
             result.push_back(iface);
+    }, & err);
+
+    if (err) {
+        if (perr) {
+            *perr = err;
+            return std::vector<network_interface>{};
+        } else {
+            throw err;
+        }
     }
 
     return result;
+}
+
+inline std::vector<network_interface> fetch_all_interfaces (error * perr = nullptr)
+{
+    return fetch_interfaces([] (network_interface const &) { return true; }, perr);
 }
 
 enum class usename {

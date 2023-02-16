@@ -11,4 +11,3 @@ project(p2p-demo)
 
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} pfs::netty::p2p pfs::netty)
-target_compile_definitions(${PROJECT_NAME} PUBLIC PFS__LOG_LEVEL=3)
