@@ -143,13 +143,14 @@ inet_socket & inet_socket::operator = (inet_socket && other)
 
 inet_socket::~inet_socket ()
 {
-    if (_socket != kINVALID_SOCKET) {
 #if _MSC_VER
-		::shutdown(_socket, SD_BOTH);
-		::closesocket(_socket);
+    if (_socket != kINVALID_SOCKET) {
+        ::shutdown(_socket, SD_BOTH);
+        ::closesocket(_socket);
 #else
+    if (_socket > 0) {
         ::shutdown(_socket, SHUT_RDWR);
-		::close(_socket);
+        ::close(_socket);
 #endif
 
         _socket = kINVALID_SOCKET;
@@ -175,7 +176,7 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
 {
     sockaddr_in addr_in4;
 
-    memset(& addr_in4, 0, sizeof(addr_in4));
+    std::memset(& addr_in4, 0, sizeof(addr_in4));
 
     addr_in4.sin_family      = AF_INET;
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
@@ -323,7 +324,7 @@ int inet_socket::recv (char * data, int len, error * perr)
 int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * perr)
 {
     sockaddr_in addr_in4;
-    memset(& addr_in4, 0, sizeof(addr_in4));
+    std::memset(& addr_in4, 0, sizeof(addr_in4));
 
 #if _MSC_VER
     int addr_in4_len = sizeof(addr_in4);
@@ -447,7 +448,7 @@ send_result inet_socket::send_to (socket4_addr const & saddr
 {
     sockaddr_in addr_in4;
 
-    memset(& addr_in4, 0, sizeof(addr_in4));
+    std::memset(& addr_in4, 0, sizeof(addr_in4));
 
     addr_in4.sin_family      = AF_INET;
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));

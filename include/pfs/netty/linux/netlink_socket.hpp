@@ -10,7 +10,9 @@
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
 
+#if NETTY__LIBMNL_ENABLED
 struct mnl_socket;
+#endif
 
 namespace netty {
 namespace linux_os {
@@ -30,7 +32,11 @@ public:
     };
 
 private:
+#if NETTY__LIBMNL_ENABLED
     mnl_socket * _socket { nullptr };
+#else
+    native_type _socket { kINVALID_SOCKET };
+#endif
 
 public:
     /**

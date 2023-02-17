@@ -102,7 +102,7 @@ if (MSVC OR __has_sys_select)
     list(APPEND _netty__definitions "NETTY__SELECT_ENABLED=1")
 endif()
 
-if (UNIX)
+if (UNIX OR ANDROID)
     CHECK_INCLUDE_FILE("sys/epoll.h" __has_sys_epoll)
 
     if (__has_sys_epoll)
@@ -117,10 +117,11 @@ if (UNIX)
 
     CHECK_INCLUDE_FILE("libmnl/libmnl.h" __has_libmnl)
 
+    list(APPEND _netty__sources
+        ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_monitor.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_socket.cpp)
+
     if (__has_libmnl)
-        list(APPEND _netty__sources
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_monitor.cpp
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_socket.cpp)
         list(APPEND _netty__definitions "NETTY__LIBMNL_ENABLED=1")
 
         if (NETTY__BUILD_SHARED)
