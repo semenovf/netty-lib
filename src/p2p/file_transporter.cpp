@@ -260,7 +260,7 @@ file_transporter::ifile_item * file_transporter::locate_ifile_item (
                 , std::move(desc_file)
                 , std::move(data_file)
                 , 0
-                , pfs::crypto::sha256{}
+                //, pfs::crypto::sha256{}
             });
 
             return & res.first->second;
@@ -299,7 +299,7 @@ void file_transporter::commit_incoming_file (universal_id addresser
     auto * p = locate_ifile_item(addresser, fileid, ensure);
 
     if (!p) {
-        throw error{
+        throw error {
               errc::filesystem_error
             , tr::f_("ifile item not found by fileid: {}", fileid)
         };
@@ -394,7 +394,7 @@ void file_transporter::commit_chunk (universal_id addresser, file_chunk const & 
     filesize_t last_offset = p->data_file.offset();
 
     p->data_file.write(fc.chunk.data(), fc.chunk.size());
-    p->hash.update(fc.chunk.data(), fc.chunk.size());
+    //p->hash.update(fc.chunk.data(), fc.chunk.size());
 
     // Write offset
     filesize_t offset = p->data_file.offset();
@@ -454,8 +454,7 @@ void file_transporter::process_file_request (universal_id sender
 
         // Add info to output pool for sending file
         _ofile_pool.emplace(fr.fileid, ofile_item{
-            sender, std::move(data_file), false, pfs::crypto::sha256{}
-        });
+            sender, std::move(data_file), true});
 
         // Send file_begin packet
         file_begin fb { fr.fileid, fr.offset };
@@ -489,18 +488,48 @@ void file_transporter::process_file_begin (universal_id addresser
     if (!p)
         return;
 
-    download_progress(addresser, fb.fileid, 0, p->filesize);
+    download_progress(addresser, fb.fileid, fb.offset, p->filesize);
 }
 
 void file_transporter::process_file_chunk (universal_id sender
     , std::vector<char> const & data)
 {
-    auto fc = input_envelope_type::unseal<file_chunk>(data);
+    try {
+        auto fc = input_envelope_type::unseal<file_chunk>(data);
 
-    LOG_TRACE_3("File chunk received from: {} ({}; offset={}; chunk size={})"
-        , sender, fc.fileid, fc.offset, fc.chunk.size());
+        LOG_TRACE_3("File chunk received from: {} ({}; offset={}; chunk size={})"
+            , sender, fc.fileid, fc.offset, fc.chunk.size());
 
-    commit_chunk(sender, fc);
+        commit_chunk(sender, fc);
+    } catch (...) {
+        auto fch = input_envelope_type::unseal<file_chunk_header>(data);
+
+        auto * p = locate_ifile_item(sender, fch.fileid, false);
+
+        if (p) {
+            on_error(tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
+                , sender, fch.fileid));
+            stop_file(sender, fch.fileid);
+        } else if (_ifile_pool.size() == 1) {
+            // Only one file is downloading
+            auto pos = _ifile_pool.begin();
+
+            on_error(tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
+                , sender, pos->first));
+
+            stop_file(sender, pos->first);
+        } else {
+            on_error(tr::f_("file chunk from {} may be corrupted"
+                ", stopping all files from specified sender", sender));
+
+            // Unknown file, stop all from specified sender
+            for (auto const & x: _ifile_pool) {
+                if (x.second.addresser == sender) {
+                    stop_file(sender, x.first);
+                }
+            }
+        }
+    }
 }
 
 void file_transporter::process_file_end (universal_id sender
@@ -523,7 +552,6 @@ void file_transporter::process_file_state (universal_id /*sender*/
         case file_status::success:
             complete_file(fs.fileid, true);
             break;
-
 //         case file_status::checksum:
 //             complete_file(fs.fileid, false);
 //             break;
@@ -644,7 +672,19 @@ void file_transporter::stop_file (universal_id addressee, universal_id fileid)
 
     ready_to_send(addressee, fileid, packet_type::file_stop
         , out.data().data(), out.data().size());
+}
+
+bool file_transporter::request_chunk (universal_id fileid)
+{
+    auto pos = _ofile_pool.find(fileid);
+
+    if (pos != _ofile_pool.end()) {
+        pos->second.chunk_requested = true;
+        return true;
     }
+
+    return false;
+}
 
 // Send chunk of file packets
 int file_transporter::loop ()
@@ -661,10 +701,20 @@ int file_transporter::loop ()
             continue;
         }
 
+        auto * p = & pos->second;
+
+        // Chunks sending stopped temporary
+        if (!p->chunk_requested) {
+            ++pos;
+            continue;
+        }
+
+        // Temporary stop sending chunks
+        p->chunk_requested = false;
+
         counter++;
 
         auto fileid  = pos->first;
-        auto * p = & pos->second;
         auto offset = p->data_file.offset();
 
         file_chunk fc;
@@ -674,7 +724,6 @@ int file_transporter::loop ()
         if (fc.chunk.empty()) {
             // File send completely, send `file_end` packet
 
-            p->at_end = true;
             file_end fe { fileid/*, p->hash.digest()*/ };
 
             output_envelope_type out;
@@ -699,7 +748,7 @@ int file_transporter::loop ()
             ready_to_send(pos->second.addressee, fileid, packet_type::file_chunk
                 , out.data().data(), out.data().size());
 
-            p->hash.update(fc.chunk.data(), fc.chunk.size());
+            //p->hash.update(fc.chunk.data(), fc.chunk.size());
             ++pos;
         }
     }

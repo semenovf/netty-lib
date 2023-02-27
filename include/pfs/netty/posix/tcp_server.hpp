@@ -45,12 +45,16 @@ public:
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
     /**
-     * Aaccept a connection on a server socket.
+     * Accept a connection on a server socket.
      */
     NETTY__EXPORT tcp_socket accept (error * perr = nullptr);
+    NETTY__EXPORT tcp_socket accept_nonblocking (error * perr = nullptr);
 
 public:
-    NETTY__EXPORT static tcp_socket accept (native_type listener_sock, error * perr = nullptr);
+    NETTY__EXPORT static tcp_socket accept (native_type listener_sock
+        , error * perr = nullptr);
+    NETTY__EXPORT static tcp_socket accept_nonblocking (native_type listener_sock
+        , error * perr = nullptr);
 };
 
 }} // namespace netty::posix

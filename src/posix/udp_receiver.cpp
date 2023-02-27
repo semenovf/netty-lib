@@ -29,9 +29,9 @@ udp_receiver::udp_receiver (socket4_addr const & src_saddr
 {
     if (is_multicast(src_saddr.addr)) {
 #if _MSC_VER
-        bind(_socket, socket4_addr{INADDR_ANY, src_saddr.port});
+        bind(_socket, socket4_addr{INADDR_ANY, src_saddr.port}, nullptr);
 #else
-        bind(_socket, src_saddr);
+        bind(_socket, src_saddr, nullptr);
 #endif
 
         join(src_saddr, local_addr);
@@ -40,10 +40,10 @@ udp_receiver::udp_receiver (socket4_addr const & src_saddr
             that->leave(src_saddr, local_addr);
         };
     } else if (is_broadcast(src_saddr.addr)) {
-        bind(_socket, src_saddr);
+        bind(_socket, src_saddr, nullptr);
         enable_broadcast(true);
     } else {
-        bind(_socket, src_saddr);
+        bind(_socket, src_saddr, nullptr);
     }
 }
 
@@ -57,7 +57,7 @@ udp_receiver::udp_receiver (socket4_addr const & local_saddr)
         };
     }
 
-    bind(_socket, local_saddr);
+    bind(_socket, local_saddr, nullptr);
 
     if (is_broadcast(local_saddr.addr))
         enable_broadcast(true);

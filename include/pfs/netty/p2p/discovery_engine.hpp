@@ -269,7 +269,7 @@ private:
 
         for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
             if (pos->second.expiration_timepoint < now) {
-                LOG_TRACE_2("Discovered peer expired by timeout: {}@{}: {} < {}"
+                LOG_TRACE_1("Discovered peer expired by timeout: {}@{}: {} < {}"
                     , pos->first, to_string(pos->second.saddr)
                     , std::chrono::duration_cast<std::chrono::seconds>(pos->second.expiration_timepoint.time_since_epoch())
                     , std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()));
@@ -395,7 +395,7 @@ public:
         }
 
         // There is no problem if the discovery process starts much later.
-        auto transmit_timepoint = current_timepoint() + transmit_interval;
+        auto transmit_timepoint = current_timepoint() + std::chrono::seconds{1};
         _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
             , transmit_timepoint);
 

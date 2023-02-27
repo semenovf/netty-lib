@@ -24,6 +24,7 @@
 #include <bitset>
 #include <limits>
 #include <map>
+#include <queue>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -104,15 +105,6 @@ private:
         packet       pkt;
     };
 
-    // Terms
-    // partial loss of efficiency
-    // limited efficiency
-    enum class efficiency {
-          good = 0
-        , file_output   // Loss of the file output operations.
-        , failure       // Dysfunctional
-    };
-
     using oqueue_type = pfs::ring_buffer<oqueue_item, 64 * 1024>;
 
 private:
@@ -126,8 +118,6 @@ private:
     std::unique_ptr<server_poller_type>    _reader_poller;
     std::unique_ptr<client_poller_type>    _writer_poller;
 
-    std::bitset<4> _efficiency_loss_bits {0};
-
     // Unique identifier for entity (message, file chunks) inside engine session.
     entity_id _entity_id {0};
 
@@ -136,11 +126,14 @@ private:
         bool can_write;
         writer_type writer;
 
-        // Packet output queue
-        oqueue_type q;
+        // Regular packets output queue
+        oqueue_type regular_queue;
 
-        // File chunks output queue (mapped by file identifier).
-        std::map<universal_id, std::pair<packet_type,oqueue_type>> chunks;
+        // File chunks output queues (mapped by file identifier).
+        std::map<universal_id, oqueue_type> chunks;
+
+        // Raw data to send
+        std::vector<char> raw;
     };
 
     using writer_collection_type = std::vector<std::pair<bool, writer_account>>;
@@ -165,6 +158,8 @@ private:
     reader_collection_type               _readers;
     std::map<reader_id, reader_index>    _reader_ids;
     std::map<universal_id, reader_index> _reader_uuids;
+
+    std::queue<universal_id> _peer_expiration_queue;
 
 public: // Callbacks
     mutable std::function<void (std::string const &)> on_error
@@ -359,14 +354,14 @@ public:
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount)
-                    _discovery->expire_peer(paccount->uuid);
+                    deferred_expire_peer(paccount->uuid);
             };
 
             callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount)
-                    _discovery->expire_peer(paccount->uuid);
+                    deferred_expire_peer(paccount->uuid);
             };
 
             callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
@@ -410,18 +405,13 @@ public:
      */
     void loop ()
     {
-        if (test_efficiency(efficiency::failure)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{50});
-            return;
-        }
+        auto n1 = _reader_poller->poll(_current_poller_timeout);
+        auto n2 = _writer_poller->poll((n1 <= 0)
+            ? _current_poller_timeout : std::chrono::milliseconds{0});
+        auto n3 = _discovery->discover((n1 <= 0 && n2 <= 0)
+            ? _current_poller_timeout : std::chrono::milliseconds{0});
 
-        // No need poll timeout
-        auto n1 = _discovery->discover(_current_poller_timeout);
-        auto n2 = _writer_poller->poll(std::chrono::milliseconds{0});
-        auto n3 = _reader_poller->poll(std::chrono::milliseconds{0});
-
-        if (!test_efficiency(efficiency::file_output))
-            _transporter->loop();
+        _transporter->loop();
 
         send_outgoing_packets();
 
@@ -433,14 +423,12 @@ public:
         } else {
             _current_poller_timeout = std::chrono::milliseconds{0};
         }
-    }
 
-    /**
-     * Check if state of engine is good (engine is in working order).
-     */
-    bool good () const noexcept
-    {
-        return !_efficiency_loss_bits.any();
+        // Expire peers
+        while (!_peer_expiration_queue.empty()) {
+            _discovery->expire_peer(_peer_expiration_queue.front());
+            _peer_expiration_queue.pop();
+        }
     }
 
     /**
@@ -541,8 +529,13 @@ public: // static
 private:
     void process_failure (error && err)
     {
-        loss_efficiency(efficiency::failure);
         on_failure(std::move(err));
+    }
+
+    // Deferred peer expiration
+    void deferred_expire_peer (universal_id peer_uuid)
+    {
+        _peer_expiration_queue.push(peer_uuid);
     }
 
     void release_peer (universal_id peer_uuid, socket4_addr saddr)
@@ -590,7 +583,7 @@ private:
 
         _transporter->addressee_ready = [this] (universal_id addressee) {
             auto * paccount = locate_writer_account(addressee);
-            return paccount && (paccount->q.size() <= _opts.overflow_limit)
+            return paccount && (paccount->regular_queue.size() <= _opts.overflow_limit)
                 ? true: false;
         };
 
@@ -660,23 +653,6 @@ private:
         return _entity_id == INVALID_ENTITY ? ++_entity_id : _entity_id;
     }
 
-    // UNUSED YET
-    inline void loss_efficiency (efficiency value) noexcept
-    {
-        _efficiency_loss_bits.set(static_cast<std::size_t>(value));
-    }
-
-    // UNUSED YET
-    inline void restore_efficiency (efficiency value) noexcept
-    {
-        _efficiency_loss_bits.reset(static_cast<std::size_t>(value));
-    }
-
-    inline bool test_efficiency (efficiency value) const noexcept
-    {
-        return _efficiency_loss_bits.test(static_cast<std::size_t>(value));
-    }
-
     static inline void append_chunk (std::vector<char> & vec
         , char const * buf, std::size_t len)
     {
@@ -736,7 +712,7 @@ private:
 
     reader_type * acquire_reader (reader_id listener_id)
     {
-        auto reader = _server.accept(listener_id);
+        auto reader = _server.accept_nonblocking(listener_id);
 
         reader_index index = 0;
         auto count = _readers.size();
@@ -755,8 +731,11 @@ private:
         }
 
         if (_readers.empty() || index == count) {
-            _readers.emplace_back(true, reader_account{universal_id{}, std::move(reader)});
+            _readers.emplace_back(true, reader_account{});
             index = _readers.size() - 1;
+            _readers.back().second.raw.reserve(64 * 1024);
+            _readers.back().second.uuid   = universal_id{};
+            _readers.back().second.reader = std::move(reader);
         } else {
             _readers[index].first = true;
             _readers[index].second.uuid = universal_id{};
@@ -946,15 +925,22 @@ private:
         }
 
         if (_writers.empty() || index == count) {
-            _writers.emplace_back(true, writer_account{uuid, false, writer_type{}});
+            _writers.emplace_back(true, writer_account{});
             index = _writers.size() - 1;
+            auto & wref = _writers[index];
+            wref.second.uuid = uuid;
+            wref.second.can_write = false;
+            wref.second.writer = writer_type{};
+            wref.second.raw.reserve(PACKET_SIZE * 10);
         } else {
-            _writers[index].first = true;
-            _writers[index].second.uuid = uuid;
-            _writers[index].second.can_write = false;
-            _writers[index].second.writer = writer_type{};
-            _writers[index].second.q.clear();
-            _writers[index].second.chunks.clear();
+            auto & wref = _writers[index];
+            wref.first = true;
+            wref.second.uuid = uuid;
+            wref.second.can_write = false;
+            wref.second.writer = writer_type{};
+            wref.second.regular_queue.clear();
+            wref.second.chunks.clear();
+            wref.second.raw.clear();
         }
 
         writer_id id = _writers[index].second.writer.native();
@@ -1040,8 +1026,9 @@ private:
         item.uuid = universal_id{};
         item.writer.disconnect();
         item.writer.~writer_type();
-        item.q.clear(); // No need to destroy, can be reused later
+        item.regular_queue.clear(); // No need to destroy, can be reused later
         item.chunks.clear();
+        item.raw.clear();
 
         // Notify
         writer_closed(uuid, saddr.addr, saddr.port);
@@ -1093,7 +1080,8 @@ private:
         if (! paccount)
             return INVALID_ENTITY;
 
-        return enqueue_packets_helper(& paccount->q, addressee, packettype, data, len);
+        return enqueue_packets_helper(& paccount->regular_queue, addressee
+            , packettype, data, len);
     }
 
     entity_id enqueue_file_chunk (universal_id addressee, universal_id fileid
@@ -1107,14 +1095,11 @@ private:
         auto pos = paccount->chunks.find(fileid);
 
         if (pos == paccount->chunks.end()) {
-            auto res = paccount->chunks.emplace(fileid
-                , std::make_pair(packettype, oqueue_type{}));
+            auto res = paccount->chunks.emplace(fileid, oqueue_type{});
             pos = res.first;
-        } else {
-            pos->second.first = packettype;
         }
 
-        oqueue_type * q = & pos->second.second;
+        oqueue_type * q = & pos->second;
 
         return enqueue_packets_helper(q, addressee, packettype, data, len);
     }
@@ -1151,34 +1136,34 @@ private:
             return;
 
         auto * pbuffer = & paccount->raw;
-        auto available = paccount->reader.available();
 
-        auto old_size = pbuffer->size();
+        while (pbuffer->size() < PACKET_SIZE) {
+            auto available = paccount->reader.available();
 
-        if (pbuffer->size() < old_size + available)
-            pbuffer->resize(old_size + available);
+            auto offset = pbuffer->size();
+            pbuffer->resize(offset + available);
 
-        auto rc = paccount->reader.recv(pbuffer->data() + old_size, available);
+            auto n = paccount->reader.recv(pbuffer->data() + offset, available);
 
-        if (rc == 0) {
-            // FIXME
-            // Disconnected ?
-            LOG_TRACE_2("RECV: sender: {}.{}, need to DISCONNECT?"
-                , rc, to_string(paccount->reader.saddr()), sock);
-            return;
+            if (n < 0) {
+                on_error(tr::f_("Receive data failure from: {}"
+                    , to_string(paccount->reader.saddr())));
+
+                // Expire peer and release resources allocated for it
+                deferred_expire_peer(paccount->uuid);
+                return;
+            }
+
+            pbuffer->resize(offset + n);
+
+            if (n == 0)
+                break;
+
+            if (n < PACKET_SIZE)
+                break;
         }
 
-        if (rc < 0) {
-            on_error(tr::f_("Receive data failure from: {}"
-                , to_string(paccount->reader.saddr())));
-
-            // Expire peer and release resources allocated for it
-            _discovery->expire_peer(paccount->uuid);
-            return;
-        }
-
-        pbuffer->resize(old_size + rc);
-        available = pbuffer->size();
+        auto available = pbuffer->size();
 
         if (available < PACKET_SIZE)
             return;
@@ -1195,7 +1180,8 @@ private:
             auto packettype = static_cast<packet_type>(in.peek());
             decltype(packet::packetsize) packetsize {0};
 
-            auto valid_packettype = packettype == packet_type::regular
+            auto valid_packettype
+                 = packettype == packet_type::regular
                 || packettype == packet_type::hello
                 || packettype == packet_type::file_credentials
                 || packettype == packet_type::file_request
@@ -1210,7 +1196,14 @@ private:
                     " received from: {}, ignored."
                     , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
                     , to_string(paccount->reader.saddr())));
-                continue;
+
+                // There is a problem in communication (or this engine
+                // implementation is wrong). Expiration can restore
+                // functionality at next connection (after discovery).
+                deferred_expire_peer(paccount->uuid);
+
+                pbuffer_pos = pbuffer->end();
+                break;
             }
 
             packet pkt;
@@ -1224,8 +1217,13 @@ private:
                     , to_string(paccount->reader.saddr())
                     , packetsize));
 
-                // Ignore
-                continue;
+                // There is a problem in communication (or this engine
+                // implementation is wrong). Expiration can restore
+                // functionality at next connection (after discovery).
+                deferred_expire_peer(paccount->uuid);
+
+                pbuffer_pos = pbuffer->end();
+                break;
             }
 
             // Start new sequence
@@ -1317,27 +1315,18 @@ private:
             }
         } while (available >= PACKET_SIZE);
 
-        if (available == 0) {
+        if (available == 0)
             pbuffer->clear();
-        } else {
-            //auto erased_length = pbuffer_pos - pbuffer->begin();
+        else
             pbuffer->erase(pbuffer->begin(), pbuffer_pos);
-        }
     }
 
-    void send_outgoing_packets_helper (writer_account * paccount
-        , oqueue_type * output_queue, int * limit)
+    void serialize_outgoing_packets (std::vector<char> * raw
+        , oqueue_type * output_queue, int limit)
     {
-        std::size_t total_bytes_sent = 0;
-
         output_envelope_type out;
-        error err;
-        bool break_sending = false;
 
-        // FIXME Implement throttling
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
-
-        while (*limit-- && !break_sending && !output_queue->empty()) {
+        while (limit-- && !output_queue->empty()) {
             auto & oitem = output_queue->front();
             auto const & pkt = oitem.pkt;
 
@@ -1346,18 +1335,39 @@ private:
 
             auto data = out.data();
             auto size = data.size();
+            auto offset = raw->size();
+            raw->resize(offset + size);
+            std::memcpy(raw->data() + offset, data.c_str(), size);
+            output_queue->pop();
+        }
+    }
 
-            PFS__ASSERT(size <= PACKET_SIZE, "");
+    void send_outgoing_data (writer_account * paccount)
+    {
+        std::size_t total_bytes_sent = 0;
 
-            auto send_result = paccount->writer.send(data.data(), size, & err);
+        error err;
+        bool break_sending = false;
 
-            switch (send_result.state) {
+        // TODO Implement throttling
+        // std::this_thread::sleep_for(std::chrono::milliseconds{10});
+
+        while (!break_sending && !paccount->raw.empty()) {
+            int nbytes_to_send = PACKET_SIZE * 10;
+
+            if (nbytes_to_send > paccount->raw.size())
+                nbytes_to_send = static_cast<int>(paccount->raw.size());
+
+            auto sendresult = paccount->writer.send(paccount->raw.data()
+                , nbytes_to_send, & err);
+
+            switch (sendresult.state) {
                 case netty::send_status::failure:
                     on_error(tr::f_("send failure to {}: {}"
                         , to_string(paccount->writer.saddr()), err.what()));
 
                     // Expire peer and release resources allocated for it
-                    _discovery->expire_peer(paccount->uuid);
+                    deferred_expire_peer(paccount->uuid);
                     break_sending = true;
                     break;
 
@@ -1366,7 +1376,7 @@ private:
                         , to_string(paccount->writer.saddr()), err.what()));
 
                     // Expire peer and release resources allocated for it
-                    _discovery->expire_peer(paccount->uuid);
+                    deferred_expire_peer(paccount->uuid);
                     break_sending = true;
                     break;
 
@@ -1376,12 +1386,17 @@ private:
                         paccount->can_write = false;
                         _writer_poller->wait_for_write(paccount->writer);
                     }
+
                     break_sending = true;
                     break;
 
                 case netty::send_status::good:
-                    total_bytes_sent += send_result.n;
-                    output_queue->pop();
+                    if (sendresult.n > 0) {
+                        total_bytes_sent += sendresult.n;
+                        paccount->raw.erase(paccount->raw.begin()
+                            , paccount->raw.begin() + sendresult.n);
+                    }
+
                     break;
             }
         }
@@ -1390,61 +1405,44 @@ private:
     void send_outgoing_packets ()
     {
         for (auto & witem: _writers) {
-            if (!witem.second.can_write)
+            auto * paccount = & witem.second;
+
+            if (!paccount->can_write)
                 continue;
 
-            auto & output_queue = witem.second.q;
+            // Serialize (bufferize) packets to send
+            if (paccount->raw.size() < PACKET_SIZE) {
+                auto & output_queue = paccount->regular_queue;
 
-            int limit = witem.second.chunks.empty()
-                ? _opts.send_packet_limit
-                : _opts.send_packet_limit
-                    * static_cast<double>(_opts.regular_packets_priority) / 100;
+                if (!output_queue.empty()) {
+                    // Serialize regular (priority) packets
+                    serialize_outgoing_packets(& paccount->raw, & output_queue, 10);
+                }
 
-            if (!output_queue.empty()) {
-                // Send regular (priority) packets
-                send_outgoing_packets_helper(& witem.second, & output_queue, & limit);
-            }
+                if (!paccount->chunks.empty()) {
+                    auto pos  = paccount->chunks.begin();
+                    auto last = paccount->chunks.end();
 
-            if (limit == 0)
-                continue;
+                    while (pos != last) {
+                        oqueue_type & chunks_output_queue = pos->second;
 
-            if (witem.second.chunks.empty())
-                continue;
+                        if (!chunks_output_queue.empty()) {
+                            serialize_outgoing_packets(& paccount->raw, & chunks_output_queue, 10);
+                            ++pos;
+                        } else {
+                            auto complete = !_transporter->request_chunk(pos->first);
 
-            // Send limit for all file chunk packets
-            limit = limit / witem.second.chunks.size();
-
-            if (limit == 0)
-                limit = 1;
-
-            // Need to use unused limits
-            int next_inc = 0;
-
-            auto pos = witem.second.chunks.begin();
-            auto last  = witem.second.chunks.end();
-
-            while (pos != last) {
-                // Individual limit for file chunk packets
-                auto chunk_limit = limit + next_inc;
-                next_inc = 0;
-
-                oqueue_type * q = & pos->second.second;
-
-                if (!q->empty()) {
-                    send_outgoing_packets_helper(& witem.second, q, & chunk_limit);
-                    next_inc = chunk_limit;
-                    ++pos;
-                } else {
-                    // File transfer complete
-                    bool complete = (pos->second.first == packet_type::file_end);
-
-                    if (complete) {
-                        pos = witem.second.chunks.erase(pos);
-                    } else {
-                        ++pos;
+                            if (complete)
+                                pos = paccount->chunks.erase(pos);
+                            else
+                                ++pos;
+                        }
                     }
                 }
             }
+
+            // Send serialized (bufferized) data
+            send_outgoing_data(paccount);
         }
     }
 };

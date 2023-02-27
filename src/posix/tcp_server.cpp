@@ -27,7 +27,7 @@ tcp_server::tcp_server () : inet_socket() {}
 tcp_server::tcp_server (socket4_addr const & saddr)
     : inet_socket(inet_socket::type_enum::stream)
 {
-    if (bind(_socket, saddr))
+    if (bind(_socket, saddr, nullptr))
         _saddr = saddr;
 }
 
@@ -76,6 +76,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
         if (sa.sin_family == AF_INET) {
             auto addr = pfs::to_native_order(static_cast<std::uint32_t>(sa.sin_addr.s_addr));
             auto port = pfs::to_native_order(static_cast<std::uint16_t>(sa.sin_port));
+
             return tcp_socket{sock, socket4_addr{addr, port}};
         } else {
             error err {
@@ -111,9 +112,24 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
     return tcp_socket{uninitialized{}};
 }
 
+tcp_socket tcp_server::accept_nonblocking (native_type listener_sock, error * perr)
+{
+    auto s = accept(listener_sock, perr);
+
+    if (!s.set_nonblocking(true, perr))
+        return tcp_socket{uninitialized{}};
+
+    return s;
+}
+
 tcp_socket tcp_server::accept (error * perr)
 {
     return accept(_socket, perr);
+}
+
+tcp_socket tcp_server::accept_nonblocking (error * perr)
+{
+    return accept_nonblocking(_socket, perr);
 }
 
 }} // namespace netty::posix

@@ -22,6 +22,7 @@ enum class errc
       success = 0
     , system_error       // More information can be obtained using errno (Linux) or
                          // WSAGetLastError (Windows)
+    , operation_not_permitted //
     , invalid_argument   // Invalid argument passed to callable entity
     , device_not_found
     , permissions_denied

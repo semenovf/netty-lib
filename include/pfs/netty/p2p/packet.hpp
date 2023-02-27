@@ -101,6 +101,14 @@ struct file_begin
     std::int32_t offset;
 };
 
+// Used for troubleshooting only
+struct file_chunk_header
+{
+    universal_id fileid;
+    std::int32_t offset;
+    std::int32_t chunksize;
+};
+
 struct file_chunk
 {
     universal_id fileid;
@@ -201,6 +209,16 @@ inline void load (cereal::BinaryInputArchive & ar, file_stop & fs)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// file_chunk_header
+////////////////////////////////////////////////////////////////////////////////
+inline void load (cereal::BinaryInputArchive & ar, file_chunk_header & fch)
+{
+    ar >> fch.fileid
+        >> ntoh_wrapper<decltype(fch.offset)>{fch.offset}
+        >> ntoh_wrapper<decltype(fch.chunksize)>{fch.chunksize};
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // file_chunk
 ////////////////////////////////////////////////////////////////////////////////
 inline void save (cereal::BinaryOutputArchive & ar, file_chunk const & fc)
@@ -208,15 +226,17 @@ inline void save (cereal::BinaryOutputArchive & ar, file_chunk const & fc)
     ar << fc.fileid
         << pfs::to_network_order(fc.offset)
         << pfs::to_network_order(fc.chunksize)
-        << fc.chunk;
+        << cereal::binary_data(fc.chunk.data(), fc.chunk.size());
 }
 
 inline void load (cereal::BinaryInputArchive & ar, file_chunk & fc)
 {
     ar >> fc.fileid
         >> ntoh_wrapper<decltype(fc.offset)>{fc.offset}
-        >> ntoh_wrapper<decltype(fc.chunksize)>{fc.chunksize}
-        >> fc.chunk;
+        >> ntoh_wrapper<decltype(fc.chunksize)>{fc.chunksize};
+
+        fc.chunk.resize(fc.chunksize);
+        ar >> cereal::binary_data(fc.chunk.data(), fc.chunksize);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -238,13 +258,11 @@ inline void load (cereal::BinaryInputArchive & ar, file_begin & fb)
 inline void save (cereal::BinaryOutputArchive & ar, file_end const & fe)
 {
     ar << fe.fileid;
-//         << cereal::binary_data(fe.checksum.data(), fe.checksum.size());
 }
 
 inline void load (cereal::BinaryInputArchive & ar, file_end & fe)
 {
     ar >> fe.fileid;
-//         >> cereal::binary_data(fe.checksum.data(), fe.checksum.size());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

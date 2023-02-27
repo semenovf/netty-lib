@@ -79,15 +79,13 @@ private:
         ofile_t desc_file;
         ofile_t data_file;
         filesize_t filesize;
-        pfs::crypto::sha256 hash;
     };
 
     struct ofile_item
     {
         universal_id addressee;
         ifile_t data_file;
-        bool at_end;          // true if file transferred
-        pfs::crypto::sha256 hash;
+        bool chunk_requested;
     };
 
 private:
@@ -214,13 +212,6 @@ public:
     NETTY__EXPORT ~file_transporter ();
 
     /**
-     * Sends a dozen file chunks (fragments)
-     *
-     * @return non-zero value if there was a sending of chunks of files
-     */
-    NETTY__EXPORT int loop ();
-
-    /**
      * Sets file size upper limit.
      */
     NETTY__EXPORT void set_max_file_size (filesize_t value);
@@ -271,6 +262,21 @@ public:
      * downloading file from it.
      */
     NETTY__EXPORT void stop_file (universal_id addressee, universal_id fileid);
+
+    /**
+     * Requests new chunk for specified file identifier @a fileid. Must be
+     * called from caller if need the next chunk to send.
+     *
+     * @return @c true if there are more chunks or @c false otherwise.
+     */
+    NETTY__EXPORT bool request_chunk (universal_id fileid);
+
+    /**
+     * Sends a dozen file chunks (fragments)
+     *
+     * @return non-zero value if there was a sending of chunks of files
+     */
+    NETTY__EXPORT int loop ();
 };
 
 }} // namespace netty::p2p

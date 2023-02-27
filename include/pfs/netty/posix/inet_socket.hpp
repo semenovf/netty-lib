@@ -75,7 +75,13 @@ protected:
     NETTY__EXPORT inet_socket & operator = (inet_socket &&);
 
 protected:
-    static bool bind (native_type sock, socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT bool set_nonblocking (bool enable, error * perr);
+
+protected:
+    static bool check_socket_descriptor (native_type sock, error * perr);
+    static bool bind (native_type sock, socket4_addr const & saddr, error * perr);
+    static bool set_nonblocking (native_type sock, bool enable, error * perr);
+    static bool is_nonblocking (native_type sock, error * perr);
 
 public:
     /**

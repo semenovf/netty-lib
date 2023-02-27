@@ -19,6 +19,7 @@
 #   include <sys/types.h>
 #   include <sys/socket.h>
 #   include <netinet/in.h>
+#   include <fcntl.h>
 #   include <string.h>
 #   include <unistd.h>
 #endif
@@ -79,9 +80,6 @@ inet_socket::inet_socket (type_enum socktype)
         auto rc = ::ioctlsocket(_socket, FIONBIO, & nonblocking);
 
         if (rc != 0) {
-#if _MSC_VER
-            auto lastWsaError = WSAGetLastError();
-#endif
             throw error {
                   errc::socket_error
                 , tr::_("create INET socket failure: set non-blocking")
@@ -172,8 +170,27 @@ socket4_addr inet_socket::saddr () const noexcept
     return _saddr;
 }
 
+inline bool inet_socket::check_socket_descriptor (native_type sock, error * perr)
+{
+    if (sock == inet_socket::kINVALID_SOCKET) {
+        error err { errc::invalid_argument, tr::_("bad socket descriptor") };
+
+        if (perr) {
+            *perr = std::move(err);
+            return false;
+        } else {
+            throw err;
+        }
+    }
+
+    return true;
+}
+
 bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * perr)
 {
+    if (!check_socket_descriptor(sock, perr))
+        return false;
+
     sockaddr_in addr_in4;
 
     std::memset(& addr_in4, 0, sizeof(addr_in4));
@@ -202,6 +219,91 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
     }
 
     return true;
+}
+
+bool inet_socket::set_nonblocking (bool enable, error * perr)
+{
+    return set_nonblocking(_socket, enable, perr);
+}
+
+bool inet_socket::set_nonblocking (native_type sock, bool enable, error * perr)
+{
+    if (!check_socket_descriptor(sock, perr))
+        return false;
+
+#if _MSC_VER
+    unsigned long mode = enable ? 1 : 0;
+    auto rc = ::ioctlsocket(fd, FIONBIO, & mode);
+
+    if (rc != 0) {
+#else
+    int rc = ::fcntl(sock, F_GETFL, 0);
+
+    if (rc >= 0) {
+        rc = enable ? (rc | O_NONBLOCK) : (rc & ~O_NONBLOCK);
+        rc = ::fcntl(sock, F_SETFL, rc);
+    }
+
+    if (rc < 0) {
+#endif
+        error err {
+              errc::socket_error
+            , tr::f_("set socket to {} mode failure"
+                , enable ? tr::_("nonblocking") : tr::_("blocking"))
+            , pfs::system_error_text()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+            return false;
+        } else {
+            throw err;
+        }
+    }
+
+    return true;
+}
+
+bool inet_socket::is_nonblocking (native_type sock, error * perr)
+{
+    if (!check_socket_descriptor(sock, perr))
+        return false;
+
+#if _MSC_VER
+    // No "direct" way to determine mode of the socket.
+    error err {
+          errc::operation_not_permitted
+        , tr::_("unable to determine socket mode on Windows")
+        , pfs::system_error_text()
+    };
+
+    if (perr)
+        *perr = std::move(err);
+    else
+        throw err;
+
+    return false;
+#else
+    int rc = ::fcntl(sock, F_GETFL, 0);
+
+    if (rc >= 0)
+        return rc & O_NONBLOCK;
+
+    if (rc < 0) {
+        error err {
+              errc::socket_error
+            , tr::_("get socket flags failure")
+            , pfs::system_error_text()
+        };
+
+        if (perr)
+            *perr = std::move(err);
+        else
+            throw err;
+    }
+
+    return false;
+#endif
 }
 
 int inet_socket::available (error * perr) const
@@ -372,74 +474,64 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 
 send_result inet_socket::send (char const * data, int len, error * perr)
 {
-    int total_sent = 0;
-
-    while (len) {
-        // MSG_NOSIGNAL flag means:
-        // requests not to send SIGPIPE on errors on stream oriented sockets
-        // when the other end breaks the connection.
-        // The EPIPE error is still returned.
-        //
+    // MSG_NOSIGNAL flag means:
+    // requests not to send SIGPIPE on errors on stream oriented sockets
+    // when the other end breaks the connection.
+    // The EPIPE error is still returned.
+    //
 
 #if _MSC_VER
-        auto n = ::send(_socket, data + total_sent, len, 0);
+    auto n = ::send(_socket, data, len, 0);
 #else
-        auto n = static_cast<decltype(send_result::n)>(::send(_socket
-            , data + total_sent, len, MSG_NOSIGNAL | MSG_DONTWAIT));
+    auto n = static_cast<decltype(send_result::n)>(::send(_socket
+        , data, len, MSG_NOSIGNAL | MSG_DONTWAIT));
 #endif
 
-        if (n < 0) {
+    if (n < 0) {
 #if _MSC_VER
-            auto lastWsaError = WSAGetLastError();
+        auto lastWsaError = WSAGetLastError();
 
-            if (lastWsaError == WSAENOBUFS)
-                return send_result{send_status::overflow, n};
+        if (lastWsaError == WSAENOBUFS)
+            return send_result{send_status::overflow, n};
 
-            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
-                    || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
-                return send_result{send_status::network, n};
+        if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
+                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+            return send_result{send_status::network, n};
 
-            if (lastWsaError == WSAEWOULDBLOCK)
-                return send_result{send_status::again, n};
-
+        if (lastWsaError == WSAEWOULDBLOCK)
+            return send_result{send_status::again, n};
 #else
-            // man send:
-            // The output queue for a network interface was full. This generally
-            // indicates that the interface has stopped sending, but may be
-            // caused by transient congestion.(Normally, this does not occur in
-            // Linux. Packets are just silently dropped when a device queue
-            // overflows.)
-            if (errno == ENOBUFS)
-                return send_result{send_status::overflow, n};
+        // man send:
+        // The output queue for a network interface was full. This generally
+        // indicates that the interface has stopped sending, but may be
+        // caused by transient congestion.(Normally, this does not occur in
+        // Linux. Packets are just silently dropped when a device queue
+        // overflows.)
+        if (errno == ENOBUFS)
+            return send_result{send_status::overflow, n};
 
-            if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
-                    || errno == ENETUNREACH)
-                return send_result{send_status::network, n};
+        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
+                || errno == ENETUNREACH)
+            return send_result{send_status::network, n};
 
-            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-                return send_result{send_status::again, n};
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+            return send_result{send_status::again, n};
 #endif
-            error err {
-                  errc::socket_error
-                , tr::_("send failure")
-                , pfs::system_error_text()
-            };
+        error err {
+              errc::socket_error
+            , tr::_("send failure")
+            , pfs::system_error_text()
+        };
 
-            if (perr) {
-                *perr = std::move(err);
-                return send_result{send_status::failure, n};
-            } else {
-                throw err;
-            }
-
-            break;
+        if (perr) {
+            *perr = std::move(err);
+            return send_result{send_status::failure, n};
+        } else {
+            throw err;
         }
-
-        total_sent += n;
-        len -= n;
     }
 
-    return send_result{send_status::good, total_sent};
+    return send_result{send_status::good, n};
 }
 
 // See inet_socket::send
@@ -454,64 +546,55 @@ send_result inet_socket::send_to (socket4_addr const & saddr
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
     addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
 
-    int total_sent = 0;
-
-    while (len) {
 #if _MSC_VER
-        auto n = ::sendto(_socket, data, len, 0
-            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
+    auto n = ::sendto(_socket, data, len, 0
+        , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 #else
-        auto n = static_cast<decltype(send_result::n)>(::sendto(_socket, data, len
-            , MSG_NOSIGNAL | MSG_DONTWAIT
-            , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4)));
+    auto n = static_cast<decltype(send_result::n)>(::sendto(_socket, data, len
+        , MSG_NOSIGNAL | MSG_DONTWAIT
+        , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4)));
 #endif
 
-        if (n < 0) {
+    if (n < 0) {
 #if _MSC_VER
-            auto lastWsaError = WSAGetLastError();
+        auto lastWsaError = WSAGetLastError();
 
-            if (lastWsaError == WSAENOBUFS)
-                return send_result{send_status::overflow, n};
+        if (lastWsaError == WSAENOBUFS)
+            return send_result{send_status::overflow, n};
 
-            if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
-                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
-                return send_result{send_status::network, n};
+        if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
+            || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+            return send_result{send_status::network, n};
 
-            if (lastWsaError == WSAEWOULDBLOCK)
-                return send_result{send_status::again, n};
+        if (lastWsaError == WSAEWOULDBLOCK)
+            return send_result{send_status::again, n};
 
 #else
-            if (errno == ENOBUFS)
-                return send_result{send_status::overflow, n};
+        if (errno == ENOBUFS)
+            return send_result{send_status::overflow, n};
 
-            if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
-                    || errno == ENETUNREACH)
-                return send_result{send_status::network, n};
+        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
+                || errno == ENETUNREACH)
+            return send_result{send_status::network, n};
 
-            if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-                return send_result{send_status::again, n};
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+            return send_result{send_status::again, n};
 #endif
-            error err {
-                  errc::socket_error
-                , tr::f_("send to socket failure: {}", to_string(saddr))
-                , pfs::system_error_text()
-            };
+        error err {
+              errc::socket_error
+            , tr::f_("send to socket failure: {}", to_string(saddr))
+            , pfs::system_error_text()
+        };
 
-            if (perr) {
-                *perr = std::move(err);
-                return send_result{send_status::failure, n};
-            } else {
-                throw err;
-            }
-
-            break;
+        if (perr) {
+            *perr = std::move(err);
+            return send_result{send_status::failure, n};
+        } else {
+            throw err;
         }
-
-        total_sent += n;
-        len -= n;
     }
 
-    return send_result{send_status::good, total_sent};
+    return send_result{send_status::good, n};
 }
 
 }} // namespace netty::posix
