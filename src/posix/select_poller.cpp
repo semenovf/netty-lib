@@ -152,17 +152,21 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds
 #else
     if (n < 0) {
 #endif
-        error err {
-              errc::poller_error
-            , tr::_("select failure")
-            , pfs::system_error_text()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-            return n;
+        if (errno == EINTR) {
+            // Is not a critical error, ignore it
         } else {
-            throw err;
+            error err {
+                  errc::poller_error
+                , tr::_("select failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return n;
+            } else {
+                throw err;
+            }
         }
     }
 

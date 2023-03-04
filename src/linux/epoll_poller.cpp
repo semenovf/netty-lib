@@ -108,17 +108,21 @@ int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)
     auto n = epoll_wait(eid, events.data(), maxevents, millis.count());
 
     if (n < 0) {
-        error err {
-              errc::poller_error
-            , tr::_("epoll wait failure")
-            , pfs::system_error_text()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-            return n;
+        if (errno == EINTR) {
+            // Is not a critical error, ignore it
         } else {
-            throw err;
+            error err {
+                  errc::poller_error
+                , tr::_("epoll wait failure")
+                , pfs::system_error_text()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+                return n;
+            } else {
+                throw err;
+            }
         }
     }
 
