@@ -1321,14 +1321,25 @@ private:
             pbuffer->erase(pbuffer->begin(), pbuffer_pos);
     }
 
+    /**
+     * Serializes packets to send.
+     *
+     * @param raw Buffer to store packets as raw bytes before sending.
+     * @param output_queue Queue that stores output packets.
+     * @param limit Number of messages/chunks to store as contiguous sequence
+     *        of bytes.
+     */
     void serialize_outgoing_packets (std::vector<char> * raw
         , oqueue_type * output_queue, int limit)
     {
         output_envelope_type out;
 
-        while (limit-- && !output_queue->empty()) {
+        while (limit && !output_queue->empty()) {
             auto & oitem = output_queue->front();
             auto const & pkt = oitem.pkt;
+
+            if (pkt.partindex == pkt.partcount)
+                --limit;
 
             out.reset();   // Empty envelope
             out.seal(pkt); // Seal new data
@@ -1415,7 +1426,7 @@ private:
                 auto & output_queue = paccount->regular_queue;
 
                 if (!output_queue.empty()) {
-                    // Serialize regular (priority) packets
+                    // Serialize non-file_chunk (priority) packets.
                     serialize_outgoing_packets(& paccount->raw, & output_queue, 10);
                 }
 

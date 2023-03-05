@@ -33,7 +33,9 @@ if (NETTY__BUILD_STATIC)
     portable_target(ADD_STATIC ${STATIC_PROJECT_NAME} ALIAS pfs::netty::static EXPORTS NETTY__STATIC)
 endif()
 
-list(APPEND _netty__definitions "PFS__LOG_LEVEL=2")
+if (PFS__LOG_LEVEL)
+    list(APPEND _netty__definitions "PFS__LOG_LEVEL=${PFS__LOG_LEVEL}")
+endif()
 
 list(APPEND _netty__sources
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp

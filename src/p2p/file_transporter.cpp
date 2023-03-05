@@ -501,7 +501,7 @@ void file_transporter::process_file_chunk (universal_id sender
             , sender, fc.fileid, fc.offset, fc.chunk.size());
 
         commit_chunk(sender, fc);
-    } catch (...) {
+    } catch (...) { // may be cereal::Exception
         auto fch = input_envelope_type::unseal<file_chunk_header>(data);
 
         auto * p = locate_ifile_item(sender, fch.fileid, false);
