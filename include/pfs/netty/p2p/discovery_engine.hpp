@@ -10,7 +10,6 @@
 #include "hello_packet.hpp"
 #include "universal_id.hpp"
 #include "pfs/i18n.hpp"
-#include "pfs/log.hpp"
 #include "pfs/time_point.hpp"
 #include "pfs/netty/chrono.hpp"
 #include "pfs/netty/error.hpp"
@@ -42,11 +41,14 @@ public:
     using timediff_type     = std::chrono::milliseconds;
 
     struct options {
-        //milliseconds_type transmit_interval {MAX_TRANSMIT_INTERVAL_SECONDS * 1000};
         milliseconds_type timestamp_error_limit {500};
 
         // Port on which server will accept incoming connections (readers)
         std::uint16_t host_port {0};
+
+        // Series of retries to send discovery packet to target when the
+        // transmission interval is exceeded.
+        int series_of_retries {1};
     };
 
 private:
@@ -107,12 +109,89 @@ public:
         = [] (universal_id /*peer_uuid*/, socket4_addr /*saddr*/) {};
 
 private:
-    void process_discovery_data (socket4_addr saddr
-        , char const * data, std::size_t size)
+    void process_hello_packet (socket4_addr saddr, hello_packet const & packet)
     {
         static std::chrono::milliseconds const MIN_EXPIRATION_INTERVAL {5000};
         static int const EXPIRATION_INTERVAL_FACTOR = 5;
 
+        if (packet.crc16 == crc16_of(packet)) {
+            // Ignore self received packets (can happen during
+            // multicast / broadcast transmission)
+            if (packet.uuid != _host_uuid) {
+                auto pos = _discovered_peers.find(packet.uuid);
+                auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval)
+                    * EXPIRATION_INTERVAL_FACTOR;
+
+                if (expiration_interval < MIN_EXPIRATION_INTERVAL)
+                    expiration_interval = MIN_EXPIRATION_INTERVAL;
+
+                auto expiration_timepoint = current_timepoint() + expiration_interval;
+
+                // Now in milliseconds since epoch in UTC.
+                auto now = std::chrono::duration_cast<milliseconds_type>(
+                    pfs::utc_time::now().time_since_epoch());
+
+                // Calculate time difference.
+                auto timediff = now - milliseconds_type{packet.timestamp};
+
+                // New peer is discovered
+                if (pos == std::end(_discovered_peers)) {
+                    auto res = _discovered_peers.emplace(packet.uuid
+                        , peer_credentials {
+                                socket4_addr{saddr.addr, packet.port}
+                            , expiration_timepoint
+                            , timediff
+                        });
+
+                    if (!res.second) {
+                        throw error {
+                                errc::unexpected_error
+                            , tr::_("unable to store discovered peer")
+                        };
+                    }
+
+                    pos = res.first;
+                    peer_discovered(packet.uuid, pos->second.saddr, timediff);
+                } else {
+                    // Peer may be modified
+
+                    bool modified = (pos->second.saddr.addr != saddr.addr);
+                    modified = modified || (pos->second.saddr.port != packet.port);
+
+                    if (modified) {
+                        on_error(tr::f_("peer modified (socket address changed): {}: {}=>{}, force expiration"
+                            , packet.uuid
+                            , to_string(pos->second.saddr)
+                            , to_string(socket4_addr{saddr.addr, packet.port})));
+
+                        peer_expired(packet.uuid, pos->second.saddr);
+                    } else {
+                        pos->second.expiration_timepoint = expiration_timepoint;
+
+                        auto diffdiff = timediff > pos->second.timediff
+                            ? timediff - pos->second.timediff
+                            : pos->second.timediff - timediff;
+
+                        //if (diffdiff < milliseconds_type{0})
+                        //    diffdiff *= -1;
+
+                        // Notify about peer's timestamp is out of limits.
+                        // Store new value.
+                        if (diffdiff > _opts.timestamp_error_limit) {
+                            pos->second.timediff = timediff;
+                            peer_timediff(packet.uuid, timediff);
+                        }
+                    }
+                }
+            }
+        } else {
+            on_error(tr::f_("bad CRC16 for HELO packet received from: {}"
+                , to_string(saddr)));
+        }
+    }
+
+    void process_discovery_data (socket4_addr saddr, char const * data, std::size_t size)
+    {
         if (size < hello_packet::PACKET_SIZE)
             return;
 
@@ -130,80 +209,7 @@ private:
             first += hello_packet::PACKET_SIZE;
 
             if (success) {
-                if (packet.crc16 == crc16_of(packet)) {
-                    // Ignore self received packets (can happen during
-                    // multicast / broadcast transmission)
-                    if (packet.uuid != _host_uuid) {
-                        auto pos = _discovered_peers.find(packet.uuid);
-                        auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval)
-                            * EXPIRATION_INTERVAL_FACTOR;
-
-                        if (expiration_interval < MIN_EXPIRATION_INTERVAL)
-                            expiration_interval = MIN_EXPIRATION_INTERVAL;
-
-                        auto expiration_timepoint = current_timepoint() + expiration_interval;
-
-                        // Now in milliseconds since epoch in UTC.
-                        auto now = std::chrono::duration_cast<milliseconds_type>(
-                            pfs::utc_time::now().time_since_epoch());
-
-                        // Calculate time difference.
-                        auto timediff = now - milliseconds_type{packet.timestamp};
-
-                        // New peer is discovered
-                        if (pos == std::end(_discovered_peers)) {
-                            auto res = _discovered_peers.emplace(packet.uuid
-                                , peer_credentials {
-                                      socket4_addr{saddr.addr, packet.port}
-                                    , expiration_timepoint
-                                    , timediff
-                                });
-
-                            if (!res.second) {
-                                throw error {
-                                      errc::unexpected_error
-                                    , tr::_("unable to store discovered peer")
-                                };
-                            }
-
-                            pos = res.first;
-                            peer_discovered(packet.uuid, pos->second.saddr, timediff);
-                        } else {
-                            // Peer may be modified
-
-                            bool modified = (pos->second.saddr.addr != saddr.addr);
-                            modified = modified || (pos->second.saddr.port != packet.port);
-
-                            if (modified) {
-                                LOG_TRACE_1("Peer modified (socket address changed): {}: {}=>{}"
-                                    , packet.uuid
-                                    , to_string(pos->second.saddr)
-                                    , to_string(socket4_addr{saddr.addr, packet.port}));
-
-                                peer_expired(packet.uuid, pos->second.saddr);
-                            } else {
-                                pos->second.expiration_timepoint = expiration_timepoint;
-
-                                auto diffdiff = timediff > pos->second.timediff
-                                    ? timediff - pos->second.timediff
-                                    : pos->second.timediff - timediff;
-
-                                if (diffdiff < milliseconds_type{0})
-                                    diffdiff *= -1;
-
-                                // Notify about peer's timestamp is out of limits.
-                                // Store new value.
-                                if (diffdiff < _opts.timestamp_error_limit) {
-                                    pos->second.timediff = timediff;
-                                    peer_timediff(packet.uuid, timediff);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    on_error(tr::f_("bad CRC16 for HELO packet received from: {}"
-                        , to_string(saddr)));
-                }
+                process_hello_packet(saddr, packet);
             } else {
                 on_error(tr::f_("bad HELO packet received from: {}", to_string(saddr)));
             }
@@ -245,17 +251,26 @@ private:
 
                 PFS__ASSERT(size == hello_packet::PACKET_SIZE, "");
 
+                int series_of_retries = _opts.series_of_retries;
                 netty::error err;
-                auto res = _backend.send(t.saddr, data.data(), size, & err);
 
-                if (res.state != netty::send_status::good) {
-                    if (t.last_send_status != res.state) {
-                        on_error(tr::f_("transmit failure to: {}: {}"
-                            , to_string(t.saddr), err.what()));
+                while (series_of_retries-- > 0) {
+                    auto res = _backend.send(t.saddr, data.data(), size, & err);
+
+                    if (res.state != netty::send_status::good) {
+                        if (t.last_send_status != res.state) {
+                            on_error(tr::f_("transmit failure to: {}: {}"
+                                , to_string(t.saddr), err.what()));
+
+                            // Break (don't use `break` keyword) while loop and
+                            // save last_send_status (see below).
+                            series_of_retries = 0;
+                        }
                     }
+
+                    t.last_send_status = res.state;
                 }
 
-                t.last_send_status = res.state;
                 t.transmit_timepoint = current_timepoint() + t.transmit_interval;
                 _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
                     , t.transmit_timepoint);
@@ -269,11 +284,6 @@ private:
 
         for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
             if (pos->second.expiration_timepoint < now) {
-                LOG_TRACE_1("Discovered peer expired by timeout: {}@{}: {} < {}"
-                    , pos->first, to_string(pos->second.saddr)
-                    , std::chrono::duration_cast<std::chrono::seconds>(pos->second.expiration_timepoint.time_since_epoch())
-                    , std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()));
-
                 peer_expired(pos->first, pos->second.saddr);
                 pos = _discovered_peers.erase(pos);
             } else {
@@ -428,6 +438,33 @@ public:
             pos = _discovered_peers.erase(pos);
             peer_expired(uuid, saddr);
         }
+    }
+
+    /**
+     * This packet is used by `engine` to send `hello_packet`
+     * (see netty::p2p::packet_type::hello)
+     */
+    std::string serialize_default_hello_packet ()
+    {
+        hello_packet packet;
+        packet.uuid = _host_uuid;
+        packet.port = _opts.host_port;
+
+        auto now = std::chrono::duration_cast<milliseconds_type>(
+            pfs::utc_time::now().time_since_epoch());
+        packet.transmit_interval = MAX_TRANSMIT_INTERVAL_SECONDS;
+        packet.timestamp = static_cast<decltype(packet.timestamp)>(now.count());
+        packet.counter = 0;
+        packet.crc16 = crc16_of(packet);
+
+        output_envelope_type out;
+        out.seal(packet);
+        return out.data();
+    }
+
+    void force_peer_discovered (socket4_addr saddr, char const * data, std::size_t size)
+    {
+        process_discovery_data(saddr, data, size);
     }
 
     /**

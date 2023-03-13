@@ -13,6 +13,7 @@
 #include "engine_traits.hpp"
 #include "envelope.hpp"
 #include "file_transporter.hpp"
+#include "hello_packet.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
 #include "pfs/log.hpp"
@@ -1123,9 +1124,8 @@ private:
 
         _writer_poller->wait_for_write(paccount->writer);
 
-        // Payload doesn't matter, but length must be greater than zero.
-        char h = 'H';
-        enqueue_packets(paccount->uuid, packet_type::hello, & h, 1);
+        auto pkt = _discovery->serialize_default_hello_packet();
+        enqueue_packets(paccount->uuid, packet_type::hello, pkt.data(), pkt.size());
     }
 
     void process_reader_input (reader_id sock)
@@ -1274,8 +1274,15 @@ private:
 
                         _readers[index].second.uuid = sender_uuid;
                         _reader_uuids[sender_uuid] = index;
-                         reader_ready(sender_uuid, paccount->reader.saddr().addr
+                        reader_ready(sender_uuid, paccount->reader.saddr().addr
                             , paccount->reader.saddr().port);
+
+                        auto pwriter = locate_writer_account(sender_uuid);
+
+                        if (!pwriter) {
+                            _discovery->force_peer_discovered(paccount->reader.saddr()
+                                , paccount->b.data(), paccount->b.size());
+                        }
 
                         break;
                     }
