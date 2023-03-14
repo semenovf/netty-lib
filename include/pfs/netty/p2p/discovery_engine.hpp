@@ -38,6 +38,7 @@ class discovery_engine
 
 public:
     using milliseconds_type = std::chrono::milliseconds;
+    using seconds_type      = std::chrono::seconds;
     using timediff_type     = std::chrono::milliseconds;
 
     struct options {
@@ -55,7 +56,7 @@ private:
     struct target_item {
         socket4_addr saddr;
         std::uint32_t counter;
-        milliseconds_type transmit_interval;
+        seconds_type transmit_interval;
         clock_type::time_point transmit_timepoint;
 
         // Don't call on_error periodically
@@ -111,7 +112,7 @@ public:
 private:
     void process_hello_packet (socket4_addr saddr, hello_packet const & packet)
     {
-        static std::chrono::milliseconds const MIN_EXPIRATION_INTERVAL {5000};
+        static seconds_type const MIN_EXPIRATION_INTERVAL {5};
         static int const EXPIRATION_INTERVAL_FACTOR = 5;
 
         if (packet.crc16 == crc16_of(packet)) {
@@ -119,7 +120,7 @@ private:
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
                 auto pos = _discovered_peers.find(packet.uuid);
-                auto expiration_interval = std::chrono::milliseconds(packet.transmit_interval)
+                auto expiration_interval = seconds_type(packet.transmit_interval)
                     * EXPIRATION_INTERVAL_FACTOR;
 
                 if (expiration_interval < MIN_EXPIRATION_INTERVAL)
@@ -138,7 +139,7 @@ private:
                 if (pos == std::end(_discovered_peers)) {
                     auto res = _discovered_peers.emplace(packet.uuid
                         , peer_credentials {
-                                socket4_addr{saddr.addr, packet.port}
+                              socket4_addr{saddr.addr, packet.port}
                             , expiration_timepoint
                             , timediff
                         });
@@ -379,13 +380,11 @@ public:
      * @param dest_saddr Target address (unicast, multicast or broadcast).
      * @param local_addr Multicast interface.
      */
-    void add_target (socket4_addr target_saddr
-        , inet4_addr local_addr
-        , milliseconds_type transmit_interval
-        , error * perr = nullptr)
+    void add_target (socket4_addr target_saddr, inet4_addr local_addr
+        , seconds_type transmit_interval, error * perr = nullptr)
     {
-        auto bad = transmit_interval < milliseconds_type{MIN_TRANSMIT_INTERVAL_SECONDS}
-            || transmit_interval > std::chrono::seconds{MAX_TRANSMIT_INTERVAL_SECONDS};
+        auto bad = transmit_interval < seconds_type{MIN_TRANSMIT_INTERVAL_SECONDS}
+            || transmit_interval > seconds_type{MAX_TRANSMIT_INTERVAL_SECONDS};
 
         if (bad) {
             error err {
@@ -405,7 +404,7 @@ public:
         }
 
         // There is no problem if the discovery process starts much later.
-        auto transmit_timepoint = current_timepoint() + std::chrono::seconds{1};
+        auto transmit_timepoint = current_timepoint() + seconds_type{1};
         _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
             , transmit_timepoint);
 
@@ -414,10 +413,11 @@ public:
         _backend.add_target(target_saddr, local_addr);
     }
 
-    void add_target (socket4_addr target_saddr, milliseconds_type transmit_interval
+    void add_target (socket4_addr target_saddr, seconds_type transmit_interval
         , error * perr = nullptr)
     {
-        add_target(target_saddr, inet4_addr::any_addr_value, transmit_interval, perr);
+        add_target(target_saddr, inet4_addr::any_addr_value
+            , transmit_interval, perr);
     }
 
     bool has_targets () const noexcept

@@ -442,12 +442,12 @@ public:
     }
 
     void add_target (socket4_addr src_saddr, inet4_addr local_addr
-        , std::chrono::milliseconds transmit_interval)
+        , std::chrono::seconds transmit_interval)
     {
         _discovery->add_target(src_saddr, local_addr, transmit_interval);
     }
 
-    void add_target (socket4_addr src_saddr, std::chrono::milliseconds transmit_interval)
+    void add_target (socket4_addr src_saddr, std::chrono::seconds transmit_interval)
     {
         _discovery->add_target(src_saddr, transmit_interval);
     }
