@@ -45,6 +45,7 @@ if (NETTY_P2P__ENABLE_CEREAL)
 endif(NETTY_P2P__ENABLE_CEREAL)
 
 list(APPEND _netty_p2p__sources
+    ${CMAKE_CURRENT_LIST_DIR}/src/p2p/file.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/file_transporter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
 
