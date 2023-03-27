@@ -24,7 +24,7 @@ static char const * TAG = "UDP";
 #include "sender_routine.hpp"
 #include "receiver_routine.hpp"
 
-using string_view = pfs::string_view;
+// using string_view = pfs::string_view;
 
 static struct program_context {
     std::string program;
@@ -69,11 +69,11 @@ int main (int argc, char * argv[])
             is_sender = false;
         } else if (string_view{"--qt5"} == argv[i]) {
             is_qt5 = true;
-        } else if (string_view{argv[i]}.starts_with("--addr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--addr=")) {
             addr_value = std::string{argv[i] + 7};
-        } else if (string_view{argv[i]}.starts_with("--local-addr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--local-addr=")) {
             local_addr_value = std::string{argv[i] + 13};
-        } else if (string_view{argv[i]}.starts_with("--port=")) {
+        } else if (starts_with(string_view{argv[i]}, "--port=")) {
             port_value = std::string{argv[i] + 7};
         } else {
             auto arglen = std::strlen(argv[i]);

@@ -16,6 +16,7 @@
 #include "hello_packet.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
+#include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
 #include "pfs/memory.hpp"
 #include "pfs/ring_buffer.hpp"
@@ -55,6 +56,7 @@ class engine
 public:
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
+    using filesize_type         = local_file::filesize_type;
 
 private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
@@ -225,15 +227,15 @@ public: // Callbacks
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
-        , filesize_t /*downloaded_size*/
-        , filesize_t /*total_size*/)> download_progress
-        = [] (universal_id, universal_id, filesize_t , filesize_t) {};
+        , filesize_type /*downloaded_size*/
+        , filesize_type /*total_size*/)> download_progress
+        = [] (universal_id, universal_id, filesize_type, filesize_type) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
-        , fs::path const & /*path*/
+        , std::string const & /*uri*/
         , bool /*success*/)> download_complete
-        = [] (universal_id, universal_id, fs::path const &, bool) {};
+        = [] (universal_id, universal_id, std::string const &, bool) {};
 
     /**
      * Called when file download interrupted, i.e. after peer closed.
@@ -490,12 +492,12 @@ public:
      * @param addressee_id Addressee unique identifier.
      * @param file_id Unique file identifier. If @a file_id is invalid it
      *        will be generated automatically.
-     * @param path Path to sending file.
+     * @param path Local path to sending file.
      *
      * @return Unique file identifier or invalid identifier on error.
      */
     universal_id send_file (universal_id addressee, universal_id fileid
-        , fs::path const & path)
+        , local_file::filepath_type const & path)
     {
         return _transporter->send_file(addressee, fileid, path);
     }
@@ -508,7 +510,7 @@ public:
      *
      * @return Unique file identifier or invalid identifier on error.
      */
-    universal_id send_file (universal_id addressee_id, fs::path const & path)
+    universal_id send_file (universal_id addressee_id, local_file::filepath_type const & path)
     {
         return _transporter->send_file(addressee_id, universal_id{}, path);
     }
@@ -624,14 +626,14 @@ private:
 
         _transporter->download_progress = [this] (universal_id addresser
                 , universal_id fileid
-                , filesize_t downloaded_size
-                , filesize_t total_size) {
+                , filesize_type downloaded_size
+                , filesize_type total_size) {
             download_progress(addresser, fileid, downloaded_size, total_size);
         };
 
         _transporter->download_complete = [this] (universal_id addresser
                 , universal_id fileid
-                , pfs::filesystem::path const & path
+                , std::string const & uri
                 , bool success) {
 
             if (!success) {
@@ -639,7 +641,7 @@ private:
                     , fileid, addresser));
             }
 
-            download_complete(addresser, fileid, path, success);
+            download_complete(addresser, fileid, uri, success);
         };
 
         _transporter->download_interrupted = [this] (universal_id addresser

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "envelope.hpp"
-#include "file.hpp"
 #include "serializer.hpp"
 #include "universal_id.hpp"
 #include "pfs/sha256.hpp"
@@ -21,6 +20,8 @@
 
 namespace netty {
 namespace p2p {
+
+using chunksize_t = std::int32_t;
 
 enum class packet_type: std::uint8_t {
       regular = 0x2A
@@ -80,14 +81,14 @@ struct file_credentials
 {
     universal_id fileid;
     std::string  filename;
-    std::int32_t filesize;
-    std::int32_t offset;
+    std::int64_t filesize;
+    std::int64_t offset;
 };
 
 struct file_request
 {
     universal_id fileid;
-    std::int32_t offset;
+    std::int64_t offset;
 };
 
 struct file_stop
@@ -98,22 +99,22 @@ struct file_stop
 struct file_begin
 {
     universal_id fileid;
-    std::int32_t offset;
+    std::int64_t offset;
 };
 
 // Used for troubleshooting only
 struct file_chunk_header
 {
     universal_id fileid;
-    std::int32_t offset;
-    std::int32_t chunksize;
+    std::int64_t offset;
+    chunksize_t  chunksize;
 };
 
 struct file_chunk
 {
     universal_id fileid;
-    std::int32_t offset;
-    std::int32_t chunksize;
+    std::int64_t offset;
+    chunksize_t  chunksize;
     std::vector<char> chunk;
 };
 

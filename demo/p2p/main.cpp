@@ -70,8 +70,6 @@ using engine_t = p2p::engine<p2p::posix::discovery_engine
     , p2p::file_transporter
     , PACKET_SIZE>;
 
-using string_view = pfs::string_view;
-
 static struct program_context {
     std::string program;
 } __pctx;
@@ -103,14 +101,14 @@ int main (int argc, char * argv[])
         if (string_view{"-h"} == argv[i] || string_view{"--help"} == argv[i]) {
             print_usage();
             return EXIT_SUCCESS;
-        } else if (string_view{argv[i]}.starts_with("--uuid=")) {
+        } else if (starts_with(string_view{argv[i]}, "--uuid=")) {
             my_uuid = pfs::from_string<pfs::universal_id>(std::string{argv[i] + 7});
 
             if (my_uuid == pfs::universal_id{}) {
                 LOGE("", "Bad UUID");
                 return EXIT_FAILURE;
             }
-        } else if (string_view{argv[i]}.starts_with("--listener-saddr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--listener-saddr=")) {
             char const * saddr_value = argv[i] + 17;
             auto res = netty::socket4_addr::parse(saddr_value);
 
@@ -120,7 +118,7 @@ int main (int argc, char * argv[])
             }
 
             listener_saddr = res.second;
-        } else if (string_view{argv[i]}.starts_with("--discovery-saddr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--discovery-saddr=")) {
             char const * saddr_value = argv[i] + 18;
             auto res = netty::socket4_addr::parse(saddr_value);
 
@@ -130,7 +128,7 @@ int main (int argc, char * argv[])
             }
 
             discovery_saddr = res.second;
-        } else if (string_view{argv[i]}.starts_with("--target-saddr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--target-saddr=")) {
             char const * saddr_value = argv[i] + 15;
             auto res = netty::socket4_addr::parse(saddr_value);
 
@@ -185,7 +183,7 @@ int main (int argc, char * argv[])
     engine.add_receiver(discovery_saddr);
 
     for (auto t: target_saddrs) {
-        engine.add_target(t, std::chrono::milliseconds{2 * 1000});
+        engine.add_target(t, std::chrono::seconds{2});
     }
 
     engine.on_error = [] (std::string const & str) {
@@ -265,8 +263,8 @@ int main (int argc, char * argv[])
 
     engine.download_progress = [] (p2p::universal_id sender_id
         , pfs::universal_id file_id
-        , netty::p2p::filesize_t downloaded_size
-        , netty::p2p::filesize_t total_size) {
+        , engine_t::filesize_type downloaded_size
+        , engine_t::filesize_type total_size) {
         LOGD(TAG, "Download progress: {}, file_id={}: {}/{} bytes ({} %)", sender_id
             , file_id, downloaded_size, total_size
             , (static_cast<float>(downloaded_size) / total_size) * 100);

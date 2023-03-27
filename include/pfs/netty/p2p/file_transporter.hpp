@@ -8,13 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "envelope.hpp"
-#include "file.hpp"
 #include "packet.hpp"
+#include "unified_file.hpp"
 #include "universal_id.hpp"
 #include "pfs/filesystem.hpp"
 #include "pfs/sha256.hpp"
 #include "pfs/netty/exports.hpp"
 #include <functional>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -49,11 +50,13 @@ class file_transporter
 {
     using input_envelope_type  = input_envelope<>;
     using output_envelope_type = output_envelope<>;
+    using filesize_type        = local_file::filesize_type;
+    using chunksize_type       = std::int32_t;
 
-    static constexpr filesize_t const DEFAULT_FILE_CHUNK_SIZE {16 * 1024};
-    static constexpr filesize_t const MIN_FILE_CHUNK_SIZE     {32};
-    static constexpr filesize_t const MAX_FILE_CHUNK_SIZE     {1024 * 1024};
-    static constexpr filesize_t const MAX_FILE_SIZE           {0x7ffff000};
+    static constexpr chunksize_type const DEFAULT_FILE_CHUNK_SIZE {16 * 1024};
+    static constexpr chunksize_type const MIN_FILE_CHUNK_SIZE     {32};
+    static constexpr chunksize_type const MAX_FILE_CHUNK_SIZE     {1024 * 1024};
+    static constexpr filesize_type const MAX_FILE_SIZE            {0x7ffff000};
 
 public:
     using checksum_type = pfs::crypto::sha256_digest;
@@ -67,32 +70,43 @@ public:
         // download is complete.
         int download_progress_granularity {1};
 
-        filesize_t file_chunk_size {DEFAULT_FILE_CHUNK_SIZE};
-        filesize_t max_file_size {MAX_FILE_SIZE};
+        chunksize_type file_chunk_size {DEFAULT_FILE_CHUNK_SIZE};
+        filesize_type max_file_size {MAX_FILE_SIZE};
         bool remove_transient_files_on_error {false};
     };
 
 private:
+    // Income file
     struct ifile_item
     {
-        universal_id addresser;
-        ofile_t desc_file;
-        ofile_t data_file;
-        filesize_t filesize;
+        universal_id  addresser;
+        local_file    desc_file;
+        local_file    data_file;
+        filesize_type filesize;
     };
 
-    struct ofile_item
+    // Outcome file
+    struct olocal_file_item
     {
         universal_id addressee;
-        ifile_t data_file;
+        local_file data_file;
         bool chunk_requested;
     };
+
+    struct oremote_file_item
+    {
+        universal_id addressee;
+        remote_file data_file;
+        bool chunk_requested;
+    };
+
 
 private:
     options _opts;
 
     std::unordered_map<universal_id/*fileid*/, ifile_item> _ifile_pool;
-    std::unordered_map<universal_id/*fileid*/, ofile_item> _ofile_pool;
+    std::unordered_map<universal_id/*fileid*/, olocal_file_item> _olocal_file_pool;
+    std::unordered_map<universal_id/*fileid*/, oremote_file_item> _oremote_file_pool;
 
 public:
     mutable std::function<void (std::string const &)> on_error
@@ -119,18 +133,18 @@ public:
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
-        , filesize_t /*downloaded_size*/
-        , filesize_t /*total_size*/)> download_progress
-        = [] (universal_id, universal_id, filesize_t, filesize_t) {};
+        , filesize_type /*downloaded_size*/
+        , filesize_type /*total_size*/)> download_progress
+        = [] (universal_id, universal_id, filesize_type, filesize_type) {};
 
     /**
      * Called when file download completed successfully or with an error.
      */
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
-        , pfs::filesystem::path const & /*path*/
+        , std::string const & /*uri*/
         , bool /*success*/)> download_complete
-        = [] (universal_id, universal_id, pfs::filesystem::path const &, bool) {};
+        = [] (universal_id, universal_id, std::string const &, bool) {};
 
     /**
      * Called when file download interrupted, i.e. after peer closed.
@@ -141,7 +155,7 @@ public:
 
 private:
     bool ensure_directory (pfs::filesystem::path const & dir, error * perr = nullptr) const;
-    std::vector<char> read_chunk (file const & data_file, filesize_t count);
+    std::vector<char> read_chunk (local_file & data_file, chunksize_type size);
 
     pfs::filesystem::path make_transientfilepath (universal_id addresser
         , universal_id fileid
@@ -159,8 +173,8 @@ private:
     pfs::filesystem::path make_errfilepath (universal_id addresser
         , universal_id fileid) const;
 
-    fs::path make_cachefilepath (universal_id fileid) const;
-    fs::path make_targetfilepath (universal_id addresser, std::string const & filename) const;
+    pfs::filesystem::path make_cachefilepath (universal_id fileid) const;
+    pfs::filesystem::path make_targetfilepath (universal_id addresser, std::string const & filename) const;
     void remove_transient_files (universal_id addresser, universal_id fileid);
 
     /**
@@ -214,7 +228,7 @@ public:
     /**
      * Sets file size upper limit.
      */
-    NETTY__EXPORT void set_max_file_size (filesize_t value);
+    NETTY__EXPORT void set_max_file_size (filesize_type value);
 
     NETTY__EXPORT void process_file_credentials (universal_id sender, std::vector<char> const & data);
     NETTY__EXPORT void process_file_request (universal_id sender, std::vector<char> const & data);
@@ -250,7 +264,10 @@ public:
      *        big to send or has no permissions to read file).
      */
     NETTY__EXPORT universal_id send_file (universal_id addressee, universal_id fileid
-        , pfs::filesystem::path const & path);
+        , local_file::filepath_type const & path, std::int64_t filesize);
+
+    NETTY__EXPORT universal_id send_file (universal_id addressee, universal_id fileid
+        , remote_file::filepath_type const & path, std::int64_t filesize);
 
     /**
      * Send request to download file from @a addressee_id.

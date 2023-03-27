@@ -10,4 +10,15 @@
 project(p2p-demo)
 
 add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} pfs::netty::p2p pfs::netty)
+
+if (TARGET pfs::netty::p2p)
+    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p)
+else()
+    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p::static)
+endif()
+
+if (TARGET pfs::netty)
+    target_link_libraries(${PROJECT_NAME} pfs::netty)
+else()
+    target_link_libraries(${PROJECT_NAME} pfs::netty::static)
+endif()

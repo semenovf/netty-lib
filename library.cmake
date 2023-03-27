@@ -227,3 +227,62 @@ if (NETTY__BUILD_STATIC)
         portable_target(COMPILE_OPTIONS ${STATIC_PROJECT_NAME} PUBLIC ${_netty__compile_options})
     endif()
 endif()
+
+if (ANDROID)
+    portable_target(BUILD_JAR pfs.netty
+        SOURCES
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncDatagramSocket.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncNetworkSocket.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncSemaphore.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncServer.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncServerSocket.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncSocket.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/ByteBufferList.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/ChannelWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/DataEmitter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/DatagramChannelWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/DataSink.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/HostnameResolutionException.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/SelectorWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/ServerSocketChannelWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/SocketChannelWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/ThreadQueue.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/Util.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/CompletedCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/ConnectCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/DataCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/ListenCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/SocketCreateCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/ValueFunction.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/callback/WritableCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/Cancellable.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/DependentCancellable.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/DependentFuture.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/DoneCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/FailCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/FailConvertCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/FailRecoverCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/FutureCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/Future.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/SimpleCancellable.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/SimpleFuture.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/SuccessCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/ThenCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/future/ThenFutureCallback.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/util/Allocator.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/util/ArrayDeque.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/util/Charsets.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/util/Deque.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/util/StreamUtility.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/wrapper/AsyncSocketWrapper.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/wrapper/DataEmitterWrapper.java
+
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncJsonRpcException.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncJsonRpcService.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/JsonRpc.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/JsonRpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/LogTag.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/TestJsonRpcRouter.java
+        LINK_ANDROID)
+endif()
+

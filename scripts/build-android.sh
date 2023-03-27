@@ -10,6 +10,11 @@
 
 CMAKE_OPTIONS="${CMAKE_OPTIONS}"
 
+if [ -z "$PROJECT_NAME" ] ; then
+    echo "ERROR: PROJECT_NAME is mandatory." >&2
+    exit 1
+fi
+
 if [ -z "$PROJECT_OPT_PREFIX" ] ; then
     echo "ERROR: PROJECT_OPT_PREFIX is mandatory." >&2
     exit 1
@@ -72,7 +77,9 @@ fi
 
 CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_BUILD_TYPE=$BUILD_TYPE"
 
-BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}-${ANDROID_ABI}-${ANDROID_TARGET_SDK_VERSION}-${BUILD_DIR_SUFFIX:-}
+if [ -z "$BUILD_DIR" ] ; then
+    BUILD_DIR=builds/${PROJECT_NAME}-${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}-${ANDROID_ABI}-${ANDROID_TARGET_SDK_VERSION}${BUILD_DIR_SUFFIX:+-}${BUILD_DIR_SUFFIX:-}
+fi
 
 # We are inside source directory
 if [ -d .git ] ; then

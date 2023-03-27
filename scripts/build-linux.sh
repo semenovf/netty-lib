@@ -16,6 +16,11 @@
 CMAKE_OPTIONS="${CMAKE_OPTIONS}"
 CTEST_OPTIONS="${CTEST_OPTIONS}"
 
+if [ -z "$PROJECT_NAME" ] ; then
+    echo "ERROR: PROJECT_NAME is mandatory." >&2
+    exit 1
+fi
+
 if [ -z "$PROJECT_OPT_PREFIX" ] ; then
     echo "ERROR: PROJECT_OPT_PREFIX is mandatory." >&2
     exit 1
@@ -133,7 +138,9 @@ if [ -n "$ENABLE_PROFILER" ] ; then
     CMAKE_OPTIONS="$CMAKE_OPTIONS -D${PROJECT_OPT_PREFIX}ENABLE_PROFILER=$ENABLE_PROFILER"
 fi
 
-BUILD_DIR=builds/${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}${BUILD_DIR_SUFFIX:-}
+if [ -z "$BUILD_DIR" ] ; then
+    BUILD_DIR=builds/${PROJECT_NAME}-${CXX_COMPILER:-default}.cxx${CXX_STANDARD:-}${ENABLE_COVERAGE:+.coverage}${ENABLE_PROFILER:+.profiler}${BUILD_DIR_SUFFIX:+-}${BUILD_DIR_SUFFIX:-}
+fi
 
 # We are inside source directory
 if [ -d .git ] ; then

@@ -10,6 +10,9 @@ package pfs.netty.p2p;
 
 public class FileInfo
 {
+    public String uri;
+    public String displayName;
+
     // Value returned by `getContentResolver().getType(uri)`
     // Examples:
     //      application/vnd.android.package-archive
@@ -17,5 +20,5 @@ public class FileInfo
     //      etc
     public String mimeType;
 
+    public long size;
 }
-

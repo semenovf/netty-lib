@@ -9,4 +9,9 @@
 project(iface-monitor-demo)
 
 add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} pfs::netty)
+
+if (TARGET pfs::netty)
+    target_link_libraries(${PROJECT_NAME} pfs::netty)
+else()
+    target_link_libraries(${PROJECT_NAME} pfs::netty::static)
+endif()

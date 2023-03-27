@@ -7,3 +7,6 @@
 [submodule "3rdparty/portable-target"]
 	path = 3rdparty/portable-target
 	url = git@github.com:semenovf/portable-target.git
+[submodule "3rdparty/pfs/ionik"]
+	path = 3rdparty/pfs/ionik
+	url = git@github.com:semenovf/ionik-lib.git

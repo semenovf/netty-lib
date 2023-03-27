@@ -1,0 +1,14 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2019-2023 Vladislav Trifochkin
+//
+// This file is part of `netty-lib`.
+//
+// Changelog:
+//      2023.03.21 Initial version.
+////////////////////////////////////////////////////////////////////////////////
+#pragma once
+
+namespace netty {
+namespace {
+static constexpr char const * TAG = "netty";
+}} // namespace netty

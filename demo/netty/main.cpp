@@ -23,8 +23,6 @@ static char const * TAG = "NETTY";
 #include "client_routine.hpp"
 #include "server_routine.hpp"
 
-using string_view = pfs::string_view;
-
 static struct program_context {
     std::string program;
     std::vector<std::string> poller_variants;
@@ -121,11 +119,11 @@ int main (int argc, char * argv[])
             }
 
             is_tcp = true;
-        } else if (string_view{argv[i]}.starts_with("--poller=")) {
+        } else if (starts_with(string_view{argv[i]}, "--poller=")) {
             poller_value = std::string{argv[i] + 9};
-        } else if (string_view{argv[i]}.starts_with("--addr=")) {
+        } else if (starts_with(string_view{argv[i]}, "--addr=")) {
             addr_value = std::string{argv[i] + 7};
-        } else if (string_view{argv[i]}.starts_with("--port=")) {
+        } else if (starts_with(string_view{argv[i]}, "--port=")) {
             port_value = std::string{argv[i] + 7};
         } else {
             auto arglen = std::strlen(argv[i]);

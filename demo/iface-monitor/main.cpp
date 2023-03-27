@@ -16,7 +16,6 @@
 static char const * TAG = "netty";
 
 namespace fs = pfs::filesystem;
-using string_view = pfs::string_view;
 using netlink_attributes = netty::linux_os::netlink_attributes;
 using netlink_socket     = netty::linux_os::netlink_socket;
 using netlink_monitor    = netty::linux_os::netlink_monitor;

@@ -9,5 +9,11 @@
 project(discovery-demo)
 
 add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} pfs::netty::p2p::static pfs::common)
+
+if (TARGET pfs::netty::p2p)
+    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p pfs::common)
+else()
+    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p::static pfs::common)
+endif()
+
 target_compile_definitions(${PROJECT_NAME} PUBLIC PFS__LOG_LEVEL=2)
