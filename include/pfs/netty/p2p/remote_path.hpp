@@ -15,8 +15,13 @@ namespace p2p {
 
 struct remote_path
 {
-    std::string content_uri;
-    socket4_addr content_provider_saddr;
+    std::string uri;
+    socket4_addr provider_saddr;
+
+    bool empty () const noexcept
+    {
+        return uri.empty();
+    }
 };
 
 }} // namespace netty::p2p

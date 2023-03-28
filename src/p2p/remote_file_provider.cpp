@@ -16,6 +16,8 @@
 // #include "pfs/netty/default_poller_types.hpp"
 // #include "pfs/netty/posix/tcp_socket.hpp"
 
+#include "pfs/log.hpp"
+
 namespace netty {
 namespace p2p {
 
@@ -34,24 +36,38 @@ namespace p2p {
 //      |<---------filesize----------|
 //      |                            |
 //      |-----------set_pos--------->|
-//      |-------------?------------->|
 //      |                            |
 //      |------------read----------->|
-//      |-------------?------------->|
+//      |<---------read_response-----|
 //      |                            |
 //      |------------write---------->|
-//      |-------------?------------->|
+//      |<-------write_response------|
 
 using filesize_t = ionik::filesize_t;
 
-enum class method_type: std::uint8_t {
-      open_read_only = 0x01
-    , open_write_only
-    , close
-    , offset
-    , set_pos
-    , read
-    , write
+enum class operation_enum: std::uint8_t {
+      request      = 0x01
+    , response     = 0x02
+    , notification = 0x03
+};
+
+enum class method_enum: std::uint8_t {
+      select_file        = 0x01
+    , open_read_only     = 0x02
+    , open_write_only    = 0x03
+    , close              = 0x04
+    , offset             = 0x05
+    , set_pos            = 0x06
+    , read               = 0x07
+    , write              = 0x08
+};
+
+struct select_file_request
+{};
+
+struct select_file_response
+{
+    std::string uri;
 };
 
 struct open_read_only_request
@@ -131,11 +147,21 @@ void protocol::process_payload (std::vector<char> const & payload)
 
 template <>
 std::vector<char>
+protocol::serialize (select_file_request const & p)
+{
+    std::vector<char> payload;
+    binary_ostream out {payload};
+    out << operation_enum::request << method_enum::select_file << next_rid();
+    return serialize_envelope(payload);
+}
+
+template <>
+std::vector<char>
 protocol::serialize (open_read_only_request const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::open_read_only << next_rid() << p.uri;
+    out << operation_enum::request << method_enum::open_read_only << next_rid() << p.uri;
     return serialize_envelope(payload);
 }
 
@@ -145,7 +171,7 @@ protocol::serialize (open_write_only_request const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::open_write_only << next_rid() << p.uri << p.trunc;
+    out << operation_enum::request << method_enum::open_write_only << next_rid() << p.uri << p.trunc;
     return serialize_envelope(payload);
 }
 
@@ -155,7 +181,7 @@ protocol::serialize (close_notification const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::close << p.h;
+    out << operation_enum::notification << method_enum::close << p.h;
     return serialize_envelope(payload);
 }
 
@@ -165,7 +191,7 @@ protocol::serialize (offset_request const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::offset << next_rid() << p.h;
+    out << operation_enum::request << method_enum::offset << next_rid() << p.h;
     return serialize_envelope(payload);
 }
 
@@ -175,7 +201,7 @@ protocol::serialize (set_pos_notification const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::set_pos << p.h << p.offset;
+    out << operation_enum::notification << method_enum::set_pos << p.h << p.offset;
     return serialize_envelope(payload);
 }
 
@@ -185,7 +211,7 @@ protocol::serialize (read_request const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::read << next_rid() << p.h << p.len;
+    out << operation_enum::request << method_enum::read << next_rid() << p.h << p.len;
     return serialize_envelope(payload);
 }
 
@@ -195,7 +221,7 @@ protocol::serialize (write_request const & p)
 {
     std::vector<char> payload;
     binary_ostream out {payload};
-    out << method_type::write << next_rid() << p.h << p.data;
+    out << operation_enum::request << method_enum::write << next_rid() << p.h << p.data;
     return serialize_envelope(payload);
 }
 
@@ -232,6 +258,29 @@ std::pair<bool, std::size_t> protocol::exec (char const * data, std::size_t len)
     process_payload(payload);
 
     return std::make_pair(true, static_cast<std::size_t>(in.begin() - data));
+}
+
+remote_path select_remote_file (socket4_addr provider_saddr)
+{
+    LOGD("", "CONNECTING");
+
+    remote_file_handle::channel_type channel;
+
+    channel.connected = [] (remote_file_handle::channel_type & self) {
+        LOGD("", "=== CONNECTED ===");
+        self.send(select_file_request{});
+        self.wait(std::chrono::milliseconds{30000});
+    };
+
+    channel.connection_refused = [] (remote_file_handle::channel_type &) {
+        LOGD("", "=== CONNECTION REFUSED ===");
+    };
+
+    if (!channel.connect(provider_saddr, 500))
+        return remote_path{};
+
+    // FIXME
+    return remote_path{};
 }
 
 }} // namespace netty::p2p

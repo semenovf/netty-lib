@@ -1,4 +1,12 @@
-package pfs.netty;
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2019-2023 Vladislav Trifochkin
+//
+// This file is part of `netty-lib`.
+//
+// Changelog:
+//      2023.03.26 Initial version.
+////////////////////////////////////////////////////////////////////////////////
+package pfs.netty.p2p;
 
 import android.app.Service;
 import android.content.Intent;
@@ -10,19 +18,20 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
-public class JsonRpc extends Service {
+// OBSOLETE (DO NOT USE)
+
+public class RpcService extends Service {
     private static final String TAG = "JsonRpc";
     private static final String SERVICE_ACTION = "pfs.netty.p2p.JSON_RPC_SERVICE";
 
     // FIXME Must be configurable
-    private static final String SERVER_ADDR = "192.168.1.18";
     private static final int SERVER_PORT = 42678;
     private static final int SERVER_ACCEPT_TIMEOUT_MILLIS = 3000; // 3 seconds
 
     private Thread _serverThread = null;
     private ServerSocket _serverSocket = null;
 
-    public JsonRpc() { }
+    public RpcService() { }
 
     @Override
     public IBinder onBind (Intent intent) {

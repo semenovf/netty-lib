@@ -27,10 +27,11 @@ namespace p2p {
 //
 class protocol
 {
-    using request_id        = std::uint32_t;
-    using method_field_type = std::uint8_t;
-    using size_field_type   = std::uint32_t;
-    using crc16_field_type  = std::int16_t;
+    using request_id           = std::uint32_t;
+    using operation_field_type = std::uint8_t;
+    using method_field_type    = std::uint8_t;
+    using size_field_type      = std::uint32_t;
+    using crc16_field_type     = std::int16_t;
 
 private:
     static constexpr const char BEGIN = '\xBF';

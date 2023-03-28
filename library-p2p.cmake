@@ -49,13 +49,20 @@ list(APPEND _netty_p2p__sources
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_provider.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
 
-if (NETTY_P2P__BUILD_SHARED)
-    if (NOT TARGET pfs::ionik)
+if (NOT TARGET pfs::ionik AND NOT TARGET pfs::ionik::static)
+    if (NETTY_P2P__BUILD_SHARED)
         set(IONIK__BUILD_SHARED ON CACHE BOOL "Build `ionik` shared library")
-        portable_target(INCLUDE_PROJECT
-            ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/ionik/library.cmake)
     endif()
 
+    if (NETTY_P2P__BUILD_STATIC)
+        set(IONIK__BUILD_STATIC ON CACHE BOOL "Build `ionik` static library")
+    endif()
+
+    portable_target(INCLUDE_PROJECT
+        ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/ionik/library.cmake)
+endif()
+
+if (NETTY_P2P__BUILD_SHARED)
     portable_target(SOURCES ${PROJECT_NAME} ${_netty_p2p__sources})
     portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
@@ -73,12 +80,6 @@ if (NETTY_P2P__BUILD_SHARED)
 endif()
 
 if (NETTY_P2P__BUILD_STATIC)
-    if (NOT TARGET pfs::ionik::static)
-        set(IONIK__BUILD_STATIC ON CACHE BOOL "Build `ionik` static library")
-        portable_target(INCLUDE_PROJECT
-            ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/ionik/library.cmake)
-    endif()
-
     portable_target(SOURCES ${STATIC_PROJECT_NAME} ${_netty_p2p__sources})
     portable_target(INCLUDE_DIRS ${STATIC_PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
@@ -88,10 +89,10 @@ if (NETTY_P2P__BUILD_STATIC)
         portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::netty)
     endif()
 
-    if (TARGET pfs::ionik)
-        portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::ionik)
-    elseif (TARGET pfs::ionik::static)
+    if (TARGET pfs::ionik::static)
         portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::ionik::static)
+    elseif (TARGET pfs::ionik)
+        portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::ionik)
     endif()
 endif()
 

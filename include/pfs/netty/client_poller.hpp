@@ -14,6 +14,7 @@
 #include "reader_poller.hpp"
 #include "writer_poller.hpp"
 #include "pfs/i18n.hpp"
+#include "pfs/stopwatch.hpp"
 #include <functional>
 #include <utility>
 
@@ -135,25 +136,41 @@ public:
      * @return Total number of positive events: number of connected sockets
      *         plus number of read and write events.
      */
-    int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
+    int poll (std::chrono::milliseconds timeout = std::chrono::milliseconds{0}
         , error * perr = nullptr)
     {
+        static std::chrono::milliseconds __zero_millis{0};
+
         int n1 = 0;
         int n2 = 0;
         int n3 = 0;
 
+        pfs::stopwatch<std::milli> stopwatch;
+
         // The order of call polls is matter
 
-        if (!_writer_poller.empty())
-            n1 = _writer_poller.poll(std::chrono::milliseconds{0}, perr);
+        if (!_writer_poller.empty()) {
+            stopwatch.start();
+            n1 = _writer_poller.poll(timeout, perr);
+            stopwatch.stop();
+            timeout -= std::chrono::milliseconds{stopwatch.count()};
 
-        if (!_reader_poller.empty())
-            n2 = _reader_poller.poll(millis, perr);
-        else
-            millis = std::chrono::milliseconds{0};
+            if (timeout < __zero_millis)
+                timeout = __zero_millis;
+        }
+
+        if (!_reader_poller.empty()) {
+            stopwatch.start();
+            n2 = _reader_poller.poll(timeout, perr);
+            stopwatch.stop();
+            timeout -= std::chrono::milliseconds{stopwatch.count()};
+
+            if (timeout < __zero_millis)
+                timeout = __zero_millis;
+        }
 
         if (!_connecting_poller.empty())
-            n3 = _connecting_poller.poll(millis, perr);
+            n3 = _connecting_poller.poll(timeout, perr);
 
         if (n1 < 0 && n2 < 0 && n3 < 0)
             return n1;

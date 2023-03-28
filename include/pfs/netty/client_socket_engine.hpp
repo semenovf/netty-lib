@@ -46,6 +46,7 @@ public:
           success
         , disconnected
         , connection_refused
+        , timedout
     };
 
     struct options
@@ -81,10 +82,20 @@ public: // Callbacks
     mutable std::function<void (std::string const &)> on_error
         = [] (std::string const &) {};
 
-    mutable std::function<void ()> connected = [] () {};
-    mutable std::function<void ()> disconnected = [] () {};
+    mutable std::function<void (client_socket_engine &)> connected
+        = [] (client_socket_engine &) {};
+
+    mutable std::function<void (client_socket_engine &)> disconnected
+        = [] (client_socket_engine &) {};
+
+    mutable std::function<void (client_socket_engine &)> connection_refused
+        = [] (client_socket_engine &) {};
 
 public:
+    client_socket_engine ()
+        : client_socket_engine(default_options())
+    {}
+
     /**
      * Initializes underlying APIs and constructs engine instance.
      *
@@ -137,7 +148,7 @@ public:
     client_socket_engine (client_socket_engine &&) = delete;
     client_socket_engine & operator = (client_socket_engine &&) = delete;
 
-    bool connect (netty::socket4_addr const & server_saddr)
+    bool connect (netty::socket4_addr const & server_saddr, int millis = 0)
     {
         typename poller_type::callbacks callbacks;
 
@@ -148,15 +159,16 @@ public:
 
         callbacks.connection_refused = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::connection_refused;
+            this->connection_refused(*this);
         };
 
         callbacks.connected = [this] (typename poller_type::native_socket_type sock) {
-            this->connected();
+            this->connected(*this);
         };
 
         callbacks.disconnected = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::disconnected;
-            this->disconnected();
+            this->disconnected(*this);
         };
 
         callbacks.ready_read = [this] (typename poller_type::native_socket_type sock) {
@@ -174,9 +186,14 @@ public:
         if (conn_state == conn_status::failure)
             return false;
 
+        if (conn_state == conn_status::connected)
+            return true;
+
         _poller->add(_socket, conn_state);
 
-        return true;
+        _loop_result = wait(std::chrono::milliseconds{millis});
+
+        return _loop_result == loop_result::success;
     }
 
 public:
@@ -185,6 +202,8 @@ public:
      */
     loop_result loop ()
     {
+        _loop_result = loop_result::success;
+
         send_outgoing_data();
         auto n = _poller->poll(_current_poller_timeout);
 
@@ -200,15 +219,26 @@ public:
         return _loop_result;
     }
 
-    loop_result loop (std::chrono::milliseconds poller_timeout)
+    loop_result wait (std::chrono::milliseconds poller_timeout)
     {
-        send_outgoing_data();
+        _loop_result = loop_result::success;
         auto n = _poller->poll(poller_timeout);
-        return _loop_result;
+
+        if (_loop_result != loop_result::success)
+            return _loop_result;
+
+        return n == 0 ? loop_result::timedout : _loop_result;
     }
 
     template <typename Packet>
-    std::size_t send (Packet const & p)
+    send_result send (Packet const & p)
+    {
+        send_async<Packet>(p);
+        return send_outgoing_data();
+    }
+
+    template <typename Packet>
+    std::size_t send_async (Packet const & p)
     {
         auto bytes = _protocol.serialize(p);
         enqueue(bytes.data(), bytes.size());
@@ -280,7 +310,7 @@ private:
         }
     }
 
-    netty::send_status send_outgoing_data ()
+    netty::send_result send_outgoing_data ()
     {
         std::unique_lock<BasicLockable> lock(_omtx);
 
@@ -332,7 +362,7 @@ private:
             }
         }
 
-        return sendstate;
+        return send_result{sendstate, total_bytes_sent};
     }
 };
 

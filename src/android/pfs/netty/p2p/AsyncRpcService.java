@@ -1,4 +1,12 @@
-package pfs.netty;
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2019-2023 Vladislav Trifochkin
+//
+// This file is part of `netty-lib`.
+//
+// Changelog:
+//      2023.03.26 Initial version.
+////////////////////////////////////////////////////////////////////////////////
+package pfs.netty.p2p;
 
 import android.app.Service;
 import android.content.Intent;
@@ -14,29 +22,24 @@ import com.koushikdutta.async.callback.CompletedCallback;
 import com.koushikdutta.async.callback.DataCallback;
 import com.koushikdutta.async.callback.ListenCallback;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 
 // Protocol envelope
-//
-//   1     2             3             4    5
-// --------------------------------------------
-// |x10|  size | p a y l o a d ... |crc16|x11|
-// --------------------------------------------
-// Field 1 - BEGIN flag (1 bytes).
+//   1        2               3            4    5
+// ------------------------------------------------
+// |xBF|    size    | p a y l o a d ... |crc16|xEF|
+// ------------------------------------------------
+// Field 1 - BEGIN flag (1 bytes, constant).
 // Field 2 - Payload size (4 bytes).
 // Field 3 - Payload (n bytes).
-// Field 4 - CRC16 of the payload (2 bytes).
-// Field 5 - END flag (1 byte).
+// Field 4 - CRC16 of the payload (2 bytes) (not used yet, always 0).
+// Field 5 - END flag (1 byte, constant).
 //
-public class AsyncJsonRpcService extends Service implements LogTag {
-
-    private static final String SERVICE_ACTION = "pfs.netty.ASYNC_JSON_RPC_SERVICE";
+public class AsyncRpcService extends Service implements LogTag
+{
+    private static final String SERVICE_ACTION = "pfs.netty.ASYNC_RPC_SERVICE";
     private static final String DEFAULT_SERVER_ADDR = "localhost";
     private static final int DEFAULT_SERVER_PORT = 42678;
 
@@ -48,66 +51,72 @@ public class AsyncJsonRpcService extends Service implements LogTag {
             + 1; /* Field 5 END_FLAG */
 
     // Native order for IPC communications by default
-    private static ByteOrder _order = ByteOrder.nativeOrder();
+    //private static ByteOrder _order = ByteOrder.nativeOrder();
+    private static ByteOrder _order = ByteOrder.BIG_ENDIAN;
 
     // NOTE. AsynchronousServerSocketChannel available in Android since API 26
     // private AsynchronousServerSocketChannel _serverSocket = null;
     private AsyncServer _asyncServer = null;
 
-    private JsonRpcRouter _router = null;
+    private RpcRouter _router = null;
 
     // Default constructor called by `startService()` from MainActivity
-    public AsyncJsonRpcService()
+    public AsyncRpcService()
     {
         Log.d(TAG, String.format("Service constructed: %s", this.getClass().getCanonicalName()));
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
+    public IBinder onBind (Intent intent) {
         return null;
     }
 
     @Override
-    public void onCreate () {
+    public void onCreate ()
+    {
         super.onCreate();
         Log.d(TAG, String.format("Service created from class: %s", this.getClass().getCanonicalName()));
     }
 
     @Override
-    public int onStartCommand (Intent intent, int flags, int startId) {
-        Log.d(TAG, String.format("=== START COMMAND: flags=%d; startId=%d", flags, startId));
+    public int onStartCommand (Intent intent, int flags, int startId)
+    {
+        Log.d(TAG, String.format("Starting service: flags=%d; startId=%d", flags, startId));
 
         int startResult = super.onStartCommand(intent, flags, startId);
 
-        String jsonRpcRouterClassName = intent.getExtras().getString(JsonRpcRouter.INTENT_IMPL_CLASS_KEY);
-        String serverAddr = intent.getStringExtra(JsonRpcRouter.SERVER_ADDR);
-        int serverPort = intent.getIntExtra(JsonRpcRouter.SERVER_PORT, DEFAULT_SERVER_PORT);
+        String rpcRouterClassName = intent.getStringExtra(RpcRouter.ROUTER_IMPL_CLASS_KEY);
+        String serverAddr = intent.getStringExtra(RpcRouter.SERVER_ADDR_KEY);
+        int serverPort = intent.getIntExtra(RpcRouter.SERVER_PORT_KEY, DEFAULT_SERVER_PORT);
+
+        if (rpcRouterClassName.isEmpty())
+            rpcRouterClassName = RpcRouter.DEFAULT_ROUTER_IMPL_CLASS;
 
         if (serverAddr.isEmpty())
             serverAddr = DEFAULT_SERVER_ADDR;
 
         try {
-            Class<?> jsonRpcRouterClass = Class.forName(jsonRpcRouterClassName);
-            _router = (JsonRpcRouter) jsonRpcRouterClass.newInstance();
+            Class<?> rpcRouterClass = Class.forName(rpcRouterClassName);
+            _router = ((RpcRouter)rpcRouterClass.newInstance()).context(this);
             runJob(startId, serverAddr, serverPort);
         } catch (ClassNotFoundException e) {
-            Log.e(TAG, String.format("JSON RPC router implementation class not found: %s"
-                , jsonRpcRouterClassName));
+            Log.e(TAG, String.format("RPC router implementation class not found: %s"
+                , rpcRouterClassName));
             stopSelf(startId);
             return START_NOT_STICKY;
         } catch (IllegalAccessException e) {
-            Log.e(TAG, String.format("Instantiation of JSON RPC router implementation failure: %s: %s"
-                , jsonRpcRouterClassName, e.getMessage()));
+            Log.e(TAG, String.format("Instantiation of RPC router implementation failure: %s: %s"
+                , rpcRouterClassName, e.getMessage()));
             stopSelf(startId);
             return START_NOT_STICKY;
         } catch (InstantiationException e) {
-            Log.e(TAG, String.format("Instantiation of JSON RPC router implementation failure: %s: %s"
-                    , jsonRpcRouterClassName, e.getMessage()));
+            Log.e(TAG, String.format("Instantiation of RPC router implementation failure: %s: %s"
+                    , rpcRouterClassName, e.getMessage()));
             stopSelf(startId);
             return START_NOT_STICKY;
         }
 
-        Log.d(TAG, String.format("JSON RPC router implementation ACCEPTED: %s", jsonRpcRouterClassName));
+        Log.d(TAG, String.format("RPC router implementation accepted: %s", rpcRouterClassName));
         return startResult;
     }
 
@@ -195,7 +204,7 @@ public class AsyncJsonRpcService extends Service implements LogTag {
                         Log.d(TAG, String.format("Received Message: BEGIN=%d, SIZE=%d", beginFlag, payloadSize));
 
                         if (beginFlag != BEGIN_FLAG)
-                            throw new pfs.netty.AsyncJsonRpcException("Expected BEGIN_FLAG");
+                            throw new AsyncRpcException("Expected BEGIN_FLAG");
 
                         if (remaining < payloadSize + MIN_PACKET_SIZE) {
                             Log.d(TAG, "Incomplete packet");
@@ -209,12 +218,12 @@ public class AsyncJsonRpcService extends Service implements LogTag {
                         byte endFlag = raw.get();
 
                         if (endFlag != END_FLAG)
-                            throw new AsyncJsonRpcException("Expected END_FLAG");
+                            throw new AsyncRpcException("Expected END_FLAG");
 
                         // TODO Check CRC16
                         Log.d(TAG, String.format("[Server] CRC16: %d", crc16));
 
-                        parsePayload(socket, payload);
+                        processPayload(socket, payload);
 
                         // Packet complete
                         beginFlag = 0;
@@ -245,16 +254,8 @@ public class AsyncJsonRpcService extends Service implements LogTag {
         });
     }
 
-    private void parsePayload (final AsyncSocket socket, byte[] payload)
+    private void processPayload (final AsyncSocket socket, byte[] payload)
     {
-        String jsonString = new String(payload, StandardCharsets.UTF_8);
-        Log.d(TAG, String.format("[Server] JSON: %s", jsonString));
-
-        try {
-            JSONObject command = new JSONObject(jsonString);
-            _router.execCommand(socket, command);
-        } catch (JSONException e) {
-            Log.e(TAG, "Expected JSON for payload");
-        }
+         _router.processPayload(socket, payload);
     }
 }

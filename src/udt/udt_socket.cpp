@@ -288,10 +288,10 @@ send_result basic_udt_socket::send (char const * data, int len, error * /*perr*/
         // Error code: 6001
         // Error desc: Non-blocking call failure: no buffer available for sending.
         if (CUDTException{6, 1, 0}.getErrorCode() == UDT::getlasterror_code())
-            return send_result{send_status::failure, -1};
+            return send_result{send_status::failure, 0};
     }
 
-    return send_result{send_status::good, rc};
+    return send_result{send_status::good, static_cast<decltype(send_result::n)>(rc)};
 }
 
 conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
