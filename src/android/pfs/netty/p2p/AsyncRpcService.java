@@ -11,6 +11,7 @@ package pfs.netty.p2p;
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
+import android.os.StrictMode;
 import android.util.Log;
 
 import com.koushikdutta.async.AsyncServer;
@@ -23,7 +24,9 @@ import com.koushikdutta.async.callback.DataCallback;
 import com.koushikdutta.async.callback.ListenCallback;
 
 import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteOrder;
 
 // Protocol envelope
@@ -39,20 +42,36 @@ import java.nio.ByteOrder;
 //
 public class AsyncRpcService extends Service implements LogTag
 {
+    public static final String OPEN_FILE_DIALOG_INTENT_ACTION = "pfs.netty.p2p.OPEN_FILE_DIALOG";
+    public static final String OPEN_FILE_DIALOG_RESULT_INTENT_ACTION = "pfs.netty.p2p.OPEN_FILE_DIALOG_RESULT";
+
+    public static final String ROUTER_IMPL_CLASS_KEY = "pfs.netty.p2p.ROUTER_IMPL_CLASS_KEY";
+    public static final String ORDER_KEY = "pfs.netty.p2p.ORDER_KEY";
+    public static final String SERVER_ADDR_KEY = "pfs.netty.p2p.SERVER_ADDR_KEY";
+    public static final String SERVER_PORT_KEY = "pfs.netty.p2p.SERVER_PORT_KEY";
+    public static final String REQUEST_ID_KEY = "pfs.netty.p2p.REQUEST_ID_KEY";
+
+    public static final String DEFAULT_ROUTER_IMPL_CLASS = "pfs.netty.p2p.FileRpcRouter";
+
+    public static final int NATIVE_ORDER  = 0;
+    public static final int BIG_ENDIAN    = 1;
+    public static final int LITTLE_ENDIAN = 2;
+
+    private static ByteOrder FALLBACK_BYTE_ORDER = ByteOrder.nativeOrder();
+
     private static final String SERVICE_ACTION = "pfs.netty.ASYNC_RPC_SERVICE";
-    private static final String DEFAULT_SERVER_ADDR = "localhost";
+    private static final String FALLBACK_SERVER_ADDR = "localhost";
     private static final int DEFAULT_SERVER_PORT = 42678;
 
-    private static final byte BEGIN_FLAG = (byte)0xBF;
-    private static final byte END_FLAG = (byte)0xEF;
-    private static final int MIN_PACKET_SIZE = 1 /* Field 1, BEGIN_FLAG */
+    public static final byte BEGIN_FLAG = (byte)0xBF;
+    public static final byte END_FLAG = (byte)0xEF;
+    public static final int MIN_PACKET_SIZE = 1 /* Field 1, BEGIN_FLAG */
             + 4  /* Field 2, size */
             + 2  /* Field 4, CRC16 */
             + 1; /* Field 5 END_FLAG */
 
     // Native order for IPC communications by default
-    //private static ByteOrder _order = ByteOrder.nativeOrder();
-    private static ByteOrder _order = ByteOrder.BIG_ENDIAN;
+    private ByteOrder _byteOrder = ByteOrder.nativeOrder();
 
     // NOTE. AsynchronousServerSocketChannel available in Android since API 26
     // private AsynchronousServerSocketChannel _serverSocket = null;
@@ -85,19 +104,55 @@ public class AsyncRpcService extends Service implements LogTag
 
         int startResult = super.onStartCommand(intent, flags, startId);
 
-        String rpcRouterClassName = intent.getStringExtra(RpcRouter.ROUTER_IMPL_CLASS_KEY);
-        String serverAddr = intent.getStringExtra(RpcRouter.SERVER_ADDR_KEY);
-        int serverPort = intent.getIntExtra(RpcRouter.SERVER_PORT_KEY, DEFAULT_SERVER_PORT);
+        String rpcRouterClassName = intent.getStringExtra(ROUTER_IMPL_CLASS_KEY);
+        String serverAddr = intent.getStringExtra(SERVER_ADDR_KEY);
+        int serverPort = intent.getIntExtra(SERVER_PORT_KEY, DEFAULT_SERVER_PORT);
+        int order = intent.getIntExtra(ORDER_KEY, NATIVE_ORDER);
 
         if (rpcRouterClassName.isEmpty())
-            rpcRouterClassName = RpcRouter.DEFAULT_ROUTER_IMPL_CLASS;
+            rpcRouterClassName = DEFAULT_ROUTER_IMPL_CLASS;
 
-        if (serverAddr.isEmpty())
-            serverAddr = DEFAULT_SERVER_ADDR;
+        if (serverAddr.isEmpty()) {
+            //  android.os.NetworkOnMainThreadException
+            // The exception that is thrown when an application attempts to perform a networking
+            // operation on its main thread.
+            // This is only thrown for applications targeting the Honeycomb SDK or higher.
+            // Applications targeting earlier SDK versions are allowed to do networking on
+            // their main event loop threads, but it's heavily discouraged.
+            //
+            // Avoid android.os.NetworkOnMainThreadException temporary, only to call
+            // Inet4Address.getLocalHost(). Do not want call this from main thread.
+            //StrictMode.ThreadPolicy savedPolicy = StrictMode.getThreadPolicy();
+            //StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+            //StrictMode.setThreadPolicy(policy);
+            //    try {
+            //        serverAddr = Inet4Address.getLocalHost().getHostAddress();
+            //    } catch (UnknownHostException e) {
+            serverAddr = FALLBACK_SERVER_ADDR;
+            //    } final {
+            //        StrictMode.setThreadPolicy(savedPolicy);
+            //    }
+        }
+
+        switch (order) {
+            case BIG_ENDIAN:
+                _byteOrder = ByteOrder.BIG_ENDIAN;
+                break;
+            case LITTLE_ENDIAN:
+                _byteOrder = ByteOrder.LITTLE_ENDIAN;
+                break;
+            case NATIVE_ORDER:
+                _byteOrder = ByteOrder.nativeOrder();
+                break;
+            default:
+                _byteOrder = FALLBACK_BYTE_ORDER;
+                Log.w(TAG, "Bad byte order specified, set to: " + _byteOrder.toString());
+                break;
+        }
 
         try {
             Class<?> rpcRouterClass = Class.forName(rpcRouterClassName);
-            _router = ((RpcRouter)rpcRouterClass.newInstance()).context(this);
+            _router = ((RpcRouter)rpcRouterClass.newInstance()).context(this).order(_byteOrder);
             runJob(startId, serverAddr, serverPort);
         } catch (ClassNotFoundException e) {
             Log.e(TAG, String.format("RPC router implementation class not found: %s"
@@ -151,7 +206,7 @@ public class AsyncRpcService extends Service implements LogTag
     }
 
     private void start (String bindAddr, int port) throws java.net.UnknownHostException {
-        _asyncServer = new AsyncServer("JsonRpc");
+        _asyncServer = new AsyncServer("pfs.netty.p2p.AsyncRpcService");
 
         _asyncServer.listen(InetAddress.getByName(bindAddr), port, new ListenCallback() {
             AsyncSocket local = null;
@@ -169,7 +224,8 @@ public class AsyncRpcService extends Service implements LogTag
 
             @Override
             public void onListening (AsyncServerSocket socket) {
-                Log.d(TAG, "Listening for connections");
+                Log.d(TAG, String.format("Server listening on: %s:%d, byte order: %s"
+                    , bindAddr, socket.getLocalPort(), _byteOrder.toString()));
             }
 
             @Override
@@ -190,7 +246,7 @@ public class AsyncRpcService extends Service implements LogTag
 
             @Override
             public void onDataAvailable(DataEmitter emitter, ByteBufferList raw) {
-                raw.order(_order);
+                raw.order(_byteOrder);
 
                 while (raw.remaining() >= MIN_PACKET_SIZE) {
                     int remaining = raw.remaining();
@@ -220,8 +276,7 @@ public class AsyncRpcService extends Service implements LogTag
                         if (endFlag != END_FLAG)
                             throw new AsyncRpcException("Expected END_FLAG");
 
-                        // TODO Check CRC16
-                        Log.d(TAG, String.format("[Server] CRC16: %d", crc16));
+                        // Ignore CRC16 check as it not used yet
 
                         processPayload(socket, payload);
 

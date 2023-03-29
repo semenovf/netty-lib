@@ -11,6 +11,7 @@
 #include "error.hpp"
 #include "socket4_addr.hpp"
 #include "send_result.hpp"
+#include "tag.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
 #include "pfs/memory.hpp"
@@ -77,6 +78,8 @@ private:
 
     std::chrono::milliseconds _current_poller_timeout {0};
     loop_result _loop_result = loop_result::success;
+
+    bool _connected {false};
 
 public: // Callbacks
     mutable std::function<void (std::string const &)> on_error
@@ -148,7 +151,8 @@ public:
     client_socket_engine (client_socket_engine &&) = delete;
     client_socket_engine & operator = (client_socket_engine &&) = delete;
 
-    bool connect (netty::socket4_addr const & server_saddr, int millis = 0)
+    bool connect (netty::socket4_addr const & server_saddr
+        , std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
     {
         typename poller_type::callbacks callbacks;
 
@@ -159,15 +163,18 @@ public:
 
         callbacks.connection_refused = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::connection_refused;
+            _connected = false;
             this->connection_refused(*this);
         };
 
         callbacks.connected = [this] (typename poller_type::native_socket_type sock) {
+            _connected = true;
             this->connected(*this);
         };
 
         callbacks.disconnected = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::disconnected;
+            _connected = false;
             this->disconnected(*this);
         };
 
@@ -190,10 +197,8 @@ public:
             return true;
 
         _poller->add(_socket, conn_state);
-
-        _loop_result = wait(std::chrono::milliseconds{millis});
-
-        return _loop_result == loop_result::success;
+        _poller->poll_connected(timeout);
+        return _connected;
     }
 
 public:
@@ -219,10 +224,25 @@ public:
         return _loop_result;
     }
 
-    loop_result wait (std::chrono::milliseconds poller_timeout)
+//     loop_result wait (std::chrono::milliseconds poller_timeout)
+//     {
+//         _loop_result = loop_result::success;
+//         auto n = _poller->poll(poller_timeout);
+//
+//         if (_loop_result != loop_result::success)
+//             return _loop_result;
+//
+//         return n == 0 ? loop_result::timedout : _loop_result;
+//     }
+
+    /**
+     */
+    loop_result recv (std::chrono::milliseconds timeout)
     {
         _loop_result = loop_result::success;
-        auto n = _poller->poll(poller_timeout);
+        auto n = _poller->poll_read(timeout);
+
+        LOGD(TAG, "Recv: read poller return: {}", n);
 
         if (_loop_result != loop_result::success)
             return _loop_result;
@@ -231,10 +251,11 @@ public:
     }
 
     template <typename Packet>
-    send_result send (Packet const & p)
+    send_result send (Packet const & p, std::chrono::milliseconds timeout)
     {
         send_async<Packet>(p);
-        return send_outgoing_data();
+        auto res = send_outgoing_data();
+        return res;
     }
 
     template <typename Packet>

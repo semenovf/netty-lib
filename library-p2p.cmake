@@ -46,6 +46,7 @@ endif(NETTY_P2P__ENABLE_CEREAL)
 
 list(APPEND _netty_p2p__sources
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/file_transporter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_protocol.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_provider.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
 
@@ -96,11 +97,16 @@ if (NETTY_P2P__BUILD_STATIC)
     endif()
 endif()
 
-# FIXME
-#if (ANDROID)
-    #portable_target(BUILD_JAR pfs.netty.p2p
-        #SOURCES
-            #${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentProviderBridge.java
-            #${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentInfo.java
-        #LINK_ANDROID)
-#endif()
+if (ANDROID)
+    portable_target(BUILD_JAR pfs.netty.p2p
+        SOURCES
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/AsyncRpcException.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/AsyncRpcService.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentInfo.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentProviderBridge.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/FileRpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/LogTag.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/RpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/RpcService.java
+        LINK_ANDROID)
+endif()

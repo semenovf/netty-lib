@@ -133,6 +133,42 @@ public:
     }
 
     /**
+     * @return @c 0 if read poller is empty or poll for read is timed out.
+     */
+    int poll_read (std::chrono::milliseconds timeout = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
+    {
+        if (!_reader_poller.empty())
+            return _reader_poller.poll(timeout, perr);
+
+        return 0;
+    }
+
+    /**
+     * @return @c 0 if write poller is empty or poll for write is timed out.
+     */
+    int poll_write (std::chrono::milliseconds timeout = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
+    {
+        if (!_writer_poller.empty())
+            return _writer_poller.poll(timeout, perr);
+
+        return 0;
+    }
+
+    /**
+     * @return @c 0 if connecting poller is empty or poll for connection is timed out.
+     */
+    int poll_connected (std::chrono::milliseconds timeout = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
+    {
+        if (!_connecting_poller.empty())
+            return _connecting_poller.poll(timeout, perr);
+
+        return 0;
+    }
+
+    /**
      * @return Total number of positive events: number of connected sockets
      *         plus number of read and write events.
      */

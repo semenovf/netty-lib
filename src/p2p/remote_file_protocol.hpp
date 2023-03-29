@@ -7,11 +7,15 @@
 //      2023.03.27 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/ionik/file_provider.hpp"
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace netty {
 namespace p2p {
+
+using remote_native_handle_type = std::int32_t;
 
 // Protocol envelope
 //
@@ -58,6 +62,115 @@ public:
 
     bool has_complete_packet (char const * data, std::size_t len);
     std::pair<bool, std::size_t> exec (char const * data, std::size_t len);
+};
+
+//  initiator                    executor
+//    ----                          ___
+//      |                            |
+//      |-------open_read_only------>|
+//      |<----------handle-----------|
+//      |                            |
+//      |---------open_write_only--->|
+//      |<----------handle-----------|
+//      |                            |
+//      |------------close---------->|
+//      |                            |
+//      |-----------offset---------->|
+//      |<---------filesize----------|
+//      |                            |
+//      |-----------set_pos--------->|
+//      |                            |
+//      |------------read----------->|
+//      |<---------read_response-----|
+//      |                            |
+//      |------------write---------->|
+//      |<-------write_response------|
+
+using filesize_t = ionik::filesize_t;
+
+enum class operation_enum: std::uint8_t {
+      request      = 0x01
+    , response     = 0x02
+    , notification = 0x03
+    , error        = 0x04
+};
+
+enum class method_enum: std::uint8_t {
+      select_file        = 0x01
+    , open_read_only     = 0x02
+    , open_write_only    = 0x03
+    , close              = 0x04
+    , offset             = 0x05
+    , set_pos            = 0x06
+    , read               = 0x07
+    , write              = 0x08
+};
+
+struct select_file_request
+{};
+
+struct select_file_response
+{
+    std::string uri;
+    std::string display_name;
+    std::string myme_type;
+    filesize_t  filesize;
+};
+
+struct open_read_only_request
+{
+    std::string uri;
+};
+
+struct open_write_only_request
+{
+    std::string uri;
+    ionik::truncate_enum trunc;
+};
+
+struct close_notification
+{
+    remote_native_handle_type h;
+};
+
+struct offset_request
+{
+    remote_native_handle_type h;
+};
+
+struct set_pos_notification
+{
+    remote_native_handle_type h;
+    filesize_t offset;
+};
+
+struct read_request
+{
+    remote_native_handle_type h;
+    filesize_t len;
+};
+
+struct write_request
+{
+    remote_native_handle_type h;
+    std::vector<char> data;
+};
+
+struct handle_response
+{
+    remote_native_handle_type h;
+};
+
+struct read_response
+{
+    remote_native_handle_type h;
+    std::vector<char> data;
+};
+
+struct write_response
+{
+    remote_native_handle_type h;
+    filesize_t size;
 };
 
 }} // namespace netty::p2p

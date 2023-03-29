@@ -10,5 +10,5 @@
 
 namespace netty {
 namespace {
-static constexpr char const * TAG = "netty";
+static constexpr char const * TAG = "pfs.netty";
 }} // namespace netty

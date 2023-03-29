@@ -7,277 +7,38 @@
 //      2023.03.27 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "remote_file_handle.hpp"
-#include "pfs/netty/p2p/remote_file.hpp"
-#include "pfs/binary_istream.hpp"
-#include "pfs/binary_ostream.hpp"
-// #include "pfs/ionik/file_provider.hpp"
-// #include "pfs/netty/p2p/remote_path.hpp"
-// #include "pfs/netty/client_socket_engine.hpp"
-// #include "pfs/netty/default_poller_types.hpp"
-// #include "pfs/netty/posix/tcp_socket.hpp"
+#include "pfs/chrono_literals.hpp"
 
 #include "pfs/log.hpp"
 
 namespace netty {
 namespace p2p {
 
-//  initiator                    executor
-//    ----                          ___
-//      |                            |
-//      |-------open_read_only------>|
-//      |<----------handle-----------|
-//      |                            |
-//      |---------open_write_only--->|
-//      |<----------handle-----------|
-//      |                            |
-//      |------------close---------->|
-//      |                            |
-//      |-----------offset---------->|
-//      |<---------filesize----------|
-//      |                            |
-//      |-----------set_pos--------->|
-//      |                            |
-//      |------------read----------->|
-//      |<---------read_response-----|
-//      |                            |
-//      |------------write---------->|
-//      |<-------write_response------|
-
-using filesize_t = ionik::filesize_t;
-
-enum class operation_enum: std::uint8_t {
-      request      = 0x01
-    , response     = 0x02
-    , notification = 0x03
-};
-
-enum class method_enum: std::uint8_t {
-      select_file        = 0x01
-    , open_read_only     = 0x02
-    , open_write_only    = 0x03
-    , close              = 0x04
-    , offset             = 0x05
-    , set_pos            = 0x06
-    , read               = 0x07
-    , write              = 0x08
-};
-
-struct select_file_request
-{};
-
-struct select_file_response
+remote_path select_remote_file (socket4_addr provider_saddr
+    , std::chrono::seconds wait_timeout)
 {
-    std::string uri;
-};
-
-struct open_read_only_request
-{
-    std::string uri;
-};
-
-struct open_write_only_request
-{
-    std::string uri;
-    ionik::truncate_enum trunc;
-};
-
-struct close_notification
-{
-    remote_file_handle::native_handle_type h;
-};
-
-struct offset_request
-{
-    remote_file_handle::native_handle_type h;
-};
-
-struct set_pos_notification
-{
-    remote_file_handle::native_handle_type h;
-    filesize_t offset;
-};
-
-struct read_request
-{
-    remote_file_handle::native_handle_type h;
-    filesize_t len;
-};
-
-struct write_request
-{
-    remote_file_handle::native_handle_type h;
-    std::vector<char> data;
-};
-
-struct handle_response
-{
-    remote_file_handle::native_handle_type h;
-};
-
-struct read_response
-{
-    remote_file_handle::native_handle_type h;
-    std::vector<char> data;
-};
-
-struct write_response
-{
-    remote_file_handle::native_handle_type h;
-    filesize_t size;
-};
-
-using binary_istream = pfs::binary_istream<std::uint32_t, pfs::endian::network>;
-using binary_ostream = pfs::binary_ostream<std::uint32_t, pfs::endian::network>;
-
-std::vector<char> protocol::serialize_envelope (std::vector<char> const & payload)
-{
-    std::vector<char> envelope;
-    binary_ostream out {envelope};
-    out << BEGIN
-        << payload // <- payload size here
-        << crc16_field_type{0}
-        << END;
-    return envelope;
-}
-
-void protocol::process_payload (std::vector<char> const & payload)
-{
-    // FIXME
-}
-
-template <>
-std::vector<char>
-protocol::serialize (select_file_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::select_file << next_rid();
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (open_read_only_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::open_read_only << next_rid() << p.uri;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (open_write_only_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::open_write_only << next_rid() << p.uri << p.trunc;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (close_notification const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::notification << method_enum::close << p.h;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (offset_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::offset << next_rid() << p.h;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (set_pos_notification const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::notification << method_enum::set_pos << p.h << p.offset;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (read_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::read << next_rid() << p.h << p.len;
-    return serialize_envelope(payload);
-}
-
-template <>
-std::vector<char>
-protocol::serialize (write_request const & p)
-{
-    std::vector<char> payload;
-    binary_ostream out {payload};
-    out << operation_enum::request << method_enum::write << next_rid() << p.h << p.data;
-    return serialize_envelope(payload);
-}
-
-bool protocol::has_complete_packet (char const * data, std::size_t len)
-{
-    if (len < MIN_PACKET_SIZE)
-        return false;
-
-    char b;
-    std::uint32_t sz;
-    binary_istream in {data, data + len};
-    in >> b >> sz;
-
-    return MIN_PACKET_SIZE + sz <= len;
-}
-
-std::pair<bool, std::size_t> protocol::exec (char const * data, std::size_t len)
-{
-    if (len == 0)
-        return std::make_pair(true, 0);
-
-    binary_istream in {data, data + len};
-    std::vector<char> payload;
-    char b, e;
-    crc16_field_type crc16;
-
-    in >> b >> payload >> crc16 >> e;
-
-    bool success = (b == BEGIN && e == END);
-
-    if (!success)
-        return std::make_pair(false, 0);
-
-    process_payload(payload);
-
-    return std::make_pair(true, static_cast<std::size_t>(in.begin() - data));
-}
-
-remote_path select_remote_file (socket4_addr provider_saddr)
-{
-    LOGD("", "CONNECTING");
-
     remote_file_handle::channel_type channel;
+    remote_path result;
 
-    channel.connected = [] (remote_file_handle::channel_type & self) {
-        LOGD("", "=== CONNECTED ===");
-        self.send(select_file_request{});
-        self.wait(std::chrono::milliseconds{30000});
-    };
+//     channel.connected = [wait_timeout, & result] (remote_file_handle::channel_type & self) {
+//         self.send(select_file_request{});
+//         auto res = self.recv(wait_timeout);
+//
+//         if (res == remote_file_handle::channel_type::loop_result::success) {
+//             LOGD("", "=== SELECT REMOTE FILE SUCCESS ===");
+//         }
+//     };
 
     channel.connection_refused = [] (remote_file_handle::channel_type &) {
         LOGD("", "=== CONNECTION REFUSED ===");
     };
 
-    if (!channel.connect(provider_saddr, 500))
+    if (!channel.connect(provider_saddr, 1_s))
         return remote_path{};
+
+    channel.send(select_file_request{}, 1_s);
+    auto res = channel.recv(wait_timeout);
+
 
     // FIXME
     return remote_path{};
@@ -287,7 +48,8 @@ remote_path select_remote_file (socket4_addr provider_saddr)
 
 namespace ionik {
 
-using file_provider_t = file_provider<std::unique_ptr<netty::p2p::remote_file_handle>, netty::p2p::remote_path>;
+using file_provider_t = file_provider<std::unique_ptr<netty::p2p::remote_file_handle>
+    , netty::p2p::remote_path>;
 using filepath_t = file_provider_t::filepath_type;
 using filesize_t = file_provider_t::filesize_type;
 using handle_t   = file_provider_t::handle_type;
@@ -350,134 +112,3 @@ filesize_t file_provider_t::write (handle_t & h, char const * buffer
 }
 
 } // namespace ionik
-
-// namespace details {
-
-// class file_provider
-// {
-// //     JavaVM * _jvm {nullptr};
-//     jobject _jobj {nullptr};
-//
-//     jmethodID _open_read_only {nullptr};
-//     jmethodID _open_write_only {nullptr};
-//     jmethodID _close {nullptr};
-//     jmethodID _offset {nullptr};
-//     jmethodID _set_pos {nullptr};
-//     jmethodID _read {nullptr};
-//     jmethodID _write {nullptr};
-//
-// private:
-//     static jmethodID get_method_id (JNIEnv * env, jclass clazz
-//         , char const * method_name, char const * signature, error * perr)
-//     {
-//         auto m = env->GetMethodID(clazz, method_name, signature);
-//
-//         if (!m) {
-//             error err {
-//                   std::make_error_code(std::errc::bad_address)
-//                 , tr::f_("get method ID failure: {}", method_name)
-//             };
-//
-//             if (perr) {
-//                 *perr = std::move(err);
-//                 return m;
-//             } else {
-//                 throw err;
-//             }
-//         }
-//
-//         return m;
-//     }
-//
-// public:
-//     file_provider (JNIEnv * env, jobject jobj)
-//     {
-//         if (env) {
-// //             _jvm = acquireJavaVM(env, nullptr);
-//
-//             if (jobj) {
-//                 _jobj = env->NewGlobalRef(jobj);
-//
-//                 if (_jobj) {
-//                     jclass clazz = env->GetObjectClass(_jobj);
-//
-//                     _open_read_only = get_method_id(env, clazz, "openReadOnly", "(Ljava/lang/String;)I", nullptr);
-//                     _open_write_only = get_method_id(env, clazz, "openWriteOnly", "(Ljava/lang/String;Z)I", nullptr);
-//                     _close   = get_method_id(env, clazz, "close", "(I)V", nullptr);
-//                     _offset  = get_method_id(env, clazz, "offset", "(I)J", nullptr);
-//                     _set_pos = get_method_id(env, clazz, "setPosition", "(IJ)Z", nullptr);
-//                     _read    = get_method_id(env, clazz, "read", "(I[BI)I", nullptr);
-//                     _write   = get_method_id(env, clazz, "write", "(I[BI)I", nullptr);
-//                 }
-//             }
-//         }
-//     }
-//
-//     // Must be released before
-//     ~file_provider ()
-//     {
-//         if (_jobj) {
-//             _jobj = nullptr;
-//         }
-//
-// //         _jvm = nullptr;
-//     }
-//
-//     void release (JNIEnv * env)
-//     {
-//         if (env) {
-//             if (_jobj) {
-//                 env->DeleteGlobalRef(_jobj);
-//                 _jobj = nullptr;
-//             }
-//         }
-//     }
-//
-//     file::handle_type open_read_only (filepath_t const & path, error * perr)
-//     {
-//         return file::INVALID_FILE_HANDLE;
-//         //     printf("In C, depth = %d, about to enter Java\n", depth);
-//         //     (*env)->CallVoidMethod(env, obj, mid, depth);
-//         //     printf("In C, depth = %d, back from Java\n", depth);
-//     }
-// };
-//
-// static std::unique_ptr<file_provider> __filecache;
-//
-// /*
-//  * Class:     pfs_netty_p2p_FileCache
-//  * Method:    fileCacheCreated
-//  * Signature: (Lpfs/netty/p2p/FileCache;)V
-//  */
-// extern "C"
-// JNIEXPORT void JNICALL
-// Java_pfs_netty_p2p_FileCache_fileCacheCreated (JNIEnv * env, jclass clazz, jobject filecache)
-// {
-//     __android_log_print(ANDROID_LOG_DEBUG, "NETTY", "~~~ FILE CACHE CREATED ~~~");
-//
-//     if (__filecache) {
-//         __filecache->release(env);
-//         __filecache.reset();
-//     }
-//
-//     if (filecache)
-//         __filecache = pfs::make_unique<file_provider>(env, filecache);
-// }
-//
-// /*
-//  * Class:     pfs_netty_p2p_FileCache
-//  * Method:    fileCacheBeforeDestroyed
-//  * Signature: (Lpfs/netty/p2p/FileCache;)V
-//  */
-// extern "C"
-// JNIEXPORT void JNICALL Java_pfs_netty_p2p_FileCache_fileCacheBeforeDestroyed
-//   (JNIEnv * env, jclass clazz, jobject filecache)
-// {
-//     __android_log_print(ANDROID_LOG_DEBUG, "NETTY", "~~~ FILE CACHE BEFORE DESTROYED ~~~");
-//
-//     if (__filecache) {
-//         __filecache->release(env);
-//         __filecache.reset();
-//     }
-// }
-// };

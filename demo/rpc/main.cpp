@@ -65,7 +65,7 @@ int main (int argc, char * argv[])
         }
     }
 
-    auto path = netty::p2p::select_remote_file(provider_saddr);
+    auto path = netty::p2p::select_remote_file(provider_saddr, std::chrono::seconds{30});
 
     if (path.empty()) {
         LOGI(TAG, "File not selected");

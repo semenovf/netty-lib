@@ -22,7 +22,7 @@ class remote_file_handle
 public:
     using channel_type = client_socket_engine_mt<posix::tcp_socket
         , netty::client_poller_type, protocol>;
-    using native_handle_type = std::int32_t;
+    using native_handle_type = remote_native_handle_type;
     using filesize_type = remote_file_provider::filesize_type;
 
 private:
