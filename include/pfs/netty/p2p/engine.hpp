@@ -14,6 +14,7 @@
 #include "envelope.hpp"
 #include "file_transporter.hpp"
 #include "hello_packet.hpp"
+#include "file.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
 #include "pfs/i18n.hpp"
@@ -56,7 +57,7 @@ class engine
 public:
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
-    using filesize_type         = local_file::filesize_type;
+//     using filesize_type         = local_file::filesize_type;
 
 private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
@@ -225,17 +226,30 @@ public: // Callbacks
     mutable std::function<void (universal_id, std::string)> data_received
         = [] (universal_id, std::string) {};
 
-    mutable std::function<void (universal_id /*addresser*/
-        , universal_id /*fileid*/
-        , filesize_type /*downloaded_size*/
-        , filesize_type /*total_size*/)> download_progress
-        = [] (universal_id, universal_id, filesize_type, filesize_type) {};
+        // FIXME
+//     mutable std::function<void (universal_id /*addresser*/
+//         , universal_id /*fileid*/
+//         , filesize_type /*downloaded_size*/
+//         , filesize_type /*total_size*/)> download_progress
+//         = [] (universal_id, universal_id, filesize_type, filesize_type) {};
+//
+//     mutable std::function<void (universal_id /*addresser*/
+//         , universal_id /*fileid*/
+//         , std::string const & /*uri*/
+//         , bool /*success*/)> download_complete
+//         = [] (universal_id, universal_id, std::string const &, bool) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
-        , std::string const & /*uri*/
+        , filesize_t /*downloaded_size*/
+        , filesize_t /*total_size*/)> download_progress
+        = [] (universal_id, universal_id, filesize_t , filesize_t) {};
+
+    mutable std::function<void (universal_id /*addresser*/
+        , universal_id /*fileid*/
+        , pfs::filesystem::path const & /*path*/
         , bool /*success*/)> download_complete
-        = [] (universal_id, universal_id, std::string const &, bool) {};
+        = [] (universal_id, universal_id, fs::path const &, bool) {};
 
     /**
      * Called when file download interrupted, i.e. after peer closed.
@@ -269,7 +283,6 @@ public:
                 invalid_argument_desc = tr::_("overflow limit must be a positive integer");
                 break;
             }
-
         } while (false);
 
         if (bad) {
@@ -399,6 +412,11 @@ public:
         return true;
     }
 
+    void set_open_outcome_file (std::function<file (std::string const & /*path*/)> && f)
+    {
+        _transporter->open_outcome_file = std::move(f);
+    }
+
 private:
     std::chrono::milliseconds _current_poller_timeout {0};
 
@@ -486,20 +504,57 @@ public:
             , data.size());
     }
 
+    // FIXME
+//     /**
+//      * Send file.
+//      *
+//      * @param addressee_id Addressee unique identifier.
+//      * @param file_id Unique file identifier. If @a file_id is invalid it
+//      *        will be generated automatically.
+//      * @param path Local path to sending file.
+//      *
+//      * @return Unique file identifier or invalid identifier on error.
+//      */
+//     universal_id send_file (universal_id addressee, universal_id fileid
+//         , local_file::filepath_type const & path)
+//     {
+//         return _transporter->send_file(addressee, fileid, path);
+//     }
+//
+//     /**
+//      * Send file.
+//      *
+//      * @param addressee_id Addressee unique identifier.
+//      * @param path Path to sending file.
+//      *
+//      * @return Unique file identifier or invalid identifier on error.
+//      */
+//     universal_id send_file (universal_id addressee_id, local_file::filepath_type const & path)
+//     {
+//         return _transporter->send_file(addressee_id, universal_id{}, path);
+//     }
+
     /**
      * Send file.
      *
      * @param addressee_id Addressee unique identifier.
      * @param file_id Unique file identifier. If @a file_id is invalid it
      *        will be generated automatically.
-     * @param path Local path to sending file.
+     * @param path Path to sending file.
      *
      * @return Unique file identifier or invalid identifier on error.
      */
     universal_id send_file (universal_id addressee, universal_id fileid
-        , local_file::filepath_type const & path)
+        , pfs::filesystem::path const & path)
     {
         return _transporter->send_file(addressee, fileid, path);
+    }
+
+    universal_id send_file (universal_id addressee, universal_id fileid
+        , std::string const & path, std::string const & display_name
+        , std::int64_t filesize)
+    {
+        return _transporter->send_file(addressee, fileid, path, display_name, filesize);
     }
 
     /**
@@ -510,7 +565,7 @@ public:
      *
      * @return Unique file identifier or invalid identifier on error.
      */
-    universal_id send_file (universal_id addressee_id, local_file::filepath_type const & path)
+    universal_id send_file (universal_id addressee_id, std::string const & path)
     {
         return _transporter->send_file(addressee_id, universal_id{}, path);
     }
@@ -626,14 +681,14 @@ private:
 
         _transporter->download_progress = [this] (universal_id addresser
                 , universal_id fileid
-                , filesize_type downloaded_size
-                , filesize_type total_size) {
+                , filesize_t downloaded_size
+                , filesize_t total_size) {
             download_progress(addresser, fileid, downloaded_size, total_size);
         };
 
         _transporter->download_complete = [this] (universal_id addresser
                 , universal_id fileid
-                , std::string const & uri
+                , pfs::filesystem::path const & path
                 , bool success) {
 
             if (!success) {
@@ -641,7 +696,7 @@ private:
                     , fileid, addresser));
             }
 
-            download_complete(addresser, fileid, uri, success);
+            download_complete(addresser, fileid, path, success);
         };
 
         _transporter->download_interrupted = [this] (universal_id addresser
