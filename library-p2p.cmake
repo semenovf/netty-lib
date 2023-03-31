@@ -96,17 +96,3 @@ if (NETTY_P2P__BUILD_STATIC)
         portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::ionik)
     endif()
 endif()
-
-if (ANDROID)
-    portable_target(BUILD_JAR pfs.netty.p2p
-        SOURCES
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/AsyncRpcException.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/AsyncRpcService.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentInfo.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/ContentProviderBridge.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/FileRpcRouter.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/LogTag.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/RpcRouter.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/p2p/android/pfs/netty/p2p/RpcService.java
-        LINK_ANDROID)
-endif()

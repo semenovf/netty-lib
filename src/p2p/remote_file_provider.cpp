@@ -39,7 +39,6 @@ remote_path select_remote_file (socket4_addr provider_saddr
     channel.send(select_file_request{}, 1_s);
     auto res = channel.recv(wait_timeout);
 
-
     // FIXME
     return remote_path{};
 }

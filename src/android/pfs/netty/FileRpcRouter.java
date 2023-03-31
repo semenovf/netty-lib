@@ -6,7 +6,7 @@
 // Changelog:
 //      2027.03.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -54,7 +54,7 @@ public class FileRpcRouter extends RpcRouter implements LogTag {
                 Uri uri = Uri.parse(uriString);
 
                 // content://com.android.providers.downloads.documents/document/msf%3A1000000008
-                pfs.netty.p2p.ContentInfo contentInfo = _fileCache.getFileInfo(uri);
+                pfs.netty.ContentInfo contentInfo = _fileCache.getFileInfo(uri);
                 Log.d(TAG, String.format("*** URI = %s", contentInfo.uri));
                 Log.d(TAG, String.format("*** DISPLAY NAME = %s", contentInfo.displayName));
                 Log.d(TAG, String.format("*** MIME = %s", contentInfo.mimeType));

@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.03.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
 import android.app.Service;
 import android.content.Intent;
@@ -42,16 +42,16 @@ import java.nio.ByteOrder;
 //
 public class AsyncRpcService extends Service implements LogTag
 {
-    public static final String OPEN_FILE_DIALOG_INTENT_ACTION = "pfs.netty.p2p.OPEN_FILE_DIALOG";
-    public static final String OPEN_FILE_DIALOG_RESULT_INTENT_ACTION = "pfs.netty.p2p.OPEN_FILE_DIALOG_RESULT";
+    public static final String OPEN_FILE_DIALOG_INTENT_ACTION = "pfs.netty.OPEN_FILE_DIALOG";
+    public static final String OPEN_FILE_DIALOG_RESULT_INTENT_ACTION = "pfs.netty.OPEN_FILE_DIALOG_RESULT";
 
-    public static final String ROUTER_IMPL_CLASS_KEY = "pfs.netty.p2p.ROUTER_IMPL_CLASS_KEY";
-    public static final String ORDER_KEY = "pfs.netty.p2p.ORDER_KEY";
-    public static final String SERVER_ADDR_KEY = "pfs.netty.p2p.SERVER_ADDR_KEY";
-    public static final String SERVER_PORT_KEY = "pfs.netty.p2p.SERVER_PORT_KEY";
-    public static final String REQUEST_ID_KEY = "pfs.netty.p2p.REQUEST_ID_KEY";
+    public static final String ROUTER_IMPL_CLASS_KEY = "pfs.netty.ROUTER_IMPL_CLASS_KEY";
+    public static final String ORDER_KEY = "pfs.netty.ORDER_KEY";
+    public static final String SERVER_ADDR_KEY = "pfs.netty.SERVER_ADDR_KEY";
+    public static final String SERVER_PORT_KEY = "pfs.netty.SERVER_PORT_KEY";
+    public static final String REQUEST_ID_KEY = "pfs.netty.REQUEST_ID_KEY";
 
-    public static final String DEFAULT_ROUTER_IMPL_CLASS = "pfs.netty.p2p.FileRpcRouter";
+    public static final String DEFAULT_ROUTER_IMPL_CLASS = "pfs.netty.FileRpcRouter";
 
     public static final int NATIVE_ORDER  = 0;
     public static final int BIG_ENDIAN    = 1;
@@ -206,7 +206,7 @@ public class AsyncRpcService extends Service implements LogTag
     }
 
     private void start (String bindAddr, int port) throws java.net.UnknownHostException {
-        _asyncServer = new AsyncServer("pfs.netty.p2p.AsyncRpcService");
+        _asyncServer = new AsyncServer("pfs.netty.AsyncRpcService");
 
         _asyncServer.listen(InetAddress.getByName(bindAddr), port, new ListenCallback() {
             AsyncSocket local = null;

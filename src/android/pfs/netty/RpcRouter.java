@@ -6,7 +6,7 @@
 // Changelog:
 //      2027.03.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
 import com.koushikdutta.async.AsyncSocket;
 

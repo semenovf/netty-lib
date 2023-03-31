@@ -6,11 +6,8 @@
 // Changelog:
 //      2023.03.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
-public class AsyncRpcException extends RuntimeException {
-    public AsyncRpcException(String message) {
-        super(message);
-    }
+public interface LogTag {
+    public static final String TAG = "pfs.netty";
 }
-

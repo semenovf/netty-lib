@@ -335,7 +335,7 @@ private:
     {
         std::unique_lock<BasicLockable> lock(_omtx);
 
-        std::size_t total_bytes_sent = 0;
+        ssize_t total_bytes_sent = 0;
 
         error err;
         bool break_sending = false;

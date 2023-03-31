@@ -6,9 +6,9 @@
 // Changelog:
 //      2023.03.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
-public class FileInfo
+public class ContentInfo
 {
     public String uri;
     public String displayName;

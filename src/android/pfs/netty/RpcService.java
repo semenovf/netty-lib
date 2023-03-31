@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.03.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
 import android.app.Service;
 import android.content.Intent;
@@ -22,7 +22,7 @@ import java.net.SocketTimeoutException;
 
 public class RpcService extends Service {
     private static final String TAG = "JsonRpc";
-    private static final String SERVICE_ACTION = "pfs.netty.p2p.JSON_RPC_SERVICE";
+    private static final String SERVICE_ACTION = "pfs.netty.JSON_RPC_SERVICE";
 
     // FIXME Must be configurable
     private static final int SERVER_PORT = 42678;

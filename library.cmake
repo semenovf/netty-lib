@@ -277,12 +277,14 @@ if (ANDROID)
             ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/wrapper/AsyncSocketWrapper.java
             ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/wrapper/DataEmitterWrapper.java
 
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncJsonRpcException.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncJsonRpcService.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/JsonRpc.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/JsonRpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncRpcException.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/AsyncRpcService.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/ContentInfo.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/ContentProviderBridge.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/FileRpcRouter.java
             ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/LogTag.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/TestJsonRpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/RpcRouter.java
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/RpcService.java
         LINK_ANDROID)
 endif()
 

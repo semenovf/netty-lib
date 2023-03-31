@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.03.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-package pfs.netty.p2p;
+package pfs.netty;
 
 import android.database.Cursor;
 import android.net.Uri;
@@ -281,15 +281,21 @@ public class ContentProviderBridge implements LogTag
                 fileInfo.displayName = fileInfo.displayName.substring(cut + 1);
             }
 
-            if (fileInfo.mimeType == null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    try {
-                        fileInfo.mimeType = Files.probeContentType(Paths.get(uri.getPath()));
-                    } catch (IOException ex) {}
-                } else {
-                    ; // TODO Try other tools to detect MIME type
-                }
-            }
+            // FIXME Build.VERSION_CODES.O >= error: cannot find symbol
+            // Android Min SDK version: 25
+            // Android Target SDK version: 25
+            // Android SDK build tools revision: 33.0.2
+            // AndroidManifest-21.xml.in
+
+//             if (fileInfo.mimeType == null) {
+//                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//                     try {
+//                         fileInfo.mimeType = Files.probeContentType(Paths.get(uri.getPath()));
+//                     } catch (IOException ex) {}
+//                 } else {
+//                     ; // TODO Try other tools to detect MIME type
+//                 }
+//             }
 
             if (fileInfo.mimeType == null)
                 fileInfo.mimeType = "application/octet-stream";

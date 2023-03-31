@@ -483,8 +483,7 @@ send_result inet_socket::send (char const * data, int len, error * perr)
 #if _MSC_VER
     auto n = ::send(_socket, data, len, 0);
 #else
-    auto n = static_cast<decltype(send_result::n)>(::send(_socket
-        , data, len, MSG_NOSIGNAL | MSG_DONTWAIT));
+    auto n = ::send(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT);
 #endif
 
     if (n < 0) {
@@ -550,9 +549,8 @@ send_result inet_socket::send_to (socket4_addr const & saddr
     auto n = ::sendto(_socket, data, len, 0
         , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 #else
-    auto n = static_cast<decltype(send_result::n)>(::sendto(_socket, data, len
-        , MSG_NOSIGNAL | MSG_DONTWAIT
-        , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4)));
+    auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT
+        , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 #endif
 
     if (n < 0) {

@@ -8,6 +8,7 @@
 //      2023.01.24 Renamed to `udt_socket` and refactored.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include <sys/types.h>
 
 namespace netty {
 
@@ -27,7 +28,7 @@ enum class send_status {
 struct send_result
 {
     send_status state;
-    std::size_t n;
+    ssize_t n;
 };
 
 } // namespace netty
