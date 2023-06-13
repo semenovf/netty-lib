@@ -57,6 +57,7 @@ private:
         socket4_addr saddr;
         std::uint32_t counter;
         seconds_type transmit_interval;
+        seconds_type expiration_interval;
         clock_type::time_point transmit_timepoint;
 
         // Don't call on_error periodically
@@ -112,19 +113,19 @@ public:
 private:
     void process_hello_packet (socket4_addr saddr, hello_packet const & packet)
     {
-        static seconds_type const MIN_EXPIRATION_INTERVAL {5};
-        static int const EXPIRATION_INTERVAL_FACTOR = 5;
+        // static seconds_type const MIN_EXPIRATION_INTERVAL {5};
+        // static int const EXPIRATION_INTERVAL_FACTOR = 5;
 
         if (packet.crc16 == crc16_of(packet)) {
             // Ignore self received packets (can happen during
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
                 auto pos = _discovered_peers.find(packet.uuid);
-                auto expiration_interval = seconds_type(packet.transmit_interval)
-                    * EXPIRATION_INTERVAL_FACTOR;
-
-                if (expiration_interval < MIN_EXPIRATION_INTERVAL)
-                    expiration_interval = MIN_EXPIRATION_INTERVAL;
+                 auto expiration_interval = seconds_type(packet.expiration_interval);
+                //     * EXPIRATION_INTERVAL_FACTOR;
+                //
+                // if (expiration_interval < MIN_EXPIRATION_INTERVAL)
+                //     expiration_interval = MIN_EXPIRATION_INTERVAL;
 
                 auto expiration_timepoint = current_timepoint() + expiration_interval;
 
@@ -238,7 +239,7 @@ private:
 
                 auto now = std::chrono::duration_cast<milliseconds_type>(
                     pfs::utc_time::now().time_since_epoch());
-                packet.transmit_interval = static_cast<std::uint16_t>(t.transmit_interval.count());
+                packet.expiration_interval = static_cast<std::uint16_t>(t.expiration_interval.count());
                 packet.timestamp = static_cast<decltype(packet.timestamp)>(now.count());
 
                 packet.counter = ++t.counter;
@@ -379,9 +380,13 @@ public:
      *
      * @param dest_saddr Target address (unicast, multicast or broadcast).
      * @param local_addr Multicast interface.
+     * @param transmit_interval Discovery packet transmission inteval.
+     * @param expiration_interval Target expiration interval.
+     * @param perr Pointer to store error data.
      */
     void add_target (socket4_addr target_saddr, inet4_addr local_addr
-        , seconds_type transmit_interval, error * perr = nullptr)
+        , seconds_type transmit_interval, seconds_type expiration_interval
+        , error * perr = nullptr)
     {
         auto bad = transmit_interval < seconds_type{MIN_TRANSMIT_INTERVAL_SECONDS}
             || transmit_interval > seconds_type{MAX_TRANSMIT_INTERVAL_SECONDS};
@@ -389,10 +394,28 @@ public:
         if (bad) {
             error err {
                   errc::invalid_argument
-                , tr::f_("discovery transmit inteval"
+                , tr::f_("discovery transmit interval"
                     " must greater or equals to {} and less or equals to {} seconds"
                     , MIN_TRANSMIT_INTERVAL_SECONDS
                     , MAX_TRANSMIT_INTERVAL_SECONDS)
+            };
+
+            if (perr) {
+                *perr = err;
+                return;
+            } else {
+                throw err;
+            }
+        }
+
+        bad = expiration_interval < transmit_interval;
+
+        if (bad) {
+            error err {
+                  errc::invalid_argument
+                , tr::f_("discovery expiration interval"
+                    " must greater or equals to transmit interval ({} seconds)"
+                    , transmit_interval)
             };
 
             if (perr) {
@@ -409,8 +432,37 @@ public:
             , transmit_timepoint);
 
         _targets.emplace_back(target_item{target_saddr, 0, transmit_interval
-            , transmit_timepoint, netty::send_status::good});
+            , expiration_interval, transmit_timepoint, netty::send_status::good});
         _backend.add_target(target_saddr, local_addr);
+    }
+
+    /**
+     * Add target.
+     *
+     * @param dest_saddr Target address (unicast, multicast or broadcast).
+     * @param local_addr Multicast interface.
+     * @param transmit_interval Discovery packet transmission inteval.
+     * @param perr Pointer to store error data.
+     */
+    void add_target (socket4_addr target_saddr, inet4_addr local_addr
+        , seconds_type transmit_interval, error * perr = nullptr)
+    {
+        static seconds_type const MIN_EXPIRATION_INTERVAL {5};
+        static int const EXPIRATION_INTERVAL_FACTOR = 3;
+
+        auto expiration_interval = seconds_type(transmit_interval) * EXPIRATION_INTERVAL_FACTOR;
+
+        if (expiration_interval < MIN_EXPIRATION_INTERVAL)
+            expiration_interval = MIN_EXPIRATION_INTERVAL;
+
+        add_target(target_saddr, local_addr, transmit_interval, expiration_interval, perr);
+    }
+
+    void add_target (socket4_addr target_saddr, seconds_type transmit_interval
+        , seconds_type expiration_interval, error * perr = nullptr)
+    {
+        add_target(target_saddr, inet4_addr::any_addr_value
+            , transmit_interval, expiration_interval, perr);
     }
 
     void add_target (socket4_addr target_saddr, seconds_type transmit_interval
@@ -452,7 +504,7 @@ public:
 
         auto now = std::chrono::duration_cast<milliseconds_type>(
             pfs::utc_time::now().time_since_epoch());
-        packet.transmit_interval = MAX_TRANSMIT_INTERVAL_SECONDS;
+        packet.expiration_interval = MAX_TRANSMIT_INTERVAL_SECONDS * 3;
         packet.timestamp = static_cast<decltype(packet.timestamp)>(now.count());
         packet.counter = 0;
         packet.crc16 = crc16_of(packet);

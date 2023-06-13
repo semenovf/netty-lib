@@ -462,14 +462,16 @@ public:
     }
 
     void add_target (socket4_addr src_saddr, inet4_addr local_addr
-        , std::chrono::seconds transmit_interval)
+        , std::chrono::seconds transmit_interval
+        , std::chrono::seconds expiration_interval)
     {
-        _discovery->add_target(src_saddr, local_addr, transmit_interval);
+        _discovery->add_target(src_saddr, local_addr, transmit_interval, expiration_interval);
     }
 
-    void add_target (socket4_addr src_saddr, std::chrono::seconds transmit_interval)
+    void add_target (socket4_addr src_saddr, std::chrono::seconds transmit_interval
+        , std::chrono::seconds expiration_interval)
     {
-        _discovery->add_target(src_saddr, transmit_interval);
+        _discovery->add_target(src_saddr, transmit_interval, expiration_interval);
     }
 
     /**
