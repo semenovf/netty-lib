@@ -66,13 +66,16 @@ udp_receiver::udp_receiver (socket4_addr const & local_saddr)
 udp_receiver::udp_receiver (udp_receiver && s)
     : udp_socket(std::move(s))
     , _dtor(std::move(s._dtor))
-{}
+{
+    s._dtor = nullptr;
+}
 
 udp_receiver & udp_receiver::operator = (udp_receiver && s)
 {
     this->~udp_receiver();
     udp_socket::operator = (std::move(s));
     _dtor = std::move(s._dtor);
+    s._dtor = nullptr;
     return *this;
 }
 
