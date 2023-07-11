@@ -14,6 +14,7 @@
 #include "reader_poller.hpp"
 #include "writer_poller.hpp"
 #include "pfs/i18n.hpp"
+#include "pfs/log.hpp"
 #include "pfs/stopwatch.hpp"
 #include <functional>
 #include <utility>
@@ -81,11 +82,13 @@ public:
     template <typename Socket>
     void add (Socket const & sock, conn_status state, error * perr = nullptr)
     {
-        if (state == conn_status::connecting)
+        if (state == conn_status::connecting) {
             _connecting_poller.add(sock.native(), perr);
-        else if (state == conn_status::connected)
+            LOG_TRACE_3("Client socket ({}) added to `client_poller` with CONNECTING state", to_string(sock.saddr()));
+        } else if (state == conn_status::connected) {
             _reader_poller.add(sock, perr);
-        else {
+            LOG_TRACE_3("Client socket ({}) added to `client_poller` with CONNECTED state", to_string(sock.saddr()));
+        } else {
             error err {
                   errc::poller_error
                 , tr::_("socket must be in a connecting or connected state to be"
@@ -110,6 +113,8 @@ public:
         _connecting_poller.remove(sock.native(), perr);
         _reader_poller.remove(sock.native(), perr);
         _writer_poller.remove(sock.native(), perr);
+
+        LOG_TRACE_3("Client socket ({}) removed from `client_poller`", to_string(sock.saddr()));
     }
 
     /**

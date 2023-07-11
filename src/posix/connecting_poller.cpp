@@ -85,7 +85,7 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
                         default:
                             remove(fd);
                             removed = true;
-                            on_error(fd, tr::_("unhandled error value returned by `getsockopt`"));
+                            on_error(fd, tr::f_("unhandled error value returned by `getsockopt`: {}", error_val));
                             break;
                     }
                 }
@@ -146,7 +146,8 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
             auto fd = _rep.events[i].fd;
 
             // 1. Occured while tcp socket attempts to connect to non-existance server socket (connection_refused)
-            // 2. ... ?
+            // 2. No route to host
+            // 3. ... ?
             // Identical to `epoll_poller`
             if (revents & POLLERR) {
                 int error_val = 0;
@@ -160,21 +161,26 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 } else {
                     switch (error_val) {
                         case 0: // No error
+                            on_error(fd, tr::f_("POLLERR event happend for socket ({})"
+                                ", but no error occurred on it, socket removed", fd));
+                            break;
+
+                        case EHOSTUNREACH:
+                            on_error(fd, tr::f_("No route to host for socket ({}), socket removed", fd));
                             break;
 
                         case ECONNREFUSED:
-                            remove(fd);
-
-                            if (connection_refused)
-                                connection_refused(fd);
-
                             break;
 
                         default:
-                            remove(fd);
-                            on_error(fd, tr::_("unhandled error value returned by `getsockopt`"));
+                            on_error(fd, tr::f_("unhandled error value returned by `getsockopt`: {}", error_val));
                             break;
                     }
+
+                    remove(fd);
+
+                    if (connection_refused)
+                        connection_refused(fd);
                 }
 
                 continue;

@@ -367,20 +367,28 @@ public:
             };
 
             callbacks.connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
+                LOG_TRACE_3("Connection refused for: sock={}", sock);
+
                 auto paccount = locate_writer_account(sock);
 
-                if (paccount)
+                if (paccount) {
+                    LOG_TRACE_3("Connection refused for: UUID={}, sock={}", paccount->uuid, sock);
                     deferred_expire_peer(paccount->uuid);
+                }
             };
 
             callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
+                LOG_TRACE_3("Connection disconnected for: sock={}", sock);
                 auto paccount = locate_writer_account(sock);
 
-                if (paccount)
+                if (paccount) {
+                    LOG_TRACE_3("Connection disconnected for: UUID={}, sock={}", paccount->uuid, sock);
                     deferred_expire_peer(paccount->uuid);
+                }
             };
 
             callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
+                LOG_TRACE_3("Connection established for: sock={}", sock);
                 process_socket_connected(sock);
             };
 

@@ -22,6 +22,8 @@
 #include <map>
 #include <vector>
 
+#include "pfs/log.hpp"
+
 namespace netty {
 namespace p2p {
 
@@ -120,8 +122,13 @@ private:
             // Ignore self received packets (can happen during
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
+                LOG_TRACE_3("HELO packet received from: {} ({})", packet.uuid
+                    , to_string(saddr));
+
                 auto pos = _discovered_peers.find(packet.uuid);
-                 auto expiration_interval = seconds_type(packet.expiration_interval);
+                auto expiration_interval = seconds_type(packet.expiration_interval);
+
+
                 //     * EXPIRATION_INTERVAL_FACTOR;
                 //
                 // if (expiration_interval < MIN_EXPIRATION_INTERVAL)
@@ -138,6 +145,8 @@ private:
 
                 // New peer is discovered
                 if (pos == std::end(_discovered_peers)) {
+                    LOG_TRACE_3("New peer discovered: {}", packet.uuid);
+
                     auto res = _discovered_peers.emplace(packet.uuid
                         , peer_credentials {
                               socket4_addr{saddr.addr, packet.port}
@@ -147,7 +156,7 @@ private:
 
                     if (!res.second) {
                         throw error {
-                                errc::unexpected_error
+                              errc::unexpected_error
                             , tr::_("unable to store discovered peer")
                         };
                     }
@@ -155,8 +164,6 @@ private:
                     pos = res.first;
                     peer_discovered(packet.uuid, pos->second.saddr, timediff);
                 } else {
-                    // Peer may be modified
-
                     bool modified = (pos->second.saddr.addr != saddr.addr);
                     modified = modified || (pos->second.saddr.port != packet.port);
 
@@ -231,11 +238,16 @@ private:
             packet.uuid = _host_uuid;
             packet.port = _opts.host_port;
 
+            _nearest_transmit_timepoint = clock_type::time_point::max();
+
             for (auto & t: _targets) {
                 interval_exceeded = (t.transmit_timepoint <= now);
 
-                if (!interval_exceeded)
+                if (!interval_exceeded) {
+                    _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
+                        , t.transmit_timepoint);
                     continue;
+                }
 
                 auto now = std::chrono::duration_cast<milliseconds_type>(
                     pfs::utc_time::now().time_since_epoch());
@@ -259,13 +271,15 @@ private:
                 while (series_of_retries-- > 0) {
                     auto res = _backend.send(t.saddr, data.data(), size, & err);
 
-                    if (res.state != netty::send_status::good) {
+                    if (res.state == netty::send_status::good) {
+                        series_of_retries = 0;
+                    } else {
                         if (t.last_send_status != res.state) {
                             on_error(tr::f_("transmit failure to: {}: {}"
                                 , to_string(t.saddr), err.what()));
 
-                            // Break (don't use `break` keyword) while loop and
-                            // save last_send_status (see below).
+                            // Prepare to break (don't use `break` keyword)
+                            // while loop and save last_send_status (see below).
                             series_of_retries = 0;
                         }
                     }
@@ -351,6 +365,8 @@ public:
         _backend.data_ready = [this] (socket4_addr saddr, std::vector<char> data) {
             process_discovery_data(saddr, data.data(), data.size());
         };
+
+        _nearest_transmit_timepoint = clock_type::time_point::max();
     }
 
     ~discovery_engine ()
@@ -426,8 +442,7 @@ public:
             }
         }
 
-        // There is no problem if the discovery process starts much later.
-        auto transmit_timepoint = current_timepoint() + seconds_type{1};
+        auto transmit_timepoint = current_timepoint() + transmit_interval;
         _nearest_transmit_timepoint = (std::min)(_nearest_transmit_timepoint
             , transmit_timepoint);
 
