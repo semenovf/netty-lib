@@ -10,10 +10,10 @@
 #include "envelope.hpp"
 #include "file.hpp"
 #include "packet.hpp"
-//#include "unified_file.hpp"
 #include "universal_id.hpp"
 #include "pfs/filesystem.hpp"
 #include "pfs/sha256.hpp"
+#include "pfs/traverse_directory.hpp"
 #include "pfs/netty/exports.hpp"
 #include <functional>
 #include <memory>
@@ -332,6 +332,20 @@ public:
      * @return non-zero value if there was a sending of chunks of files
      */
     NETTY__EXPORT int loop ();
+
+    /**
+     * Wipes download folder.
+     */
+    void wipe (error * perr = nullptr)
+    {
+        wipe(_opts.download_directory, perr);
+    }
+
+public: // static
+    /**
+     * Wipes specified folder.
+     */
+    static NETTY__EXPORT void wipe (fs::path const & download_dir, error * perr = nullptr);
 };
 
 }} // namespace netty::p2p

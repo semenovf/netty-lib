@@ -881,4 +881,84 @@ int file_transporter::loop ()
     return counter;
 }
 
+void file_transporter::wipe (fs::path const & download_dir, error * perr)
+{
+    fs::directory_traversal dt;
+
+    dt.on_leave_directory = [download_dir, perr] (fs::path const & dir) {
+        if (dir != download_dir) {
+            std::error_code ec;
+            fs::remove_all(dir, ec);
+
+            if (ec) {
+                error err = {
+                      errc::filesystem_error
+                    , tr::f_("remove directory failure: {}", dir)
+                    , ec.message()
+                };
+
+                if (perr) {
+                    *perr = std::move(err);
+                } else {
+                    throw err;
+                }
+            } else {
+                LOG_TRACE_1("Directory removed: {}", dir);
+            }
+        }
+    };
+
+    dt.on_entry = [perr] (pfs::filesystem::path const & path) {
+        std::error_code ec;
+        fs::remove(path, ec);
+
+        if (ec) {
+            error err = {
+                  errc::filesystem_error
+                , tr::f_("remove file failure: {}", path)
+                , ec.message()
+            };
+
+            if (perr) {
+                *perr = std::move(err);
+            } else {
+                throw err;
+            }
+        } else {
+            LOG_TRACE_2("File removed: {}", path);
+        }
+    };
+
+    dt.on_entry_error = [perr] (fs::path const & path, pfs::error const & ex) {
+        error err {
+              errc::filesystem_error
+            , tr::f_("wipe failure on file: {}", path)
+            , ex.what()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+        } else {
+            throw err;
+        }
+    };
+
+    dt.on_error = [perr] (pfs::error const & ex) {
+        error err {
+              errc::filesystem_error
+            , tr::_("wipe failure")
+            , ex.what()
+        };
+
+        if (perr) {
+            *perr = std::move(err);
+        } else {
+            throw err;
+        }
+    };
+
+    if (!download_dir.empty()) {
+        dt.traverse(download_dir);
+    }
+}
 }} // namespace netty::p2p

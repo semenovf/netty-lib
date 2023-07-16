@@ -37,7 +37,8 @@ netlink_socket::netlink_socket (type_enum netlinktype)
         default: {
             throw error {
                   errc::socket_error
-                , tr::f_("bad/unsupported Netlink socket type: {}", netlinktype)
+                , tr::f_("bad/unsupported Netlink socket type: {}"
+                    , static_cast<int>(netlinktype))
             };
         }
     }

@@ -36,7 +36,6 @@
 
 // TODO DEPRECATED Use ionik::file<> and specializations
 
-
 namespace netty {
 namespace p2p {
 
@@ -83,6 +82,7 @@ public:
         if (this != & f) {
             _h = f._h;
             f._h = INVALID_FILE_HANDLE;
+            close_callback = f.close_callback;
         }
     }
 
@@ -92,6 +92,7 @@ public:
             close();
             _h = f._h;
             f._h = INVALID_FILE_HANDLE;
+            close_callback = f.close_callback;
         }
 
         return *this;
@@ -147,7 +148,7 @@ public:
         }
 
 #if _MSC_VER
-		auto n = _read(_h, buffer, count);
+        auto n = _read(_h, buffer, count);
 #else
         auto n = ::read(_h, buffer, count);
 #endif
@@ -306,8 +307,8 @@ public: // static
         }
 
 #if _MSC_VER
-		handle_type h;
-		_sopen_s(& h, fs::utf8_encode(path).c_str(), O_RDONLY, _SH_DENYNO, 0);
+        handle_type h;
+        _sopen_s(& h, fs::utf8_encode(path).c_str(), O_RDONLY, _SH_DENYNO, 0);
 #else
         handle_type h = ::open(fs::utf8_encode(path).c_str(), O_RDONLY);
 #endif
@@ -348,8 +349,8 @@ public: // static
             oflags |= O_TRUNC;
 
 #if _MSC_VER
-		handle_type h;
-		_sopen_s(& h, fs::utf8_encode(path).c_str(), oflags, _SH_DENYWR, S_IRUSR | S_IWUSR);
+        handle_type h;
+        _sopen_s(& h, fs::utf8_encode(path).c_str(), oflags, _SH_DENYWR, S_IRUSR | S_IWUSR);
 
 #else
         handle_type h = ::open(fs::utf8_encode(path).c_str()
