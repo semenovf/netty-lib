@@ -18,11 +18,6 @@ namespace p2p {
 
 namespace fs = pfs::filesystem;
 
-// FIXME
-// constexpr file_transporter::chunksize_type const file_transporter::DEFAULT_FILE_CHUNK_SIZE;
-// constexpr file_transporter::chunksize_type const file_transporter::MIN_FILE_CHUNK_SIZE;
-// constexpr file_transporter::chunksize_type const file_transporter::MAX_FILE_CHUNK_SIZE;
-// constexpr file_transporter::filesize_type  const file_transporter::MAX_FILE_SIZE;
 constexpr filesize_t const file_transporter::DEFAULT_FILE_CHUNK_SIZE;
 constexpr filesize_t const file_transporter::MIN_FILE_CHUNK_SIZE;
 constexpr filesize_t const file_transporter::MAX_FILE_CHUNK_SIZE;
@@ -129,21 +124,6 @@ bool file_transporter::ensure_directory (fs::path const & dir, error * perr) con
     return true;
 }
 
-// FIXME
-// std::vector<char> file_transporter::read_chunk (local_file & data_file
-//     , chunksize_type size)
-// {
-//     std::vector<char> chunk(size);
-//
-//     auto n = data_file.read(chunk.data(), size);
-//
-//     if (n == 0)
-//         chunk.clear();
-//     else if (n < size)
-//         chunk.resize(n);
-//
-//     return chunk;
-// }
 std::vector<char> file_transporter::read_chunk (file const & data_file
     , filesize_t count)
 {
@@ -272,12 +252,8 @@ file_transporter::ifile_item * file_transporter::locate_ifile_item (
             auto descfilepath = make_descfilepath(addresser, fileid);
             auto datafilepath = make_datafilepath(addresser, fileid);
 
-            // FIXME
-//             auto desc_file = local_file::open_write_only(descfilepath);
-//             auto data_file = local_file::open_write_only(datafilepath);
             auto desc_file = file::open_write_only(descfilepath);
             auto data_file = file::open_write_only(datafilepath);
-
 
             auto res = _ifile_pool.emplace(fileid, ifile_item{
                   addresser
@@ -301,12 +277,15 @@ void file_transporter::remove_ifile_item (universal_id fileid)
     _ifile_pool.erase(fileid);
 }
 
-void file_transporter::remove_ofile_item (universal_id fileid)
+void file_transporter::remove_ofile_item (universal_id addressee, universal_id fileid)
 {
-    // FIXME
-//     _olocal_file_pool.erase(fileid);
-// //     _oremote_file_pool.erase(fileid);
-    _ofile_pool.erase(fileid);
+    auto range = _ofile_pool.equal_range(fileid);
+
+    for (auto pos = range.first; pos != range.second; ++pos) {
+        if (pos->second.addressee == addressee) {
+            _ofile_pool.erase(pos);
+        }
+    }
 }
 
 void file_transporter::notify_file_status (universal_id addressee
@@ -378,9 +357,6 @@ file_credentials file_transporter::incoming_file_credentials (
     , universal_id fileid)
 {
     auto descfilepath = make_descfilepath(addresser, fileid);
-
-    // FIXME
-//     auto desc_file = local_file::open_read_only(descfilepath);
     auto desc_file = file::open_read_only(descfilepath);
 
     file_credentials fc;
@@ -392,19 +368,12 @@ file_credentials file_transporter::incoming_file_credentials (
     return fc;
 }
 
-// FIXME
-// void file_transporter::cache_file_credentials (universal_id fileid, fs::path const & abspath)
-// {
-//     auto cachefilepath = make_cachefilepath(fileid);
-//     local_file::rewrite(cachefilepath, fs::utf8_encode(abspath));
-// }
 void file_transporter::cache_file_credentials (universal_id fileid
     , std::string const & abspath)
 {
     auto cachefilepath = make_cachefilepath(fileid);
     file::rewrite(cachefilepath, abspath);
 }
-
 
 void file_transporter::uncache_file_credentials (universal_id fileid)
 {
@@ -433,16 +402,12 @@ void file_transporter::commit_chunk (universal_id addresser, file_chunk const & 
 //             std::abort();
 //         }
 
-    // FIXME
-//     filesize_type last_offset = p->data_file.offset();
     filesize_t last_offset = p->data_file.offset();
 
     p->data_file.write(fc.chunk.data(), fc.chunk.size());
     //p->hash.update(fc.chunk.data(), fc.chunk.size());
 
     // Write offset
-    // FIXME
-//     filesize_type offset = p->data_file.offset();
     filesize_t offset = p->data_file.offset();
 
     p->desc_file.set_pos(0);
@@ -470,10 +435,10 @@ void file_transporter::commit_chunk (universal_id addresser, file_chunk const & 
 }
 
 // Complete or stop file sending
-void file_transporter::complete_file (universal_id fileid, bool /*success*/)
+void file_transporter::complete_file (universal_id addressee, universal_id fileid, bool /*success*/)
 {
     uncache_file_credentials(fileid);
-    remove_ofile_item(fileid);
+    remove_ofile_item(addressee, fileid);
 }
 
 void file_transporter::process_file_credentials (universal_id sender
@@ -492,22 +457,13 @@ void file_transporter::process_file_request (universal_id sender
     auto fr = input_envelope_type::unseal<file_request>(data);
 
     auto cachefilepath = make_cachefilepath(fr.fileid);
-    // FIXME
-//     auto orig_path = local_file::read_all(cachefilepath);
     auto orig_path = file::read_all(cachefilepath);
 
     if (!orig_path.empty()) {
-        // FIXME
-        //auto data_file = local_file::open_read_only(fs::utf8_decode(orig_path));
         auto data_file = open_outcome_file(orig_path);
 
         data_file.set_pos(fr.offset);
 
-        // Add info to output pool for sending file
-        // FIXME
-//         _olocal_file_pool.emplace(fr.fileid, olocal_file_item {
-//                 sender, std::move(data_file), true
-//             });
         _ofile_pool.emplace(fr.fileid, ofile_item{
             sender, std::move(data_file), true});
 
@@ -526,7 +482,7 @@ void file_transporter::process_file_stop (universal_id sender
     , std::vector<char> const & data)
 {
     auto fs = input_envelope_type::unseal<file_stop>(data);
-    remove_ofile_item(fs.fileid);
+    remove_ofile_item(sender, fs.fileid);
     upload_stopped(sender, fs.fileid);
 }
 
@@ -597,7 +553,7 @@ void file_transporter::process_file_end (universal_id sender
     commit_incoming_file(sender, fe.fileid/*, fe.checksum*/);
 }
 
-void file_transporter::process_file_state (universal_id /*sender*/
+void file_transporter::process_file_state (universal_id sender
     , std::vector<char> const & data)
 {
     auto fs = input_envelope_type::unseal<file_state>(data);
@@ -605,7 +561,7 @@ void file_transporter::process_file_state (universal_id /*sender*/
     switch (fs.status) {
         // File received successfully by receiver
         case file_status::success:
-            complete_file(fs.fileid, true);
+            complete_file(sender, fs.fileid, true);
             break;
 //         case file_status::checksum:
 //             complete_file(fs.fileid, false);
@@ -622,17 +578,6 @@ void file_transporter::process_file_state (universal_id /*sender*/
     }
 }
 
-// FIXME
-// void file_transporter::expire_addressee (universal_id addressee)
-// {
-//     // Erase all items associated with specified addressee
-//     for (auto pos = _olocal_file_pool.begin(); pos != _olocal_file_pool.end();) {
-//         if (pos->second.addressee == addressee)
-//             pos = _olocal_file_pool.erase(pos);
-//         else
-//             ++pos;
-//     }
-// }
 void file_transporter::expire_addressee (universal_id addressee)
 {
     // Erase all items associated with specified addressee
@@ -683,9 +628,6 @@ void file_transporter::send_file_request (universal_id addressee_id, universal_i
         , addressee_id, fr.fileid, fr.offset);
 }
 
-// FIXME
-// universal_id file_transporter::send_file (universal_id addressee
-//     , universal_id fileid, local_file::filepath_type const & path, std::int64_t filesize)
 universal_id file_transporter::send_file (universal_id addressee
     , universal_id fileid, pfs::filesystem::path const & path)
 {
@@ -698,8 +640,6 @@ universal_id file_transporter::send_file (universal_id addressee
     }
 
     try {
-        // FIXME
-//         local_file::open_read_only(path);
         // Check if file can be read
         file::open_read_only(path);
     } catch (...) {
@@ -722,8 +662,6 @@ universal_id file_transporter::send_file (universal_id addressee
     LOG_TRACE_3("Send file credentials: {} (file id={}; size={} bytes)"
         , path, fileid, fc.filesize);
 
-    // FIXME
-    //cache_file_credentials(fileid, fs::absolute(path));
     cache_file_credentials(fileid, fs::utf8_encode(fs::absolute(path)));
 
     output_envelope_type out;
@@ -779,25 +717,15 @@ void file_transporter::stop_file (universal_id addressee, universal_id fileid)
         , out.data().data(), out.data().size());
 }
 
-// FIXME
-// bool file_transporter::request_chunk (universal_id fileid)
-// {
-//     auto pos = _olocal_file_pool.find(fileid);
-//
-//     if (pos != _olocal_file_pool.end()) {
-//         pos->second.chunk_requested = true;
-//         return true;
-//     }
-//
-//     return false;
-// }
-bool file_transporter::request_chunk (universal_id fileid)
+bool file_transporter::request_chunk (universal_id addressee, universal_id fileid)
 {
-    auto pos = _ofile_pool.find(fileid);
+    auto range = _ofile_pool.equal_range(fileid);
 
-    if (pos != _ofile_pool.end()) {
-        pos->second.chunk_requested = true;
-        return true;
+    for (auto pos = range.first; pos != range.second; ++pos) {
+        if (pos->second.addressee == addressee) {
+            pos->second.chunk_requested = true;
+            return true;
+        }
     }
 
     return false;
@@ -806,15 +734,11 @@ bool file_transporter::request_chunk (universal_id fileid)
 // Send chunk of file packets
 int file_transporter::loop ()
 {
-    // FIXME
-    //if (_olocal_file_pool.empty())
     if (_ofile_pool.empty())
         return 0;
 
     int counter = 0;
 
-    // FIXME
-    //for (auto pos = _olocal_file_pool.begin(); pos != _olocal_file_pool.end();) {
     for (auto pos = _ofile_pool.begin(); pos != _ofile_pool.end();) {
         if (!addressee_ready(pos->second.addressee)) {
             ++pos;
@@ -853,15 +777,10 @@ int file_transporter::loop ()
                 , out.data().data(), out.data().size());
 
             // Remove file from output pool
-            // FIXME
-            //pos = _olocal_file_pool.erase(pos);
             pos = _ofile_pool.erase(pos);
         } else if (fc.chunk.size() > 0) {
             fc.fileid = pos->first;
             fc.offset = offset;
-
-            // FIXME
-            //fc.chunksize = static_cast<chunksize_type>(fc.chunk.size());
             fc.chunksize = static_cast<filesize_t>(fc.chunk.size());
 
             output_envelope_type out;

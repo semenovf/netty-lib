@@ -92,30 +92,11 @@ private:
     struct ifile_item
     {
         universal_id  addresser;
-        // FIXME
-//         local_file    desc_file;
-//         local_file    data_file;
         ofile_t desc_file;
         ofile_t data_file;
-        //filesize_type filesize;
         filesize_t filesize;
     };
 
-    // Outcome file
-    // FIXME
-//     struct olocal_file_item
-//     {
-//         universal_id addressee;
-//         local_file data_file;
-//         bool chunk_requested;
-//     };
-//
-//     struct oremote_file_item
-//     {
-//         universal_id addressee;
-//         remote_file data_file;
-//         bool chunk_requested;
-//     };
     struct ofile_item
     {
         universal_id addressee;
@@ -127,10 +108,7 @@ private:
     options _opts;
 
     std::unordered_map<universal_id/*fileid*/, ifile_item> _ifile_pool;
-    // FIXME
-//     std::unordered_map<universal_id/*fileid*/, olocal_file_item> _olocal_file_pool;
-//     std::unordered_map<universal_id/*fileid*/, oremote_file_item> _oremote_file_pool;
-    std::unordered_map<universal_id/*fileid*/, ofile_item> _ofile_pool;
+    std::unordered_multimap<universal_id/*fileid*/, ofile_item> _ofile_pool;
 
 public:
     mutable std::function<void (std::string const &)> on_error
@@ -219,7 +197,7 @@ private:
         , universal_id fileid, bool ensure);
 
     void remove_ifile_item (universal_id fileid);
-    void remove_ofile_item (universal_id fileid);
+    void remove_ofile_item (universal_id addressee, universal_id fileid);
 
     /**
      * Load file credentials for incoming file
@@ -231,7 +209,7 @@ private:
     void uncache_file_credentials (universal_id fileid);
 
     void commit_chunk (universal_id addresser, file_chunk const & fc);
-    void complete_file (universal_id fileid, bool /*success*/);
+    void complete_file (universal_id addressee, universal_id fileid, bool /*success*/);
 
     /**
      * Notify receiver about file status
@@ -285,7 +263,7 @@ public:
      * @details Actually this method initiates file sending by send file
      *          credentials.
      *
-     * @param addressee_id Addressee unique identifier.
+     * @param addressee Addressee unique identifier.
      * @param fileid Unique file identifier. If @a file_id is invalid it
      *        will be generated automatically.
      * @param path Path to sending file.
@@ -293,13 +271,6 @@ public:
      * @return Unique file identifier or invalid identifier on error (file too
      *        big to send or has no permissions to read file).
      */
-    // FIXME
-//     NETTY__EXPORT universal_id send_file (universal_id addressee, universal_id fileid
-//         , local_file::filepath_type const & path, std::int64_t filesize);
-//
-//     NETTY__EXPORT universal_id send_file (universal_id addressee, universal_id fileid
-//         , remote_file::filepath_type const & path, std::int64_t filesize);
-
     NETTY__EXPORT universal_id send_file (universal_id addressee, universal_id fileid
         , pfs::filesystem::path const & path);
 
@@ -324,7 +295,7 @@ public:
      *
      * @return @c true if there are more chunks or @c false otherwise.
      */
-    NETTY__EXPORT bool request_chunk (universal_id fileid);
+    NETTY__EXPORT bool request_chunk (universal_id addressee, universal_id fileid);
 
     /**
      * Sends a dozen file chunks (fragments)

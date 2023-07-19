@@ -139,8 +139,6 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
 
             n--;
 
-            LOG_TRACE_2("++++++++ READER POLL: fd={}, revents={}", ev.fd, ev.revents);
-
             if (ev.revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);

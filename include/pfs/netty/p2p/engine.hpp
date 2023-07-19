@@ -1365,6 +1365,7 @@ private:
 
                 switch (packettype) {
                     case packet_type::regular:
+                        LOG_TRACE_3("Data received from: {} {} bytes", sender_uuid, paccount->b.size());
                         this->data_received(sender_uuid
                             , std::string(paccount->b.data(), paccount->b.size()));
                         break;
@@ -1578,7 +1579,7 @@ private:
                             serialize_outgoing_packets(& paccount->raw, & chunks_output_queue, 10);
                             ++pos;
                         } else {
-                            auto complete = !_transporter->request_chunk(pos->first);
+                            auto complete = !_transporter->request_chunk(paccount->uuid, pos->first);
 
                             if (complete)
                                 pos = paccount->chunks.erase(pos);
