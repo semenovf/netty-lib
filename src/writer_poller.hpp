@@ -16,9 +16,11 @@ template <typename Backend>
 writer_poller<Backend>::writer_poller ()
     : writer_poller(specialized{})
 {
-    on_error = [] (native_socket_type, std::string const & text) {
+    on_failure = [] (native_socket_type, std::string const & text) {
         fmt::print(stderr, tr::_("ERROR: writer poller: {}\n"), text);
     };
+
+    can_write = [] (native_socket_type) {};
 }
 
 template <typename Backend>

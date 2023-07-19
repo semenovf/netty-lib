@@ -7,6 +7,7 @@
 //      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller.hpp"
+#include "pfs/log.hpp"
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -59,7 +60,6 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
             if (FD_ISSET(fd, & rfds)) {
                 res++;
 
-                bool disconnect = false;
                 char buf[1];
 #if _MSC_VER
                 auto n1 = ::recv(fd, buf, sizeof(buf), MSG_PEEK);
@@ -68,10 +68,9 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #endif
 
                 if (n1 > 0) {
-                    if (ready_read)
-                        ready_read(fd);
+                    ready_read(fd);
                 } else if (n1 == 0) {
-                    disconnect = true;
+                    disconnected(fd);
                 } else {
 #if _MSC_VER
                     auto lastWsaError = WSAGetLastError();
@@ -79,25 +78,18 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                     // The message was too large to fit into the specified buffer and was truncated.
                     // Is not an error. Process this error as normal result.
                     if (lastWsaError == WSAEMSGSIZE) {
-                        if (ready_read)
-                            ready_read(fd);
+                        ready_read(fd);
                     } else {
 #endif
                         if (errno != ECONNRESET) {
-                            on_error(fd, tr::f_("read socket failure: {}"
-                                , pfs::system_error_text(errno)));
+                            on_failure(fd, tr::f_("read socket failure: {} (socket={})"
+                                , pfs::system_error_text(errno), fd));
+                        } else {
+                            disconnected(fd);
                         }
-                        disconnect = true;
 #if _MSC_VER
                     }
 #endif
-                }
-
-                if (disconnect) {
-                    remove(fd);
-
-                    if (disconnected)
-                        disconnected(fd);
                 }
 
                 --rcounter;
@@ -114,7 +106,7 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
 template <>
 reader_poller<posix::poll_poller>::reader_poller (specialized)
-    : _rep(POLLERR | POLLIN
+    : _rep(POLLERR | POLLIN | POLLNVAL
 
 #ifdef POLLRDNORM
         | POLLRDNORM
@@ -138,34 +130,35 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
     auto res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].revents;
-            auto fd = _rep.events[i].fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
 
-            if (revents & POLLERR) {
+            if (ev.revents == 0)
+                continue;
+
+            n--;
+
+            LOG_TRACE_2("++++++++ READER POLL: fd={}, revents={}", ev.fd, ev.revents);
+
+            if (ev.revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
-                remove(fd);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
-                        , pfs::system_error_text(), fd));
+                    on_failure(ev.fd, tr::f_("get socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), ev.fd));
                 } else {
-                    on_error(fd, tr::f_("read socket failure: {}, socket removed: {}"
-                        , pfs::system_error_text(error_val), fd));
+                    on_failure(ev.fd, tr::f_("read socket failure: {} (socket={})"
+                        , pfs::system_error_text(error_val), ev.fd));
                 }
-
-                if (disconnected)
-                    disconnected(fd);
 
                 continue;
             }
 
-            // There is data to read - can accept
-            // Identical to `epoll_poller`
-            if (revents & (POLLIN
+            // There is data to read
+            if (ev.revents & (POLLIN
 #ifdef POLLRDNORM
                 | POLLRDNORM
 #endif
@@ -175,29 +168,20 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
             )) {
                 res++;
 
-                // Same as for select_poller
-                bool disconnect = false;
                 char buf[1];
-                auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+                auto n = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
                 if (n > 0) {
-                    if (ready_read)
-                        ready_read(fd);
-                } else if ( n == 0) {
-                    disconnect = true;
+                    ready_read(ev.fd);
+                } else if (n == 0) {
+                    disconnected(ev.fd);
                 } else {
                     if (errno != ECONNRESET) {
-                        on_error(fd, tr::f_("read socket failure: {}"
-                            , pfs::system_error_text(errno)));
+                        on_failure(ev.fd, tr::f_("read socket failure: {} (socket={})"
+                            , pfs::system_error_text(errno), ev.fd));
+                    } else {
+                        disconnected(ev.fd);
                     }
-                    disconnect = true;
-                }
-
-                if (disconnect) {
-                    remove(fd);
-
-                    if (disconnected)
-                        disconnected(fd);
                 }
             }
         }

@@ -24,7 +24,7 @@ private:
     Backend _rep;
 
 public:
-    mutable std::function<void(native_socket_type, std::string const &)> on_error;
+    mutable std::function<void(native_socket_type, std::string const &)> on_failure;
     mutable std::function<void(native_socket_type)> disconnected;
     mutable std::function<void(native_socket_type)> ready_read;
 
@@ -45,9 +45,7 @@ public:
 
     NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
-
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
-
     NETTY__EXPORT bool empty () const noexcept;
 };
 

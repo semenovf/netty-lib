@@ -4,8 +4,7 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2021.10.26 Initial version.
-//      2023.01.06 Renamed to `udt_socket` and refactored.
+//      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 

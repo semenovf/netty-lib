@@ -40,10 +40,7 @@ int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
                 //auto state = UDT::getsockstate(u);
                 //LOGD(TAG, "UDT write socket state: {}", state);
 
-                remove(u);
-
-                if (can_write)
-                    can_write(u);
+                can_write(u);
             }
         }
     }

@@ -34,56 +34,47 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
     int res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].events;
-            auto fd = _rep.events[i].data.fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
 
-            if (revents & EPOLLERR) {
+            if (ev.events == 0)
+                continue;
+
+            n--;
+
+            if (ev.events & EPOLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
-                remove(fd);
+                auto rc = getsockopt(ev.data.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
-                        , pfs::system_error_text(), fd));
+                    on_failure(ev.data.fd, tr::f_("get socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), ev.data.fd));
                 } else {
-                    on_error(fd, tr::f_("read socket failure: {}, socket removed: {}"
-                        , pfs::system_error_text(error_val), fd));
+                    on_failure(ev.data.fd, tr::f_("read socket failure: {} (socket={})"
+                        , pfs::system_error_text(error_val), ev.data.fd));
                 }
-
-                if (disconnected)
-                    disconnected(fd);
 
                 continue;
             }
 
-            if (revents & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
-                bool disconnect = false;
+            if (ev.events & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
+                res++;
                 char buf[1];
-                auto n = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+                auto n = ::recv(ev.data.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
                 if (n > 0) {
-                    res++;
-
-                    if (ready_read)
-                        ready_read(fd);
-                } else if ( n == 0) {
-                    disconnect = true;
+                    ready_read(ev.data.fd);
+                } else if (n == 0) {
+                    disconnected(ev.data.fd);
                 } else {
                     if (errno != ECONNRESET) {
-                        on_error(fd, tr::f_("read socket failure: {}"
-                            , pfs::system_error_text(errno)));
+                        on_failure(ev.data.fd, tr::f_("read socket failure: {} (socket={})"
+                            , pfs::system_error_text(errno), ev.data.fd));
+                    } else {
+                        disconnected(ev.data.fd);
                     }
-                    disconnect = true;
-                }
-
-                if (disconnect) {
-                    remove(fd);
-
-                    if (disconnected)
-                        disconnected(fd);
                 }
             }
         }

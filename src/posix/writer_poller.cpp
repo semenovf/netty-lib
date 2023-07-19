@@ -56,12 +56,7 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
             if (FD_ISSET(fd, & wfds)) {
                 res++;
-
-                remove(fd);
-
-                if (can_write)
-                    can_write(fd);
-
+                can_write(fd);
                 --rcounter;
             }
         }
@@ -100,26 +95,29 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
     auto res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].revents;
-            auto fd = _rep.events[i].fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
+
+            if (ev.revents == 0)
+                continue;
+
+            n--;
 
             // This event is also reported for the write end of a pipe when
             // the read end has been closed.
             // TODO Recognize disconnection (EPIPE ?)
-            if (revents & POLLERR) {
+            if (ev.revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
-                remove(fd);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
-                        , pfs::system_error_text(), fd));
+                    on_failure(ev.fd, tr::f_("get socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), ev.fd));
                 } else {
-                    on_error(fd, tr::f_("write socket failure: {}, socket removed: {}"
-                        , pfs::system_error_text(error_val), fd));
+                    on_failure(ev.fd, tr::f_("write socket failure: {} (socket={})"
+                        , pfs::system_error_text(error_val), ev.fd));
                 }
 
                 continue;
@@ -128,7 +126,7 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
             // Writing is now possible, though a write larger than the available space
             // in a socket or pipe will still block (unless O_NONBLOCK is set).
             // Identical to `epoll_poller`
-            if (revents & (POLLOUT
+            if (ev.revents & (POLLOUT
 #ifdef POLLWRNORM
                 | POLLWRNORM
 #endif
@@ -137,11 +135,7 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
 #endif
             )) {
                 res++;
-
-                remove(fd);
-
-                if (can_write)
-                    can_write(fd);
+                can_write(ev.fd);
             }
         }
     }

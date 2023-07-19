@@ -57,7 +57,6 @@ class engine
 public:
     using input_envelope_type   = input_envelope<>;
     using output_envelope_type  = output_envelope<>;
-//     using filesize_type         = local_file::filesize_type;
 
 private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
@@ -128,6 +127,7 @@ private:
     struct writer_account {
         universal_id uuid;
         bool can_write;
+        bool connected; // Used to check complete channel
         writer_type writer;
 
         // Regular packets output queue
@@ -221,23 +221,16 @@ public: // Callbacks
         = [] (universal_id, inet4_addr, std::uint16_t) {};
 
     /**
+     * Called when channel (reader and writer available) established.
+     */
+    mutable std::function<void (universal_id, inet4_addr, std::uint16_t)> channel_established
+        = [] (universal_id, inet4_addr, std::uint16_t) {};
+
+    /**
      * Message received.
      */
     mutable std::function<void (universal_id, std::string)> data_received
         = [] (universal_id, std::string) {};
-
-        // FIXME
-//     mutable std::function<void (universal_id /*addresser*/
-//         , universal_id /*fileid*/
-//         , filesize_type /*downloaded_size*/
-//         , filesize_type /*total_size*/)> download_progress
-//         = [] (universal_id, universal_id, filesize_type, filesize_type) {};
-//
-//     mutable std::function<void (universal_id /*addresser*/
-//         , universal_id /*fileid*/
-//         , std::string const & /*uri*/
-//         , bool /*success*/)> download_complete
-//         = [] (universal_id, universal_id, std::string const &, bool) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
@@ -329,14 +322,7 @@ public:
         // Create and configure main server poller
         ////////////////////////////////////////////////////////////////////////
         {
-            typename server_poller_type::callbacks callbacks;
-
-            callbacks.on_error = [this] (typename server_poller_type::native_socket_type
-                , std::string const & text) {
-                this->on_error(text);
-            };
-
-            callbacks.accept = [this] (typename server_poller_type::native_socket_type listener_sock, bool & ok) {
+            auto accept_proc = [this] (typename server_poller_type::native_socket_type listener_sock, bool & ok) {
                 auto * reader = acquire_reader(listener_sock);
 
                 if (!reader) {
@@ -348,54 +334,90 @@ public:
                 return reader->native();
             };
 
-            callbacks.ready_read = [this] (typename server_poller_type::native_socket_type sock) {
+            _reader_poller = pfs::make_unique<server_poller_type>(std::move(accept_proc));
+
+            _reader_poller->on_listener_failure = [this] (typename server_poller_type::native_socket_type, std::string const & text) {
+                this->on_failure(error {errc::unexpected_error, text});
+            };
+
+            _reader_poller->on_reader_failure = [this] (typename server_poller_type::native_socket_type sock, std::string const & text) {
+                this->on_error(text);
+
+                auto paccount = locate_reader_account(sock);
+
+                if (paccount && paccount->uuid != universal_id{}) {
+                    deferred_expire_peer(paccount->uuid);
+                } else {
+                    LOG_TRACE_3("Failure on socket: socket={}, but reader account not found", sock);
+                }
+            };
+
+            _reader_poller->ready_read = [this] (typename server_poller_type::native_socket_type sock) {
                 process_reader_input(sock);
             };
 
-            _reader_poller = pfs::make_unique<server_poller_type>(std::move(callbacks));
+            _reader_poller->disconnected = [this] (typename server_poller_type::native_socket_type sock) {
+                auto paccount = locate_reader_account(sock);
+
+                if (paccount && paccount->uuid != universal_id{}) {
+                    LOG_TRACE_3("Reader socket disconnected: UUID={}, socket={}", paccount->uuid, sock);
+                    deferred_expire_peer(paccount->uuid);
+                } else {
+                    LOG_TRACE_3("Reader socket disconnected: socket={}, but reader account not found", sock);
+                }
+            };
         }
 
         ////////////////////////////////////////////////////////////////////////
         // Create and configure writer poller
         ////////////////////////////////////////////////////////////////////////
         {
-            typename client_poller_type::callbacks callbacks;
+            _writer_poller = pfs::make_unique<client_poller_type>();
 
-            callbacks.on_error = [this] (typename client_poller_type::native_socket_type
-                , std::string const & text) {
+            _writer_poller->on_failure = [this] (typename client_poller_type::native_socket_type sock, std::string const & text) {
                 this->on_error(text);
-            };
-
-            callbacks.connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_3("Connection refused for: sock={}", sock);
 
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount) {
-                    LOG_TRACE_3("Connection refused for: UUID={}, sock={}", paccount->uuid, sock);
+                    LOG_TRACE_3("Failure on socket: UUID={}, socket={}", paccount->uuid, sock);
                     deferred_expire_peer(paccount->uuid);
+                } else {
+                    LOG_TRACE_3("Failure on socket: socket={}, but writer account not found", sock);
                 }
             };
 
-            callbacks.disconnected = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_3("Connection disconnected for: sock={}", sock);
+            _writer_poller->connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount) {
-                    LOG_TRACE_3("Connection disconnected for: UUID={}, sock={}", paccount->uuid, sock);
+                    LOG_TRACE_3("Connection refused for: UUID={}, socket={}", paccount->uuid, sock);
                     deferred_expire_peer(paccount->uuid);
+                } else {
+                    LOG_TRACE_3("Connection refused for: socket={}, but writer account not found", sock);
                 }
             };
 
-            callbacks.connected = [this] (typename client_poller_type::native_socket_type sock) {
-                LOG_TRACE_3("Connection established for: sock={}", sock);
+            _writer_poller->connected = [this] (typename client_poller_type::native_socket_type sock) {
+                LOG_TRACE_3("Connection established for: socket={}", sock);
                 process_socket_connected(sock);
             };
 
-            // No need, writer sockets for write only
-            callbacks.ready_read = [] (typename client_poller_type::native_socket_type sock) {};
+            _writer_poller->disconnected = [this] (typename client_poller_type::native_socket_type sock) {
+                auto paccount = locate_writer_account(sock);
 
-            callbacks.can_write = [this] (typename client_poller_type::native_socket_type sock) {
+                if (paccount) {
+                    LOG_TRACE_3("Connection disconnected for: UUID={}, socket={}", paccount->uuid, sock);
+                    deferred_expire_peer(paccount->uuid);
+                } else {
+                    LOG_TRACE_3("Connection disconnected for: socket={}, but writer account not found", sock);
+                }
+            };
+
+            // Not need, writer sockets for write only
+            _writer_poller->ready_read = [] (typename client_poller_type::native_socket_type) {};
+
+            _writer_poller->can_write = [this] (typename client_poller_type::native_socket_type sock) {
                 auto pos = _writer_ids.find(sock);
 
                 if (pos != _writer_ids.end()) {
@@ -403,8 +425,6 @@ public:
                     _writers[index].second.can_write = true;
                 }
             };
-
-            _writer_poller = pfs::make_unique<client_poller_type>(std::move(callbacks));
         }
 
         try {
@@ -514,36 +534,6 @@ public:
             , data.size());
     }
 
-    // FIXME
-//     /**
-//      * Send file.
-//      *
-//      * @param addressee_id Addressee unique identifier.
-//      * @param file_id Unique file identifier. If @a file_id is invalid it
-//      *        will be generated automatically.
-//      * @param path Local path to sending file.
-//      *
-//      * @return Unique file identifier or invalid identifier on error.
-//      */
-//     universal_id send_file (universal_id addressee, universal_id fileid
-//         , local_file::filepath_type const & path)
-//     {
-//         return _transporter->send_file(addressee, fileid, path);
-//     }
-//
-//     /**
-//      * Send file.
-//      *
-//      * @param addressee_id Addressee unique identifier.
-//      * @param path Path to sending file.
-//      *
-//      * @return Unique file identifier or invalid identifier on error.
-//      */
-//     universal_id send_file (universal_id addressee_id, local_file::filepath_type const & path)
-//     {
-//         return _transporter->send_file(addressee_id, universal_id{}, path);
-//     }
-
     /**
      * Send file.
      *
@@ -603,11 +593,14 @@ private:
     // Deferred peer expiration
     void deferred_expire_peer (universal_id peer_uuid)
     {
+        LOG_TRACE_2("Deferred peer expiration: {}", peer_uuid);
         _peer_expiration_queue.push(peer_uuid);
     }
 
     void release_peer (universal_id peer_uuid, socket4_addr saddr)
     {
+        LOG_TRACE_2("Release peer: {}@{}", peer_uuid, to_string(saddr));
+
         release_reader(peer_uuid);
         release_writer(peer_uuid);
 
@@ -780,6 +773,8 @@ private:
 
     reader_type * acquire_reader (reader_id listener_id)
     {
+        LOG_TRACE_2("Acquire reader by listener: socket={}", listener_id);
+
         auto reader = _server.accept_nonblocking(listener_id);
 
         reader_index index = 0;
@@ -799,12 +794,14 @@ private:
         }
 
         if (_readers.empty() || index == count) {
+            // Free element not found, append new one to store reader account
             _readers.emplace_back(true, reader_account{});
             index = _readers.size() - 1;
             _readers.back().second.raw.reserve(64 * 1024);
             _readers.back().second.uuid   = universal_id{};
             _readers.back().second.reader = std::move(reader);
         } else {
+            // Use free element to store reader account
             _readers[index].first = true;
             _readers[index].second.uuid = universal_id{};
             _readers[index].second.reader = std::move(reader);
@@ -819,6 +816,8 @@ private:
         // Will be assign when hello packet received
         //_reader_uuids[uuid] = index;
 
+        LOG_TRACE_2("Reader acquired: index={}", index);
+
         return & _readers[index].second.reader;
     }
 
@@ -826,21 +825,28 @@ private:
     {
         auto pos = _reader_ids.find(id);
 
-        if (pos == _reader_ids.end())
+        if (pos == _reader_ids.end()) {
+            LOG_TRACE_2("No reader located: socket={}", id);
             return nullptr;
+        }
 
         check_reader_consistency(id);
 
         auto index = pos->second;
+
         return & _readers[index].second;
     }
 
     void release_reader (universal_id uuid)
     {
+        LOG_TRACE_2("Release reader: uuid={}", uuid);
+
         auto pos1 = _reader_uuids.find(uuid);
 
-        if (pos1 == _reader_uuids.end())
+        if (pos1 == _reader_uuids.end()) {
+            LOG_TRACE_2("No reader found for release: uuid={}", uuid);
             return;
+        }
 
         auto index = pos1->second;
         auto & item = _readers[index].second;
@@ -865,6 +871,8 @@ private:
         item.reader.~reader_type();
         item.b.clear(); // No need to destroy, can be reused later
         item.raw.clear();
+
+        LOG_TRACE_2("Reader released: uuid={}", uuid);
 
         // Notify
         reader_closed(uuid, saddr.addr, saddr.port);
@@ -976,6 +984,8 @@ private:
 
     writer_type * acquire_writer (universal_id uuid)
     {
+        LOG_TRACE_2("Acquire writer: uuid={}", uuid);
+
         writer_index index = 0;
         auto count = _writers.size();
 
@@ -998,6 +1008,7 @@ private:
             auto & wref = _writers[index];
             wref.second.uuid = uuid;
             wref.second.can_write = false;
+            wref.second.connected = false;
             wref.second.writer = writer_type{};
             wref.second.raw.reserve(PACKET_SIZE * 10);
         } else {
@@ -1005,6 +1016,7 @@ private:
             wref.first = true;
             wref.second.uuid = uuid;
             wref.second.can_write = false;
+            wref.second.connected = false;
             wref.second.writer = writer_type{};
             wref.second.regular_queue.clear();
             wref.second.chunks.clear();
@@ -1016,6 +1028,8 @@ private:
         _writer_ids[id] = index;
         _writer_uuids[uuid] = index;
 
+        LOG_TRACE_2("Writer acquired: uuid={}, index={}", uuid, index);
+
         return & _writers[index].second.writer;
     }
 
@@ -1023,12 +1037,15 @@ private:
     {
         auto pos = _writer_ids.find(id);
 
-        if (pos == _writer_ids.end())
+        if (pos == _writer_ids.end()) {
+            LOG_TRACE_2("No writer account located: socket={}", id);
             return nullptr;
+        }
 
         check_writer_consistency(id);
 
         auto index = pos->second;
+
         return & _writers[index].second;
     }
 
@@ -1036,17 +1053,22 @@ private:
     {
         auto pos = _writer_uuids.find(uuid);
 
-        if (pos == _writer_uuids.end())
+        if (pos == _writer_uuids.end()) {
+            LOG_TRACE_2("No writer account located: uuid={}", uuid);
             return nullptr;
+        }
 
         check_writer_consistency(uuid);
 
         auto index = pos->second;
+
         return & _writers[index].second;
     }
 
     void connect_writer (universal_id uuid, socket4_addr remote_saddr)
     {
+        LOG_TRACE_2("Connect writer to server: uuid={}, remote_saddr={}", uuid
+            , to_string(remote_saddr));
         auto * writer = acquire_writer(uuid);
         auto conn_state = writer->connect(remote_saddr);
         _writer_poller->add(*writer, conn_state);
@@ -1055,10 +1077,14 @@ private:
     // Release writer by universal identifier
     void release_writer (universal_id uuid)
     {
+        LOG_TRACE_2("Release writer: uuid={}", uuid);
+
         auto pos = _writer_uuids.find(uuid);
 
-        if (pos == _writer_uuids.end())
+        if (pos == _writer_uuids.end()) {
+            LOG_TRACE_2("No writer found for release: uuid={}", uuid);
             return;
+        }
 
         auto index = pos->second;
         auto & item = _writers[index].second;
@@ -1069,6 +1095,8 @@ private:
     // Release writer by native identifier
     void release_writer (writer_id id)
     {
+        LOG_TRACE_2("Release writer: socket={}", id);
+
         check_writer_consistency(id);
 
         auto pos1 = _writer_ids.find(id);
@@ -1098,8 +1126,32 @@ private:
         item.chunks.clear();
         item.raw.clear();
 
+        LOG_TRACE_2("Writer released: socket={}, uuid={}", id, uuid);
+
         // Notify
         writer_closed(uuid, saddr.addr, saddr.port);
+    }
+
+    void check_complete_channel (universal_id peer_uuid)
+    {
+        LOG_TRACE_2("Check complete channel: peer={}", peer_uuid);
+
+        int complete = 0;
+        auto reader_pos = _reader_uuids.find(peer_uuid);
+
+        if (reader_pos != _reader_uuids.end())
+            complete++;
+
+        auto const * paccount = locate_writer_account(peer_uuid);
+
+        if (paccount != nullptr && paccount->connected)
+            complete++;
+
+        if (complete >= 2) {
+            auto saddr = paccount->writer.saddr();
+            LOG_TRACE_2("Channel complete (established): peer={}, saddr={}", peer_uuid, to_string(saddr));
+            channel_established(peer_uuid, saddr.addr, saddr.port);
+        }
     }
 
     entity_id enqueue_packets_helper (oqueue_type * q, universal_id addressee
@@ -1175,24 +1227,32 @@ private:
     void process_peer_discovered (universal_id peer_uuid, socket4_addr saddr
         , std::chrono::milliseconds const & timediff)
     {
+        LOG_TRACE_2("Process peer discovered: peer={}, saddr={}", peer_uuid, to_string(saddr));
         connect_writer(peer_uuid, saddr);
         peer_discovered(peer_uuid, saddr.addr, saddr.port, timediff);
     }
 
     void process_socket_connected (writer_id id)
     {
+        LOG_TRACE_2("Process socket connected: socket={}", id);
+
         auto * paccount = locate_writer_account(id);
 
         if (!paccount)
             return;
 
+        _writer_poller->wait_for_write(paccount->writer);
+
+        paccount->connected = true;
+
         writer_ready(paccount->uuid, paccount->writer.saddr().addr
             , paccount->writer.saddr().port);
 
-        _writer_poller->wait_for_write(paccount->writer);
-
         auto pkt = _discovery->serialize_default_hello_packet();
         enqueue_packets(paccount->uuid, packet_type::hello, pkt.data(), pkt.size());
+
+        LOG_TRACE_2("Socket connected and enqueued `hello` packet: socket={}", id);
+        check_complete_channel(paccount->uuid);
     }
 
     void process_reader_input (reader_id sock)
@@ -1316,8 +1376,8 @@ private:
                             process_failure(error {
                                   errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
-                                    " no reader found by socket id: {}"
-                                    " , need to fix algorithm.", sock)
+                                    " no reader found by socket id: {},"
+                                    " need to fix algorithm", sock)
                             });
 
                             return;
@@ -1332,13 +1392,14 @@ private:
                                   errc::unexpected_error
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " found inconsistency for reader with universal"
-                                    " identifier: {}, need to fix algorithm."
+                                    " identifier: {}, need to fix algorithm"
                                     , sender_uuid)
                             });
 
                             return;
                         }
 
+                        // Complete reader account
                         _readers[index].second.uuid = sender_uuid;
                         _reader_uuids[sender_uuid] = index;
                         reader_ready(sender_uuid, paccount->reader.saddr().addr
@@ -1350,6 +1411,8 @@ private:
                             _discovery->force_peer_discovered(paccount->reader.saddr()
                                 , paccount->b.data(), paccount->b.size());
                         }
+
+                        check_complete_channel(sender_uuid);
 
                         break;
                     }

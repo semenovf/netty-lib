@@ -154,39 +154,37 @@ public:
     bool connect (netty::socket4_addr const & server_saddr
         , std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
     {
-        typename poller_type::callbacks callbacks;
+        _poller = pfs::make_unique<poller_type>();
 
-        callbacks.on_error = [this] (typename poller_type::native_socket_type
+        _poller->on_failure = [this] (typename poller_type::native_socket_type
             , std::string const & text) {
             this->on_error(text);
         };
 
-        callbacks.connection_refused = [this] (typename poller_type::native_socket_type sock) {
+        _poller->connection_refused = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::connection_refused;
             _connected = false;
             this->connection_refused(*this);
         };
 
-        callbacks.connected = [this] (typename poller_type::native_socket_type sock) {
+        _poller->connected = [this] (typename poller_type::native_socket_type sock) {
             _connected = true;
             this->connected(*this);
         };
 
-        callbacks.disconnected = [this] (typename poller_type::native_socket_type sock) {
+        _poller->disconnected = [this] (typename poller_type::native_socket_type sock) {
             _loop_result = loop_result::disconnected;
             _connected = false;
             this->disconnected(*this);
         };
 
-        callbacks.ready_read = [this] (typename poller_type::native_socket_type sock) {
+        _poller->ready_read = [this] (typename poller_type::native_socket_type sock) {
             process_input(sock);
         };
 
-        callbacks.can_write = [this] (typename poller_type::native_socket_type sock) {
+        _poller->can_write = [this] (typename poller_type::native_socket_type sock) {
             _can_write = true;
         };
-
-        _poller = pfs::make_unique<poller_type>(std::move(callbacks));
 
         auto conn_state = _socket.connect(server_saddr);
 

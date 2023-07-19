@@ -56,10 +56,7 @@ int listener_poller<posix::select_poller>::poll (std::chrono::milliseconds milli
 
             if (FD_ISSET(fd, & rfds)) {
                 res++;
-
-                if (accept)
-                    accept(fd);
-
+                accept(fd);
                 --rcounter;
             }
         }
@@ -97,34 +94,35 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
     int res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].revents;
-            auto fd = _rep.events[i].fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
+
+            if (ev.revents == 0)
+                continue;
+
+            n--;
 
             // 1. Occured while tcp socket attempts to connect to non-existance server socket (connection_refused)
             // 2. ... ?
-            // Identical to `epoll_poller`
-            if (revents & POLLERR) {
+            if (ev.revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
-                remove(fd);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed: {}"
-                        , pfs::system_error_text(), fd));
+                    on_failure(ev.fd, tr::f_("get socket option failure: {}, socket removed: {}"
+                        , pfs::system_error_text(), ev.fd));
                 } else {
-                    on_error(fd, tr::f_("accept socket error: {}, socket removed: {}"
-                        , pfs::system_error_text(error_val), fd));
+                    on_failure(ev.fd, tr::f_("accept socket error: {}, socket removed: {}"
+                        , pfs::system_error_text(error_val), ev.fd));
                 }
 
                 continue;
             }
 
             // There is data to read - can accept
-            // Identical to `epoll_poller`
-            if (revents & (POLLIN
+            if (ev.revents & (POLLIN
 #ifdef POLLRDNORM
                 | POLLRDNORM
 #endif
@@ -133,9 +131,7 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
 #endif
             )) {
                 res++;
-
-                if (accept)
-                    accept(fd);
+                accept(ev.fd);
             }
         }
     }

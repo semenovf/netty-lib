@@ -49,7 +49,6 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
         auto last = _rep.sockets.end();
 
         for (; pos != last && rcounter > 0; ++pos) {
-            bool removed = false;
             auto fd = *pos;
 
             if (FD_ISSET(fd, & rfds)) {
@@ -64,28 +63,21 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 #endif
 
                 if (rc != 0) {
-                    remove(fd);
-                    removed = true;
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed"
-                        , pfs::system_error_text()));
+                    on_failure(fd, tr::f_("get socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), fd));
                 } else {
                     switch (error_val) {
                         case 0: // No error
                             break;
 
                         case ECONNREFUSED:
-                            remove(fd);
-                            removed = true;
-
-                            if (connection_refused)
-                                connection_refused(fd);
-
+                            connection_refused(fd);
                             break;
 
                         default:
-                            remove(fd);
-                            removed = true;
-                            on_error(fd, tr::f_("unhandled error value returned by `getsockopt`: {}", error_val));
+                            on_failure(fd, tr::f_("unhandled error value "
+                                "returned by `getsockopt`: {} (socket={})"
+                                , error_val, fd));
                             break;
                     }
                 }
@@ -94,12 +86,7 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
             }
 
             if (FD_ISSET(fd, & wfds)) {
-                if (!removed)
-                    remove(fd);
-
-                if (connected)
-                    connected(fd);
-
+                connected(fd);
                 --rcounter;
             }
         }
@@ -141,46 +128,47 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
     int res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].revents;
-            auto fd = _rep.events[i].fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
+
+            if (ev.revents == 0)
+                continue;
+
+            n--;
 
             // 1. Occured while tcp socket attempts to connect to non-existance server socket (connection_refused)
             // 2. No route to host
             // 3. ... ?
-            // Identical to `epoll_poller`
-            if (revents & POLLERR) {
+            if (ev.revents & POLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    remove(fd);
-                    on_error(fd, tr::f_("get socket option failure: {}, socket removed"
-                        , pfs::system_error_text()));
+                    on_failure(ev.fd, tr::f_("get socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), ev.fd));
                 } else {
                     switch (error_val) {
                         case 0: // No error
-                            on_error(fd, tr::f_("POLLERR event happend for socket ({})"
-                                ", but no error occurred on it, socket removed", fd));
+                            on_failure(ev.fd, tr::f_("EPOLLERR event happend,"
+                                " but no error occurred on it (socket={})", ev.fd));
                             break;
 
                         case EHOSTUNREACH:
-                            on_error(fd, tr::f_("No route to host for socket ({}), socket removed", fd));
+                            on_failure(ev.fd, tr::f_("No route to host (socket={})", ev.fd));
                             break;
 
                         case ECONNREFUSED:
+                            connection_refused(ev.fd);
                             break;
 
                         default:
-                            on_error(fd, tr::f_("unhandled error value returned by `getsockopt`: {}", error_val));
+                            on_failure(ev.fd, tr::f_("unhandled error value "
+                                "returned by `getsockopt`: {} (socket={})"
+                                , error_val, ev.fd));
                             break;
                     }
-
-                    remove(fd);
-
-                    if (connection_refused)
-                        connection_refused(fd);
                 }
 
                 continue;
@@ -191,25 +179,19 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
             // Contexts:
             // a. Attempt to connect to defunct server address/port
             // b. ...
-            //
-            // Identical to `epoll_poller`
-            if (revents & (POLLHUP
+            if (ev.revents & (POLLHUP
 #ifdef POLLRDHUP
                 | POLLRDHUP
 #endif
             )) {
-                remove(fd);
-
-                if (connection_refused)
-                    connection_refused(fd);
-
+                connection_refused(ev.fd);
                 continue;
             }
 
             // Writing is now possible, though a write larger than the available space
             // in a socket or pipe will still block (unless O_NONBLOCK is set).
             // Identical to `epoll_poller`
-            if (revents & (POLLOUT
+            if (ev.revents & (POLLOUT
 #ifdef POLLWRNORM
                 | POLLWRNORM
 #endif
@@ -218,11 +200,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
 #endif
             )) {
                 res++;
-
-                remove(fd);
-
-                if (connected)
-                    connected(fd);
+                connected(ev.fd);
             }
         }
     }

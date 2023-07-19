@@ -14,6 +14,7 @@
 #include "pfs/stopwatch.hpp"
 #include <functional>
 #include <utility>
+#include <vector>
 
 namespace netty {
 
@@ -26,30 +27,39 @@ class server_poller
 public:
     using native_socket_type = typename Backend::native_socket_type;
 
-    struct callbacks
-    {
-        std::function<void(native_socket_type, std::string const &)> on_error;
-        std::function<native_socket_type(native_socket_type, bool &)> accept;
-        std::function<void(native_socket_type)> disconnected;
-        std::function<void(native_socket_type)> ready_read;
-    };
-
 private:
     listener_poller<Backend> _listener_poller;
     reader_poller<Backend>   _reader_poller;
+    std::vector<native_socket_type> _removable_listeners;
+    std::vector<native_socket_type> _removable_readers;
 
-private: // callbacks
+public: // callbacks
+    mutable std::function<void(native_socket_type, std::string const &)> on_listener_failure
+        = [] (native_socket_type, std::string const &) {};
+    mutable std::function<void(native_socket_type, std::string const &)> on_reader_failure
+        = [] (native_socket_type, std::string const &) {};
+    mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
+
+private:
     std::function<native_socket_type(native_socket_type, bool &)> accept;
 
 public:
-    server_poller (callbacks && cbs)
+    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
     {
-        if (cbs.on_error) {
-            _listener_poller.on_error = cbs.on_error;
-            _reader_poller.on_error = std::move(cbs.on_error);
-        }
+        _listener_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+            // Socket must be removed from monitoring later
+            _removable_listeners.push_back(sock);
+            on_listener_failure(sock, errstr);
+        };
 
-        accept = std::move(cbs.accept);
+        _reader_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+            // Socket must be removed from monitoring later
+            _removable_readers.push_back(sock);
+            on_reader_failure(sock, errstr);
+        };
+
+        accept = accept_proc;
 
         _listener_poller.accept = [this] (native_socket_type listener_sock) {
             bool ok = true;
@@ -59,8 +69,15 @@ public:
                 _reader_poller.add(sock);
         };
 
-        _reader_poller.disconnected = std::move(cbs.disconnected);
-        _reader_poller.ready_read = std::move(cbs.ready_read);
+        _reader_poller.ready_read = [this] (native_socket_type sock) {
+            ready_read(sock);
+        };
+
+        _reader_poller.disconnected = [this] (native_socket_type sock) {
+            // Socket must be removed from monitoring later
+            _removable_readers.push_back(sock);
+            disconnected(sock);
+        };
     }
 
     ~server_poller () = default;
@@ -133,6 +150,18 @@ public:
 
         if (!_listener_poller.empty())
             n2 = _listener_poller.poll(timeout, perr);
+
+        if (!_removable_listeners.empty()) {
+            for (auto const & sock: _removable_listeners)
+                _listener_poller.remove(sock);
+            _removable_listeners.clear();
+        }
+
+        if (!_removable_readers.empty()) {
+            for (auto const & sock: _removable_readers)
+                _reader_poller.remove(sock);
+            _removable_readers.clear();
+        }
 
         if (n1 < 0 && n2 < 0)
             return n1;

@@ -34,23 +34,26 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
     int res = 0;
 
     if (n > 0) {
-        for (int i = 0; i < n; i++) {
-            auto revents = _rep.events[i].events;
-            auto fd = _rep.events[i].data.fd;
+        for (auto const & ev: _rep.events) {
+            if (n == 0)
+                break;
 
-            if (revents & EPOLLERR) {
+            if (ev.events == 0)
+                continue;
+
+            n--;
+
+            if (ev.events & EPOLLERR) {
                 int error_val = 0;
                 socklen_t len = sizeof(error_val);
-                auto rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
-                remove(fd);
+                auto rc = getsockopt(ev.data.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_error(fd, tr::f_("get socket option failure: {}, listener socket removed: {}"
-                        , pfs::system_error_text(), fd));
+                    on_failure(ev.data.fd, tr::f_("get socket option failure: {}, listener socket removed: {}"
+                        , pfs::system_error_text(), ev.data.fd));
                 } else {
-                    on_error(fd, tr::f_("accept socket error: {}, listener socket removed: {}"
-                        , pfs::system_error_text(error_val), fd));
+                    on_failure(ev.data.fd, tr::f_("accept socket error: {}, listener socket removed: {}"
+                        , pfs::system_error_text(error_val), ev.data.fd));
                 }
 
                 continue;
@@ -58,11 +61,9 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
 
             // There is data to read - can accept
             // Identical to `poll_poller`
-            if (revents & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
+            if (ev.events & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
                 res++;
-
-                if (accept)
-                    accept(fd);
+                accept(ev.data.fd);
             }
         }
     }

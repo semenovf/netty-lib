@@ -39,25 +39,13 @@ int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
 
                 if (state == CONNECTED || state == OPENED) {
                     res++;
-
-                    if (ready_read)
-                        ready_read(u);
+                    ready_read(u);
                 } else {
-                    auto disconnect = false;
-
                     if (state == CLOSED) {
-                        disconnect = true;
+                        disconnected(u)
                     } else {
-                        disconnect = true;
-                        on_error(u, tr::f_("read socket failure: state={}"
+                        on_failure(u, tr::f_("read socket failure: state={}"
                             " (TODO: handle properly)", state));
-                    }
-
-                    if (disconnect) {
-                        remove(u);
-
-                        if (disconnected)
-                            disconnected(u);
                     }
                 }
             }

@@ -18,6 +18,7 @@
 #include "pfs/stopwatch.hpp"
 #include <functional>
 #include <utility>
+#include <vector>
 
 namespace netty {
 
@@ -27,45 +28,70 @@ class client_poller
 public:
     using native_socket_type = typename Backend::native_socket_type;
 
-    struct callbacks
-    {
-        std::function<void(native_socket_type, std::string const &)> on_error;
-        std::function<void(native_socket_type)> connection_refused;
-        std::function<void(native_socket_type)> connected;
-        std::function<void(native_socket_type)> disconnected;
-        std::function<void(native_socket_type)> ready_read;
-        std::function<void(native_socket_type)> can_write;
-    };
-
 private:
     connecting_poller<Backend> _connecting_poller;
     reader_poller<Backend>     _reader_poller;
     writer_poller<Backend>     _writer_poller;
-
-private:
-    std::function<void(native_socket_type)> connected;
+    std::vector<native_socket_type> _removable_connecting_sockets;
+    std::vector<native_socket_type> _removable_readers;
+    std::vector<native_socket_type> _removable_writers;
 
 public:
-    client_poller (callbacks && cbs)
+    mutable std::function<void(native_socket_type, std::string const &)> on_failure = [] (native_socket_type, std::string const &) {};
+    mutable std::function<void(native_socket_type)> connection_refused = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> connected = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> can_write = [] (native_socket_type) {};
+
+public:
+    client_poller ()
     {
-        if (cbs.on_error) {
-            _connecting_poller.on_error = cbs.on_error;
-            _reader_poller.on_error = cbs.on_error;
-            _writer_poller.on_error = std::move(cbs.on_error);
-        }
-
-        _connecting_poller.connection_refused = std::move(cbs.connection_refused);
-        connected = std::move(cbs.connected);
-
-        _connecting_poller.connected = [this] (native_socket_type sock) {
-            // sock already removed from _connecting_poller
-            _reader_poller.add(sock);
-            this->connected(sock);
+        _connecting_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+            // Socket must be removed from monitoring later
+            _removable_connecting_sockets.push_back(sock);
+            on_failure(sock, errstr);
         };
 
-        _reader_poller.disconnected = std::move(cbs.disconnected);
-        _reader_poller.ready_read   = std::move(cbs.ready_read);
-        _writer_poller.can_write    = std::move(cbs.can_write);
+        _reader_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+            // Socket must be removed from monitoring later
+            _removable_readers.push_back(sock);
+            on_failure(sock, errstr);
+        };
+
+        _writer_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+            // Socket must be removed from monitoring later
+            _removable_writers.push_back(sock);
+            on_failure(sock, errstr);
+        };
+
+        _connecting_poller.connection_refused = [this] (native_socket_type sock) {
+            // Socket must be removed from monitoring later
+            _removable_connecting_sockets.push_back(sock);
+            connection_refused(sock);
+        };
+
+        _connecting_poller.connected = [this] (native_socket_type sock) {
+            // Socket must be removed from monitoring later
+            _removable_connecting_sockets.push_back(sock);
+            _reader_poller.add(sock); // safe to add to poller
+            connected(sock);
+        };
+
+        _reader_poller.disconnected = [this] (native_socket_type sock) {
+            // Socket must be removed from monitoring later
+            _removable_readers.push_back(sock);
+            disconnected(sock);
+        };
+
+        _reader_poller.ready_read = [this] (native_socket_type sock) {
+            ready_read(sock);
+        };
+
+        _writer_poller.can_write = [this] (native_socket_type sock) {
+            _removable_writers.push_back(sock);
+            can_write(sock);
+        };
     }
 
     ~client_poller () = default;
@@ -212,6 +238,24 @@ public:
 
         if (!_connecting_poller.empty())
             n3 = _connecting_poller.poll(timeout, perr);
+
+        if (!_removable_connecting_sockets.empty()) {
+            for (auto const & sock: _removable_connecting_sockets)
+                _connecting_poller.remove(sock);
+            _removable_connecting_sockets.clear();
+        }
+
+        if (!_removable_readers.empty()) {
+            for (auto const & sock: _removable_readers)
+                _reader_poller.remove(sock);
+            _removable_readers.clear();
+        }
+
+        if (!_removable_writers.empty()) {
+            for (auto const & sock: _removable_writers)
+                _writer_poller.remove(sock);
+            _removable_writers.clear();
+        }
 
         if (n1 < 0 && n2 < 0 && n3 < 0)
             return n1;

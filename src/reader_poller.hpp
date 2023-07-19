@@ -16,9 +16,12 @@ template <typename Backend>
 reader_poller<Backend>::reader_poller ()
     : reader_poller(specialized{})
 {
-    on_error = [] (native_socket_type, std::string const & text) {
+    on_failure = [] (native_socket_type, std::string const & text) {
         fmt::print(stderr, tr::_("ERROR: reader poller: {}\n"), text);
     };
+
+    disconnected = [] (native_socket_type) {};
+    ready_read = [] (native_socket_type) {};
 }
 
 template <typename Backend>
