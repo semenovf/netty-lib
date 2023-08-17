@@ -51,20 +51,11 @@ class file_transporter
 {
     using input_envelope_type  = input_envelope<>;
     using output_envelope_type = output_envelope<>;
-    // FIXME
-//     using filesize_type        = local_file::filesize_type;
-//     using chunksize_type       = std::int32_t;
 
-    // FIXME
-//     static constexpr chunksize_type const DEFAULT_FILE_CHUNK_SIZE {16 * 1024};
-//     static constexpr chunksize_type const MIN_FILE_CHUNK_SIZE     {32};
-//     static constexpr chunksize_type const MAX_FILE_CHUNK_SIZE     {1024 * 1024};
-//     static constexpr filesize_type const MAX_FILE_SIZE            {0x7ffff000};
     static constexpr filesize_t const DEFAULT_FILE_CHUNK_SIZE {16 * 1024};
     static constexpr filesize_t const MIN_FILE_CHUNK_SIZE     {32};
     static constexpr filesize_t const MAX_FILE_CHUNK_SIZE     {1024 * 1024};
     static constexpr filesize_t const MAX_FILE_SIZE           {0x7ffff000};
-
 
 public:
     using checksum_type = pfs::crypto::sha256_digest;

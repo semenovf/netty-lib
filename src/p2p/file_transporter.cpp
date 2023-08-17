@@ -305,10 +305,19 @@ void file_transporter::commit_incoming_file (universal_id addresser
     auto * p = locate_ifile_item(addresser, fileid, ensure);
 
     if (!p) {
-        throw error {
-              errc::filesystem_error
-            , tr::f_("ifile item not found by fileid: {}", fileid)
-        };
+        // May be double commit: file is completely downloaded and transient
+        // files are removed. Seems it shouldn't be a fatal error (exception).
+
+        // throw error {
+        //       errc::filesystem_error
+        //     , tr::f_("ifile item not found by fileid: {}", fileid)
+        // };
+
+        on_error(tr::f_("`ifile` item not found by file identifier ({}) "
+            "while commiting incoming file, it may be the result of double or"
+            " more commits, need to remove the cause."
+            , fileid));
+        return;
     }
 
     auto descfilepath = make_descfilepath(addresser, fileid);
@@ -338,11 +347,8 @@ void file_transporter::cache_incoming_file_credentials (universal_id addresser
     if (!fs::exists(descfilepath)) {
         auto datafilepath = make_datafilepath(addresser, fc.fileid);
 
-        // FIXME
-//         auto desc_file = local_file::open_write_only(descfilepath, ionik::truncate_enum::on);
-//         // Only create/reset file
-//         auto data_file = local_file::open_write_only(datafilepath, ionik::truncate_enum::on);
         auto desc_file = file::open_write_only(descfilepath, truncate_enum::on);
+
         // Only create/reset file
         auto data_file = file::open_write_only(datafilepath, truncate_enum::on);
 
@@ -549,7 +555,6 @@ void file_transporter::process_file_end (universal_id sender
     auto fe = input_envelope_type::unseal<file_end>(data);
 
     LOG_TRACE_3("File received completely from: {} ({})", sender, fe.fileid);
-
     commit_incoming_file(sender, fe.fileid/*, fe.checksum*/);
 }
 
