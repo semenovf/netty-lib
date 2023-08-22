@@ -281,9 +281,11 @@ void file_transporter::remove_ofile_item (universal_id addressee, universal_id f
 {
     auto range = _ofile_pool.equal_range(fileid);
 
-    for (auto pos = range.first; pos != range.second; ++pos) {
+    for (auto pos = range.first; pos != range.second;) {
         if (pos->second.addressee == addressee) {
-            _ofile_pool.erase(pos);
+            pos = _ofile_pool.erase(pos);
+        } else {
+            ++pos;
         }
     }
 }
