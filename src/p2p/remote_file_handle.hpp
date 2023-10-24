@@ -38,7 +38,7 @@ public: // static
     static remote_file_provider::handle_type open_read_only (
         netty::p2p::remote_path const & path, ionik::error * perr)
     {
-        // FIXME
+        // FIXME Implement
         return std::unique_ptr<remote_file_handle>{};
     }
 
@@ -46,39 +46,43 @@ public: // static
           netty::p2p::remote_path const & path
         , ionik::truncate_enum trunc, ionik::error * perr)
     {
-        // FIXME
+        // FIXME Implement
         return std::unique_ptr<remote_file_handle>{};
     }
 
     static void close (remote_file_provider::handle_type & h)
     {
-        // FIXME
+        // FIXME Implement
     }
 
 
-    static filesize_type offset (remote_file_provider::handle_type const & h)
-    {
-        // FIXME
-        return 0;
-    }
-
-    static void set_pos (remote_file_provider::handle_type & h, filesize_type offset
+    static remote_file_provider::offset_result_type offset (
+          remote_file_provider::handle_type const & h
         , ionik::error * perr)
     {
+        // FIXME Implement
+        return remote_file_provider::offset_result_type{0, false};
     }
 
-    static filesize_type read (remote_file_provider::handle_type & h, char * buffer
-        , filesize_type len, ionik::error * perr)
+    static bool set_pos (remote_file_provider::handle_type & h, filesize_type offset
+        , ionik::error * perr)
     {
-        // FIXME
-        return 0;
+        // FIXME Implement
+        return false;
     }
 
-    static filesize_type write (remote_file_provider::handle_type & h
+    static remote_file_provider::read_result_type read (remote_file_provider::handle_type & h
+        , char * buffer, filesize_type len, ionik::error * perr)
+    {
+        // FIXME Implement
+        return remote_file_provider::read_result_type{0, false};
+    }
+
+    static remote_file_provider::write_result_type write (remote_file_provider::handle_type & h
         , char const * buffer, filesize_type len, ionik::error * perr)
     {
-        // FIXME
-        return 0;
+        // FIXME Implement
+        return remote_file_provider::write_result_type{0, false};
     }
 };
 

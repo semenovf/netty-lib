@@ -85,27 +85,27 @@ void file_provider_t::close (handle_t & h)
 }
 
 template <>
-filesize_t file_provider_t::offset (handle_t const & h)
+file_provider_t::offset_result_type file_provider_t::offset (handle_t const & h, error * perr)
 {
-    return netty::p2p::remote_file_handle::offset(h);
+    return netty::p2p::remote_file_handle::offset(h, perr);
 }
 
 template <>
-void file_provider_t::set_pos (handle_t & h, filesize_t offset, error * perr)
+bool file_provider_t::set_pos (handle_t & h, filesize_t offset, error * perr)
 {
-    netty::p2p::remote_file_handle::set_pos(h, offset, perr);
+    return netty::p2p::remote_file_handle::set_pos(h, offset, perr);
 }
 
 template <>
-filesize_t file_provider_t::read (handle_t & h, char * buffer, filesize_t len
-    , error * perr)
+file_provider_t::read_result_type file_provider_t::read (handle_t & h
+    , char * buffer, filesize_t len, error * perr)
 {
     return netty::p2p::remote_file_handle::read(h, buffer, len, perr);
 }
 
 template <>
-filesize_t file_provider_t::write (handle_t & h, char const * buffer
-    , filesize_t len, error * perr)
+file_provider_t::write_result_type file_provider_t::write (handle_t & h
+    , char const * buffer, filesize_t len, error * perr)
 {
     return netty::p2p::remote_file_handle::write(h, buffer, len, perr);
 }
