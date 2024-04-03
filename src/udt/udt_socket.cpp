@@ -337,7 +337,7 @@ conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
     error err {
           errc::socket_error
         , tr::f_("unexpected UDT socket state while connecting: {}"
-            , status)
+            , static_cast<int>(status))
     };
 
     if (perr) {

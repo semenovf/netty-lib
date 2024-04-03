@@ -13,6 +13,7 @@
 #include "pfs/log.hpp"
 #include "pfs/string_view.hpp"
 
+using string_view = pfs::string_view;
 static char const * TAG = "netty";
 
 namespace fs = pfs::filesystem;

@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# Copyright (c) 2021,2022 Vladislav Trifochkin
+# Copyright (c) 2021-2023 Vladislav Trifochkin
 #
 # Unified build script for Linux distributions
 #
@@ -11,19 +11,44 @@
 #      2021.11.19 Added support for profiling.
 #      2022.07.06 Added CTEST_OPTIONS.
 #      2022.07.26 Fixed conditions for run tests and coverage tests.
+#      2023.04.11 Added PROJECT_NAME variable.
+#      2023.09.20 Changed default values:
+#                 * BUILD_TESTS by default is ON
+#                 * BUILD_DEMO by default is ON
+#                 * PROJECT_NAME by default is the name of the project folder.
+#                 * PROJECT_OPT_PREFIX default value is in the PREFIX file.
+#                 The script is now unified again (has no any explicit project
+#                 dependecies inside).
+#      2023.11.16 Extended source directory (SOURCE_DIR) recognition.
 ################################################################################
 
 CMAKE_OPTIONS="${CMAKE_OPTIONS}"
 CTEST_OPTIONS="${CTEST_OPTIONS}"
 
-if [ -z "$PROJECT_NAME" ] ; then
-    echo "ERROR: PROJECT_NAME is mandatory." >&2
+SCRIPT_ABS_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+PROJECT_FOLDER="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_FOLDER_NAME="$(basename "$PROJECT_FOLDER")"
+echo "** Script absolute path: $SCRIPT_ABS_PATH"
+echo "** Project folder: $PROJECT_FOLDER"
+echo "** Project folder name: $PROJECT_FOLDER_NAME"
+
+if [ ! -d "$PROJECT_FOLDER" ] ; then
+    echo "ERROR: Project folder not found: $PROJECT_FOLDER." >&2
     exit 1
 fi
 
+if [ -z "$PROJECT_NAME" ] ; then
+    PROJECT_NAME=$PROJECT_FOLDER_NAME
+fi
+
 if [ -z "$PROJECT_OPT_PREFIX" ] ; then
-    echo "ERROR: PROJECT_OPT_PREFIX is mandatory." >&2
-    exit 1
+    if [ ! -f "$PROJECT_FOLDER/PREFIX" ] ; then
+        echo "ERROR: PREFIX file must be in the project folder." >&2
+        exit 1
+    fi
+
+    PROJECT_OPT_PREFIX=$(<"$PROJECT_FOLDER/PREFIX")
+    echo "** Option prefix name: $PROJECT_OPT_PREFIX"
 fi
 
 if [ -z "$BUILD_GENERATOR" ] ; then
@@ -37,11 +62,11 @@ fi
 
 if [ -n $BUILD_STRICT ] ; then
     case $BUILD_STRICT in
-        [Oo][Nn])
-            BUILD_STRICT=ON
+        [Oo][Ff][Ff])
+            BUILD_STRICT=OFF
             ;;
         *)
-            unset BUILD_STRICT
+            BUILD_STRICT=ON
             ;;
     esac
 fi
@@ -68,13 +93,17 @@ fi
 
 CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_BUILD_TYPE=$BUILD_TYPE"
 
+if [ -z "$BUILD_TESTS" ] ; then
+    BUILD_TESTS=ON
+fi
+
 if [ -n $BUILD_TESTS ] ; then
     case $BUILD_TESTS in
-        [Oo][Nn])
-            BUILD_TESTS=ON
+        [Oo][Ff][Ff])
+            BUILD_TESTS=OFF
             ;;
         *)
-            unset BUILD_TESTS
+            BUILD_TESTS=ON
             ;;
     esac
 fi
@@ -93,13 +122,17 @@ if [ -n $CTEST_VERBOSE ] ; then
     esac
 fi
 
+if [ -z "$BUILD_DEMO" ] ; then
+    BUILD_DEMO=ON
+fi
+
 if [ -n $BUILD_DEMO ] ; then
     case $BUILD_DEMO in
-        [Oo][Nn])
-            BUILD_DEMO=ON
+        [Oo][Ff][Ff])
+            BUILD_DEMO=OFF
             ;;
         *)
-            unset BUILD_DEMO
+            BUILD_DEMO=ON
             ;;
     esac
 fi
@@ -143,7 +176,7 @@ if [ -z "$BUILD_DIR" ] ; then
 fi
 
 # We are inside source directory
-if [ -d .git ] ; then
+if [ -d .git -o -f LICENSE -o -f PREFIX -o -f CMakeLists.txt ] ; then
     if [ -z "$SOURCE_DIR" ] ; then
         SOURCE_DIR=`pwd`
     fi
@@ -152,7 +185,7 @@ fi
 
 if [ -z "$SOURCE_DIR" ] ; then
     # We are inside subdirectory (usually from scripts directory)
-    if [ -d ../.git ] ; then
+    if [ -d ../.git -o -f ../LICENSE -o -f ../PREFIX -o -f ../CMakeLists.txt ] ; then
         SOURCE_DIR=`pwd`/..
         BUILD_DIR="../../$BUILD_DIR"
     else

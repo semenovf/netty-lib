@@ -21,13 +21,7 @@ void start_server (netty::socket4_addr const & saddr)
     try {
         ServerType server {saddr, 10};
 
-        typename PollerType::callbacks callbacks;
-
-        callbacks.on_error = [] (typename PollerType::native_socket_type, std::string const & text) {
-            LOGE(TAG, "Error on server: {}", text);
-        };
-
-        callbacks.accept = [& server, & sockets] (typename PollerType::native_socket_type listener_sock, bool & ok) {
+        auto accept_proc = [& server, & sockets] (typename PollerType::native_socket_type listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);
 
             auto pos = sockets.find(listener_sock);
@@ -51,12 +45,16 @@ void start_server (netty::socket4_addr const & saddr)
             return client.kINVALID_SOCKET;
         };
 
-        callbacks.disconnected = [] (typename PollerType::native_socket_type sock)
-        {
-            LOGD(TAG, "Disconnected: socket={}", sock);
+        PollerType poller{std::move(accept_proc)};
+        poller.on_listener_failure = [] (typename PollerType::native_socket_type, std::string const & text) {
+            LOGE(TAG, "Error on server: {}", text);
         };
 
-        callbacks.ready_read = [& sockets] (typename PollerType::native_socket_type sock) {
+        poller.on_reader_failure = [] (typename PollerType::native_socket_type, std::string const & text) {
+            LOGE(TAG, "Error on peer socket (reader): {}", text);
+        };
+
+        poller.ready_read = [& sockets] (typename PollerType::native_socket_type sock) {
             auto pos = sockets.find(sock);
 
             // Release entry erroneously!!!
@@ -76,7 +74,11 @@ void start_server (netty::socket4_addr const & saddr)
             }
         };
 
-        PollerType poller{std::move(callbacks)};
+        poller.disconnected = [] (typename PollerType::native_socket_type sock)
+        {
+            LOGD(TAG, "Disconnected: socket={}", sock);
+        };
+
         std::chrono::milliseconds poller_timeout {1000};
 
         poller.add_listener(server);

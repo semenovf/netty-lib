@@ -12,11 +12,9 @@
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/startup.hpp"
 #include "pfs/netty/p2p/remote_file.hpp"
-// #include <cstdlib>
-// #include <cstring>
 #include <string>
-// #include <utility>
-// #include <vector>
+
+using string_view = pfs::string_view;
 
 static char const * TAG = "pfs.netty.p2p";
 
@@ -46,7 +44,7 @@ int main (int argc, char * argv[])
         if (string_view{"-h"} == argv[i] || string_view{"--help"} == argv[i]) {
             print_usage();
             return EXIT_SUCCESS;
-        } else if (starts_with(string_view{argv[i]}, "--provider=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--provider=")) {
             auto res = netty::socket4_addr::parse(argv[i] + 11);
 
             if (!res.first) {

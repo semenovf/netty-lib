@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2021-2023 Vladislav Trifochkin
+# Copyright (c) 2021-2024 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -8,6 +8,7 @@
 #      2021.06.22 Fixed completely.
 #      2022.01.14 Refactored for use `portable_target`.
 #      2023.02.10 Separated static and shared builds.
+#      2024.04.03 Replaced the sequence of two target configurations with a foreach statement.
 ################################################################################
 cmake_minimum_required (VERSION 3.11)
 project(netty CXX)
@@ -26,11 +27,13 @@ endif()
 
 if (NETTY__BUILD_SHARED)
     portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty EXPORTS NETTY__EXPORTS)
+    list(APPEND _netty__targets ${PROJECT_NAME})
 endif()
 
 if (NETTY__BUILD_STATIC)
     set(STATIC_PROJECT_NAME ${PROJECT_NAME}-static)
     portable_target(ADD_STATIC ${STATIC_PROJECT_NAME} ALIAS pfs::netty::static EXPORTS NETTY__STATIC)
+    list(APPEND _netty__targets ${STATIC_PROJECT_NAME})
 endif()
 
 if (PFS__LOG_LEVEL)
@@ -62,20 +65,12 @@ else()
 endif()
 
 if (NOT TARGET pfs::common)
-    portable_target(INCLUDE_PROJECT
-        ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pfs/common/library.cmake)
+    portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/2ndparty/common/library.cmake)
 endif()
 
 if (MSVC)
     list(APPEND _netty__compile_options "/wd4251" "/wd4267" "/wd4244")
-
-    if (NETTY__BUILD_SHARED)
-        portable_target(LINK ${PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
-    endif()
-
-    if (NETTY__BUILD_STATIC)
-        portable_target(LINK ${STATIC_PROJECT_NAME} PRIVATE Ws2_32 Iphlpapi)
-    endif()
+    list(APPEND _netty__private_links Ws2_32 Iphlpapi)
 endif(MSVC)
 
 CHECK_INCLUDE_FILE("poll.h" __has_poll)
@@ -125,14 +120,7 @@ if (UNIX OR ANDROID)
 
     if (__has_libmnl)
         list(APPEND _netty__definitions "NETTY__LIBMNL_ENABLED=1")
-
-        if (NETTY__BUILD_SHARED)
-            portable_target(LINK ${PROJECT_NAME} PRIVATE mnl)
-        endif()
-
-        if (NETTY__BUILD_STATIC)
-            portable_target(LINK ${STATIC_PROJECT_NAME} PRIVATE mnl)
-        endif()
+        list(APPEND _netty__private_links mnl)
     endif()
 endif()
 
@@ -167,11 +155,11 @@ if (NETTY__ENABLE_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)
 
     if (NETTY__BUILD_SHARED)
-        list(APPEND _netty__definitions UDT_EXPORTS)
+        portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC UDT_EXPORTS)
     endif()
 
     if (NETTY__BUILD_STATIC)
-        list(APPEND _netty__definitions UDT_STATIC)
+        portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PUBLIC UDT_EXPORTS)
     endif()
 
     list(APPEND _netty__definitions "NETTY__UDT_ENABLED=1")
@@ -190,43 +178,31 @@ if (NETTY__ENABLE_QT5)
     list(APPEND _netty__qt5_components Core Network)
 endif(NETTY__ENABLE_QT5)
 
-if (NETTY__BUILD_SHARED)
-    portable_target(SOURCES ${PROJECT_NAME} ${_netty__sources})
-    portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC ${_netty__definitions})
-    portable_target(INCLUDE_DIRS ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-    portable_target(LINK ${PROJECT_NAME} PUBLIC pfs::common)
+foreach(_target IN LISTS _netty__targets)
+    portable_target(SOURCES ${_target} ${_netty__sources})
+    portable_target(INCLUDE_DIRS ${_target} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+    portable_target(LINK ${_target} PUBLIC pfs::common)
 
-    if (_netty__qt5_components)
-        portable_target(LINK_QT5_COMPONENTS ${PROJECT_NAME} PRIVATE ${_netty__qt5_components})
+    if (_netty__compile_options)
+        portable_target(COMPILE_OPTIONS ${_target} PUBLIC ${_netty__compile_options})
     endif()
 
     if (_netty__private_definitions)
-        portable_target(DEFINITIONS ${PROJECT_NAME} PRIVATE ${_netty__private_definitions})
+        portable_target(DEFINITIONS ${_target} PRIVATE ${_netty__private_definitions})
     endif()
 
-    if (_netty__compile_options)
-        portable_target(COMPILE_OPTIONS ${PROJECT_NAME} PUBLIC ${_netty__compile_options})
+    if (_netty__definitions)
+        portable_target(DEFINITIONS ${_target} PUBLIC ${_netty__definitions})
     endif()
-endif()
 
-if (NETTY__BUILD_STATIC)
-    portable_target(SOURCES ${STATIC_PROJECT_NAME} ${_netty__sources})
-    portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PUBLIC ${_netty__definitions})
-    portable_target(INCLUDE_DIRS ${STATIC_PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
-    portable_target(LINK ${STATIC_PROJECT_NAME} PUBLIC pfs::common)
+    if (_netty__private_links)
+        portable_target(LINK ${_target} PRIVATE ${_netty__private_links})
+    endif()
 
     if (_netty__qt5_components)
-        portable_target(LINK_QT5_COMPONENTS ${STATIC_PROJECT_NAME} PRIVATE ${_netty__qt5_components})
+        portable_target(LINK_QT5_COMPONENTS ${_target} PRIVATE ${_netty__qt5_components})
     endif()
-
-    if (_netty__private_definitions)
-        portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PRIVATE ${_netty__private_definitions})
-    endif()
-
-    if (_netty__compile_options)
-        portable_target(COMPILE_OPTIONS ${STATIC_PROJECT_NAME} PUBLIC ${_netty__compile_options})
-    endif()
-endif()
+endforeach()
 
 if (ANDROID)
     portable_target(BUILD_JAR pfs.netty

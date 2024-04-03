@@ -7,6 +7,7 @@
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
+#include "pfs/i18n.hpp"
 
 #if NETTY__UDT_ENABLED
 #   include "newlib/udt.hpp"
@@ -14,8 +15,6 @@
 #endif
 
 #include "pfs/log.hpp"
-
-static char const * TAG = "UDT";
 
 namespace netty {
 
@@ -85,9 +84,10 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
     if (n > 0) {
         if (!_rep.writefds.empty()) {
             for (UDTSOCKET u: _rep.writefds) {
-                auto status = UDT::getsockstate(u);
-                LOGD(TAG, "UDT connected socket state: {} ({})"
-                    , status, status == CONNECTED ? "CONNECTED" : "?");
+                auto state = UDT::getsockstate(u);
+                LOG_TRACE_1(tr::f_("UDT connected socket state: {} ({})"
+                    , static_cast<int>(state)
+                    , state == CONNECTED ? tr::_("CONNECTED") : "?"));
 
                 remove(u);
 

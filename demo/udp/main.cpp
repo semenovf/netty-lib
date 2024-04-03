@@ -19,12 +19,11 @@
 #   include "pfs/netty/qt5/udp_sender.hpp"
 #endif
 
+using string_view = pfs::string_view;
 static char const * TAG = "UDP";
 
 #include "sender_routine.hpp"
 #include "receiver_routine.hpp"
-
-// using string_view = pfs::string_view;
 
 static struct program_context {
     std::string program;
@@ -69,11 +68,11 @@ int main (int argc, char * argv[])
             is_sender = false;
         } else if (string_view{"--qt5"} == argv[i]) {
             is_qt5 = true;
-        } else if (starts_with(string_view{argv[i]}, "--addr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--addr=")) {
             addr_value = std::string{argv[i] + 7};
-        } else if (starts_with(string_view{argv[i]}, "--local-addr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--local-addr=")) {
             local_addr_value = std::string{argv[i] + 13};
-        } else if (starts_with(string_view{argv[i]}, "--port=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--port=")) {
             port_value = std::string{argv[i] + 7};
         } else {
             auto arglen = std::strlen(argv[i]);

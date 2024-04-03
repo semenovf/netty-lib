@@ -17,6 +17,7 @@
 #include <vector>
 #include <cstdlib>
 
+using string_view = pfs::string_view;
 static char const * TAG = "NETTY";
 
 #include "types.hpp"
@@ -119,11 +120,11 @@ int main (int argc, char * argv[])
             }
 
             is_tcp = true;
-        } else if (starts_with(string_view{argv[i]}, "--poller=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--poller=")) {
             poller_value = std::string{argv[i] + 9};
-        } else if (starts_with(string_view{argv[i]}, "--addr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--addr=")) {
             addr_value = std::string{argv[i] + 7};
-        } else if (starts_with(string_view{argv[i]}, "--port=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--port=")) {
             port_value = std::string{argv[i] + 7};
         } else {
             auto arglen = std::strlen(argv[i]);

@@ -21,6 +21,8 @@
 
 #include <vector>
 
+using string_view = pfs::string_view;
+
 static char const * TAG = "DISCOVERY";
 
 using discovery_engine = netty::p2p::discovery_engine<netty::p2p::posix::discovery_engine>;
@@ -55,7 +57,7 @@ int main (int argc, char * argv[])
         if (string_view{"-h"} == argv[i] || string_view{"--help"} == argv[i]) {
             print_usage();
             return EXIT_SUCCESS;
-        } else if (starts_with(string_view{argv[i]}, "--local-addr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--local-addr=")) {
             auto res = netty::inet4_addr::parse(argv[i] + 13);
 
             if (!res.first) {
@@ -63,9 +65,9 @@ int main (int argc, char * argv[])
                 return EXIT_FAILURE;
             }
             local_addr = std::move(res.first);
-        } else if (starts_with(string_view{argv[i]}, "--listener-saddr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--listener-saddr=")) {
             listener_saddr_values.push_back(std::string{argv[i] + 17});
-        } else if (starts_with(string_view{argv[i]}, "--target-saddr=")) {
+        } else if (pfs::starts_with(string_view{argv[i]}, "--target-saddr=")) {
             target_saddr_values.push_back(std::string{argv[i] + 15});
         } else {
             auto arglen = std::strlen(argv[i]);

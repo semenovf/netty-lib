@@ -16,43 +16,37 @@ void start_client (netty::socket4_addr const & saddr)
     bool can_write = true;
     LOGD(TAG, "Starting client");
 
-    typename PollerType::callbacks callbacks;
     SocketType socket;
+    PollerType poller;
 
-    callbacks.on_error = [& finish] (typename PollerType::native_socket_type, std::string const & text) {
+    poller.on_failure = [& finish] (typename PollerType::native_socket_type, std::string const & text) {
         LOGE(TAG, "Error on client: {}", text);
         finish = true;
     };
 
-    callbacks.connection_refused = [& finish] (typename PollerType::native_socket_type sock) {
+    poller.connection_refused = [& finish] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
     };
 
-    callbacks.connected = [] (typename PollerType::native_socket_type sock) {
+    poller.connected = [] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Connected: {}", sock);
-
-//         char buf[1];
-//         auto n = ::recv(sock, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
-//
-//         LOGD(TAG, "-- CONNECTED: recv: n={}, error={}", n, errno);
     };
 
-    callbacks.disconnected = [& finish] (typename SocketType::native_type sock) {
+    poller.disconnected = [& finish] (typename SocketType::native_type sock) {
         LOGD(TAG, "Disconnected: socket={}", sock);
         finish = true;
     };
 
-    callbacks.ready_read = [] (typename PollerType::native_socket_type sock) {
+    poller.ready_read = [] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Ready read");
     };
 
-    callbacks.can_write = [& can_write] (typename PollerType::native_socket_type sock) {
+    poller.can_write = [& can_write] (typename PollerType::native_socket_type sock) {
         can_write = true;
     };
 
     try {
-        PollerType poller {std::move(callbacks)};
         std::chrono::milliseconds poller_timeout {100};
         auto conn_state = socket.connect(saddr);
         poller.add(socket, conn_state);

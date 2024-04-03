@@ -11,9 +11,9 @@ project(rpc-demo)
 add_executable(${PROJECT_NAME} main.cpp)
 
 if (TARGET)
-    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p)
+    target_link_libraries(${PROJECT_NAME} pfs::netty_p2p)
 else()
-    target_link_libraries(${PROJECT_NAME} pfs::netty::p2p::static)
+    target_link_libraries(${PROJECT_NAME} pfs::netty_p2p::static)
 endif()
 
 target_link_libraries(${PROJECT_NAME} pfs::common)
