@@ -34,10 +34,10 @@ private:
     std::vector<native_socket_type> _removable_readers;
 
 public: // callbacks
-    mutable std::function<void(native_socket_type, std::string const &)> on_listener_failure
-        = [] (native_socket_type, std::string const &) {};
-    mutable std::function<void(native_socket_type, std::string const &)> on_reader_failure
-        = [] (native_socket_type, std::string const &) {};
+    mutable std::function<void(native_socket_type, error const &)> on_listener_failure
+        = [] (native_socket_type, error const &) {};
+    mutable std::function<void(native_socket_type, error const &)> on_reader_failure
+        = [] (native_socket_type, error const &) {};
     mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
 
@@ -47,16 +47,16 @@ private:
 public:
     server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
     {
-        _listener_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+        _listener_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_listeners.push_back(sock);
-            on_listener_failure(sock, errstr);
+            on_listener_failure(sock, err);
         };
 
-        _reader_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+        _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            on_reader_failure(sock, errstr);
+            on_reader_failure(sock, err);
         };
 
         accept = accept_proc;

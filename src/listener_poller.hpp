@@ -16,8 +16,8 @@ template <typename Backend>
 listener_poller<Backend>::listener_poller ()
     : listener_poller(specialized{})
 {
-    on_failure = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::_("ERROR: listener poller: {}\n"), text);
+    on_failure = [] (native_socket_type, error const & err) {
+        fmt::println(stderr, tr::_("ERROR: listener poller: {}"), err.what());
     };
 
     accept = [] (native_socket_type) {};

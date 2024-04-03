@@ -39,6 +39,7 @@ if (NETTY_P2P__ENABLE_CEREAL)
     endif()
 
     list(APPEND _netty_p2p__links cereal)
+    list(APPEND _netty_p2p__definitions "NETTY_P2P__CEREAL_ENABLED=1")
 endif(NETTY_P2P__ENABLE_CEREAL)
 
 list(APPEND _netty_p2p__sources
@@ -63,6 +64,10 @@ endif()
 foreach(_target IN LISTS _netty_p2p__targets)
     portable_target(SOURCES ${_target} ${_netty_p2p__sources})
     portable_target(INCLUDE_DIRS ${_target} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+
+    if (_netty_p2p__definitions)
+        portable_target(DEFINITIONS ${_target} PUBLIC ${_netty_p2p__definitions})
+    endif()
 
     if (_netty_p2p__links)
         portable_target(LINK ${_target} PUBLIC ${_netty_p2p__links})

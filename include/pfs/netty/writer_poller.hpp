@@ -25,7 +25,7 @@ private:
     Backend _rep;
 
 public:
-    mutable std::function<void(native_socket_type, std::string const &)> on_failure;
+    mutable std::function<void(native_socket_type, error const &)> on_failure;
     mutable std::function<void(native_socket_type)> can_write;
 
 protected:

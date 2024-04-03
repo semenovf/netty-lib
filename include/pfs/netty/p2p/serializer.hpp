@@ -8,8 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/endian.hpp"
-#include <cereal/archives/binary.hpp>
 #include <utility>
+
+#if NETTY_P2P__CEREAL_ENABLED
+#   include <cereal/archives/binary.hpp>
+#endif
 
 namespace netty {
 namespace p2p {
@@ -24,12 +27,14 @@ struct ntoh_wrapper
 template <typename T>
 inline ntoh_wrapper<T> ntoh (T & v) { return ntoh_wrapper<T>{v}; }
 
+#if NETTY_P2P__CEREAL_ENABLED
 template <typename T>
 void load (cereal::BinaryInputArchive & ar, ntoh_wrapper<T> & r)
 {
     ar >> *r.p;
     *r.p = pfs::to_native_order(*r.p);
 }
+#endif
 
 }} // namespace netty::p2p
 

@@ -3,10 +3,10 @@
 LOG_FILE='download.log'
 GIT_DOWNLOADER="git clone"
 
-JANSSON_RELEASE=v2.14
+CEREAL_RELEASE=master
 
 # HTTPS
-HTTPS_SOURCES="--depth 1 -b ${JANSSON_RELEASE} --single-branch https://github.com/akheron/jansson.git jansson"
+HTTPS_SOURCES="--depth 1 -b ${CEREAL_RELEASE} --single-branch https://github.com/USCiLab/cereal.git cereal"
 
 DEFAULT_SOURCES=${HTTPS_SOURCES}
 DEFAULT_DOWNLOADER=${GIT_DOWNLOADER}

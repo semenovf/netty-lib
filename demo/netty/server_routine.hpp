@@ -46,12 +46,12 @@ void start_server (netty::socket4_addr const & saddr)
         };
 
         PollerType poller{std::move(accept_proc)};
-        poller.on_listener_failure = [] (typename PollerType::native_socket_type, std::string const & text) {
-            LOGE(TAG, "Error on server: {}", text);
+        poller.on_listener_failure = [] (typename PollerType::native_socket_type, netty::error const & err) {
+            LOGE(TAG, "Error on server: {}", err.what());
         };
 
-        poller.on_reader_failure = [] (typename PollerType::native_socket_type, std::string const & text) {
-            LOGE(TAG, "Error on peer socket (reader): {}", text);
+        poller.on_reader_failure = [] (typename PollerType::native_socket_type, netty::error const & err) {
+            LOGE(TAG, "Error on peer socket (reader): {}", err.what());
         };
 
         poller.ready_read = [& sockets] (typename PollerType::native_socket_type sock) {

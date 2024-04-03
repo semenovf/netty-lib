@@ -82,8 +82,8 @@ private:
     bool _connected {false};
 
 public: // Callbacks
-    mutable std::function<void (std::string const &)> on_error
-        = [] (std::string const &) {};
+    mutable std::function<void (error const &)> on_failure
+        = [] (error const &) {};
 
     mutable std::function<void (client_socket_engine &)> connected
         = [] (client_socket_engine &) {};
@@ -110,8 +110,8 @@ public:
         std::string invalid_argument_desc;
         _opts = opts;
 
-        on_error = [] (std::string const & s) {
-            LOGE(TAG, "ERROR: {}", s);
+        on_failure = [] (error const & err) {
+            LOGE(TAG, "ERROR: {}", err.what());
         };
 
         do {
@@ -157,8 +157,8 @@ public:
         _poller = pfs::make_unique<poller_type>();
 
         _poller->on_failure = [this] (typename poller_type::native_socket_type
-            , std::string const & text) {
-            this->on_error(text);
+            , error const & err) {
+            this->on_failure(err);
         };
 
         _poller->connection_refused = [this] (typename poller_type::native_socket_type sock) {
@@ -289,7 +289,10 @@ private:
     void process_input (typename poller_type::native_socket_type sock)
     {
         if (_socket.native() != sock) {
-            on_error(tr::f_("alien socket requested input process, ignored: {}", sock));
+            on_failure(error {
+                  errc::unexpected_error
+                , tr::f_("alien socket requested input process, ignored: {}", sock)
+            });
             return;
         }
 
@@ -350,14 +353,20 @@ private:
 
             switch (sendstate) {
                 case netty::send_status::failure:
-                    on_error(tr::f_("send failure to {}: {}"
-                        , to_string(_socket.saddr()), err.what()));
+                    on_failure(error {
+                          err.code()
+                        , tr::f_("send failure to {}: {}"
+                            , to_string(_socket.saddr()), err.what())
+                    });
                     break_sending = true;
                     break;
 
                 case netty::send_status::network:
-                    on_error(tr::f_("send failure to {}: network failure: {}"
-                        , to_string(_socket.saddr()), err.what()));
+                    on_failure(error {
+                          err.code()
+                        , tr::f_("send failure to {}: network failure: {}"
+                            , to_string(_socket.saddr()), err.what())
+                    });
                     break_sending = true;
                     break;
 

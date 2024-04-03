@@ -26,9 +26,9 @@ private:
     std::map<native_socket_type, clock_type::time_point> _connecting_sockets;
 
 public:
-    mutable std::function<void(native_socket_type, std::string const &)> on_failure;// = [] (native_socket_type, std::string const &) {};
-    mutable std::function<void(native_socket_type)> connection_refused;// = [] (native_socket_type) {};
-    mutable std::function<void(native_socket_type)> connected;// = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type, error const &)> on_failure;
+    mutable std::function<void(native_socket_type)> connection_refused;
+    mutable std::function<void(native_socket_type)> connected;
 
 protected:
     struct specialized {};

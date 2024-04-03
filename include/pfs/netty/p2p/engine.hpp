@@ -166,14 +166,11 @@ private:
     std::queue<universal_id> _peer_expiration_queue;
 
 public: // Callbacks
-    mutable std::function<void (std::string const &)> on_error
-        = [] (std::string const &) {};
-
     /**
-     * Called when unrecoverable error occurred - engine became dysfunctional.
+     * Called when unrecoverable error occurred - engine became disfunctional.
      * It must be restarted.
      */
-    mutable std::function<void (error err)> on_failure = [] (error) {};
+    mutable std::function<void (error const & err)> on_failure = [] (error const & err) {};
 
     /**
      * Called when new peer discovered by desicover engine.
@@ -264,9 +261,7 @@ public:
         std::string invalid_argument_desc;
         _opts = opts;
 
-        on_error = [] (std::string const & s) {
-            fmt::print(stderr, "{}\n", s);
-        };
+        on_failure = [] (error const & err) { fmt::println(stderr, "{}", err.what()); };
 
         do {
             bad = _opts.overflow_limit <= 0
@@ -336,12 +331,12 @@ public:
 
             _reader_poller = pfs::make_unique<server_poller_type>(std::move(accept_proc));
 
-            _reader_poller->on_listener_failure = [this] (typename server_poller_type::native_socket_type, std::string const & text) {
-                this->on_failure(error {errc::unexpected_error, text});
+            _reader_poller->on_listener_failure = [this] (typename server_poller_type::native_socket_type, error const & err) {
+                this->on_failure(err);
             };
 
-            _reader_poller->on_reader_failure = [this] (typename server_poller_type::native_socket_type sock, std::string const & text) {
-                this->on_error(text);
+            _reader_poller->on_reader_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
+                this->on_failure(err);
 
                 auto paccount = locate_reader_account(sock);
 
@@ -374,8 +369,8 @@ public:
         {
             _writer_poller = pfs::make_unique<client_poller_type>();
 
-            _writer_poller->on_failure = [this] (typename client_poller_type::native_socket_type sock, std::string const & text) {
-                this->on_error(text);
+            _writer_poller->on_failure = [this] (typename client_poller_type::native_socket_type sock, error const & err) {
+                this->on_failure(err);
 
                 auto paccount = locate_writer_account(sock);
 
@@ -432,8 +427,11 @@ public:
 
             // Start listening on main listener
             _server.listen(_opts.listener_backlog);
-        } catch (error ex) {
-            on_error(tr::f_("start netty::p2p::engine failure: {}", ex.what()));
+        } catch (error const & ex) {
+            on_failure(error {
+                  ex.code()
+                , tr::f_("start netty::p2p::engine failure: {}", ex.what())
+            });
             return false;
         }
 
@@ -615,8 +613,8 @@ private:
     {
         _discovery = pfs::make_unique<discovery_engine_type>(_host_uuid, _opts.discovery);
 
-        _discovery->on_error = [this] (std::string const & errstr) {
-            this->on_error(errstr);
+        _discovery->on_failure = [this] (error const & err) {
+            this->on_failure(err);
         };
 
         _discovery->peer_discovered = [this] (universal_id peer_uuid
@@ -638,8 +636,8 @@ private:
     {
         _transporter = pfs::make_unique<FileTransporter>(_opts.filetransporter);
 
-        _transporter->on_error = [this] (std::string const & errstr) {
-            this->on_error(errstr);
+        _transporter->on_failure = [this] (error const & err) {
+            this->on_failure(err);
         };
 
         _transporter->addressee_ready = [this] (universal_id addressee) {
@@ -695,8 +693,11 @@ private:
                 , bool success) {
 
             if (!success) {
-                on_error(tr::f_("Checksum does not match for income file: {} from {}"
-                    , fileid, addresser));
+                on_failure(error {
+                      errc::wrong_checksum
+                    , tr::f_("checksum does not match for income file: {} from {}"
+                        , fileid, addresser)
+                });
             }
 
             download_complete(addresser, fileid, path, success);
@@ -1273,8 +1274,10 @@ private:
             auto n = paccount->reader.recv(pbuffer->data() + offset, available);
 
             if (n < 0) {
-                on_error(tr::f_("Receive data failure from: {}"
-                    , to_string(paccount->reader.saddr())));
+                on_failure(error {
+                      errc::socket_error
+                    , tr::f_("Receive data failure from: {}", to_string(paccount->reader.saddr()))
+                });
 
                 // Expire peer and release resources allocated for it
                 deferred_expire_peer(paccount->uuid);
@@ -1319,10 +1322,12 @@ private:
                 || packettype == packet_type::file_stop;
 
             if (!valid_packettype) {
-                on_error(tr::f_("Unexpected packet type ({})"
-                    " received from: {}, ignored."
-                    , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
-                    , to_string(paccount->reader.saddr())));
+                on_failure(error {
+                      std::make_error_code(std::errc::bad_message)
+                    , tr::f_("unexpected packet type ({}) received from: {}, ignored."
+                        , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
+                        , to_string(paccount->reader.saddr()))
+                });
 
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
@@ -1338,11 +1343,13 @@ private:
             packetsize = pkt.packetsize;
 
             if (PACKET_SIZE != packetsize) {
-                on_error(tr::f_("Unexpected packet size ({})"
-                    " received from: {}, expected: {}"
-                    , PACKET_SIZE
-                    , to_string(paccount->reader.saddr())
-                    , packetsize));
+                on_failure(error {
+                      std::make_error_code(std::errc::bad_message)
+                    , tr::f_("Unexpected packet size ({}) received from: {}, expected: {}"
+                        , PACKET_SIZE
+                        , to_string(paccount->reader.saddr())
+                        , packetsize)
+                });
 
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
@@ -1512,8 +1519,11 @@ private:
 
             switch (sendresult.state) {
                 case netty::send_status::failure:
-                    on_error(tr::f_("send failure to {}: {}"
-                        , to_string(paccount->writer.saddr()), err.what()));
+                    on_failure(error {
+                          err.code()
+                        , tr::f_("send failure to {}: {}"
+                            , to_string(paccount->writer.saddr()), err.what())
+                    });
 
                     // Expire peer and release resources allocated for it
                     deferred_expire_peer(paccount->uuid);
@@ -1521,8 +1531,11 @@ private:
                     break;
 
                 case netty::send_status::network:
-                    on_error(tr::f_("send failure to {}: network failure: {}"
-                        , to_string(paccount->writer.saddr()), err.what()));
+                    on_failure(error {
+                          err.code()
+                        , tr::f_("send failure to {}: network failure: {}"
+                            , to_string(paccount->writer.saddr()), err.what())
+                    });
 
                     // Expire peer and release resources allocated for it
                     deferred_expire_peer(paccount->uuid);

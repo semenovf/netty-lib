@@ -63,8 +63,11 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 #endif
 
                 if (rc != 0) {
-                    on_failure(fd, tr::f_("get socket option failure: {} (socket={})"
-                        , pfs::system_error_text(), fd));
+                    on_failure(fd, error {
+                          errc::system_error
+                        , tr::f_("get socket option failure: {} (socket={})"
+                            , pfs::system_error_text(), fd)
+                    });
                 } else {
                     switch (error_val) {
                         case 0: // No error
@@ -75,9 +78,11 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
                             break;
 
                         default:
-                            on_failure(fd, tr::f_("unhandled error value "
-                                "returned by `getsockopt`: {} (socket={})"
-                                , error_val, fd));
+                            on_failure(fd, error {
+                                  errc::unexpected_error
+                                , tr::f_("unhandled error value returned by `getsockopt`: {} (socket={})"
+                                    , error_val, fd)
+                            });
                             break;
                     }
                 }
@@ -146,17 +151,26 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.fd, tr::f_("get socket option failure: {} (socket={})"
-                        , pfs::system_error_text(), ev.fd));
+                    on_failure(ev.fd, error {
+                          errc::system_error
+                        , tr::f_("get socket option failure: {} (socket={})"
+                            , pfs::system_error_text(), ev.fd)
+                    });
                 } else {
                     switch (error_val) {
                         case 0: // No error
-                            on_failure(ev.fd, tr::f_("EPOLLERR event happend,"
-                                " but no error occurred on it (socket={})", ev.fd));
+                            on_failure(ev.fd, error {
+                                  errc::unexpected_error
+                                , tr::f_("EPOLLERR event happend, but no error occurred on it (socket={})"
+                                    , ev.fd)
+                            });
                             break;
 
                         case EHOSTUNREACH:
-                            on_failure(ev.fd, tr::f_("No route to host (socket={})", ev.fd));
+                            on_failure(ev.fd, error {
+                                  errc::socket_error
+                                , tr::f_("no route to host (socket={})", ev.fd)
+                            });
                             break;
 
                         case ECONNREFUSED:
@@ -164,9 +178,11 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                             break;
 
                         default:
-                            on_failure(ev.fd, tr::f_("unhandled error value "
-                                "returned by `getsockopt`: {} (socket={})"
-                                , error_val, ev.fd));
+                            on_failure(ev.fd, error {
+                                  errc::unexpected_error
+                                , tr::f_("unhandled error value returned by `getsockopt`: {} (socket={})"
+                                    , error_val, ev.fd)
+                            });
                             break;
                     }
                 }

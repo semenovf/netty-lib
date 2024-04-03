@@ -88,8 +88,7 @@ private:
     std::map<universal_id, peer_credentials> _discovered_peers;
 
 public:
-    mutable std::function<void (std::string const &)> on_error
-        = [] (std::string const &) {};
+    mutable std::function<void (error const &)> on_failure = [] (error const &) {};
 
     /**
      * Called when peer discovery (hello) packet received.
@@ -168,10 +167,10 @@ private:
                     modified = modified || (pos->second.saddr.port != packet.port);
 
                     if (modified) {
-                        on_error(tr::f_("peer modified (socket address changed): {}: {}=>{}, force expiration"
+                        LOG_TRACE_2("peer modified (socket address changed): {}: {}=>{}, force expiration"
                             , packet.uuid
                             , to_string(pos->second.saddr)
-                            , to_string(socket4_addr{saddr.addr, packet.port})));
+                            , to_string(socket4_addr{saddr.addr, packet.port}))
 
                         peer_expired(packet.uuid, pos->second.saddr);
                     } else {
@@ -194,8 +193,10 @@ private:
                 }
             }
         } else {
-            on_error(tr::f_("bad CRC16 for HELO packet received from: {}"
-                , to_string(saddr)));
+            on_failure(error {
+                  errc::wrong_checksum
+                , tr::f_("bad CRC16 for HELO packet received from: {}", to_string(saddr))
+            });
         }
     }
 
@@ -220,7 +221,10 @@ private:
             if (success) {
                 process_hello_packet(saddr, packet);
             } else {
-                on_error(tr::f_("bad HELO packet received from: {}", to_string(saddr)));
+                on_failure(error {
+                      std::make_error_code(std::errc::bad_message)
+                    , tr::f_("bad HELO packet received from: {}", to_string(saddr))
+                });
             }
         }
     }
@@ -275,8 +279,10 @@ private:
                         series_of_retries = 0;
                     } else {
                         if (t.last_send_status != res.state) {
-                            on_error(tr::f_("transmit failure to: {}: {}"
-                                , to_string(t.saddr), err.what()));
+                            on_failure(error {
+                                  err.code()
+                                , tr::f_("transmit failure to: {}: {}", to_string(t.saddr), err.what())
+                            });
 
                             // Prepare to break (don't use `break` keyword)
                             // while loop and save last_send_status (see below).

@@ -11,7 +11,10 @@
 #include "universal_id.hpp"
 #include "pfs/crc16.hpp"
 #include "pfs/universal_id_crc.hpp"
-#include <cereal/archives/binary.hpp>
+
+#if NETTY_P2P__CEREAL_ENABLED
+#   include <cereal/archives/binary.hpp>
+#endif
 
 namespace netty {
 namespace p2p {
@@ -43,6 +46,7 @@ inline std::int16_t crc16_of (hello_packet const & pkt)
     return crc16;
 }
 
+#if NETTY_P2P__CEREAL_ENABLED
 inline void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
 {
     ar  << pkt.greeting[0]
@@ -70,6 +74,7 @@ inline void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
         >> ntoh(pkt.timestamp)
         >> ntoh(pkt.crc16);
 }
+#endif
 
 inline bool is_valid (hello_packet const & pkt)
 {

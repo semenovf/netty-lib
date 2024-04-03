@@ -118,8 +118,8 @@ int main (int argc, char * argv[])
 //         discovery.add_target(res.second, local_addr);
     }
 
-    discovery.on_error = [] (std::string const & errstr) {
-        LOGE(TAG, "{}", errstr);
+    discovery.on_failure = [] (netty::error const & err) {
+        LOGE(TAG, "{}", err.what());
     };
 
     discovery.peer_discovered = [] (netty::p2p::universal_id peer_uuid

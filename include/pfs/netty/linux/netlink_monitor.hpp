@@ -33,7 +33,7 @@ class netlink_monitor
     reader_poller<epoll_poller> _poller;
 
 public:
-    mutable std::function<void(std::string const &)> on_error;
+    mutable std::function<void(error const &)> on_failure;
     mutable std::function<void(netlink_attributes const &)> attrs_ready;
     mutable std::function<void(inet4_addr, std::uint32_t)> inet4_addr_added;
     mutable std::function<void(inet4_addr, std::uint32_t)> inet4_addr_removed;

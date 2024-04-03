@@ -310,15 +310,13 @@ void file_transporter::commit_incoming_file (universal_id addresser
         // May be double commit: file is completely downloaded and transient
         // files are removed. Seems it shouldn't be a fatal error (exception).
 
-        // throw error {
-        //       errc::filesystem_error
-        //     , tr::f_("ifile item not found by fileid: {}", fileid)
-        // };
-
-        on_error(tr::f_("`ifile` item not found by file identifier ({}) "
-            "while commiting incoming file, it may be the result of double or"
-            " more commits, need to remove the cause."
-            , fileid));
+        on_failure(error {
+              errc::filesystem_error
+            , tr::f_("`ifile` item not found by file identifier ({}) "
+                "while commiting incoming file, it may be the result of double or"
+                " more commits, need to remove the cause."
+                , fileid)
+        });
         return;
     }
 
@@ -526,20 +524,29 @@ void file_transporter::process_file_chunk (universal_id sender
         auto * p = locate_ifile_item(sender, fch.fileid, false);
 
         if (p) {
-            on_error(tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
-                , sender, fch.fileid));
+            on_failure(error {
+                  errc::filesystem_error
+                , tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
+                    , sender, fch.fileid)
+            });
             stop_file(sender, fch.fileid);
         } else if (_ifile_pool.size() == 1) {
             // Only one file is downloading
             auto pos = _ifile_pool.begin();
 
-            on_error(tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
-                , sender, pos->first));
+            on_failure(error {
+                  errc::filesystem_error
+                , tr::f_("file chunk from {} may be corrupted, stopping file receive: {}"
+                , sender, pos->first)
+            });
 
             stop_file(sender, pos->first);
         } else {
-            on_error(tr::f_("file chunk from {} may be corrupted"
-                ", stopping all files from specified sender", sender));
+            on_failure(error {
+                  errc::filesystem_error
+                , tr::f_("file chunk from {} may be corrupted"
+                    ", stopping all files from specified sender", sender)
+            });
 
             // Unknown file, stop all from specified sender
             for (auto const & x: _ifile_pool) {

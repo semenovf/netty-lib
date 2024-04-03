@@ -7,14 +7,18 @@
 //      2021.09.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <cereal/archives/binary.hpp>
-#include <cereal/types/string.hpp>
 #include <sstream>
 #include <utility>
+
+#if NETTY_P2P__CEREAL_ENABLED
+#   include <cereal/archives/binary.hpp>
+#   include <cereal/types/string.hpp>
+#endif
 
 namespace netty {
 namespace p2p {
 
+#if NETTY_P2P__CEREAL_ENABLED
 // NOTE!
 // Do not use PortableBinaryOutputArchive and PortableBinaryInputArchive
 // as they add flag corresponding to endianess.
@@ -162,5 +166,7 @@ public:
         return payload;
     }
 };
+
+#endif
 
 }} // namespace netty::p2p

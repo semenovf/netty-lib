@@ -188,8 +188,8 @@ int main (int argc, char * argv[])
         engine.add_target(t, std::chrono::seconds{2}, std::chrono::seconds{5});
     }
 
-    engine.on_error = [] (std::string const & str) {
-        fmt::print(stderr, "ERROR: {}\n", str);
+    engine.on_failure = [] (netty::error const & err) {
+        fmt::println(stderr, "ERROR: {}", err.what());
     };
 
     engine.peer_discovered = [] (p2p::universal_id contact_id

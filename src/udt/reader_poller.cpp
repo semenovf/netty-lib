@@ -44,8 +44,11 @@ int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
                     if (state == CLOSED) {
                         disconnected(u);
                     } else {
-                        on_failure(u, tr::f_("read socket failure: state={}"
-                            " (TODO: handle properly)", static_cast<int>(state)));
+                        on_failure(u, error {
+                              errc::socket_error
+                            , tr::f_("read socket failure: state={} (TODO: need to handle properly)"
+                                , static_cast<int>(state))
+                        });
                     }
                 }
             }

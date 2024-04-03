@@ -82,8 +82,11 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                     } else {
 #endif
                         if (errno != ECONNRESET) {
-                            on_failure(fd, tr::f_("read socket failure: {} (socket={})"
-                                , pfs::system_error_text(errno), fd));
+                            on_failure(fd, error {
+                                  errc::socket_error
+                                , tr::f_("read socket failure: {} (socket={})"
+                                    , pfs::system_error_text(errno), fd)
+                            });
                         } else {
                             disconnected(fd);
                         }
@@ -145,11 +148,17 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.fd, tr::f_("get socket option failure: {} (socket={})"
-                        , pfs::system_error_text(), ev.fd));
+                    on_failure(ev.fd, error {
+                          errc::system_error
+                        , tr::f_("get socket option failure: {} (socket={})"
+                            , pfs::system_error_text(), ev.fd)
+                    });
                 } else {
-                    on_failure(ev.fd, tr::f_("read socket failure: {} (socket={})"
-                        , pfs::system_error_text(error_val), ev.fd));
+                    on_failure(ev.fd, error {
+                          errc::socket_error
+                        , tr::f_("read socket failure: {} (socket={})"
+                            , pfs::system_error_text(error_val), ev.fd)
+                    });
                 }
 
                 continue;
@@ -175,8 +184,11 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                     disconnected(ev.fd);
                 } else {
                     if (errno != ECONNRESET) {
-                        on_failure(ev.fd, tr::f_("read socket failure: {} (socket={})"
-                            , pfs::system_error_text(errno), ev.fd));
+                        on_failure(ev.fd, error {
+                              errc::socket_error
+                            , tr::f_("read socket failure: {} (socket={})"
+                                , pfs::system_error_text(errno), ev.fd)
+                        });
                     } else {
                         disconnected(ev.fd);
                     }

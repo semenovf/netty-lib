@@ -130,6 +130,7 @@ struct file_state
     file_status status;
 };
 
+#if NETTY_P2P__CEREAL_ENABLED
 ////////////////////////////////////////////////////////////////////////////////
 // packet
 ////////////////////////////////////////////////////////////////////////////////
@@ -278,5 +279,7 @@ inline void load (cereal::BinaryInputArchive & ar, file_state & fs)
 {
     ar >> fs.fileid >> fs.status;
 }
+
+#endif
 
 }} // namespace netty::p2p

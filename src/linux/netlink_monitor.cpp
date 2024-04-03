@@ -357,8 +357,8 @@ static callback_result parse (void const * buf, std::size_t len
 netlink_monitor::netlink_monitor ()
     : _nls(netlink_socket::type_enum::route)
 {
-    _poller.on_failure = [this] (netlink_socket::native_type, std::string const & s) {
-        this->on_error(s);
+    _poller.on_failure = [this] (netlink_socket::native_type, error const & err) {
+        this->on_failure(err);
     };
 
     _poller.ready_read = [this] (netlink_socket::native_type) {

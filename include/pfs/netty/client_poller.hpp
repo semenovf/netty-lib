@@ -37,7 +37,7 @@ private:
     std::vector<native_socket_type> _removable_writers;
 
 public:
-    mutable std::function<void(native_socket_type, std::string const &)> on_failure = [] (native_socket_type, std::string const &) {};
+    mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
     mutable std::function<void(native_socket_type)> connection_refused = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> connected = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
@@ -47,22 +47,22 @@ public:
 public:
     client_poller ()
     {
-        _connecting_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+        _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_connecting_sockets.push_back(sock);
-            on_failure(sock, errstr);
+            on_failure(sock, err);
         };
 
-        _reader_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+        _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            on_failure(sock, errstr);
+            on_failure(sock, err);
         };
 
-        _writer_poller.on_failure = [this] (native_socket_type sock, std::string const & errstr) {
+        _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_writers.push_back(sock);
-            on_failure(sock, errstr);
+            on_failure(sock, err);
         };
 
         _connecting_poller.connection_refused = [this] (native_socket_type sock) {

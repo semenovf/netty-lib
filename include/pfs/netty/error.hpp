@@ -30,6 +30,7 @@ enum class errc
     , poller_error       // Errors occurred in poller
     , socket_error       // Socket operation error
     , filesystem_error
+    , wrong_checksum
     , unexpected_error
 };
 

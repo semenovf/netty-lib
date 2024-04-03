@@ -19,8 +19,8 @@ void start_client (netty::socket4_addr const & saddr)
     SocketType socket;
     PollerType poller;
 
-    poller.on_failure = [& finish] (typename PollerType::native_socket_type, std::string const & text) {
-        LOGE(TAG, "Error on client: {}", text);
+    poller.on_failure = [& finish] (typename PollerType::native_socket_type, netty::error const & err) {
+        LOGE(TAG, "Error on client: {}", err.what());
         finish = true;
     };
 

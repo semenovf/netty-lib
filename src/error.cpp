@@ -39,6 +39,8 @@ std::string error_category::message (int ev) const
             return tr::_("socket error");
         case errc::filesystem_error:
             return tr::_("filesystem error");
+        case errc::wrong_checksum:
+            return tr::_("wrong checksum");
         case errc::unexpected_error:
             return tr::_("unexpected error");
 

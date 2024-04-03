@@ -102,8 +102,8 @@ private:
     std::unordered_multimap<universal_id/*fileid*/, ofile_item> _ofile_pool;
 
 public:
-    mutable std::function<void (std::string const &)> on_error
-        = [] (std::string const &) {};
+    mutable std::function<void (error const &)> on_failure
+        = [] (error const &) {};
 
     /**
      * Called to check if addressee is busy or not available

@@ -49,11 +49,17 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                 auto rc = getsockopt(ev.data.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.data.fd, tr::f_("get socket option failure: {} (socket={})"
-                        , pfs::system_error_text(), ev.data.fd));
+                    on_failure(ev.data.fd, error {
+                          errc::system_error
+                        , tr::f_("get socket option failure: {} (socket={})"
+                            , pfs::system_error_text(), ev.data.fd)
+                    });
                 } else {
-                    on_failure(ev.data.fd, tr::f_("read socket failure: {} (socket={})"
-                        , pfs::system_error_text(error_val), ev.data.fd));
+                    on_failure(ev.data.fd, error {
+                          errc::socket_error
+                        , tr::f_("read socket failure: {} (socket={})"
+                            , pfs::system_error_text(error_val), ev.data.fd)
+                    });
                 }
 
                 continue;
@@ -70,8 +76,11 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                     disconnected(ev.data.fd);
                 } else {
                     if (errno != ECONNRESET) {
-                        on_failure(ev.data.fd, tr::f_("read socket failure: {} (socket={})"
-                            , pfs::system_error_text(errno), ev.data.fd));
+                        on_failure(ev.data.fd, error {
+                              errc::socket_error
+                              , tr::f_("read socket failure: {} (socket={})"
+                                , pfs::system_error_text(errno), ev.data.fd)
+                        });
                     } else {
                         disconnected(ev.data.fd);
                     }

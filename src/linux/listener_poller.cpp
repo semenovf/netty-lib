@@ -49,11 +49,17 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
                 auto rc = getsockopt(ev.data.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.data.fd, tr::f_("get socket option failure: {}, listener socket removed: {}"
-                        , pfs::system_error_text(), ev.data.fd));
+                    on_failure(ev.data.fd, error {
+                          errc::system_error
+                        , tr::f_("get socket option failure: {}, listener socket removed: {}"
+                            , pfs::system_error_text(), ev.data.fd)
+                    });
                 } else {
-                    on_failure(ev.data.fd, tr::f_("accept socket error: {}, listener socket removed: {}"
-                        , pfs::system_error_text(error_val), ev.data.fd));
+                    on_failure(ev.data.fd, error {
+                          errc::socket_error
+                        , tr::f_("accept socket error: {}, listener socket removed: {}"
+                            , pfs::system_error_text(error_val), ev.data.fd)
+                    });
                 }
 
                 continue;

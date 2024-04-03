@@ -16,8 +16,8 @@ template <typename Backend>
 connecting_poller<Backend>::connecting_poller ()
     : connecting_poller(specialized{})
 {
-    on_failure = [] (native_socket_type, std::string const & text) {
-        fmt::print(stderr, tr::_("ERROR: connecting poller: {}\n"), text);
+    on_failure = [] (native_socket_type, error const & err) {
+        fmt::println(stderr, tr::_("ERROR: connecting poller: {}"), err.what());
     };
 
     connection_refused = [] (native_socket_type) {};
