@@ -1,16 +1,17 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.02.16 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/linux/netlink_socket.hpp"
+#include "netlink_socket.hpp"
 #include "pfs/i18n.hpp"
 #include <linux/rtnetlink.h>
 
-#if NETTY__LIBMNL_ENABLED
+#if METTY__LIBMNL_ENABLED
 #   include <libmnl/libmnl.h>
 #else
 #   include <sys/types.h>
@@ -19,7 +20,7 @@
 #endif
 
 namespace netty {
-namespace linux_os {
+namespace utils {
 
 netlink_socket::netlink_socket () = default;
 
@@ -36,8 +37,8 @@ netlink_socket::netlink_socket (type_enum netlinktype)
         }
         default: {
             throw error {
-                  errc::socket_error
-                , tr::f_("bad/unsupported Netlink socket type: {}"
+                  errc::system_error
+                , tr::f_("bad/unsupported netlink socket type: {}"
                     , static_cast<int>(netlinktype))
             };
         }
@@ -49,8 +50,8 @@ netlink_socket::netlink_socket (type_enum netlinktype)
     if (_socket < 0) {
 #endif
         throw error {
-              errc::socket_error
-            , tr::_("create Netlink socket failure")
+              errc::system_error
+            , tr::_("create netlink socket failure")
             , pfs::system_error_text()
         };
     }
@@ -75,8 +76,8 @@ netlink_socket::netlink_socket (type_enum netlinktype)
 
     if (rc < 0) {
         throw error {
-              errc::socket_error
-            , tr::_("bind Netlink socket failure")
+              errc::system_error
+            , tr::_("bind netlink socket failure")
             , pfs::system_error_text()
         };
     }
@@ -178,7 +179,7 @@ int netlink_socket::recv (char * data, int len, error * perr)
 
     if (n < 0) {
         error err {
-              errc::socket_error
+              errc::system_error
             , tr::_("receive data from Netlink socket failure")
             , pfs::system_error_text()
         };
@@ -211,8 +212,8 @@ int netlink_socket::send (char const * req, int len, error * perr)
 
     if (n < 0) {
         error err {
-              errc::socket_error
-            , tr::_("send Netlink request failure")
+              errc::system_error
+            , tr::_("send netlink request failure")
             , pfs::system_error_text()
         };
 
@@ -227,5 +228,4 @@ int netlink_socket::send (char const * req, int len, error * perr)
     return n;
 }
 
-}} // namespace netty::linux_os
-
+}} // namespace netty::utils

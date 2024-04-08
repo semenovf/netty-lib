@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,10 +7,12 @@
 //
 // Changelog:
 //      2021.06.24 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/network_interface.hpp"
+#include "network_interface.hpp"
 
 namespace netty {
+namespace utils {
 
 std::string to_string (network_interface_type type)
 {
@@ -65,4 +67,4 @@ std::string to_string (network_interface_status status)
     return std::string{"unknown"};
 }
 
-} // namespace netty
+}} // namespace netty::utils

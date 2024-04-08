@@ -69,7 +69,7 @@ file_transporter::file_transporter (options const & opts)
 
     if (bad) {
         error err {
-              errc::invalid_argument
+              make_error_code(std::errc::invalid_argument)
             , invalid_argument_desc
         };
 

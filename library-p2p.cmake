@@ -57,8 +57,7 @@ if (NOT TARGET pfs::ionik AND NOT TARGET pfs::ionik::static)
         set(IONIK__BUILD_STATIC ON CACHE BOOL "Build `ionik` static library")
     endif()
 
-    portable_target(INCLUDE_PROJECT
-        ${CMAKE_CURRENT_LIST_DIR}/2ndparty/ionik/library.cmake)
+    portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/2ndparty/ionik/library.cmake)
 endif()
 
 foreach(_target IN LISTS _netty_p2p__targets)

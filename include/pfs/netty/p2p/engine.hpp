@@ -275,7 +275,7 @@ public:
 
         if (bad) {
             error err {
-                  errc::invalid_argument
+                  make_error_code(std::errc::invalid_argument)
                 , invalid_argument_desc
             };
 
@@ -731,7 +731,7 @@ private:
 
         if (pos1 == _reader_ids.end()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " reader socket not found in collection (id={})"
                     " , need to fix algorithm.", id)
@@ -742,7 +742,7 @@ private:
 
         if (index >= _readers.size()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " index for reader item is out of bounds (id={})"
                     " , need to fix algorithm.", id)
@@ -753,7 +753,7 @@ private:
 
         if (!alive) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_reader_consistency:"
                     " invalid reader in collection found (id={})"
                     " , need to fix algorithm.", id)
@@ -888,7 +888,7 @@ private:
 
         if (pos1 == _writer_ids.end()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer socket not found in collection (id={})"
                     " , need to fix algorithm.", id)
@@ -899,7 +899,7 @@ private:
 
         if (index >= _writers.size()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                 " index for writer item is out of bounds (id={})"
                 " , need to fix algorithm.", id)
@@ -910,7 +910,7 @@ private:
 
         if (!alive) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " invalid writer in collection found (id={})"
                     " , need to fix algorithm.", id)
@@ -923,7 +923,7 @@ private:
 
         if (pos2 == _writer_uuids.end()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer universal identifier not found in collection (id={}, uuid={})"
                     " , need to fix algorithm.", id, item.uuid)
@@ -940,7 +940,7 @@ private:
 
         if (pos2 == _writer_uuids.end()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer universal identifier not found in collection (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -951,7 +951,7 @@ private:
 
         if (index >= _writers.size()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " index for writer item is out of bounds (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -962,7 +962,7 @@ private:
 
         if (!alive) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " invalid writer in collection found (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -975,7 +975,7 @@ private:
 
         if (pos1 == _writer_ids.end()) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("p2p::engine::check_writer_consistency:"
                     " writer socket not found in collection (uuid={})"
                     " , need to fix algorithm.", uuid)
@@ -1382,7 +1382,7 @@ private:
 
                         if (pos1 == _reader_ids.end()) {
                             process_failure(error {
-                                  errc::unexpected_error
+                                  make_error_code(pfs::errc::unexpected_error)
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " no reader found by socket id: {},"
                                     " need to fix algorithm", sock)
@@ -1397,7 +1397,7 @@ private:
 
                         if (pos != _reader_uuids.end() && pos->second != index) {
                             process_failure(error {
-                                  errc::unexpected_error
+                                  make_error_code(pfs::errc::unexpected_error)
                                 , tr::f_("p2p::engine::process_reader_input:"
                                     " found inconsistency for reader with universal"
                                     " identifier: {}, need to fix algorithm"

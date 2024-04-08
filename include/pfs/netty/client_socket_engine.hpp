@@ -128,7 +128,7 @@ public:
 
         if (bad) {
             throw error {
-                  errc::invalid_argument
+                  make_error_code(std::errc::invalid_argument)
                 , invalid_argument_desc
             };
         }
@@ -290,7 +290,7 @@ private:
     {
         if (_socket.native() != sock) {
             on_failure(error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("alien socket requested input process, ignored: {}", sock)
             });
             return;
@@ -304,7 +304,7 @@ private:
 
         if (n < 0) {
             throw error {
-                  errc::unexpected_error
+                  make_error_code(pfs::errc::unexpected_error)
                 , tr::f_("Receive data failure from: {}", to_string(_socket.saddr()))
             };
         }
@@ -324,7 +324,7 @@ private:
             } else {
                 if (result.second == (std::numeric_limits<std::size_t>::max)()) {
                     throw error {
-                          errc::unexpected_error
+                          make_error_code(pfs::errc::unexpected_error)
                         , tr::f_("Receive bad packet from: {}", to_string(_socket.saddr()))
                     };
                 }
@@ -336,7 +336,7 @@ private:
     {
         std::unique_lock<BasicLockable> lock(_omtx);
 
-        ssize_t total_bytes_sent = 0;
+        std::int64_t total_bytes_sent = 0;
 
         error err;
         bool break_sending = false;

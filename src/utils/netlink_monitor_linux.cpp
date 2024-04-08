@@ -1,26 +1,30 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.02.16 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
+#include "netlink_monitor.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/endian.hpp"
-#include "pfs/netty/inet4_addr.hpp"
-#include "pfs/netty/linux/netlink_monitor.hpp"
+#include "pfs/log.hpp"
+#include <cstring>
+#include <utility>
+#include <unistd.h>
 #include <linux/if.h>
 #include <linux/if_link.h>
 #include <linux/rtnetlink.h>
-#include <utility>
+#include <sys/epoll.h>
 
 #if NETTY__LIBMNL_ENABLED
 #   include <libmnl/libmnl.h>
 #endif
 
 namespace netty {
-namespace linux_os {
+namespace utils {
 
 enum class callback_result {
 #if NETTY__LIBMNL_ENABLED
@@ -33,23 +37,6 @@ enum class callback_result {
     , ok    =  1
 #endif
 };
-
-//     EXPORT_SYMBOL(mnl_attr_get_type);
-// uint16_t mnl_attr_get_type(const struct nlattr *attr)
-// {
-// 	return attr->nla_type & NLA_TYPE_MASK;
-// }
-//
-// EXPORT_SYMBOL(mnl_attr_type_valid);
-// int mnl_attr_type_valid(const struct nlattr *attr, uint16_t max)
-// {
-// 	if (mnl_attr_get_type(attr) > max) {
-// 		errno = EOPNOTSUPP;
-// 		return -1;
-// 	}
-// 	return 1;
-// }
-
 
 template <typename IfMsgType>
 IfMsgType const * cast_payload (nlmsghdr const * nlh)
@@ -198,7 +185,8 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
                         auto value = get_attr_ptr<std::uint32_t>(pattr);
 
                         if (ifa->ifa_family == AF_INET) {
-                            auto ip = inet4_addr{pfs::to_native_order(*value.first)};
+                            //auto ip = inet4_addr{pfs::to_native_order(*value.first)};
+                            auto ip = pfs::to_native_order(*value.first);
 
                             if (nlmsg_type == RTM_NEWADDR) {
                                 if (pmonitor->inet4_addr_added)
@@ -354,43 +342,144 @@ static callback_result parse (void const * buf, std::size_t len
 #endif
 }
 
-netlink_monitor::netlink_monitor ()
-    : _nls(netlink_socket::type_enum::route)
+netlink_monitor::netlink_monitor (error * perr)
+    : _sock(netlink_socket::type_enum::route)
 {
-    _poller.on_failure = [this] (netlink_socket::native_type, error const & err) {
-        this->on_failure(err);
-    };
+    _epoll_id = epoll_create1(0);
 
-    _poller.ready_read = [this] (netlink_socket::native_type) {
-#if NETTY__LIBMNL_ENABLED
-        char buf[MNL_SOCKET_BUFFER_SIZE];
-#else
-        char buf[8192]; // Max size for MNL_SOCKET_BUFFER_SIZE
-#endif
-        auto n = _nls.recv(buf, sizeof(buf));
+    if (_epoll_id < 0) {
+        pfs::throw_or(perr, error {
+              errc::system_error
+            , tr::_("epoll create failure")
+            , pfs::system_error_text()
+        });
 
-        if (n > 0) {
-#if NETTY__LIBMNL_ENABLED
-            auto rc = parse(buf, n, nullptr, this);
-#else
-            auto rc = parse(buf, n, & parser_callback, this);
-#endif
-            if (rc == callback_result::error) {
-                throw error {
-                      errc::socket_error
-                    , tr::_("Netlink parse data failure")
-                    , pfs::system_error_text()
-                };
-            }
-        }
-    };
+        return;
+    }
 
-    _poller.add(_nls.native());
+    struct epoll_event ev;
+    ev.events = EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND;
+    ev.data.fd = _sock.native();
+
+    int rc = epoll_ctl(_epoll_id, EPOLL_CTL_ADD, _sock.native(), & ev);
+
+    if (rc != 0) {
+        // Is not an error
+        if (errno == EEXIST)
+            return;
+
+        pfs::throw_or(perr, error {
+              errc::system_error
+            , tr::_("epoll add socket failure")
+            , pfs::system_error_text()
+        });
+
+        return;
+    }
+}
+
+netlink_monitor::~netlink_monitor ()
+{
+    if (_epoll_id > 0) {
+        ::close(_epoll_id);
+        _epoll_id = -1;
+    }
 }
 
 int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 {
-    return _poller.poll(millis, perr);
+    static constexpr int MAX_EVENTS = 64;
+    epoll_event events[MAX_EVENTS];
+    std::memset(events, 0, sizeof(epoll_event) * MAX_EVENTS);
+
+    auto n = epoll_wait(_epoll_id, events, MAX_EVENTS, millis.count());
+
+    if (n < 0) {
+        if (errno == EINTR) {
+            // Is not a critical error, ignore it
+        } else {
+            pfs::throw_or(perr, error {
+                  errc::system_error
+                , tr::_("epoll wait failure")
+                , pfs::system_error_text()
+            });
+        }
+
+        return n;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (events[i].events == 0)
+            continue;
+
+        int fd = events[i].data.fd;
+
+        if (events[i].events & EPOLLERR) {
+            int error_val = 0;
+            socklen_t len = sizeof(error_val);
+            auto rc = getsockopt(events[i].data.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
+
+            if (rc != 0) {
+                on_failure(error {
+                      errc::system_error
+                    , tr::f_("get netlink socket option failure: {} (socket={})"
+                        , pfs::system_error_text(), fd)
+                });
+            } else {
+                on_failure(error {
+                      errc::system_error
+                    , tr::f_("read netlink socket failure: {} (socket={})"
+                        , pfs::system_error_text(error_val), fd)
+                });
+            }
+
+            continue;
+        }
+
+        if (events[i].events & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
+#if NETTY__LIBMNL_ENABLED
+            char buf[MNL_SOCKET_BUFFER_SIZE];
+#else
+            char buf[8192]; // Max size for MNL_SOCKET_BUFFER_SIZE
+#endif
+            auto nreceived = ::recv(events[i].data.fd, buf, sizeof(buf), 0);
+
+            if (nreceived > 0) {
+
+#if NETTY__LIBMNL_ENABLED
+                auto rc = parse(buf, nreceived, nullptr, this);
+#else
+                auto rc = parse(buf, nreceived, & parser_callback, this);
+#endif
+                if (rc == callback_result::error) {
+                    pfs::throw_or(perr, error {
+                          errc::system_error
+                        , tr::_("netlink parse data failure")
+                        , pfs::system_error_text()
+                    });
+
+                    return -1;
+                }
+            } else if (nreceived == 0) {
+                LOGD("", "FIXME: 1. DISCONNECTED: {}", fd);
+                return -1;
+            } else {
+                if (errno != ECONNRESET) {
+                    on_failure(error {
+                          errc::system_error
+                        , tr::f_("read netlink socket failure: {} (socket={})"
+                            , pfs::system_error_text(errno), fd)
+                    });
+                } else {
+                    LOGD("", "FIXME: 2. DISCONNECTED: {}", fd);
+                }
+
+                return -1;
+            }
+        }
+    }
+
+    return n;
 }
 
-}} // namespace netty::linux_os
+}} // namespace netty::utils

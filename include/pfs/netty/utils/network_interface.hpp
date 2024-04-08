@@ -1,20 +1,23 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.06.24 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "exports.hpp"
-#include "error.hpp"
-#include "inet4_addr.hpp"
+#include "netty/exports.hpp"
+#include "netty/error.hpp"
+#include "netty/inet4_addr.hpp"
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
 
 namespace netty {
+namespace utils {
 
 using string_type = std::string;
 
@@ -51,9 +54,9 @@ enum class network_interface_flag {
       ddns_enabled = 0x0001
     , dhcp_enabled = 0x0004
     , receive_only = 0x0008
-    , no_multicast = 0x0010
-    , ip4_enabled = 0x0080
-    , ip6_enabled = 0x0100
+    , multicast    = 0x0010
+    , ip4_enabled  = 0x0080
+    , ip6_enabled  = 0x0100
 };
 
 struct network_interface_data
@@ -61,18 +64,22 @@ struct network_interface_data
     // The index of the IPv4 interface with which these addresses
     // are associated. On Windows Server 2003 and Windows XP,
     // this member is zero if IPv4 is not available on the interface.
-    int ip4_index {0};
+    // int ip4_index {0};
 
     // The interface index for the IPv6 IP address. This member is zero
     // if IPv6 is not available on the interface.
     // NOTE: This structure member is only available on Windows XP with SP1 and later.
-    int ip6_index {0};
+    // int ip6_index {0};
 
     // The maximum transmission unit (MTU) size, in bytes.
-    uint32_t mtu {0};
+    std::uint32_t mtu {0};
 
-    // IPv4 address associated with interface
+    // IPv4 address associated with interface.
+    // For Windows contains first unicast address if any.
     inet4_addr ip4;
+
+    // IPv6 address associated with interface
+    string_type ip6;
 
     string_type adapter_name;
 
@@ -92,11 +99,7 @@ struct network_interface_data
 
     network_interface_status status {network_interface_status::unknown};
 
-    uint32_t flags {0};
-
-#   if (defined(__linux) || defined(__linux__))
-#   elif _MSC_VER
-#   endif
+    std::uint32_t flags {0};
 };
 
 class network_interface
@@ -116,17 +119,22 @@ public:
         return _data.ip4;
     }
 
-    int ip4_index () const noexcept
+    string_type ip6_addr () const noexcept
     {
-        return _data.ip4_index;
+        return _data.ip6;
     }
 
-    int ip6_index () const noexcept
-    {
-        return _data.ip6_index;
-    }
+    // int ip4_index () const noexcept
+    // {
+    //     return _data.ip4_index;
+    // }
 
-    uint32_t mtu () const noexcept
+    // int ip6_index () const noexcept
+    // {
+    //     return _data.ip6_index;
+    // }
+
+    std::uint32_t mtu () const noexcept
     {
         return _data.mtu;
     }
@@ -187,9 +195,8 @@ public:
         return _data.type == network_interface_type::loopback;
     }
 
-    //friend NETTY__EXPORT std::vector<network_interface> fetch_interfaces (error * perr);
-    friend NETTY__EXPORT void foreach_interface (std::function<void(network_interface const &)> visitor
-    , error * perr);
+    friend NETTY__EXPORT
+    void foreach_interface (std::function<void(network_interface const &)> visitor, error * perr);
 };
 
 void foreach_interface (std::function<void(network_interface const &)> visitor
@@ -201,7 +208,7 @@ void foreach_interface (std::function<void(network_interface const &)> visitor
  * @param [out] ec error code (if any errors occured):
  *         - std::errc::not_enough_memory
  *         - std::errc::value_too_large
- *         - netty::errc::system_error
+ *         - pfs::errc::system_error
  * @return Network interfaces
  */
 
@@ -217,12 +224,8 @@ std::vector<network_interface> fetch_interfaces (Visitor && visitor, error * per
     }, & err);
 
     if (err) {
-        if (perr) {
-            *perr = err;
-            return std::vector<network_interface>{};
-        } else {
-            throw err;
-        }
+        pfs::throw_or(perr, std::move(err));
+        return std::vector<network_interface>{};
     }
 
     return result;
@@ -255,4 +258,4 @@ inline std::vector<network_interface> fetch_interfaces_by_name (usename un
 NETTY__EXPORT std::string to_string (network_interface_type type);
 NETTY__EXPORT std::string to_string (network_interface_status status);
 
-} // namespace netty
+}} // namespace netty::utils

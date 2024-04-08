@@ -1,21 +1,22 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.02.16 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
+#include "error.hpp"
+#include "exports.hpp"
 
 #if NETTY__LIBMNL_ENABLED
 struct mnl_socket;
 #endif
 
 namespace netty {
-namespace linux_os {
+namespace utils {
 
 /**
  * Netlink socket
@@ -76,4 +77,4 @@ public:
     NETTY__EXPORT int send (char const * req, int len, error * perr = nullptr);
 };
 
-}} // namespace netty::linux_os
+}} // namespace netty::utils

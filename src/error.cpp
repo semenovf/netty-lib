@@ -21,12 +21,8 @@ std::string error_category::message (int ev) const
     switch (static_cast<errc>(ev)) {
         case errc::success:
             return tr::_("no error");
-        case errc::system_error:
-            return tr::_("system error");
         case errc::operation_not_permitted:
             return tr::_("operation not permitted");
-        case errc::invalid_argument:
-            return tr::_("invalid argument");
         case errc::device_not_found:
             return tr::_("device not found");
         case errc::permissions_denied:
@@ -41,8 +37,6 @@ std::string error_category::message (int ev) const
             return tr::_("filesystem error");
         case errc::wrong_checksum:
             return tr::_("wrong checksum");
-        case errc::unexpected_error:
-            return tr::_("unexpected error");
 
         default: return tr::_("unknown net error");
     }

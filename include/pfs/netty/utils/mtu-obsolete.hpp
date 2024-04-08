@@ -1,10 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2021.06.21 Initial version
+//      2021.06.21 Initial version.
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "exports.hpp"
@@ -12,6 +13,7 @@
 #include <string>
 
 namespace netty {
+namespace utils {
 
 /**
  * Returns MTU (Maximum Transfer Unit) value of a device specified
@@ -44,4 +46,4 @@ inline int mtu (std::string const & iface)
     return result;
 }
 
-} // namespace netty
+}} // namespace netty::utils

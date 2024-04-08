@@ -1,78 +1,80 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2021.06.21 Initial version
+//      2021.06.21 Initial version (netty-lib).
+//      2024.04.08 Refactored.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/network_interface.hpp"
-#include <iostream>
+#include "netty/utils/network_interface.hpp"
+#include "pfs/argvapi.hpp"
+#include "pfs/fmt.hpp"
+#include "pfs/log.hpp"
 #include <string>
-#include <cerrno>
+
+void printUsage (pfs::filesystem::path const & programName
+    , std::string const & errorString = std::string{})
+{
+    std::FILE * out = stdout;
+
+    if (!errorString.empty()) {
+        out = stderr;
+        fmt::println(out, "Error: {}", errorString);
+    }
+
+    fmt::println(out, "Usage:\n\n"
+        "{0} --help | -h\n"
+        "\tPrint this help and exit\n\n"
+        "{0} [INTERFACE]"
+        "\tnPrint MTU for specified/all interface\n"
+#if (defined(__linux) || defined(__linux__))
+        "\tnAvailable interfaces can be listed by command `ip a`"
+#elif _MSC_VER
+        "\tAvailable interfaces can be listed by command `netsh interface ipv4 show subinterfaces`"
+#endif
+        , programName);
+}
+
 
 int main (int argc, char * argv[])
 {
-    if (argc < 2) {
-        std::cerr << "Too few arguments"
-            << "\nRun `" << argv[0] << " <interface>`"
-#if (defined(__linux) || defined(__linux__))
-            << "\n\nAvailable interfaces can be listed by command `ip a`"
-#elif _MSC_VER
-            << "\n\nAvailable interfaces can be listed by command `netsh interface ipv4 show subinterfaces`"
-#endif
-            << std::endl;
-        return EXIT_FAILURE;
-    }
+    auto commandLine = pfs::make_argvapi(argc, argv);
+    auto programName = commandLine.program_name();
+    auto commandLineIterator = commandLine.begin();
 
-    std::error_code ec;
-    auto interface_name = argv[1];
+    std::string interfaceName;
 
-    auto ifaces = netty::fetch_interfaces([& interface_name] (netty::network_interface const & iface) -> bool {
-        std::cout << "Adapter name: "  << iface.adapter_name() << "\n";
-        std::cout << "\tReadable name: " << iface.readable_name() << "\n";
-        std::cout << "\tDescription  : " << iface.description() << "\n";
-        std::cout << "\tHW address   : " << iface.hardware_address() << "\n";
-        std::cout << "\tType         : " << to_string(iface.type()) << "\n";
-        std::cout << "\tStatus       : " << to_string(iface.status()) << "\n";
-        std::cout << "\tMTU          : " << iface.mtu() << "\n";
-        std::cout << "\tIPv4 enabled : " << std::boolalpha << iface.is_flag_on(netty::network_interface_flag::ip4_enabled) << "\n";
-        std::cout << "\tIPv6 enabled : " << std::boolalpha << iface.is_flag_on(netty::network_interface_flag::ip6_enabled) << "\n";
-        std::cout << "\tIPv4 interface index: " << iface.ip4_index() << "\n";
-        std::cout << "\tIPv6 interface index: " << iface.ip6_index() << "\n";
-        std::cout << "\tIPv4         : " << to_string(iface.ip4_addr()) << "\n";
-        std::cout << "\n\n";
-        return interface_name == iface.adapter_name();
-    });
+    while (commandLineIterator.has_more()) {
+        auto x = commandLineIterator.next();
 
-    if (ec) {
-        std::cerr << "ERROR: failed to get MTU value for interface ["
-            << interface_name << "]: "
-            << ec.message() << std::endl;
-
-        if (ec == netty::make_error_code(netty::errc::system_error)) {
-            std::cerr << "ERROR: errno: " << errno << std::endl;
+        if (x.is_option("help") || x.is_option("h")) {
+            printUsage(programName);
+            return EXIT_SUCCESS;
+        } else if (x.has_arg()) {
+            using pfs::to_string;
+            interfaceName = to_string(x.arg());
+            break;
         }
-        return EXIT_FAILURE;
     }
 
-
-    {
-        using netty::fetch_interfaces_by_name;
-
-        auto ifaces = fetch_interfaces_by_name(netty::usename::adapter
-            , interface_name);
+    if (interfaceName.empty()) {
+        auto ifaces = netty::utils::fetch_interfaces([] (netty::utils::network_interface const & iface) -> bool {
+            fmt::println("MTU value for interface [{}]: {}", iface.adapter_name(), iface.mtu());
+            return true;
+        });
+    } else {
+        using netty::utils::fetch_interfaces_by_name;
+        auto ifaces = fetch_interfaces_by_name(netty::utils::usename::adapter, interfaceName);
 
         if (ifaces.empty()) {
-            std::cerr << "ERROR: interface ["
-                << interface_name << "]: not found" << std::endl;
+            LOGE("", "interface [{}] not found", interfaceName);
             return EXIT_FAILURE;
         }
 
-        std::cout << "MTU value for interface ["
-            << interface_name << "]: "
-            << ifaces[0].mtu() << std::endl;
-        }
+        for (auto const & iface: ifaces)
+            fmt::println("MTU value for interface [{}]: {}", iface.adapter_name(), iface.mtu());
+    }
 
     return EXIT_SUCCESS;
 }

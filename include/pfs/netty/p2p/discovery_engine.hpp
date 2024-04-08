@@ -9,14 +9,14 @@
 #pragma once
 #include "hello_packet.hpp"
 #include "universal_id.hpp"
+#include "netty/chrono.hpp"
+#include "netty/error.hpp"
+#include "netty/exports.hpp"
+#include "netty/send_result.hpp"
+#include "netty/socket4_addr.hpp"
+#include "netty/p2p/envelope.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/time_point.hpp"
-#include "pfs/netty/chrono.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/send_result.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/p2p/envelope.hpp"
 #include <chrono>
 #include <functional>
 #include <map>
@@ -155,7 +155,7 @@ private:
 
                     if (!res.second) {
                         throw error {
-                              errc::unexpected_error
+                              make_error_code(pfs::errc::unexpected_error)
                             , tr::_("unable to store discovered peer")
                         };
                     }
@@ -361,7 +361,7 @@ public:
 
         if (bad) {
             error err {
-                  errc::invalid_argument
+                  make_error_code(std::errc::invalid_argument)
                 , invalid_argument_desc
             };
 
@@ -415,7 +415,7 @@ public:
 
         if (bad) {
             error err {
-                  errc::invalid_argument
+                  make_error_code(std::errc::invalid_argument)
                 , tr::f_("discovery transmit interval"
                     " must greater or equals to {} and less or equals to {} seconds"
                     , MIN_TRANSMIT_INTERVAL_SECONDS
@@ -434,7 +434,7 @@ public:
 
         if (bad) {
             error err {
-                  errc::invalid_argument
+                  make_error_code(std::errc::invalid_argument)
                 , tr::f_("discovery expiration interval"
                     " must greater or equals to transmit interval ({} seconds)"
                     , transmit_interval)

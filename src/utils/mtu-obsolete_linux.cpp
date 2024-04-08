@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2021 Vladislav Trifochkin
+// Copyright (c) 2021-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -10,10 +10,11 @@
 //      4. [Net-Tools](https://sourceforge.net/projects/net-tools/files/)
 //
 // Changelog:
-//      2021.06.21 Initial version
+//      2021.06.21 Initial version (netty-lib).
 //      2021.06.21 Use 2-way to get MTU: mtu_alternative0() and mtu_alternative1()
+//      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/mtu-obsolete.hpp"
+#include "mtu-obsolete.hpp"
 #include <cstring>
 #include <fstream>
 #include <sys/ioctl.h>
@@ -23,6 +24,7 @@
 #include <unistd.h>
 
 namespace netty {
+namespace utils {
 
 //
 // See `man 7 netdevice`.
@@ -102,7 +104,7 @@ static int mtu_alternative1 (std::string const & interface, std::error_code & ec
     return result;
 }
 
-NETTY__EXPORT int mtu (std::string const & interface, std::error_code & ec) noexcept
+int mtu (std::string const & interface, std::error_code & ec) noexcept
 {
     auto result = mtu_alternative0(interface, ec);
 
@@ -112,4 +114,4 @@ NETTY__EXPORT int mtu (std::string const & interface, std::error_code & ec) noex
     return result;
 }
 
-} // namespace netty
+}} // namespace netty::utils

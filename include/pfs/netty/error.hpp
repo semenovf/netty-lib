@@ -20,10 +20,7 @@ using error_code = std::error_code;
 enum class errc
 {
       success = 0
-    , system_error       // More information can be obtained using errno (Linux) or
-                         // WSAGetLastError (Windows)
-    , operation_not_permitted //
-    , invalid_argument   // Invalid argument passed to callable entity
+    , operation_not_permitted
     , device_not_found
     , permissions_denied
     , name_too_long
@@ -31,7 +28,6 @@ enum class errc
     , socket_error       // Socket operation error
     , filesystem_error
     , wrong_checksum
-    , unexpected_error
 };
 
 class error_category : public std::error_category

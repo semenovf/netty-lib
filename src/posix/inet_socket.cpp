@@ -173,14 +173,12 @@ socket4_addr inet_socket::saddr () const noexcept
 inline bool inet_socket::check_socket_descriptor (native_type sock, error * perr)
 {
     if (sock == inet_socket::kINVALID_SOCKET) {
-        error err { errc::invalid_argument, tr::_("bad socket descriptor") };
+        pfs::throw_or(perr, error { 
+              make_error_code(std::errc::invalid_argument)
+            , tr::_("bad socket descriptor")
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;
@@ -204,18 +202,13 @@ bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * pe
         , sizeof(addr_in4));
 
     if (rc != 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::f_("bind name to socket failure: {}", to_string(saddr))
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;
@@ -233,7 +226,7 @@ bool inet_socket::set_nonblocking (native_type sock, bool enable, error * perr)
 
 #if _MSC_VER
     unsigned long mode = enable ? 1 : 0;
-    auto rc = ::ioctlsocket(fd, FIONBIO, & mode);
+    auto rc = ::ioctlsocket(sock, FIONBIO, & mode);
 
     if (rc != 0) {
 #else
@@ -246,19 +239,14 @@ bool inet_socket::set_nonblocking (native_type sock, bool enable, error * perr)
 
     if (rc < 0) {
 #endif
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::f_("set socket to {} mode failure"
                 , enable ? tr::_("nonblocking") : tr::_("blocking"))
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;
@@ -271,16 +259,11 @@ bool inet_socket::is_nonblocking (native_type sock, error * perr)
 
 #if _MSC_VER
     // No "direct" way to determine mode of the socket.
-    error err {
+    pfs::throw_or(perr, error {
           errc::operation_not_permitted
         , tr::_("unable to determine socket mode on Windows")
         , pfs::system_error_text()
-    };
-
-    if (perr)
-        *perr = std::move(err);
-    else
-        throw err;
+    });
 
     return false;
 #else
@@ -290,16 +273,11 @@ bool inet_socket::is_nonblocking (native_type sock, error * perr)
         return rc & O_NONBLOCK;
 
     if (rc < 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("get socket flags failure")
             , pfs::system_error_text()
         };
-
-        if (perr)
-            *perr = std::move(err);
-        else
-            throw err;
     }
 
     return false;
@@ -362,7 +340,7 @@ int inet_socket::available (error * perr) const
 
     if (rc < 0
         && errno == EAGAIN
-                || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+            || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
         return 0;
     }
 
@@ -373,18 +351,13 @@ int inet_socket::available (error * perr) const
     auto rc1 = ::ioctl(_socket, FIONREAD, & n);
 
     if (rc1 != 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("read available data size from socket failure")
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return -1;
-        } else {
-            throw err;
-        }
+        return -1;
     }
 
     return n;
@@ -405,18 +378,13 @@ int inet_socket::recv (char * data, int len, error * perr)
 #endif
             n = 0;
         } else {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::socket_error
                 , tr::_("receive data failure")
                 , pfs::system_error_text()
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return n;
-            } else {
-                throw err;
-            }
+            return n;
         }
     }
 

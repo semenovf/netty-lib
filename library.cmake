@@ -54,12 +54,15 @@ list(APPEND _netty__sources
 
 if (UNIX OR ANDROID)
     list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_linux.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_linux.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_linux.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_socket.cpp)
 elseif (MSVC)
     list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/network_interface_win32.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_win32.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_win32.cpp)
 else()
     message (FATAL_ERROR "Unsupported platform")
 endif()
@@ -113,10 +116,6 @@ if (UNIX OR ANDROID)
     endif()
 
     CHECK_INCLUDE_FILE("libmnl/libmnl.h" __has_libmnl)
-
-    list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_monitor.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/linux/netlink_socket.cpp)
 
     if (__has_libmnl)
         list(APPEND _netty__definitions "NETTY__LIBMNL_ENABLED=1")
@@ -180,7 +179,13 @@ endif(NETTY__ENABLE_QT5)
 
 foreach(_target IN LISTS _netty__targets)
     portable_target(SOURCES ${_target} ${_netty__sources})
-    portable_target(INCLUDE_DIRS ${_target} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+    portable_target(INCLUDE_DIRS ${_target} PUBLIC 
+        ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/include/pfs)
+    portable_target(INCLUDE_DIRS ${_target} PRIVATE 
+        ${CMAKE_CURRENT_LIST_DIR}/include/pfs/netty
+        ${CMAKE_CURRENT_LIST_DIR}/include/pfs/netty/utils)
+
     portable_target(LINK ${_target} PUBLIC pfs::common)
 
     if (_netty__compile_options)
