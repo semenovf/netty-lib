@@ -170,7 +170,7 @@ private:
                         LOG_TRACE_2("peer modified (socket address changed): {}: {}=>{}, force expiration"
                             , packet.uuid
                             , to_string(pos->second.saddr)
-                            , to_string(socket4_addr{saddr.addr, packet.port}))
+                            , to_string(socket4_addr{saddr.addr, packet.port}));
 
                         peer_expired(packet.uuid, pos->second.saddr);
                     } else {
