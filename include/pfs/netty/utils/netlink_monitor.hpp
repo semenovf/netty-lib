@@ -34,6 +34,10 @@ struct netlink_attributes
     bool up;      // Interface is up
 };
 
+// NOTE
+// On Linux, it is possible to receive more than one message per interface sequentially
+// for `inet4_addr_added` event.
+//
 class netlink_monitor
 {
 #if _MSC_VER

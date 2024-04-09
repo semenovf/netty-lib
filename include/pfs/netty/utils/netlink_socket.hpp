@@ -8,8 +8,8 @@
 //      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "error.hpp"
-#include "exports.hpp"
+#include "netty/error.hpp"
+#include "netty/exports.hpp"
 
 #if NETTY__LIBMNL_ENABLED
 struct mnl_socket;
@@ -48,7 +48,7 @@ public:
     /**
      * Constructs Netlink socket.
      */
-    netlink_socket (type_enum netlinktype);
+    netlink_socket (type_enum netlinktype, bool nonblocking = true);
 
     netlink_socket (netlink_socket const &) = delete;
     netlink_socket & operator = (netlink_socket const &) = delete;

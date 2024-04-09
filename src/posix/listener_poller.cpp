@@ -112,7 +112,7 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
 
                 if (rc != 0) {
                     on_failure(ev.fd, error {
-                          errc::system_error
+                          make_error_code(pfs::errc::system_error)
                         , tr::f_("get socket option failure: {}, socket removed: {}"
                             , pfs::system_error_text(), ev.fd)
                     });

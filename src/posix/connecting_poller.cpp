@@ -152,7 +152,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
 
                 if (rc != 0) {
                     on_failure(ev.fd, error {
-                          errc::system_error
+                          make_error_code(pfs::errc::system_error)
                         , tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
@@ -160,7 +160,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                     switch (error_val) {
                         case 0: // No error
                             on_failure(ev.fd, error {
-                                  errc::unexpected_error
+                                  make_error_code(pfs::errc::unexpected_error)
                                 , tr::f_("EPOLLERR event happend, but no error occurred on it (socket={})"
                                     , ev.fd)
                             });
@@ -179,7 +179,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
 
                         default:
                             on_failure(ev.fd, error {
-                                  errc::unexpected_error
+                                  make_error_code(pfs::errc::unexpected_error)
                                 , tr::f_("unhandled error value returned by `getsockopt`: {} (socket={})"
                                     , error_val, ev.fd)
                             });

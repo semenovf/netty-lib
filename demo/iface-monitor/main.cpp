@@ -14,14 +14,18 @@
 using netlink_monitor = netty::utils::netlink_monitor;
 using netlink_attributes = netty::utils::netlink_attributes;
 
-int main (int argc, char * argv[])
+int main (int, char *[])
 {
     LOGD("", "Start Netlink monitoring");
 
     netlink_monitor nm;
 
+    nm.on_failure = [] (netty::error const & err) {
+        LOGE("", "{}", err.what());
+    };
+
     nm.attrs_ready = [] (netlink_attributes const & attrs) {
-        LOGD("", "{} [{}]: mtu={}\n"
+        LOGD("", "Link: {} [{}]: mtu={}"
             , attrs.iface_name
             , attrs.up ? "UP" : "DOWN"
             , attrs.mtu);
@@ -35,8 +39,9 @@ int main (int argc, char * argv[])
         LOGD("", "Address removed from interface {}: {}", iface_index, to_string(addr));
     };
 
-    while (true)
-        nm.poll(std::chrono::seconds{1});
+    while (true) {
+        nm.poll(std::chrono::seconds{5});
+    }
 
     return EXIT_SUCCESS;
 }

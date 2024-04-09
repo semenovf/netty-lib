@@ -277,7 +277,7 @@ bool inet_socket::is_nonblocking (native_type sock, error * perr)
               errc::socket_error
             , tr::_("get socket flags failure")
             , pfs::system_error_text()
-        };
+        });
     }
 
     return false;

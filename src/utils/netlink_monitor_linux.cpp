@@ -172,11 +172,10 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
         case RTM_NEWADDR:
         case RTM_DELADDR: {
             auto ifa = cast_payload<ifaddrmsg>(nlh);
-
             auto nlmsg_type = nlh->nlmsg_type;
 
-            ret = foreach_attr(nlh, sizeof(*ifa), [ifa, nlmsg_type] (
-                    nlattr const * pattr, netlink_monitor * pmonitor) {
+            ret = foreach_attr(nlh, sizeof(*ifa), [ifa, nlmsg_type] (nlattr const * pattr
+                , netlink_monitor * pmonitor) {
 
                 auto attrtype = attr_type(pattr);
 
@@ -185,8 +184,7 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
                         auto value = get_attr_ptr<std::uint32_t>(pattr);
 
                         if (ifa->ifa_family == AF_INET) {
-                            //auto ip = inet4_addr{pfs::to_native_order(*value.first)};
-                            auto ip = pfs::to_native_order(*value.first);
+                            auto ip = inet4_addr{pfs::to_native_order(*value.first)};
 
                             if (nlmsg_type == RTM_NEWADDR) {
                                 if (pmonitor->inet4_addr_added)
@@ -218,10 +216,10 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
 
             netlink_attributes attrs;
 
-            if (ifm->ifi_flags & IFF_RUNNING)
-                attrs.running = true;
-            else
-                attrs.running = false;
+            // if (ifm->ifi_flags & IFF_RUNNING)
+            //     attrs.running = true;
+            // else
+            //     attrs.running = false;
 
             if (ifm->ifi_flags & IFF_UP)
                 attrs.up = true;
@@ -349,7 +347,7 @@ netlink_monitor::netlink_monitor (error * perr)
 
     if (_epoll_id < 0) {
         pfs::throw_or(perr, error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("epoll create failure")
             , pfs::system_error_text()
         });
@@ -369,7 +367,7 @@ netlink_monitor::netlink_monitor (error * perr)
             return;
 
         pfs::throw_or(perr, error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("epoll add socket failure")
             , pfs::system_error_text()
         });
@@ -399,7 +397,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
             // Is not a critical error, ignore it
         } else {
             pfs::throw_or(perr, error {
-                  errc::system_error
+                  make_error_code(pfs::errc::system_error)
                 , tr::_("epoll wait failure")
                 , pfs::system_error_text()
             });
@@ -421,13 +419,13 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 
             if (rc != 0) {
                 on_failure(error {
-                      errc::system_error
+                      make_error_code(pfs::errc::system_error)
                     , tr::f_("get netlink socket option failure: {} (socket={})"
                         , pfs::system_error_text(), fd)
                 });
             } else {
                 on_failure(error {
-                      errc::system_error
+                      make_error_code(pfs::errc::system_error)
                     , tr::f_("read netlink socket failure: {} (socket={})"
                         , pfs::system_error_text(error_val), fd)
                 });
@@ -442,39 +440,51 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 #else
             char buf[8192]; // Max size for MNL_SOCKET_BUFFER_SIZE
 #endif
-            auto nreceived = ::recv(events[i].data.fd, buf, sizeof(buf), 0);
 
-            if (nreceived > 0) {
+            std::size_t total_received = 0;
 
+            while (true) {
+                auto nreceived = ::recv(events[i].data.fd, buf, sizeof(buf), 0);
+
+                if (nreceived > 0) {
+                    total_received += nreceived;
 #if NETTY__LIBMNL_ENABLED
-                auto rc = parse(buf, nreceived, nullptr, this);
+                    auto rc = parse(buf, nreceived, nullptr, this);
 #else
-                auto rc = parse(buf, nreceived, & parser_callback, this);
+                    auto rc = parse(buf, nreceived, & parser_callback, this);
 #endif
-                if (rc == callback_result::error) {
-                    pfs::throw_or(perr, error {
-                          errc::system_error
-                        , tr::_("netlink parse data failure")
-                        , pfs::system_error_text()
-                    });
+                    if (rc == callback_result::error) {
+                        on_failure(error {
+                              make_error_code(pfs::errc::system_error)
+                            , tr::_("netlink parse data failure")
+                            , pfs::system_error_text()
+                        });
 
-                    return -1;
-                }
-            } else if (nreceived == 0) {
-                LOGD("", "FIXME: 1. DISCONNECTED: {}", fd);
-                return -1;
-            } else {
-                if (errno != ECONNRESET) {
-                    on_failure(error {
-                          errc::system_error
-                        , tr::f_("read netlink socket failure: {} (socket={})"
-                            , pfs::system_error_text(errno), fd)
-                    });
+                        break;
+                    }
+                } else if (nreceived == 0) {
+                    if (total_received == 0) {
+                        // Disconnected
+                        ;
+                    }
+
+                    break;
                 } else {
-                    LOGD("", "FIXME: 2. DISCONNECTED: {}", fd);
-                }
+                    if (errno == EAGAIN) {
+                        // Resource temporarily unavailable, not an error here, ignore it
+                        ;
+                    } else if (errno == ECONNRESET) {
+                        // Disconnected, not an error here, ignore it
+                    } else {
+                        on_failure(error {
+                              make_error_code(pfs::errc::system_error)
+                            , tr::f_("read netlink socket failure: {} (socket={})"
+                                , pfs::system_error_text(errno), fd)
+                        });
+                    }
 
-                return -1;
+                    break;
+                }
             }
         }
     }

@@ -46,7 +46,7 @@ static bool ioctl_helper (int fd, unsigned long request, struct ifreq * ifr, std
                 ec = make_error_code(std::errc::no_such_device);
                 break;
             default:
-                ec = make_error_code(errc::system_error);
+                ec = make_error_code(pfs::errc::system_error);
                 break;
         }
 
@@ -70,7 +70,7 @@ void foreach_interface (std::function<void(network_interface const &)> visitor, 
 
     if (getifaddrs(& ifaddr) != 0) {
         pfs::throw_or(perr, error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , pfs::system_error_text()
         });
 
@@ -86,7 +86,7 @@ void foreach_interface (std::function<void(network_interface const &)> visitor, 
 
     if (sock < 0) {
         pfs::throw_or(perr, error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , pfs::system_error_text()
         });
 
@@ -188,15 +188,13 @@ void foreach_interface (std::function<void(network_interface const &)> visitor, 
 
             if (ifa->ifa_addr != nullptr) {
                 if (ifa->ifa_addr->sa_family == AF_INET) {
-                    char buf[INET_ADDRSTRLEN];
                     auto p = reinterpret_cast<sockaddr_in *>(ifa->ifa_addr);
-                    iface->_data.ip4 = htonl(p->sin_addr.s_addr);
-                    iface->_data.ip4_name = inet_ntop(AF_INET, & p->sin_addr, buf, sizeof(buf));
+                    iface->_data.ip4 = inet4_addr{htonl(p->sin_addr.s_addr)};
                     iface->_data.flags |= static_cast<decltype(iface->_data.flags)>(network_interface_flag::ip4_enabled);
                 } else if (ifa->ifa_addr->sa_family == AF_INET6) {
                     char buf[INET6_ADDRSTRLEN];
                     auto p = reinterpret_cast<sockaddr_in6 *>(ifa->ifa_addr);
-                    iface->_data.ip6_name = inet_ntop(AF_INET6, & p->sin6_addr, buf, sizeof(buf));
+                    iface->_data.ip6 = inet_ntop(AF_INET6, & p->sin6_addr, buf, sizeof(buf));
                     iface->_data.flags |= static_cast<decltype(iface->_data.flags)>(network_interface_flag::ip6_enabled);
                 } else {
                     // Nor IPv4 nor IPv6, ignore;
@@ -205,7 +203,7 @@ void foreach_interface (std::function<void(network_interface const &)> visitor, 
 
             if (ec) {
                 pfs::throw_or(perr, error {
-                      errc::system_error
+                      make_error_code(pfs::errc::system_error)
                     , ec.message()
                 });
 

@@ -11,7 +11,7 @@
 #include "pfs/i18n.hpp"
 #include <linux/rtnetlink.h>
 
-#if METTY__LIBMNL_ENABLED
+#if NETTY__LIBMNL_ENABLED
 #   include <libmnl/libmnl.h>
 #else
 #   include <sys/types.h>
@@ -24,20 +24,22 @@ namespace utils {
 
 netlink_socket::netlink_socket () = default;
 
-netlink_socket::netlink_socket (type_enum netlinktype)
+netlink_socket::netlink_socket (type_enum netlinktype, bool nonblocking)
 {
     switch (netlinktype) {
         case type_enum::route: {
 #if NETTY__LIBMNL_ENABLED
             _socket = mnl_socket_open(NETLINK_ROUTE);
 #else
-            _socket = ::socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+            _socket = ::socket(AF_NETLINK
+                , SOCK_RAW | (nonblocking ? SOCK_NONBLOCK : 0)
+                , NETLINK_ROUTE);
 #endif
             break;
         }
         default: {
             throw error {
-                  errc::system_error
+                  make_error_code(pfs::errc::system_error)
                 , tr::f_("bad/unsupported netlink socket type: {}"
                     , static_cast<int>(netlinktype))
             };
@@ -50,14 +52,14 @@ netlink_socket::netlink_socket (type_enum netlinktype)
     if (_socket < 0) {
 #endif
         throw error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("create netlink socket failure")
             , pfs::system_error_text()
         };
     }
 
     unsigned int nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR
-        /* | RTMGRP_NOTIFY | RTMGRP_IPV6_IFADDR */;
+        /*| RTMGRP_NOTIFY | RTMGRP_IPV6_IFADDR */;
 
 #if NETTY__LIBMNL_ENABLED
     auto rc = mnl_socket_bind(_socket, nl_groups, MNL_SOCKET_AUTOPID);
@@ -76,7 +78,7 @@ netlink_socket::netlink_socket (type_enum netlinktype)
 
     if (rc < 0) {
         throw error {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("bind netlink socket failure")
             , pfs::system_error_text()
         };
@@ -179,7 +181,7 @@ int netlink_socket::recv (char * data, int len, error * perr)
 
     if (n < 0) {
         error err {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("receive data from Netlink socket failure")
             , pfs::system_error_text()
         };
@@ -212,7 +214,7 @@ int netlink_socket::send (char const * req, int len, error * perr)
 
     if (n < 0) {
         error err {
-              errc::system_error
+              make_error_code(pfs::errc::system_error)
             , tr::_("send netlink request failure")
             , pfs::system_error_text()
         };
