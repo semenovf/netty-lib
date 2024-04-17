@@ -12,6 +12,7 @@
 #include "netty/chrono.hpp"
 #include "netty/error.hpp"
 #include "netty/exports.hpp"
+#include "netty/host4_addr.hpp"
 #include "netty/send_result.hpp"
 #include "netty/socket4_addr.hpp"
 #include "netty/p2p/envelope.hpp"
@@ -93,9 +94,13 @@ public:
     /**
      * Called when peer discovery (hello) packet received.
      * It happens periodically (defined by _transmit_interval on the remote host).
+     *
+     * @deprecated Use `peer_discovered2` instead.
      */
-    mutable std::function<void (universal_id, socket4_addr, timediff_type const &)>
-        peer_discovered = [] (universal_id, socket4_addr, timediff_type const &) {};
+    mutable std::function<void (universal_id, socket4_addr, timediff_type const &)> peer_discovered;
+
+    mutable std::function<void (host4_addr, timediff_type const &)>
+        peer_discovered2 = [] (host4_addr, timediff_type const &) {};
 
     /**
      * Called when the time difference has changed significantly.
@@ -107,9 +112,13 @@ public:
      * Called when no discovery packets were received for a specified period or
      * when any of the credential properties have changed.
      * This is an opposite event to `peer_discovered`.
+     *
+     * @deprecated Use `peer_expired2` instead.
      */
-    mutable std::function<void (universal_id, socket4_addr)> peer_expired
-        = [] (universal_id /*peer_uuid*/, socket4_addr /*saddr*/) {};
+    mutable std::function<void (universal_id, socket4_addr)> peer_expired;
+
+    mutable std::function<void (host4_addr)> peer_expired2
+        = [] (host4_addr /*saddr*/) {};
 
 private:
     void process_hello_packet (socket4_addr saddr, hello_packet const & packet)
@@ -161,7 +170,11 @@ private:
                     }
 
                     pos = res.first;
-                    peer_discovered(packet.uuid, pos->second.saddr, timediff);
+
+                    if (peer_discovered)
+                        peer_discovered(packet.uuid, pos->second.saddr, timediff);
+                    else
+                        peer_discovered2(host4_addr{packet.uuid, pos->second.saddr}, timediff);
                 } else {
                     bool modified = (pos->second.saddr.addr != saddr.addr);
                     modified = modified || (pos->second.saddr.port != packet.port);
@@ -172,7 +185,10 @@ private:
                             , to_string(pos->second.saddr)
                             , to_string(socket4_addr{saddr.addr, packet.port}));
 
-                        peer_expired(packet.uuid, pos->second.saddr);
+                        if (peer_expired)
+                            peer_expired(packet.uuid, pos->second.saddr);
+                        else
+                            peer_expired2(host4_addr{packet.uuid, pos->second.saddr});
                     } else {
                         pos->second.expiration_timepoint = expiration_timepoint;
 
@@ -306,7 +322,11 @@ private:
 
         for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
             if (pos->second.expiration_timepoint < now) {
-                peer_expired(pos->first, pos->second.saddr);
+                if (peer_expired)
+                    peer_expired(pos->first, pos->second.saddr);
+                else
+                    peer_expired2(host4_addr{pos->first, pos->second.saddr});
+
                 pos = _discovered_peers.erase(pos);
             } else {
                 ++pos;
@@ -317,7 +337,11 @@ private:
     void expire_all_peers ()
     {
         for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
-            peer_expired(pos->first, pos->second.saddr);
+            if (peer_expired)
+                peer_expired(pos->first, pos->second.saddr);
+            else
+                peer_expired2(host4_addr{pos->first, pos->second.saddr});
+
             pos = _discovered_peers.erase(pos);
         }
     }
@@ -509,7 +533,11 @@ public:
             // The order is matter (erase and then call callback)
             auto saddr = pos->second.saddr;
             pos = _discovered_peers.erase(pos);
-            peer_expired(uuid, saddr);
+
+            if (peer_expired)
+                peer_expired(uuid, saddr);
+            else
+                peer_expired2(host4_addr{uuid, saddr});
         }
     }
 

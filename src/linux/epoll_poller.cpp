@@ -57,7 +57,7 @@ void epoll_poller::add (native_socket_type sock, error * perr)
 
         error err {
               errc::poller_error
-            , tr::_("epoll add socket failure")
+            , tr::f_("epoll add socket ({}) failure", sock)
             , pfs::system_error_text()
         };
 

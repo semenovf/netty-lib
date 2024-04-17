@@ -116,9 +116,9 @@ public:
      */
     mutable std::function<void (universal_id /*addressee*/
         , universal_id /*fileid*/
-        , packet_type /*packettype*/
+        , packet_type_enum /*packettype*/
         , char const * /*data*/, int /*len*/)> ready_to_send
-        = [] (universal_id, universal_id, packet_type, char const *, int) {};
+        = [] (universal_id, universal_id, packet_type_enum, char const *, int) {};
 
     mutable std::function<void (universal_id /*addressee*/
         , universal_id /*fileid*/)> upload_stopped

@@ -115,18 +115,13 @@ public:
             _reader_poller.add(sock, perr);
             LOG_TRACE_3("Client socket ({}) added to `client_poller` with CONNECTED state", to_string(sock.saddr()));
         } else {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::poller_error
                 , tr::_("socket must be in a connecting or connected state to be"
                     " added to the client poller")
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return;
-            } else {
-                throw err;
-            }
+            return;
         }
     }
 

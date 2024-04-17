@@ -11,8 +11,6 @@
 #include "pfs/universal_id.hpp"
 #include "pfs/universal_id_crc.hpp"
 #include "pfs/universal_id_hash.hpp"
-#include <utility>
-#include <cassert>
 
 #if NETTY_P2P__CEREAL_ENABLED
 #   include <cereal/archives/binary.hpp>
@@ -22,6 +20,7 @@ namespace netty {
 namespace p2p {
 
 using universal_id = pfs::universal_id;
+    /// @depricated Use `host_id` instead
 
 }} // namespace netty::p2p
 

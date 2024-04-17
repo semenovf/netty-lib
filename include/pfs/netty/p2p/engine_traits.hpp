@@ -89,9 +89,11 @@ struct default_engine_traits
 
 #endif // !NETTY__P2P_UDT_ENGINE
 
-    // They are usually identical
-    using writer_id = typename client_poller_type::native_socket_type;
-    using reader_id = typename server_poller_type::native_socket_type;
+    using listener_type = server_type;
+
+    // DEPRECATED
+    using writer_id_type = typename client_poller_type::native_socket_type;
+    using reader_id_type = typename server_poller_type::native_socket_type;
 };
 
 }} // namespace netty::p2p

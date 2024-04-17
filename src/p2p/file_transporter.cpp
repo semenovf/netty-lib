@@ -296,7 +296,7 @@ void file_transporter::notify_file_status (universal_id addressee
     output_envelope_type out;
     out << file_state {fileid, state};
 
-    ready_to_send(addressee, fileid, packet_type::file_state
+    ready_to_send(addressee, fileid, packet_type_enum::file_state
         , out.data().data(), out.data().size());
 }
 
@@ -479,7 +479,7 @@ void file_transporter::process_file_request (universal_id sender
         output_envelope_type out;
         out << fb;
 
-        ready_to_send(sender, fr.fileid, packet_type::file_begin
+        ready_to_send(sender, fr.fileid, packet_type_enum::file_begin
             , out.data().data(), out.data().size());
     }
 }
@@ -635,7 +635,7 @@ void file_transporter::send_file_request (universal_id addressee_id, universal_i
     output_envelope_type out;
     out << fr;
 
-    ready_to_send(addressee_id, fileid, packet_type::file_request
+    ready_to_send(addressee_id, fileid, packet_type_enum::file_request
         , out.data().data(), out.data().size());
 
     LOG_TRACE_3("Send file request: addressee={}; file={}; offset={}"
@@ -681,7 +681,7 @@ universal_id file_transporter::send_file (universal_id addressee
     output_envelope_type out;
     out << fc;
 
-    ready_to_send(addressee, fileid, packet_type::file_credentials
+    ready_to_send(addressee, fileid, packet_type_enum::file_credentials
         , out.data().data(), out.data().size());
 
     return fileid;
@@ -710,7 +710,7 @@ universal_id file_transporter::send_file (universal_id addressee
     output_envelope_type out;
     out << fc;
 
-    ready_to_send(addressee, fileid, packet_type::file_credentials
+    ready_to_send(addressee, fileid, packet_type_enum::file_credentials
         , out.data().data(), out.data().size());
 
     return fileid;
@@ -727,7 +727,7 @@ void file_transporter::stop_file (universal_id addressee, universal_id fileid)
 
     LOG_TRACE_3("Send file stop to: {} ({})", addressee, fs.fileid);
 
-    ready_to_send(addressee, fileid, packet_type::file_stop
+    ready_to_send(addressee, fileid, packet_type_enum::file_stop
         , out.data().data(), out.data().size());
 }
 
@@ -787,7 +787,7 @@ int file_transporter::loop ()
             output_envelope_type out;
             out << fe;
 
-            ready_to_send(pos->second.addressee, fileid, packet_type::file_end
+            ready_to_send(pos->second.addressee, fileid, packet_type_enum::file_end
                 , out.data().data(), out.data().size());
 
             // Remove file from output pool
@@ -803,7 +803,7 @@ int file_transporter::loop ()
             LOG_TRACE_3("Send file chunk: {} (offset={}, chunk size={})"
                 , pos->first, offset, fc.chunk.size());
 
-            ready_to_send(pos->second.addressee, fileid, packet_type::file_chunk
+            ready_to_send(pos->second.addressee, fileid, packet_type_enum::file_chunk
                 , out.data().data(), out.data().size());
 
             //p->hash.update(fc.chunk.data(), fc.chunk.size());

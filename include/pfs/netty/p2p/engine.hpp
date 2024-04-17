@@ -43,6 +43,8 @@ namespace p2p {
  * @tparam SocketsBackend Socket backend.
  * @tparam PACKET_SIZE Maximum packet size (must be less or equal to
  *         @c packet::MAX_PACKET_SIZE and greater than @c packet::PACKET_HEADER_SIZE).
+ *
+ * @deprecated Use `delivery_engine`, `discovery_engine`.
  */
 template <
       typename DiscoveryEngineBackend
@@ -65,10 +67,11 @@ private:
     using server_type           = typename EngineTraits::server_type;
     using reader_type           = typename EngineTraits::reader_type;
     using writer_type           = typename EngineTraits::writer_type;
-    using reader_id             = typename EngineTraits::reader_id;
-    using writer_id             = typename EngineTraits::writer_id;
+    using reader_id             = typename EngineTraits::reader_id_type;
+    using writer_id             = typename EngineTraits::writer_id_type;
     using discovery_engine_type = discovery_engine<DiscoveryEngineBackend>;
 
+    // TODO replace with INVALID_MESSAGE_ID
     static constexpr entity_id INVALID_ENTITY {0};
 
 public:
@@ -86,12 +89,14 @@ public:
         bool check_reader_consistency {true};
         bool check_writer_consistency {true};
 
+        // UNUSED
         // Number packets send in one iteration
-        int send_packet_limit {10};
+        // int send_packet_limit {10};
 
+        // UNUSED
         // Priority in percents of sending regular packets in relation to
         // sending of file chunk packets. Applicable to `send_packet_limit`.
-        int regular_packets_priority {80};
+        // int regular_packets_priority {80};
 
         typename FileTransporter::options filetransporter;
         typename discovery_engine_type::options discovery;
@@ -101,6 +106,7 @@ public:
     } _opts;
 
 private:
+    // TODO replace with message_unit
     struct oqueue_item
     {
         entity_id    id;
@@ -523,12 +529,12 @@ public:
      */
     entity_id send (universal_id addressee_id, char const * data, int len)
     {
-        return enqueue_packets(addressee_id, packet_type::regular, data, len);
+        return enqueue_packets(addressee_id, packet_type_enum::regular, data, len);
     }
 
     entity_id send (universal_id addressee_id, std::string const & data)
     {
-        return enqueue_packets(addressee_id, packet_type::regular, data.c_str()
+        return enqueue_packets(addressee_id, packet_type_enum::regular, data.c_str()
             , data.size());
     }
 
@@ -648,20 +654,20 @@ private:
 
         _transporter->ready_to_send = [this] (universal_id addressee
                 , universal_id fileid
-                , packet_type packettype
+                , packet_type_enum packettype
                 , char const * data, int len) {
             switch (packettype) {
                 // Commands
-                case packet_type::file_credentials:
-                case packet_type::file_request:
-                case packet_type::file_stop:
-                case packet_type::file_state:
+                case packet_type_enum::file_credentials:
+                case packet_type_enum::file_request:
+                case packet_type_enum::file_stop:
+                case packet_type_enum::file_state:
                     enqueue_packets(addressee, packettype, data, len);
                     break;
                 // Data
-                case packet_type::file_begin:
-                case packet_type::file_end:
-                case packet_type::file_chunk:
+                case packet_type_enum::file_begin:
+                case packet_type_enum::file_end:
+                case packet_type_enum::file_chunk:
                     enqueue_file_chunk(addressee, fileid, packettype, data, len);
                     break;
                 default:
@@ -1155,8 +1161,9 @@ private:
         }
     }
 
+    // TODO replace with netty::p2p::enqueue_packets
     entity_id enqueue_packets_helper (oqueue_type * q, universal_id addressee
-        , packet_type packettype, char const * data, int len)
+        , packet_type_enum packettype, char const * data, int len)
     {
         auto payload_size = PACKET_SIZE - packet::PACKET_HEADER_SIZE;
         auto remain_len   = len;
@@ -1194,7 +1201,7 @@ private:
      * Splits @a data into packets and enqueue them into output queue.
      */
     entity_id enqueue_packets (universal_id addressee
-        , packet_type packettype, char const * data, int len)
+        , packet_type_enum packettype, char const * data, int len)
     {
         auto * paccount = locate_writer_account(addressee);
 
@@ -1206,7 +1213,7 @@ private:
     }
 
     entity_id enqueue_file_chunk (universal_id addressee, universal_id fileid
-        , packet_type packettype, char const * data, int len)
+        , packet_type_enum packettype, char const * data, int len)
     {
         auto * paccount = locate_writer_account(addressee);
 
@@ -1250,7 +1257,7 @@ private:
             , paccount->writer.saddr().port);
 
         auto pkt = _discovery->serialize_default_hello_packet();
-        enqueue_packets(paccount->uuid, packet_type::hello, pkt.data(), pkt.size());
+        enqueue_packets(paccount->uuid, packet_type_enum::hello, pkt.data(), pkt.size());
 
         LOG_TRACE_2("Socket connected and enqueued `hello` packet: socket={}", id);
         check_complete_channel(paccount->uuid);
@@ -1305,21 +1312,21 @@ private:
             available -= PACKET_SIZE;
             pbuffer_pos += PACKET_SIZE;
 
-            static_assert(sizeof(packet_type) <= sizeof(char), "");
+            static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
 
-            auto packettype = static_cast<packet_type>(in.peek());
+            auto packettype = static_cast<packet_type_enum>(in.peek());
             decltype(packet::packetsize) packetsize {0};
 
             auto valid_packettype
-                 = packettype == packet_type::regular
-                || packettype == packet_type::hello
-                || packettype == packet_type::file_credentials
-                || packettype == packet_type::file_request
-                || packettype == packet_type::file_chunk
-                || packettype == packet_type::file_begin
-                || packettype == packet_type::file_end
-                || packettype == packet_type::file_state
-                || packettype == packet_type::file_stop;
+                 = packettype == packet_type_enum::regular
+                || packettype == packet_type_enum::hello
+                || packettype == packet_type_enum::file_credentials
+                || packettype == packet_type_enum::file_request
+                || packettype == packet_type_enum::file_chunk
+                || packettype == packet_type_enum::file_begin
+                || packettype == packet_type_enum::file_end
+                || packettype == packet_type_enum::file_state
+                || packettype == packet_type_enum::file_stop;
 
             if (!valid_packettype) {
                 on_failure(error {
@@ -1371,13 +1378,13 @@ private:
                 auto sender_uuid = pkt.addresser;
 
                 switch (packettype) {
-                    case packet_type::regular:
+                    case packet_type_enum::regular:
                         LOG_TRACE_3("Data received from: {} {} bytes", sender_uuid, paccount->b.size());
                         this->data_received(sender_uuid
                             , std::string(paccount->b.data(), paccount->b.size()));
                         break;
 
-                    case packet_type::hello: {
+                    case packet_type_enum::hello: {
                         auto pos1 = _reader_ids.find(sock);
 
                         if (pos1 == _reader_ids.end()) {
@@ -1416,6 +1423,7 @@ private:
                         auto pwriter = locate_writer_account(sender_uuid);
 
                         if (!pwriter) {
+                            // TODO This call may be superfluous, check
                             _discovery->force_peer_discovered(paccount->reader.saddr()
                                 , paccount->b.data(), paccount->b.size());
                         }
@@ -1426,34 +1434,34 @@ private:
                     }
 
                     // Initiating file sending from peer
-                    case packet_type::file_credentials:
+                    case packet_type_enum::file_credentials:
                         _transporter->process_file_credentials(sender_uuid, paccount->b);
                         break;
 
-                    case packet_type::file_request:
+                    case packet_type_enum::file_request:
                         _transporter->process_file_request(sender_uuid, paccount->b);
                         break;
 
-                    case packet_type::file_stop:
+                    case packet_type_enum::file_stop:
                         _transporter->process_file_stop(sender_uuid, paccount->b);
                         break;
 
                     // File chunk received
-                    case packet_type::file_chunk:
+                    case packet_type_enum::file_chunk:
                         _transporter->process_file_chunk(sender_uuid, paccount->b);
                         break;
 
                     // File
-                    case packet_type::file_begin:
+                    case packet_type_enum::file_begin:
                         _transporter->process_file_begin(sender_uuid, paccount->b);
                         break;
 
                     // File received completely
-                    case packet_type::file_end:
+                    case packet_type_enum::file_end:
                         _transporter->process_file_end(sender_uuid, paccount->b);
                         break;
 
-                    case packet_type::file_state:
+                    case packet_type_enum::file_state:
                         _transporter->process_file_state(sender_uuid, paccount->b);
                         break;
                 }

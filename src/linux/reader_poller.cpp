@@ -55,11 +55,15 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                             , pfs::system_error_text(), ev.data.fd)
                     });
                 } else {
-                    on_failure(ev.data.fd, error {
-                          errc::socket_error
-                        , tr::f_("read socket failure: {} (socket={})"
-                            , pfs::system_error_text(error_val), ev.data.fd)
-                    });
+                    if (error_val == EPIPE) {
+                        disconnected(ev.data.fd);
+                    } else {
+                        on_failure(ev.data.fd, error {
+                              errc::socket_error
+                            , tr::f_("get socket option failure: {} (socket={})"
+                                , pfs::system_error_text(error_val), ev.data.fd)
+                        });
+                    }
                 }
 
                 continue;
@@ -75,14 +79,14 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                 } else if (n == 0) {
                     disconnected(ev.data.fd);
                 } else {
-                    if (errno != ECONNRESET) {
+                    if (errno == ECONNRESET) {
+                        disconnected(ev.data.fd);
+                    } else {
                         on_failure(ev.data.fd, error {
                               errc::socket_error
                               , tr::f_("read socket failure: {} (socket={})"
                                 , pfs::system_error_text(errno), ev.data.fd)
                         });
-                    } else {
-                        disconnected(ev.data.fd);
                     }
                 }
             }

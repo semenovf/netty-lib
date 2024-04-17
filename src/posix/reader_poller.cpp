@@ -81,14 +81,14 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                         ready_read(fd);
                     } else {
 #endif
-                        if (errno != ECONNRESET) {
+                        if (errno == ECONNRESET) {
+                            disconnected(fd);
+                        } else {
                             on_failure(fd, error {
                                   errc::socket_error
                                 , tr::f_("read socket failure: {} (socket={})"
                                     , pfs::system_error_text(errno), fd)
                             });
-                        } else {
-                            disconnected(fd);
                         }
 #if _MSC_VER
                     }
@@ -154,11 +154,15 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
-                    on_failure(ev.fd, error {
-                          errc::socket_error
-                        , tr::f_("read socket failure: {} (socket={})"
-                            , pfs::system_error_text(error_val), ev.fd)
-                    });
+                    if (error_val == EPIPE) {
+                        disconnected(ev.fd);
+                    } else {
+                        on_failure(ev.fd, error {
+                              errc::socket_error
+                            , tr::f_("get socket option failure: {} (socket={})"
+                                , pfs::system_error_text(error_val), ev.fd)
+                        });
+                    }
                 }
 
                 continue;
