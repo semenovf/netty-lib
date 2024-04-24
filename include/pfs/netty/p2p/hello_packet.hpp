@@ -7,14 +7,9 @@
 //      2021.09.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "serializer.hpp"
 #include "universal_id.hpp"
 #include "pfs/crc16.hpp"
 #include "pfs/universal_id_crc.hpp"
-
-#if NETTY_P2P__CEREAL_ENABLED
-#   include <cereal/archives/binary.hpp>
-#endif
 
 namespace netty {
 namespace p2p {
@@ -45,36 +40,6 @@ inline std::int16_t crc16_of (hello_packet const & pkt)
         , pkt.counter, pkt.timestamp);
     return crc16;
 }
-
-#if NETTY_P2P__CEREAL_ENABLED
-inline void save (cereal::BinaryOutputArchive & ar, hello_packet const & pkt)
-{
-    ar  << pkt.greeting[0]
-        << pkt.greeting[1]
-        << pkt.greeting[2]
-        << pkt.greeting[3]
-        << pkt.uuid
-        << pfs::to_network_order(pkt.port)
-        << pfs::to_network_order(pkt.expiration_interval)
-        << pfs::to_network_order(pkt.counter)
-        << pfs::to_network_order(pkt.timestamp)
-        << pfs::to_network_order(crc16_of(pkt));
-}
-
-inline void load (cereal::BinaryInputArchive & ar, hello_packet & pkt)
-{
-    ar  >> pkt.greeting[0]
-        >> pkt.greeting[1]
-        >> pkt.greeting[2]
-        >> pkt.greeting[3]
-        >> pkt.uuid
-        >> ntoh(pkt.port)
-        >> ntoh(pkt.expiration_interval)
-        >> ntoh(pkt.counter)
-        >> ntoh(pkt.timestamp)
-        >> ntoh(pkt.crc16);
-}
-#endif
 
 inline bool is_valid (hello_packet const & pkt)
 {

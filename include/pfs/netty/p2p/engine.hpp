@@ -11,7 +11,7 @@
 #pragma once
 #include "discovery_engine.hpp"
 #include "engine_traits.hpp"
-#include "envelope.hpp"
+#include "primal_serializer.hpp"
 #include "file_transporter.hpp"
 #include "hello_packet.hpp"
 #include "file.hpp"
@@ -48,17 +48,19 @@ namespace p2p {
  */
 template <
       typename DiscoveryEngineBackend
+    , typename Serializer       = primal_serializer<>
     , typename EngineTraits     = default_engine_traits
-    , typename FileTransporter  = file_transporter
+    , typename FileTransporter  = file_transporter<Serializer>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class engine
 {
     static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE
         && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
 
-public:
-    using input_envelope_type   = input_envelope<>;
-    using output_envelope_type  = output_envelope<>;
+    // FIXME REMOVE
+// public:
+//     using input_envelope_type   = input_envelope<>;
+//     using output_envelope_type  = output_envelope<>;
 
 private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
@@ -69,7 +71,7 @@ private:
     using writer_type           = typename EngineTraits::writer_type;
     using reader_id             = typename EngineTraits::reader_id_type;
     using writer_id             = typename EngineTraits::writer_id_type;
-    using discovery_engine_type = discovery_engine<DiscoveryEngineBackend>;
+    using discovery_engine_type = discovery_engine<DiscoveryEngineBackend, Serializer>;
 
     // TODO replace with INVALID_MESSAGE_ID
     static constexpr entity_id INVALID_ENTITY {0};
@@ -652,23 +654,21 @@ private:
                 ? true: false;
         };
 
-        _transporter->ready_to_send = [this] (universal_id addressee
-                , universal_id fileid
-                , packet_type_enum packettype
-                , char const * data, int len) {
+        _transporter->ready_send = [this] (universal_id addressee, universal_id fileid
+                , packet_type_enum packettype, std::vector<char> data) {
             switch (packettype) {
                 // Commands
                 case packet_type_enum::file_credentials:
                 case packet_type_enum::file_request:
                 case packet_type_enum::file_stop:
                 case packet_type_enum::file_state:
-                    enqueue_packets(addressee, packettype, data, len);
+                    enqueue_packets(addressee, packettype, data.data(), pfs::numeric_cast<int>(data.size()));
                     break;
                 // Data
                 case packet_type_enum::file_begin:
                 case packet_type_enum::file_end:
                 case packet_type_enum::file_chunk:
-                    enqueue_file_chunk(addressee, fileid, packettype, data, len);
+                    enqueue_file_chunk(addressee, fileid, packettype, data.data(), pfs::numeric_cast<int>(data.size()));
                     break;
                 default:
                     return;
@@ -1158,6 +1158,8 @@ private:
             auto saddr = paccount->writer.saddr();
             LOG_TRACE_2("Channel complete (established): peer={}, saddr={}", peer_uuid, to_string(saddr));
             channel_established(peer_uuid, saddr.addr, saddr.port);
+        } else {
+            LOG_TRACE_2("Channel incomplete yet: peer={}", peer_uuid);
         }
     }
 
@@ -1308,27 +1310,16 @@ private:
         auto pbuffer_pos = pbuffer->begin();
 
         do {
-            input_envelope_type in {& *pbuffer_pos, PACKET_SIZE};
+            typename Serializer::istream_type in {& *pbuffer_pos, PACKET_SIZE};
             available -= PACKET_SIZE;
             pbuffer_pos += PACKET_SIZE;
 
             static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
 
-            auto packettype = static_cast<packet_type_enum>(in.peek());
+            auto packettype = static_cast<packet_type_enum>(*in.peek());
             decltype(packet::packetsize) packetsize {0};
 
-            auto valid_packettype
-                 = packettype == packet_type_enum::regular
-                || packettype == packet_type_enum::hello
-                || packettype == packet_type_enum::file_credentials
-                || packettype == packet_type_enum::file_request
-                || packettype == packet_type_enum::file_chunk
-                || packettype == packet_type_enum::file_begin
-                || packettype == packet_type_enum::file_end
-                || packettype == packet_type_enum::file_state
-                || packettype == packet_type_enum::file_stop;
-
-            if (!valid_packettype) {
+            if (!is_valid(packettype)) {
                 on_failure(error {
                       std::make_error_code(std::errc::bad_message)
                     , tr::f_("unexpected packet type ({}) received from: {}, ignored."
@@ -1346,7 +1337,7 @@ private:
             }
 
             packet pkt;
-            in.unseal(pkt);
+            in >> pkt;
             packetsize = pkt.packetsize;
 
             if (PACKET_SIZE != packetsize) {
@@ -1482,10 +1473,9 @@ private:
      * @param limit Number of messages/chunks to store as contiguous sequence
      *        of bytes.
      */
-    void serialize_outgoing_packets (std::vector<char> * raw
-        , oqueue_type * output_queue, int limit)
+    void serialize_outgoing_packets (std::vector<char> * raw, oqueue_type * output_queue, int limit)
     {
-        output_envelope_type out;
+        typename Serializer::ostream_type out;
 
         while (limit && !output_queue->empty()) {
             auto & oitem = output_queue->front();
@@ -1494,14 +1484,14 @@ private:
             if (pkt.partindex == pkt.partcount)
                 --limit;
 
-            out.reset();   // Empty envelope
-            out.seal(pkt); // Seal new data
+            out.reset();
+            out << pkt;
 
-            auto data = out.data();
-            auto size = data.size();
+            auto ptr = out.data();
+            auto size = out.size();
             auto offset = raw->size();
             raw->resize(offset + size);
-            std::memcpy(raw->data() + offset, data.c_str(), size);
+            std::memcpy(raw->data() + offset, ptr, size);
             output_queue->pop();
         }
     }

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "hello_packet.hpp"
+#include "primal_serializer.hpp"
 #include "universal_id.hpp"
 #include "netty/chrono.hpp"
 #include "netty/error.hpp"
@@ -15,29 +16,23 @@
 #include "netty/host4_addr.hpp"
 #include "netty/send_result.hpp"
 #include "netty/socket4_addr.hpp"
-#include "netty/p2p/envelope.hpp"
 #include "pfs/i18n.hpp"
+#include "pfs/log.hpp"
 #include "pfs/time_point.hpp"
 #include <chrono>
 #include <functional>
 #include <map>
 #include <vector>
 
-#include "pfs/log.hpp"
-
 namespace netty {
 namespace p2p {
 
-template <typename Backend>
+template <typename Backend, typename Serializer = primal_serializer<>>
 class discovery_engine
 {
     // Maximum and minimum transmit interval in seconds
     static constexpr int MAX_TRANSMIT_INTERVAL_SECONDS = 300;
     static constexpr int MIN_TRANSMIT_INTERVAL_SECONDS =   1;
-
-    using backend_type         = Backend;
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
 
 public:
     using milliseconds_type = std::chrono::milliseconds;
@@ -81,7 +76,7 @@ private:
 private:
     universal_id _host_uuid;
     options      _opts;
-    backend_type _backend;
+    Backend      _backend;
     clock_type::time_point   _nearest_transmit_timepoint;
     std::vector<target_item> _targets;
 
@@ -225,10 +220,10 @@ private:
         auto last = data + size;
 
         while (first < last) {
-            input_envelope_type in {first, hello_packet::PACKET_SIZE};
             hello_packet packet;
+            typename Serializer::istream_type in {first, hello_packet::PACKET_SIZE};
+            in >> packet;
 
-            in.unseal(packet);
             auto success = is_valid(packet);
 
             // Unconditional increment
@@ -277,11 +272,14 @@ private:
                 packet.counter = ++t.counter;
                 packet.crc16 = crc16_of(packet);
 
-                output_envelope_type out;
-                out.seal(packet);
+                // output_envelope_type out;
+                // out.seal(packet);
+                // auto data = out.data();
 
-                auto data = out.data();
-                auto size = data.size();
+                typename Serializer::ostream_type out;
+                out << packet;
+
+                auto size = out.size();
 
                 PFS__ASSERT(size == hello_packet::PACKET_SIZE, "");
 
@@ -289,7 +287,7 @@ private:
                 netty::error err;
 
                 while (series_of_retries-- > 0) {
-                    auto res = _backend.send(t.saddr, data.data(), size, & err);
+                    auto res = _backend.send(t.saddr, out.data(), size, & err);
 
                     if (res.state == netty::send_status::good) {
                         series_of_retries = 0;
@@ -544,8 +542,10 @@ public:
     /**
      * This packet is used by `engine` to send `hello_packet`
      * (see netty::p2p::packet_type::hello)
+     *
+     * @deprecated Call from `engine` will be removed.
      */
-    std::string serialize_default_hello_packet ()
+    typename Serializer::output_archive_type serialize_default_hello_packet ()
     {
         hello_packet packet;
         packet.uuid = _host_uuid;
@@ -558,9 +558,11 @@ public:
         packet.counter = 0;
         packet.crc16 = crc16_of(packet);
 
-        output_envelope_type out;
-        out.seal(packet);
-        return out.data();
+        typename Serializer::output_archive_type ar;
+        typename Serializer::ostream_type out {ar};
+        out << packet;
+
+        return ar;
     }
 
     void force_peer_discovered (socket4_addr saddr, char const * data, std::size_t size)
@@ -582,10 +584,10 @@ public:
     }
 };
 
-template <typename Backend> constexpr int const
-discovery_engine<Backend>::MIN_TRANSMIT_INTERVAL_SECONDS;
+template <typename Backend, typename Serializer>
+constexpr int discovery_engine<Backend, Serializer>::MIN_TRANSMIT_INTERVAL_SECONDS;
 
-template <typename Backend> constexpr int const
-discovery_engine<Backend>::MAX_TRANSMIT_INTERVAL_SECONDS;
+template <typename Backend, typename Serializer>
+constexpr int discovery_engine<Backend, Serializer>::MAX_TRANSMIT_INTERVAL_SECONDS;
 
 }} // namespace netty::p2p

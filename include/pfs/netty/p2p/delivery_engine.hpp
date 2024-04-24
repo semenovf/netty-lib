@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "engine_traits.hpp"
-#include "envelope.hpp"
 #include "packet.hpp"
+#include "primal_serializer.hpp"
 #include "universal_id.hpp"
 #include "netty/error.hpp"
 #include "netty/host4_addr.hpp"
@@ -22,25 +22,20 @@
 #include "pfs/stopwatch.hpp"
 #include <functional>
 #include <map>
+#include <numeric>
 #include <queue>
 #include <vector>
-
-#include "pfs/log.hpp"
 
 namespace netty {
 namespace p2p {
 
 template <typename EngineTraits = default_engine_traits
     , typename MessageIdGenerator = default_message_id_generator
+    , typename Serializer = primal_serializer<>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class delivery_engine
 {
-    static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE
-        && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
-
-public:
-    using input_envelope_type  = input_envelope<>;
-    using output_envelope_type = output_envelope<>;
+    static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
 
 private:
     using client_poller_type = typename EngineTraits::client_poller_type;
@@ -58,14 +53,6 @@ public:
         // The maximum length to which the queue of pending connections
         // for listener may grow.
         int listener_backlog {100};
-
-    //     // Limit to size for output queue
-    //     std::int32_t overflow_limit = 1024;
-    //
-    //     std::chrono::milliseconds overflow_timeout {100};
-    //
-    //     typename FileTransporter::options filetransporter;
-    //     typename discovery_engine_type::options discovery;
 
         // Fixed C2512 on MSVC 2017
         options () {}
@@ -94,9 +81,8 @@ private:
         // Regular packets output queue
         output_queue_type regular_queue;
 
-        // FIXME
         // File chunks output queues (mapped by file identifier).
-        // std::map<universal_id, output_queue_type> chunks;
+        std::map<universal_id, output_queue_type> chunks;
 
         // Serialized (raw) data to send.
         std::vector<char> raw;
@@ -164,24 +150,22 @@ public: // Callbacks
      */
     mutable std::function<void (universal_id, std::string)> data_received = [] (universal_id, std::string) {};
 
-    // mutable std::function<void (universal_id /*addresser*/
-    //     , universal_id /*fileid*/
-    //     , filesize_t /*downloaded_size*/
-    //     , filesize_t /*total_size*/)> download_progress
-    //     = [] (universal_id, universal_id, filesize_t , filesize_t) {};
-    //
-    // mutable std::function<void (universal_id /*addresser*/
-    //     , universal_id /*fileid*/
-    //     , pfs::filesystem::path const & /*path*/
-    //     , bool /*success*/)> download_complete
-    //     = [] (universal_id, universal_id, fs::path const &, bool) {};
-    //
-    // /**
-    //  * Called when file download interrupted, i.e. after peer closed.
-    //  */
-    // mutable std::function<void (universal_id /*addresser*/
-    //     , universal_id /*fileid*/)> download_interrupted
-    //     = [] (universal_id, universal_id) {};
+    /**
+     * Called when channel closed.
+     */
+    mutable std::function<void (universal_id)> channel_closed = [] (universal_id) {};
+
+    /**
+     * Called when any file data received. These data must be passed to the file transporter
+     */
+    mutable std::function<void (universal_id, packet_type_enum, std::vector<char>)> file_data_received
+        = [] (universal_id, packet_type_enum packettype, std::vector<char> const &) {};
+
+    /**
+     * Called to request new file chunks for sending.
+     */
+    mutable std::function<void (universal_id, universal_id)> request_file_chunk
+        = [] (universal_id addressee, universal_id fileid) {};
 
 public:
     /**
@@ -316,6 +300,7 @@ public:
 
     ~delivery_engine ()
     {
+        release_peers();
         _listener.reset();
         _reader_poller.reset();
         _writer_poller.reset();
@@ -338,16 +323,24 @@ public:
         connect_writer(std::move(haddr));
     }
 
-    void release_peer (host4_addr haddr)
+    void release_peer (universal_id peer_id)
     {
-        release_reader(haddr.host_id);
-        release_writer(haddr.host_id);
+        release_reader(peer_id);
+        release_writer(peer_id);
+        channel_closed(peer_id);
+    }
 
-        // FIXME
-        // Erase file input pool
-        // if (_transporter)
-        //      _transporter->expire_addresser(peer_uuid);
-        //
+    void release_peers ()
+    {
+        std::vector<universal_id> peers;
+        std::accumulate(_writer_account_map.cbegin(), _writer_account_map.cend()
+            , & peers, [] (std::vector<universal_id> * peers, decltype(*_writer_account_map.cbegin()) x) {
+                peers->push_back(x.first);
+                return peers;
+            });
+
+        for (auto const & peer_id: peers)
+            release_peer(peer_id);
     }
 
     // FIXME
@@ -357,11 +350,10 @@ public:
     // }
 
 private:
-    // std::chrono::milliseconds _current_poller_timeout {0};
     pfs::stopwatch<std::milli> _stopwatch;
 
 public:
-    int poll (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
+    int step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
     {
         int n1 = 0;
         int n2 = 0;
@@ -369,8 +361,18 @@ public:
 
         if (timeout > zero_millis) {
             _stopwatch.start();
+            send_outgoing_packets();
+            _stopwatch.stop();
+
+            timeout -= std::chrono::milliseconds{_stopwatch.count()};
+
+            if(timeout < zero_millis)
+                timeout = zero_millis;
+
+            _stopwatch.start();
             n1 = _reader_poller->poll(timeout);
             _stopwatch.stop();
+
             timeout -= std::chrono::milliseconds{_stopwatch.count()};
 
             if(timeout < zero_millis)
@@ -378,6 +380,7 @@ public:
 
             n2 = _writer_poller->poll(timeout);
         } else {
+            send_outgoing_packets();
             n1 = _reader_poller->poll(zero_millis);
             n2 = _writer_poller->poll(zero_millis);
         }
@@ -392,10 +395,7 @@ public:
     }
 
     /**
-     * Send data.
-     *
-     * @details Actually this method splits data to send into packets and
-     *          enqueue them into output queue.
+     * Splits data to send into packets and enqueue them into output queue.
      *
      * @param addressee_id Addressee unique identifier.
      * @param data Data to send.
@@ -403,14 +403,58 @@ public:
      *
      * @return Unique message identifier.
      */
-    pfs::optional<message_id_t> send (universal_id addressee, char const * data, int len)
+    pfs::optional<message_id_t> enqueue (universal_id addressee, char const * data, int len)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data, len);
     }
 
-    pfs::optional<message_id_t> send (universal_id addressee, std::string const & data)
+    pfs::optional<message_id_t> enqueue (universal_id addressee, std::string const & data)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data.c_str(), data.size());
+    }
+
+    /**
+     * Process file upload stopped event from file transporter
+     */
+    void file_upload_stopped (universal_id addressee, universal_id fileid)
+    {
+        auto awriter = locate_writer_account(addressee);
+
+        if (awriter == nullptr) {
+            on_error(tr::f_("file upload stopped/finished, but writer not found: addressee={}, fileid={}"
+                , addressee, fileid));
+            return;
+        }
+
+        awriter->chunks.erase(fileid);
+    }
+
+    void file_upload_complete (universal_id addressee, universal_id fileid)
+    {
+        file_upload_stopped(addressee, fileid);
+    }
+
+    void file_ready_send (universal_id addressee, universal_id fileid, packet_type_enum packettype
+        , std::vector<char> data)
+    {
+        switch (packettype) {
+            // Commands
+            case packet_type_enum::file_credentials:
+            case packet_type_enum::file_request:
+            case packet_type_enum::file_stop:
+            case packet_type_enum::file_state:
+                LOG_TRACE_3("Enqueue file control packets to: {}", addressee);
+                enqueue_packets(addressee, packettype, data.data(), pfs::numeric_cast<int>(data.size()));
+                break;
+            // Data
+            case packet_type_enum::file_begin:
+            case packet_type_enum::file_end:
+            case packet_type_enum::file_chunk:
+                enqueue_file_chunk(addressee, fileid, packettype, data.data(), pfs::numeric_cast<int>(data.size()));
+                break;
+            default:
+                return;
+        }
     }
 
 private:
@@ -438,7 +482,7 @@ private:
         auto pos = _reader_account_map.find(sock);
 
         if (pos == _reader_account_map.end()) {
-            on_warn(tr::f_("no reader account located: socket={}", sock));
+            on_warn(tr::f_("no reader account located by socket: {}", sock));
             return nullptr;
         }
 
@@ -452,6 +496,7 @@ private:
                 return & r.second;
         }
 
+        on_warn(tr::f_("no reader account located by peer ID: {}", peer_id));
         return nullptr;
     }
 
@@ -462,6 +507,7 @@ private:
                 return & w.second;
         }
 
+        on_warn(tr::f_("no writer account located by socket: {}", sock));
         return nullptr;
     }
 
@@ -469,8 +515,10 @@ private:
     {
         auto pos = _writer_account_map.find(peer_id);
 
-        if (pos == _writer_account_map.end())
+        if (pos == _writer_account_map.end()) {
+            on_warn(tr::f_("no writer account located by peer ID: {}", peer_id));
             return nullptr;
+        }
 
         return & pos->second;
     }
@@ -503,7 +551,7 @@ private:
         awriter.regular_queue.clear();
         awriter.raw.clear();
         awriter.raw.reserve(PACKET_SIZE * 10);
-        //awriter.chunks.clear();
+        awriter.chunks.clear();
 
         return awriter;
     }
@@ -517,7 +565,6 @@ private:
         _writer_poller->add(writer, conn_state, & err);
 
         if (!err) {
-            LOG_TRACE_1("~~~ CONNECT WRITER");
             auto & awriter = acquire_writer_account(haddr.host_id);
             awriter.writer = std::move(writer);
         } else {
@@ -585,31 +632,26 @@ private:
         return enqueue_packets_helper(awriter->regular_queue, addressee, packettype, data, len);
     }
 
-    // FIXME
-    // entity_id enqueue_file_chunk (universal_id addressee, universal_id fileid
-    //     , packet_type packettype, char const * data, int len)
-    // {
-    //     auto * paccount = locate_writer_account(addressee);
-    //
-    //     if (! paccount)
-    //         return INVALID_ENTITY;
-    //
-    //     auto pos = paccount->chunks.find(fileid);
-    //
-    //     if (pos == paccount->chunks.end()) {
-    //         auto res = paccount->chunks.emplace(fileid, oqueue_type{});
-    //         pos = res.first;
-    //     }
-    //
-    //     oqueue_type * q = & pos->second;
-    //
-    //     return enqueue_packets_helper(q, addressee, packettype, data, len);
-    // }
+    pfs::optional<message_id_t> enqueue_file_chunk (universal_id addressee, universal_id fileid
+        , packet_type_enum packettype, char const * data, int len)
+    {
+        auto * awriter = locate_writer_account(addressee);
+
+        if (awriter == nullptr)
+            return pfs::nullopt;
+
+        auto pos = awriter->chunks.find(fileid);
+
+        if (pos == awriter->chunks.end()) {
+            auto res = awriter->chunks.emplace(fileid, output_queue_type{});
+            pos = res.first;
+        }
+
+        return enqueue_packets_helper(pos->second, addressee, packettype, data, len);
+    }
 
     void process_socket_connected (typename client_poller_type::native_socket_type sock)
     {
-        LOG_TRACE_1("~~~ WRITER CONNECTED");
-
         auto awriter = locate_writer_account(sock);
 
         if (awriter == nullptr) {
@@ -623,7 +665,7 @@ private:
         writer_ready(host4_addr{awriter->peer_id, awriter->writer.saddr()});
 
         // Only addresser need by the receiver
-        enqueue_packets(awriter->peer_id, packet_type_enum::hello, "", 0);
+        enqueue_packets(awriter->peer_id, packet_type_enum::hello, "HELO", 4);
 
         check_complete_channel(awriter->peer_id);
     }
@@ -668,27 +710,16 @@ private:
         auto buffer_pos = buffer.begin();
 
         do {
-            input_envelope_type in {& *buffer_pos, PACKET_SIZE};
+            typename Serializer::istream_type in {& *buffer_pos, PACKET_SIZE};
             available -= PACKET_SIZE;
             buffer_pos += PACKET_SIZE;
 
             static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
 
-            auto packettype = static_cast<packet_type_enum>(in.peek());
+            auto packettype = static_cast<packet_type_enum>(*in.peek());
             decltype(packet::packetsize) packetsize {0};
 
-            auto valid_packettype
-                 = packettype == packet_type_enum::regular
-                || packettype == packet_type_enum::hello
-                || packettype == packet_type_enum::file_credentials
-                || packettype == packet_type_enum::file_request
-                || packettype == packet_type_enum::file_chunk
-                || packettype == packet_type_enum::file_begin
-                || packettype == packet_type_enum::file_end
-                || packettype == packet_type_enum::file_state
-                || packettype == packet_type_enum::file_stop;
-
-            if (!valid_packettype) {
+            if (!is_valid(packettype)) {
                 on_error(tr::f_("unexpected packet type ({}) received from: {}, ignored."
                     , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
                     , to_string(areader->reader.saddr())));
@@ -703,7 +734,7 @@ private:
             }
 
             packet pkt;
-            in.unseal(pkt);
+            in >> pkt;
             packetsize = pkt.packetsize;
 
             if (packetsize != PACKET_SIZE) {
@@ -745,38 +776,15 @@ private:
                         break;
                     }
 
-                    // FIXME
-    //                 // Initiating file sending from peer
-    //                 case packet_type_enum::file_credentials:
-    //                     _transporter->process_file_credentials(peer_id, areader->b);
-    //                     break;
-    //
-    //                 case packet_type_enum::file_request:
-    //                     _transporter->process_file_request(peer_id, areader->b);
-    //                     break;
-    //
-    //                 case packet_type_enum::file_stop:
-    //                     _transporter->process_file_stop(peer_id, areader->b);
-    //                     break;
-    //
-    //                 // File chunk received
-    //                 case packet_type_enum::file_chunk:
-    //                     _transporter->process_file_chunk(peer_id, areader->b);
-    //                     break;
-    //
-    //                 // File
-    //                 case packet_type_enum::file_begin:
-    //                     _transporter->process_file_begin(peer_id, areader->b);
-    //                     break;
-    //
-    //                 // File received completely
-    //                 case packet_type_enum::file_end:
-    //                     _transporter->process_file_end(peer_id, areader->b);
-    //                     break;
-    //
-    //                 case packet_type_enum::file_state:
-    //                     _transporter->process_file_state(peer_id, areader->b);
-    //                     break;
+                    case packet_type_enum::file_credentials:
+                    case packet_type_enum::file_request:
+                    case packet_type_enum::file_stop:
+                    case packet_type_enum::file_chunk:
+                    case packet_type_enum::file_begin:
+                    case packet_type_enum::file_end:
+                    case packet_type_enum::file_state:
+                        file_data_received(peer_id, packettype, std::move(areader->b));
+                        break;
                 }
             }
         } while (available >= PACKET_SIZE);
@@ -797,7 +805,7 @@ private:
      */
     void serialize_outgoing_packets (std::vector<char> & raw, output_queue_type & q, int limit)
     {
-        output_envelope_type out;
+        typename Serializer::ostream_type out;
 
         while (limit && !q.empty()) {
             auto const & x = q.front();
@@ -805,14 +813,14 @@ private:
             if (x.pkt.partindex == x.pkt.partcount)
                 --limit;
 
-            out.reset();   // Empty envelope
-            out.seal(x.pkt); // Seal new data
+            out.reset();  // Empty envelope
+            out << x.pkt; // Pack new data
 
             auto data = out.data();
-            auto size = data.size();
+            auto size = out.size();
             auto offset = raw.size();
             raw.resize(offset + size);
-            std::memcpy(raw.data() + offset, data.c_str(), size);
+            std::memcpy(raw.data() + offset, data, size);
             q.pop();
         }
     }
@@ -890,31 +898,27 @@ private:
                 if (!awriter.regular_queue.empty())
                     serialize_outgoing_packets(awriter.raw, awriter.regular_queue, 10);
 
-                // FIXME
-    //             if (!paccount->chunks.empty()) {
-    //                 auto pos  = paccount->chunks.begin();
-    //                 auto last = paccount->chunks.end();
-    //
-    //                 while (pos != last) {
-    //                     oqueue_type & chunks_output_queue = pos->second;
-    //
-    //                     if (!chunks_output_queue.empty()) {
-    //                         serialize_outgoing_packets(& paccount->raw, & chunks_output_queue, 10);
-    //                         ++pos;
-    //                     } else {
-    //                         auto complete = !_transporter->request_chunk(paccount->uuid, pos->first);
-    //
-    //                         if (complete)
-    //                             pos = paccount->chunks.erase(pos);
-    //                         else
-    //                             ++pos;
-    //                     }
-    //                 }
-    //             }
+                if (!awriter.chunks.empty()) {
+                    auto pos  = awriter.chunks.begin();
+                    auto last = awriter.chunks.end();
+
+                    while (pos != last) {
+                        output_queue_type & chunks_output_queue = pos->second;
+
+                        if (!chunks_output_queue.empty()) {
+                            serialize_outgoing_packets(awriter.raw, chunks_output_queue, 10);
+                            ++pos;
+                        } else {
+                            request_file_chunk(awriter.peer_id, pos->first);
+                            ++pos;
+                        }
+                    }
+                }
             }
 
             // Send serialized (bufferized) data
-            send_outgoing_data(awriter);
+            if (!awriter.raw.empty())
+                send_outgoing_data(awriter);
         }
     }
 };
