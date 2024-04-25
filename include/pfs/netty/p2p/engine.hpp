@@ -71,6 +71,7 @@ private:
     using writer_type           = typename EngineTraits::writer_type;
     using reader_id             = typename EngineTraits::reader_id_type;
     using writer_id             = typename EngineTraits::writer_id_type;
+    using serializer_type       = Serializer;
     using discovery_engine_type = discovery_engine<DiscoveryEngineBackend, Serializer>;
 
     // TODO replace with INVALID_MESSAGE_ID
@@ -234,8 +235,8 @@ public: // Callbacks
     /**
      * Message received.
      */
-    mutable std::function<void (universal_id, std::string)> data_received
-        = [] (universal_id, std::string) {};
+    mutable std::function<void (universal_id, std::vector<char>)> data_received
+        = [] (universal_id, std::vector<char>) {};
 
     mutable std::function<void (universal_id /*addresser*/
         , universal_id /*fileid*/
@@ -1371,8 +1372,7 @@ private:
                 switch (packettype) {
                     case packet_type_enum::regular:
                         LOG_TRACE_3("Data received from: {} {} bytes", sender_uuid, paccount->b.size());
-                        this->data_received(sender_uuid
-                            , std::string(paccount->b.data(), paccount->b.size()));
+                        this->data_received(sender_uuid, std::move(paccount->b));
                         break;
 
                     case packet_type_enum::hello: {

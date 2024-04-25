@@ -148,7 +148,8 @@ public: // Callbacks
     /**
      * Message received.
      */
-    mutable std::function<void (universal_id, std::string)> data_received = [] (universal_id, std::string) {};
+    mutable std::function<void (universal_id, std::vector<char>)> data_received
+        = [] (universal_id, std::vector<char>) {};
 
     /**
      * Called when channel closed.
@@ -410,7 +411,12 @@ public:
 
     pfs::optional<message_id_t> enqueue (universal_id addressee, std::string const & data)
     {
-        return enqueue_packets(addressee, packet_type_enum::regular, data.c_str(), data.size());
+        return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
+    }
+
+    pfs::optional<message_id_t> enqueue (universal_id addressee, std::vector<char> const & data)
+    {
+        return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
     }
 
     /**
@@ -765,7 +771,7 @@ private:
 
                 switch (packettype) {
                     case packet_type_enum::regular:
-                        this->data_received(peer_id, std::string(areader->b.data(), areader->b.size()));
+                        this->data_received(peer_id, std::move(areader->b));
                         break;
 
                     case packet_type_enum::hello: {
