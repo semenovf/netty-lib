@@ -1,20 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2021 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2021.11.09 Initial version.
+//      2024.04.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/endian.hpp"
-#include "pfs/universal_id.hpp"
-#include "pfs/universal_id_crc.hpp"
-#include "pfs/universal_id_hash.hpp"
+#include "universal_id.hpp"
 
 namespace netty {
 namespace p2p {
 
-using universal_id = pfs::universal_id;
+using peer_id = universal_id;
 
 }} // namespace netty::p2p
+

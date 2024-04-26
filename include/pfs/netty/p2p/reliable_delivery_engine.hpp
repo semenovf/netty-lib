@@ -7,7 +7,7 @@
 //      2024.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "universal_id.hpp"
+#include "peer_id.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/optional.hpp"
 #include <memory>
@@ -18,6 +18,8 @@ namespace p2p {
 template <typename DeliveryEngine, typename PersistentStorage>
 class reliable_delivery_engine
 {
+    using serializer_type = typename DeliveryEngine::serializer_type;
+
 private:
     std::unique_ptr<DeliveryEngine> _delivery;
     std::unique_ptr<PersistentStorage> _storage;
@@ -72,19 +74,50 @@ public:
         _delivery->connect(std::move(haddr));
     }
 
-    void release_peer (universal_id peer_id)
+    void release_peer (peer_id peerid)
     {
-        _delivery->release_peer(peer_id);
+        _delivery->release_peer(peerid);
     }
 
-    pfs::optional<message_id_t> enqueue (universal_id addressee, char const * data, int len)
+    bool enqueue (peer_id addressee, char const * data, int len)
     {
-        return _delivery->enqueue(addressee, data, len);
+        pfs::error err;
+        auto msgid = _storage->save(addressee, data, len, & err);
+
+        if (err) {
+            _delivery->on_failure(netty::error{err.code(), tr::f_("save message failure: {}"
+                , err.what())});
+            return false;
+        }
+
+        typename serializer_type::ostream_type out;
+        out << msgid << std::make_pair(data, len);
+
+        auto success = _delivery->enqueue(addressee, out.data());
+
+        if (!success) {
+            _storage->remove(addressee, msgid, & err);
+
+            if (err) {
+                _delivery->on_failure(netty::error{err.code(), tr::f_("remove message failure: {}: {}"
+                    , msgid, err.what())});
+                return false;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
-    pfs::optional<message_id_t> enqueue (universal_id addressee, std::string const & data)
+    bool enqueue (peer_id addressee, std::string const & data)
     {
-        return _delivery->enqueue(addressee, data);
+        return enqueue(addressee, data.data(), data.size());
+    }
+
+    bool enqueue (peer_id addressee, std::vector<char> const & data)
+    {
+        return enqueue(addressee, data.data(), data.size());
     }
 
     void file_upload_stopped (universal_id addressee, universal_id fileid)
@@ -98,7 +131,7 @@ public:
     }
 
     void file_ready_send (universal_id addressee, universal_id fileid, packet_type_enum packettype
-        , std::string data)
+        , typename serializer_type::output_archive_type data)
     {
         _delivery->file_ready_send(addressee, fileid, packettype, std::move(data));
     }

@@ -21,18 +21,6 @@ namespace netty {
 namespace p2p {
 
 using chunksize_t = std::int32_t;
-using message_id_t = std::uint64_t;
-
-class default_message_id_generator
-{
-    message_id_t _value {0};
-
-public:
-    message_id_t operator () () noexcept
-    {
-        return ++_value;
-    }
-};
 
 enum class packet_type_enum: std::uint8_t {
       regular = 0x2A
@@ -166,20 +154,11 @@ struct ack
 };
 
 /**
- */
-struct message_unit
-{
-    message_id_t id;
-    universal_id addressee;
-    packet pkt;
-};
-
-/**
  * @param packet_size Maximum packet size (must be less or equal to @c packet::MAX_PACKET_SIZE and
  *        greater than @c packet::PACKET_HEADER_SIZE).
  */
 template <typename QueueType>
-message_id_t enqueue_packets (message_id_t msgid, QueueType & q, universal_id addresser
+void enqueue_packets (QueueType & q, universal_id addresser
     , universal_id addressee, packet_type_enum packettype, std::uint16_t packet_size
     , char const * data, int len)
 {
@@ -207,10 +186,8 @@ message_id_t enqueue_packets (message_id_t msgid, QueueType & q, universal_id ad
         remain_data += p.payloadsize;
 
         // May throw std::bad_alloc
-        q.push(message_unit{msgid, addressee, std::move(p)});
+        q.push(std::move(p));
     }
-
-    return msgid;
 }
 
 }} // namespace netty::p2p

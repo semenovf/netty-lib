@@ -109,12 +109,11 @@ public:
     } _opts;
 
 private:
-    // TODO replace with message_unit
     struct oqueue_item
     {
-        entity_id    id;
-        universal_id addressee;
-        packet       pkt;
+        // entity_id    id;
+        // universal_id addressee;
+        packet pkt;
     };
 
     using oqueue_type = pfs::ring_buffer<oqueue_item, 64 * 1024>;
@@ -1194,7 +1193,7 @@ private:
             remain_data += p.payloadsize;
 
             // May throw std::bad_alloc
-            q->push(oqueue_item{entityid, addressee, std::move(p)});
+            q->push(oqueue_item{/*entityid, addressee, */std::move(p)});
         }
 
         return entityid;

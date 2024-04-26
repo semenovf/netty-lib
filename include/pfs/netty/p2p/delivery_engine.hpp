@@ -30,7 +30,6 @@ namespace netty {
 namespace p2p {
 
 template <typename EngineTraits = default_engine_traits
-    , typename MessageIdGenerator = default_message_id_generator
     , typename Serializer = primal_serializer<>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class delivery_engine
@@ -43,7 +42,10 @@ private:
     using listener_type = typename EngineTraits::listener_type;
     using reader_type = typename EngineTraits::reader_type;
     using writer_type = typename EngineTraits::writer_type;
-    using output_queue_type = pfs::ring_buffer<netty::p2p::message_unit, 64 * 1024>;
+    using output_queue_type = pfs::ring_buffer<packet, 64 * 1024>;
+
+public:
+    using serializer_type = Serializer;
 
 public:
     struct options
@@ -100,9 +102,6 @@ private:
 
     std::map<typename server_poller_type::native_socket_type, reader_account> _reader_account_map;
     std::map<universal_id, writer_account> _writer_account_map;
-
-    // Unique identifier for message (regular messages, file chunks) inside engine session.
-    MessageIdGenerator _next_message_id;
 
 public: // Callbacks
     /**
@@ -404,17 +403,17 @@ public:
      *
      * @return Unique message identifier.
      */
-    pfs::optional<message_id_t> enqueue (universal_id addressee, char const * data, int len)
+    bool enqueue (universal_id addressee, char const * data, int len)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data, len);
     }
 
-    pfs::optional<message_id_t> enqueue (universal_id addressee, std::string const & data)
+    bool enqueue (universal_id addressee, std::string const & data)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
     }
 
-    pfs::optional<message_id_t> enqueue (universal_id addressee, std::vector<char> const & data)
+    bool enqueue (universal_id addressee, std::vector<char> const & data)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
     }
@@ -441,7 +440,7 @@ public:
     }
 
     void file_ready_send (universal_id addressee, universal_id fileid, packet_type_enum packettype
-        , std::vector<char> data)
+        , typename serializer_type::output_archive_type data)
     {
         switch (packettype) {
             // Commands
@@ -617,34 +616,35 @@ private:
             channel_established(host4_addr{peer_id, awriter->writer.saddr()});
     }
 
-    inline message_id_t enqueue_packets_helper (output_queue_type & q, universal_id addressee
+    inline void enqueue_packets_helper (output_queue_type & q, universal_id addressee
         , packet_type_enum packettype, char const * data, int len)
     {
-        return netty::p2p::enqueue_packets<output_queue_type>(_next_message_id(), q, _host_id, addressee
+        netty::p2p::enqueue_packets<output_queue_type>(q, _host_id, addressee
             , packettype, PACKET_SIZE, data, len);
     }
 
     /**
      * Splits @a data into packets and enqueue them into output queue.
      */
-    pfs::optional<message_id_t> enqueue_packets (universal_id addressee, packet_type_enum packettype
+    bool enqueue_packets (universal_id addressee, packet_type_enum packettype
         , char const * data, int len)
     {
         auto * awriter = locate_writer_account(addressee);
 
         if (awriter == nullptr)
-            return pfs::nullopt;
+            return false;
 
-        return enqueue_packets_helper(awriter->regular_queue, addressee, packettype, data, len);
+        enqueue_packets_helper(awriter->regular_queue, addressee, packettype, data, len);
+        return true;
     }
 
-    pfs::optional<message_id_t> enqueue_file_chunk (universal_id addressee, universal_id fileid
-        , packet_type_enum packettype, char const * data, int len)
+    bool enqueue_file_chunk (universal_id addressee, universal_id fileid, packet_type_enum packettype
+        , char const * data, int len)
     {
         auto * awriter = locate_writer_account(addressee);
 
         if (awriter == nullptr)
-            return pfs::nullopt;
+            return false;
 
         auto pos = awriter->chunks.find(fileid);
 
@@ -653,7 +653,8 @@ private:
             pos = res.first;
         }
 
-        return enqueue_packets_helper(pos->second, addressee, packettype, data, len);
+        enqueue_packets_helper(pos->second, addressee, packettype, data, len);
+        return true;
     }
 
     void process_socket_connected (typename client_poller_type::native_socket_type sock)
@@ -814,13 +815,13 @@ private:
         typename Serializer::ostream_type out;
 
         while (limit && !q.empty()) {
-            auto const & x = q.front();
+            auto const & pkt = q.front();
 
-            if (x.pkt.partindex == x.pkt.partcount)
+            if (pkt.partindex == pkt.partcount)
                 --limit;
 
             out.reset();  // Empty envelope
-            out << x.pkt; // Pack new data
+            out << pkt; // Pack new data
 
             auto data = out.data();
             auto size = out.size();
