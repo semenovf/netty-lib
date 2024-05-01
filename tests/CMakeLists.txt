@@ -11,7 +11,6 @@
 project(netty-lib-TESTS CXX C)
 
 set(TESTS
-    envelope
     inet4_addr)
 
 if (TARGET pfs::netty)

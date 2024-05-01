@@ -9,14 +9,13 @@
 #      2023.01.17 Version 2.
 #      2023.02.10 Separated static and shared builds.
 #      2024.04.03 Replaced the sequence of two target configurations with a foreach statement.
+#      2024.05.01 Removed cereal dependency.
 ################################################################################
 cmake_minimum_required (VERSION 3.11)
 project(netty_p2p CXX)
 
 option(NETTY_P2P__BUILD_SHARED "Enable build shared library" OFF)
 option(NETTY_P2P__BUILD_STATIC "Enable build static library" ON)
-option(NETTY_P2P__ENABLE_CEREAL "Enable cereal library (serialization backend)" ON)
-option(NETTY_P2P__ENABLE_CEREAL_THREAD_SAFETY "Enable cereal library thread safety" OFF)
 
 if (NOT PORTABLE_TARGET__CURRENT_PROJECT_DIR)
     set(PORTABLE_TARGET__CURRENT_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -32,15 +31,6 @@ if (NETTY_P2P__BUILD_STATIC)
     portable_target(ADD_STATIC ${STATIC_PROJECT_NAME} ALIAS pfs::netty_p2p::static EXPORTS NETTY__STATIC)
     list(APPEND _netty_p2p__targets ${STATIC_PROJECT_NAME})
 endif()
-
-if (NETTY_P2P__ENABLE_CEREAL)
-    if (NOT TARGET cereal)
-        portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/cereal.cmake)
-    endif()
-
-    list(APPEND _netty_p2p__links cereal)
-    list(APPEND _netty_p2p__definitions "NETTY_P2P__CEREAL_ENABLED=1")
-endif(NETTY_P2P__ENABLE_CEREAL)
 
 list(APPEND _netty_p2p__sources
     # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_protocol.cpp

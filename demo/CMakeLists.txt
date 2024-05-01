@@ -13,9 +13,10 @@ add_subdirectory(mtu)
 add_subdirectory(netty)
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
-add_subdirectory(rpc)
+# add_subdirectory(rpc) // FIXME
 
 if (NETTY__BUILD_P2P)
     add_subdirectory(discovery)
-    add_subdirectory(p2p)
+    # add_subdirectory(p2p) // FIXME
+    add_subdirectory(reliable-delivery)
 endif(NETTY__BUILD_P2P)

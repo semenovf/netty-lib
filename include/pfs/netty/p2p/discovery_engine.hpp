@@ -272,10 +272,6 @@ private:
                 packet.counter = ++t.counter;
                 packet.crc16 = crc16_of(packet);
 
-                // output_envelope_type out;
-                // out.seal(packet);
-                // auto data = out.data();
-
                 typename Serializer::ostream_type out;
                 out << packet;
 

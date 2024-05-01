@@ -820,8 +820,8 @@ private:
             if (pkt.partindex == pkt.partcount)
                 --limit;
 
-            out.reset();  // Empty envelope
-            out << pkt; // Pack new data
+            out.reset(); // Empty envelope
+            out << pkt;  // Pack new data
 
             auto data = out.data();
             auto size = out.size();

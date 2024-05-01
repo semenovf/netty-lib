@@ -44,8 +44,7 @@ constexpr bool is_valid (packet_type_enum t)
         || t == packet_type_enum::file_begin
         || t == packet_type_enum::file_end
         || t == packet_type_enum::file_state
-        || t == packet_type_enum::file_stop
-        || t == packet_type_enum::ack;
+        || t == packet_type_enum::file_stop;
 }
 
 

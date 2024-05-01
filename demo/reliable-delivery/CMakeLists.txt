@@ -4,10 +4,9 @@
 # This file is part of `netty-lib`.
 #
 # Changelog:
-#      2021.09.10 Initial version.
-#      2023.01.18 New version.
+#      2024.05.01 Initial version.
 ################################################################################
-project(p2p-demo)
+project(reliable-delivery-demo)
 
 add_executable(${PROJECT_NAME} main.cpp)
 
