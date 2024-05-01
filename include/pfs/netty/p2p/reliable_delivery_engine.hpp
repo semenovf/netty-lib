@@ -7,13 +7,35 @@
 //      2024.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "message_id.hpp"
 #include "peer_id.hpp"
 #include "pfs/i18n.hpp"
-#include "pfs/optional.hpp"
+#include <csdint>
 #include <memory>
 
 namespace netty {
 namespace p2p {
+
+enum class message_type : std::uint8_t
+{
+      data = 0
+        /// Message itself.
+
+    , ack = 1
+        /// Message receive acknowledgement (used by reliable_delivery_engine).
+        /// Packet content depends on message identifier.
+
+    , nack = 2
+        /// Message used to notify sender the message already process early (used by
+        /// reliable_delivery_engine). Packet content depends on message identifier.
+};
+
+temlate <typename MessageIdTraits>
+struct message_header
+{
+    message_type type;
+    typename MessageIdTraits::type id;
+};
 
 template <typename DeliveryEngine, typename PersistentStorage>
 class reliable_delivery_engine

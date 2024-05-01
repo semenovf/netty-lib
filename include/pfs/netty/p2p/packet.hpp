@@ -32,7 +32,6 @@ enum class packet_type_enum: std::uint8_t {
     , file_chunk
     , file_end
     , file_state
-    , ack          // Used by reliable_delivery_engine
 };
 
 constexpr bool is_valid (packet_type_enum t)
@@ -146,11 +145,6 @@ struct file_state
 {
     universal_id fileid;
     file_status status;
-};
-
-struct ack
-{
-    char unused;
 };
 
 /**
