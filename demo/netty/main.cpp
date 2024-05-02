@@ -157,12 +157,12 @@ int main (int argc, char * argv[])
 
     auto res = netty::inet4_addr::parse(addr_value);
 
-    if (!res.first) {
+    if (!res) {
         LOGE(TAG, "Bad address");
         return EXIT_FAILURE;
     }
 
-    auto addr = res.second;
+    auto addr = *res;
     std::uint16_t port = 42942;
 
     if (!port_value.empty()) {

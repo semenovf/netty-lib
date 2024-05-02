@@ -108,14 +108,13 @@ public: // Callbacks
      * Called when unrecoverable error occurred - engine became disfunctional.
      * It must be restarted.
      */
-    mutable std::function<void (error const & err)> on_failure = [] (error const & err) {};
+    mutable std::function<void (error const & err)> on_failure = [] (error const &) {};
 
     mutable std::function<void (std::string const &)> on_error = [] (std::string const &) {};
     mutable std::function<void (std::string const &)> on_warn = [] (std::string const &) {};
 
     /**
-     * Called when need to force peer expiration by discovery manager (using expire_peer method)
-     * Avoid to call discovery manager::expire_peer() immediately.
+     * Called when need to force peer expiration by discovery manager (using expire_peer method).
      */
     mutable std::function<void (universal_id)> defere_expire_peer;
 
@@ -205,7 +204,7 @@ public:
             if (areader != nullptr && areader->peer_id != universal_id{}) {
                 defere_expire_peer(areader->peer_id);
             } else {
-                on_error(tr::f_("reader socket failure: socket={}, but reader account not found", sock));
+                on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
                 this->on_failure(err);
             }
         };
@@ -220,7 +219,7 @@ public:
             if (areader != nullptr && areader->peer_id != universal_id{}) {
                 defere_expire_peer(areader->peer_id);
             } else {
-                on_error(tr::f_("reader socket disconnected: socket={}, but reader account not found", sock));
+                on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
             }
         };
 
@@ -235,7 +234,7 @@ public:
             if (awriter) {
                 defere_expire_peer(awriter->peer_id);
             } else {
-                on_error(tr::f_("reader socket failure: socket={}, but writer account not found", sock));
+                on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
                 this->on_failure(err);
             }
         };
@@ -394,6 +393,16 @@ public:
         return n1 + n2;
     }
 
+    std::chrono::microseconds step_timing (std::chrono::milliseconds poll_timeout = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
+    {
+        pfs::stopwatch<std::micro> stopwatch;
+        stopwatch.start();
+        step(poll_timeout, perr);
+        stopwatch.stop();
+        return std::chrono::microseconds{stopwatch.count()};
+    }
+
     /**
      * Splits data to send into packets and enqueue them into output queue.
      *
@@ -486,10 +495,8 @@ private:
     {
         auto pos = _reader_account_map.find(sock);
 
-        if (pos == _reader_account_map.end()) {
-            on_warn(tr::f_("no reader account located by socket: {}", sock));
+        if (pos == _reader_account_map.end())
             return nullptr;
-        }
 
         return & pos->second;
     }
@@ -501,7 +508,6 @@ private:
                 return & r.second;
         }
 
-        on_warn(tr::f_("no reader account located by peer ID: {}", peer_id));
         return nullptr;
     }
 
@@ -512,7 +518,6 @@ private:
                 return & w.second;
         }
 
-        on_warn(tr::f_("no writer account located by socket: {}", sock));
         return nullptr;
     }
 
@@ -520,10 +525,8 @@ private:
     {
         auto pos = _writer_account_map.find(peer_id);
 
-        if (pos == _writer_account_map.end()) {
-            on_warn(tr::f_("no writer account located by peer ID: {}", peer_id));
+        if (pos == _writer_account_map.end())
             return nullptr;
-        }
 
         return & pos->second;
     }
@@ -533,7 +536,7 @@ private:
         auto areader = locate_reader_account(peer_id);
 
         if (areader == nullptr) {
-            on_error(tr::f_("no reader found for release: {}", peer_id));
+            on_error(tr::f_("no reader account found for release: {}", peer_id));
             return;
         };
 
@@ -616,11 +619,10 @@ private:
             channel_established(host4_addr{peer_id, awriter->writer.saddr()});
     }
 
-    inline void enqueue_packets_helper (output_queue_type & q, universal_id addressee
-        , packet_type_enum packettype, char const * data, int len)
+    inline void enqueue_packets_helper (output_queue_type & q, packet_type_enum packettype
+        , char const * data, int len)
     {
-        netty::p2p::enqueue_packets<output_queue_type>(q, _host_id, addressee
-            , packettype, PACKET_SIZE, data, len);
+        netty::p2p::enqueue_packets<output_queue_type>(q, _host_id, packettype, PACKET_SIZE, data, len);
     }
 
     /**
@@ -631,10 +633,12 @@ private:
     {
         auto * awriter = locate_writer_account(addressee);
 
-        if (awriter == nullptr)
+        if (awriter == nullptr) {
+            on_error(tr::f_("no writer account found for enqueue packets: {}", addressee));
             return false;
+        }
 
-        enqueue_packets_helper(awriter->regular_queue, addressee, packettype, data, len);
+        enqueue_packets_helper(awriter->regular_queue, packettype, data, len);
         return true;
     }
 
@@ -643,8 +647,10 @@ private:
     {
         auto * awriter = locate_writer_account(addressee);
 
-        if (awriter == nullptr)
+        if (awriter == nullptr) {
+            on_error(tr::f_("no writer account found for enqueue file chunk: {}", addressee));
             return false;
+        }
 
         auto pos = awriter->chunks.find(fileid);
 
@@ -681,8 +687,10 @@ private:
     {
         auto areader = locate_reader_account(sock);
 
-        if (!areader)
+        if (areader == nullptr) {
+            on_error(tr::f_("no reader account located by socket for process input: {}", sock));
             return;
+        }
 
         auto & buffer = areader->raw;
 

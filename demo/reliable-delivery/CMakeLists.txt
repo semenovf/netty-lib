@@ -8,7 +8,8 @@
 ################################################################################
 project(reliable-delivery-demo)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} main.cpp
+    persistent_storage.cpp persistent_storage.hpp)
 
 if (TARGET pfs::netty_p2p)
     target_link_libraries(${PROJECT_NAME} pfs::netty_p2p)
@@ -20,4 +21,10 @@ if (TARGET pfs::netty)
     target_link_libraries(${PROJECT_NAME} pfs::netty)
 else()
     target_link_libraries(${PROJECT_NAME} pfs::netty::static)
+endif()
+
+if (TARGET pfs::debby)
+    target_link_libraries(${PROJECT_NAME} pfs::debby)
+else()
+    target_link_libraries(${PROJECT_NAME} pfs::debby::static)
 endif()

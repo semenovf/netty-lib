@@ -10,9 +10,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "exports.hpp"
+#include "pfs/optional.hpp"
+#include "pfs/string_view.hpp"
 #include <functional>
 #include <string>
-#include <utility>
 
 namespace netty {
 
@@ -138,17 +139,22 @@ public: // static
     /**
      * Parses IPv4 address from string.
      */
-    static NETTY__EXPORT std::pair<bool, inet4_addr> parse (char const * s, std::size_t n);
+    static NETTY__EXPORT pfs::optional<inet4_addr> parse (char const * s, std::size_t n);
 
     /**
      * Parses IPv4 address from string.
      */
-    static NETTY__EXPORT std::pair<bool, inet4_addr> parse (char const * s);
+    static NETTY__EXPORT pfs::optional<inet4_addr> parse (char const * s);
 
     /**
      * Parses IPv4 address from string.
      */
-    static NETTY__EXPORT std::pair<bool, inet4_addr> parse (std::string const & s);
+    static NETTY__EXPORT pfs::optional<inet4_addr> parse (std::string const & s);
+
+    /**
+     * Parses IPv4 address from string view.
+     */
+    static NETTY__EXPORT pfs::optional<inet4_addr> parse (pfs::string_view s);
 };
 
     /**
@@ -189,8 +195,7 @@ public: // static
     *
     *
     */
-NETTY__EXPORT std::string to_string (inet4_addr const & addr
-    , std::string const & format, int base);
+NETTY__EXPORT std::string to_string (inet4_addr const & addr, std::string const & format, int base);
 
 inline bool operator == (inet4_addr const & a, inet4_addr const & b)
 {

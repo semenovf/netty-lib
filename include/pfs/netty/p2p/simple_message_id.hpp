@@ -12,7 +12,7 @@
 namespace netty {
 namespace p2p {
 
-struct message_id_traits
+struct simple_message_id_traits
 {
     using type = std::uint64_t;
 

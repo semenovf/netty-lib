@@ -7,16 +7,16 @@
 //      2024.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "message_id.hpp"
+#include "simple_message_id.hpp"
 #include "peer_id.hpp"
 #include "pfs/i18n.hpp"
-#include <csdint>
+#include <cstdint>
 #include <memory>
 
 namespace netty {
 namespace p2p {
 
-enum class message_type : std::uint8_t
+enum class message_type_enum : std::uint8_t
 {
       data = 0
         /// Message itself.
@@ -30,21 +30,28 @@ enum class message_type : std::uint8_t
         /// reliable_delivery_engine). Packet content depends on message identifier.
 };
 
-temlate <typename MessageIdTraits>
+template <typename MessageIdTraits = simple_message_id_traits>
 struct message_header
 {
-    message_type type;
+    message_type_enum type;
     typename MessageIdTraits::type id;
 };
 
 template <typename DeliveryEngine, typename PersistentStorage>
-class reliable_delivery_engine
+class reliable_delivery_engine: public DeliveryEngine
 {
+public:
     using serializer_type = typename DeliveryEngine::serializer_type;
 
 private:
-    std::unique_ptr<DeliveryEngine> _delivery;
     std::unique_ptr<PersistentStorage> _storage;
+
+public:
+    /**
+     * Message received.
+     */
+    mutable std::function<void (universal_id, std::vector<char>)> data_received
+        = [] (universal_id, std::vector<char>) {};
 
 public:
     /**
@@ -52,29 +59,30 @@ public:
      *
      * @param host_id Unique host identifier for this instance.
      */
-    reliable_delivery_engine (std::unique_ptr<DeliveryEngine> && delivery_engine
-        , std::unique_ptr<PersistentStorage> && storage
-        , error * perr = nullptr)
-        : _delivery(std::move(delivery_engine))
+    template <typename ...Args>
+    reliable_delivery_engine (std::unique_ptr<PersistentStorage> && storage
+        , Args &&... delivery_engine_args)
+        : DeliveryEngine(std::forward<Args>(delivery_engine_args)...)
         , _storage(std::move(storage))
     {
-        if (!_delivery) {
-            pfs::throw_or(perr, error {
-                  make_error_code(std::errc::invalid_argument)
-                , tr::_("delivery engine is null")
-            });
-
-            return;
-        }
-
         if (!_storage) {
-            pfs::throw_or(perr, error {
+            throw error {
                   make_error_code(std::errc::invalid_argument)
                 , tr::_("persistent storage is null")
-            });
+            };
 
             return;
         }
+
+        DeliveryEngine::data_received = [this] (universal_id addresser, std::vector<char> data) {
+            typename serializer_type::istream_type in{data.data(), data.size()};
+            netty::p2p::message_type_enum msgtype;
+            persistent_storage::message_id msgid;
+            std::vector<char> payload;
+            in >> msgtype >> msgid >> payload;
+
+            this->data_received(addresser, payload);
+        };
     }
 
     ~reliable_delivery_engine () = default;
@@ -86,42 +94,26 @@ public:
     reliable_delivery_engine & operator = (reliable_delivery_engine &&) = default;
 
 public:
-    int step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
-    {
-        return _delivery->step(timeout);
-    }
-
-    void connect (host4_addr haddr)
-    {
-        _delivery->connect(std::move(haddr));
-    }
-
-    void release_peer (peer_id peerid)
-    {
-        _delivery->release_peer(peerid);
-    }
-
     bool enqueue (peer_id addressee, char const * data, int len)
     {
         pfs::error err;
         auto msgid = _storage->save(addressee, data, len, & err);
 
         if (err) {
-            _delivery->on_failure(netty::error{err.code(), tr::f_("save message failure: {}"
-                , err.what())});
+            this->on_failure(netty::error{err.code(), tr::f_("save message failure: {}", err.what())});
             return false;
         }
 
         typename serializer_type::ostream_type out;
-        out << msgid << std::make_pair(data, len);
+        out << message_type_enum::data << msgid << std::make_pair(data, len);
 
-        auto success = _delivery->enqueue(addressee, out.data());
+        auto success = DeliveryEngine::enqueue(addressee, out.take());
 
         if (!success) {
             _storage->remove(addressee, msgid, & err);
 
             if (err) {
-                _delivery->on_failure(netty::error{err.code(), tr::f_("remove message failure: {}: {}"
+                this->on_failure(netty::error{err.code(), tr::f_("remove message failure: {}: {}"
                     , msgid, err.what())});
                 return false;
             }
@@ -142,25 +134,7 @@ public:
         return enqueue(addressee, data.data(), data.size());
     }
 
-    void file_upload_stopped (universal_id addressee, universal_id fileid)
-    {
-        _delivery->file_upload_stopped(addressee, fileid);
-    }
-
-    void file_upload_complete (universal_id addressee, universal_id fileid)
-    {
-        _delivery->file_upload_complete(addressee, fileid);
-    }
-
-    void file_ready_send (universal_id addressee, universal_id fileid, packet_type_enum packettype
-        , typename serializer_type::output_archive_type data)
-    {
-        _delivery->file_ready_send(addressee, fileid, packettype, std::move(data));
-    }
-
 private:
 };
 
 }} // namespace netty::p2p
-
-

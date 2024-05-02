@@ -151,16 +151,14 @@ struct file_state
  *        greater than @c packet::PACKET_HEADER_SIZE).
  */
 template <typename QueueType>
-void enqueue_packets (QueueType & q, universal_id addresser
-    , universal_id addressee, packet_type_enum packettype, std::uint16_t packet_size
-    , char const * data, int len)
+void enqueue_packets (QueueType & q, universal_id addresser, packet_type_enum packettype
+    , std::uint16_t packet_size, char const * data, int len)
 {
     auto payload_size = packet_size - packet::PACKET_HEADER_SIZE;
     auto remain_len   = len;
     char const * remain_data = data;
     std::uint32_t partindex  = 1;
-    std::uint32_t partcount  = len / payload_size
-        + (len % payload_size ? 1 : 0);
+    std::uint32_t partcount  = len / payload_size + (len % payload_size ? 1 : 0);
 
     while (remain_len) {
         packet p;

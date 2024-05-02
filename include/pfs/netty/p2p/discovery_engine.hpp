@@ -18,6 +18,7 @@
 #include "netty/socket4_addr.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/log.hpp"
+#include "pfs/stopwatch.hpp"
 #include "pfs/time_point.hpp"
 #include <chrono>
 #include <functional>
@@ -83,6 +84,8 @@ private:
     // Contains discovered peers with additional information
     std::map<universal_id, peer_credentials> _discovered_peers;
 
+    std::vector<universal_id> _deferred_expired_peers;
+
 public:
     mutable std::function<void (error const &)> on_failure = [] (error const &) {};
 
@@ -118,9 +121,6 @@ public:
 private:
     void process_hello_packet (socket4_addr saddr, hello_packet const & packet)
     {
-        // static seconds_type const MIN_EXPIRATION_INTERVAL {5};
-        // static int const EXPIRATION_INTERVAL_FACTOR = 5;
-
         if (packet.crc16 == crc16_of(packet)) {
             // Ignore self received packets (can happen during
             // multicast / broadcast transmission)
@@ -130,13 +130,6 @@ private:
 
                 auto pos = _discovered_peers.find(packet.uuid);
                 auto expiration_interval = seconds_type(packet.expiration_interval);
-
-
-                //     * EXPIRATION_INTERVAL_FACTOR;
-                //
-                // if (expiration_interval < MIN_EXPIRATION_INTERVAL)
-                //     expiration_interval = MIN_EXPIRATION_INTERVAL;
-
                 auto expiration_timepoint = current_timepoint() + expiration_interval;
 
                 // Now in milliseconds since epoch in UTC.
@@ -190,9 +183,6 @@ private:
                         auto diffdiff = timediff > pos->second.timediff
                             ? timediff - pos->second.timediff
                             : pos->second.timediff - timediff;
-
-                        //if (diffdiff < milliseconds_type{0})
-                        //    diffdiff *= -1;
 
                         // Notify about peer's timestamp is out of limits.
                         // Store new value.
@@ -316,27 +306,36 @@ private:
 
         for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
             if (pos->second.expiration_timepoint < now) {
-                if (peer_expired)
-                    peer_expired(pos->first, pos->second.saddr);
-                else
-                    peer_expired2(host4_addr{pos->first, pos->second.saddr});
-
+                auto peer_id = pos->first;
+                auto saddr = pos->second.saddr;
                 pos = _discovered_peers.erase(pos);
+
+                if (peer_expired)
+                    peer_expired(peer_id, std::move(saddr));
+                else
+                    peer_expired2(host4_addr{peer_id, std::move(saddr)});
             } else {
                 ++pos;
             }
         }
-    }
 
-    void expire_all_peers ()
-    {
-        for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
-            if (peer_expired)
-                peer_expired(pos->first, pos->second.saddr);
-            else
-                peer_expired2(host4_addr{pos->first, pos->second.saddr});
+        if (!_deferred_expired_peers.empty()) {
+            // Expire deferred peers
+            for (auto const & peer_id: _deferred_expired_peers) {
+                auto pos = _discovered_peers.find(peer_id);
 
-            pos = _discovered_peers.erase(pos);
+                if (pos != _discovered_peers.end()) {
+                    auto saddr = pos->second.saddr;
+                    pos = _discovered_peers.erase(pos);
+
+                    if (peer_expired)
+                        peer_expired(peer_id, saddr);
+                    else
+                        peer_expired2(host4_addr{peer_id, saddr});
+                }
+            }
+
+            _deferred_expired_peers.clear();
         }
     }
 
@@ -394,9 +393,7 @@ public:
     }
 
     ~discovery_engine ()
-    {
-        expire_all_peers();
-    }
+    {}
 
     /**
      * Add receiver.
@@ -404,8 +401,7 @@ public:
      * @param src_saddr Receiver address (unicast, multicast or broadcast).
      * @param local_addr Local address for multicast or broadcast.
      */
-    void add_receiver (socket4_addr src_saddr
-        , inet4_addr local_addr = inet4_addr::any_addr_value)
+    void add_receiver (socket4_addr src_saddr, inet4_addr local_addr = inet4_addr::any_addr_value)
     {
         _backend.add_receiver(src_saddr, local_addr);
     }
@@ -507,8 +503,7 @@ public:
     void add_target (socket4_addr target_saddr, seconds_type transmit_interval
         , error * perr = nullptr)
     {
-        add_target(target_saddr, inet4_addr::any_addr_value
-            , transmit_interval, perr);
+        add_target(target_saddr, inet4_addr::any_addr_value, transmit_interval, perr);
     }
 
     bool has_targets () const noexcept
@@ -519,19 +514,20 @@ public:
     /**
      * Force peer expiration
      */
-    void expire_peer (universal_id uuid)
+    void expire_peer (universal_id peer_id)
     {
-        auto pos = _discovered_peers.find(uuid);
+        _deferred_expired_peers.push_back(peer_id);
+    }
 
-        if (pos != _discovered_peers.end()) {
-            // The order is matter (erase and then call callback)
-            auto saddr = pos->second.saddr;
-            pos = _discovered_peers.erase(pos);
-
+    void expire_all_peers ()
+    {
+        for (auto pos = _discovered_peers.begin(); pos != _discovered_peers.end();) {
             if (peer_expired)
-                peer_expired(uuid, saddr);
+                peer_expired(pos->first, pos->second.saddr);
             else
-                peer_expired2(host4_addr{uuid, saddr});
+                peer_expired2(host4_addr{pos->first, pos->second.saddr});
+
+            pos = _discovered_peers.erase(pos);
         }
     }
 
@@ -570,13 +566,33 @@ public:
      * @return Pair of number of input and output events (this is a result of
      *         call of backend's poll routine).
      */
-    int discover (milliseconds_type poll_timeout = milliseconds_type{0}
-        , error * perr = nullptr)
+    int step (milliseconds_type poll_timeout = milliseconds_type{0}, error * perr = nullptr)
     {
         broadcast_discovery_data();
         auto n = _backend.poll(poll_timeout, perr);
         check_expiration();
         return n;
+    }
+
+    std::chrono::microseconds step_timing (milliseconds_type poll_timeout = milliseconds_type{0}
+        , error * perr = nullptr)
+    {
+        pfs::stopwatch<std::micro> stopwatch;
+        stopwatch.start();
+        step(poll_timeout, perr);
+        stopwatch.stop();
+        return std::chrono::microseconds{stopwatch.count()};
+    }
+
+    /**
+     * @return Pair of number of input and output events (this is a result of
+     *         call of backend's poll routine).
+     *
+     * @depreacted Use step() method instead.
+     */
+    int discover (milliseconds_type poll_timeout = milliseconds_type{0}, error * perr = nullptr)
+    {
+        return step(poll_timeout, perr);
     }
 };
 

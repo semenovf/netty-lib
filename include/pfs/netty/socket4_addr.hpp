@@ -11,6 +11,8 @@
 #pragma once
 #include "exports.hpp"
 #include "inet4_addr.hpp"
+#include "pfs/optional.hpp"
+#include "pfs/string_view.hpp"
 #include <string>
 #include <utility>
 
@@ -26,17 +28,22 @@ public:
     /**
      * Parses IPv4 address from string.
      */
-    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (char const * s, std::size_t n);
+    static NETTY__EXPORT pfs::optional<socket4_addr> parse (char const * s, std::size_t n);
+
+    /**
+     * Parses IPv4 address from C-string.
+     */
+    static NETTY__EXPORT pfs::optional<socket4_addr> parse (char const * s);
 
     /**
      * Parses IPv4 address from string.
      */
-    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (char const * s);
+    static NETTY__EXPORT pfs::optional<socket4_addr> parse (std::string const & s);
 
     /**
-     * Parses IPv4 address from string.
+     * Parses IPv4 address from string view.
      */
-    static NETTY__EXPORT std::pair<bool, socket4_addr> parse (std::string const & s);
+    static NETTY__EXPORT pfs::optional<socket4_addr> parse (pfs::string_view s);
 };
 
 inline std::string to_string (socket4_addr const & saddr)

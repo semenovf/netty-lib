@@ -92,8 +92,7 @@ public:
      */
     NETTY__EXPORT bool has_targets () const noexcept;
 
-    NETTY__EXPORT int poll (std::chrono::milliseconds millis
-        , error * perr = nullptr);
+    NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 
     NETTY__EXPORT send_result send (socket4_addr dest_saddr, char const * data
         , std::size_t size, error * perr);

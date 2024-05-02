@@ -60,11 +60,11 @@ int main (int argc, char * argv[])
         } else if (pfs::starts_with(string_view{argv[i]}, "--local-addr=")) {
             auto res = netty::inet4_addr::parse(argv[i] + 13);
 
-            if (!res.first) {
+            if (!res) {
                 LOGE(TAG, "Bad local address");
                 return EXIT_FAILURE;
             }
-            local_addr = std::move(res.first);
+            local_addr = std::move(*res);
         } else if (pfs::starts_with(string_view{argv[i]}, "--listener-saddr=")) {
             listener_saddr_values.push_back(std::string{argv[i] + 17});
         } else if (pfs::starts_with(string_view{argv[i]}, "--target-saddr=")) {
@@ -98,18 +98,18 @@ int main (int argc, char * argv[])
     for (auto l: listener_saddr_values) {
         auto res = netty::socket4_addr::parse(l);
 
-        if (!res.first) {
+        if (!res) {
             LOGE(TAG, "Bad socket address for receiver: {}", l);
             return EXIT_FAILURE;
         }
 
-        discovery.add_receiver(res.second, local_addr);
+        discovery.add_receiver(*res, local_addr);
     }
 
     for (auto t: target_saddr_values) {
         auto res = netty::socket4_addr::parse(t);
 
-        if (!res.first) {
+        if (!res) {
             LOGE(TAG, "Bad socket address for target: {}", t);
             return EXIT_FAILURE;
         }

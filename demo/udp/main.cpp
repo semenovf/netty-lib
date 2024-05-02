@@ -91,12 +91,12 @@ int main (int argc, char * argv[])
 
     auto res = netty::inet4_addr::parse(addr_value);
 
-    if (!res.first) {
+    if (!res) {
         LOGE(TAG, "Bad address");
         return EXIT_FAILURE;
     }
 
-    auto addr = res.second;
+    auto addr = *res;
     std::uint16_t port = 4242;
 
     if (!port_value.empty()) {
@@ -115,12 +115,12 @@ int main (int argc, char * argv[])
     if (!local_addr_value.empty()) {
         auto res = netty::inet4_addr::parse(local_addr_value);
 
-        if (!res.first) {
+        if (!res) {
             LOGE(TAG, "Bad local address");
             return EXIT_FAILURE;
         }
 
-        local_addr = res.second;
+        local_addr = *res;
     }
 
 #if NETTY__QT5_ENABLED
