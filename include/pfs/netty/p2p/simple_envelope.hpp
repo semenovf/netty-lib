@@ -12,26 +12,26 @@
 namespace netty {
 namespace p2p {
 
-struct simple_message_id_traits
+struct simple_envelope_traits
 {
-    using type = std::uint64_t;
+    using id = std::uint64_t;
 
-    static constexpr type initial ()
+    static constexpr id initial ()
     {
-        return type{0};
+        return id{0};
     }
 
-    static constexpr type next (type x)
+    static constexpr id next (id x)
     {
         return x + 1;
     }
 
-    static constexpr bool eq (type a, type b)
+    static constexpr bool eq (id a, id b)
     {
         return a == b;
     }
 
-    static constexpr bool less (type a, type b)
+    static constexpr bool less (id a, id b)
     {
         return a < b;
     }

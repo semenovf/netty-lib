@@ -9,7 +9,7 @@
 #pragma once
 #include "functional_reliable_delivery_callbacks.hpp"
 #include "peer_id.hpp"
-#include "simple_message_id.hpp"
+#include "simple_envelope.hpp"
 #include "pfs/i18n.hpp"
 #include <cstdint>
 #include <memory>
@@ -17,25 +17,24 @@
 namespace netty {
 namespace p2p {
 
-enum class message_type_enum : std::uint8_t
+enum class envelope_type_enum : std::uint8_t
 {
-      data = 0
-        /// Message itself.
+      payload = 0
+        /// Envelope payload.
 
     , ack = 1
-        /// Message receive acknowledgement (used by reliable_delivery_engine).
-        /// Packet content depends on message identifier.
+        /// Envelope receive acknowledgement (used by reliable_delivery_engine).
 
     , nack = 2
-        /// Message used to notify sender the message already process early (used by
-        /// reliable_delivery_engine). Packet content depends on message identifier.
+        /// An envelope used to notify the sender that the payload has already been processed
+        /// previously. (used by reliable_delivery_engine).
 };
 
-template <typename MessageIdTraits = simple_message_id_traits>
-struct message_header
+template <typename EnvelopeTraits = simple_envelope_traits>
+struct envelope_header
 {
-    message_type_enum type;
-    typename MessageIdTraits::type id;
+    envelope_type_enum etype;
+    typename EnvelopeTraits::id eid;
 };
 
 template <typename DeliveryEngine, typename PersistentStorage
@@ -44,6 +43,8 @@ class reliable_delivery_engine: public DeliveryEngine, public Callbacks
 {
 public:
     using serializer_type = typename DeliveryEngine::serializer_type;
+    using envelope_traits = typename PersistentStorage::envelope_traits;
+    using envelope_header_type = envelope_header<envelope_traits>;
 
 private:
     std::unique_ptr<PersistentStorage> _storage;
@@ -71,12 +72,13 @@ public:
 
         DeliveryEngine::data_received = [this] (universal_id addresser, std::vector<char> data) {
             typename serializer_type::istream_type in{data.data(), data.size()};
-            netty::p2p::message_type_enum msgtype;
-            persistent_storage::message_id msgid;
+            envelope_header_type h;
+            // netty::p2p::envelope_type_enum etype;
+            // persistent_storage::envelope_id eid;
             std::vector<char> payload;
-            in >> msgtype >> msgid >> payload;
+            in >> h.etype >> h.eid >> payload;
 
-            Callbacks::message_received(addresser, payload);
+            Callbacks::envelope_received(addresser, payload);
         };
     }
 
@@ -92,31 +94,19 @@ public:
     bool enqueue (peer_id addressee, char const * data, int len)
     {
         pfs::error err;
-        auto msgid = _storage->save(addressee, data, len, & err);
+        auto eid = _storage->save(addressee, data, len, & err);
 
         if (err) {
-            this->on_failure(netty::error{err.code(), tr::f_("save message failure: {}", err.what())});
+            this->on_failure(netty::error{err.code(), tr::f_("save envelope failure: {}", err.what())});
             return false;
         }
 
         typename serializer_type::ostream_type out;
-        out << message_type_enum::data << msgid << std::make_pair(data, len);
+        envelope_header_type h {envelope_type_enum::payload, eid};
 
-        auto success = DeliveryEngine::enqueue(addressee, out.take());
+        out << h.etype << h.eid << std::make_pair(data, len);
 
-        if (!success) {
-            _storage->remove(addressee, msgid, & err);
-
-            if (err) {
-                this->on_failure(netty::error{err.code(), tr::f_("remove message failure: {}: {}"
-                    , msgid, err.what())});
-                return false;
-            }
-
-            return false;
-        }
-
-        return true;
+        return DeliveryEngine::enqueue(addressee, out.take());
     }
 
     bool enqueue (peer_id addressee, std::string const & data)

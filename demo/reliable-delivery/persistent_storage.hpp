@@ -10,7 +10,7 @@
 #include "pfs/error.hpp"
 #include <pfs/filesystem.hpp>
 #include "netty/p2p/peer_id.hpp"
-#include "netty/p2p/simple_message_id.hpp"
+#include "netty/p2p/simple_envelope.hpp"
 #include "pfs/debby/relational_database.hpp"
 #include "pfs/debby/result.hpp"
 #include "pfs/debby/statement.hpp"
@@ -23,8 +23,8 @@
 class persistent_storage
 {
 public:
-    using message_id_traits = netty::p2p::simple_message_id_traits;
-    using message_id        = message_id_traits::type;
+    using envelope_traits = netty::p2p::simple_envelope_traits;
+    using envelope_id     = envelope_traits::id;
 
 private:
     using relational_database = debby::relational_database<debby::backend::sqlite3::database>;
@@ -33,7 +33,7 @@ private:
 
     struct peer_info
     {
-        message_id msgid;
+        envelope_id eid;
     };
 
 private:
@@ -57,7 +57,7 @@ public:
      *
      * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
      */
-    message_id save (netty::p2p::peer_id addressee, char const * data, int len, pfs::error * perr = nullptr);
+    envelope_id save (netty::p2p::peer_id addressee, char const * data, int len, pfs::error * perr = nullptr);
 
     /**
      * Remove message data from persistent storage.
@@ -68,12 +68,12 @@ public:
      *
      * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
      */
-    void remove (netty::p2p::peer_id addressee, message_id msgid, pfs::error * perr = nullptr);
+    void remove (netty::p2p::peer_id addressee, envelope_id eid, pfs::error * perr = nullptr);
 
 private:
-    void for_each (netty::p2p::peer_id peer_id, std::function<void (message_id, std::vector<char>)> f);
+    void for_each (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void create_delivary_table (netty::p2p::peer_id peer_id);
-    message_id fetch_recent_msgid (netty::p2p::peer_id peer_id);
+    envelope_id fetch_recent_eid (netty::p2p::peer_id peer_id);
 };
 
 
