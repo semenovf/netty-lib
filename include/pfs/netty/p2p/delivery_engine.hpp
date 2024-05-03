@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "engine_traits.hpp"
+#include "functional_delivery_callbacks.hpp"
 #include "packet.hpp"
 #include "primal_serializer.hpp"
 #include "universal_id.hpp"
@@ -30,9 +31,10 @@ namespace netty {
 namespace p2p {
 
 template <typename EngineTraits = default_engine_traits
+    , typename Callbacks = functional_delivery_callbacks
     , typename Serializer = primal_serializer<>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
-class delivery_engine
+class delivery_engine: public Callbacks
 {
     static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");
 
@@ -103,69 +105,6 @@ private:
     std::map<typename server_poller_type::native_socket_type, reader_account> _reader_account_map;
     std::map<universal_id, writer_account> _writer_account_map;
 
-public: // Callbacks
-    /**
-     * Called when unrecoverable error occurred - engine became disfunctional.
-     * It must be restarted.
-     */
-    mutable std::function<void (error const & err)> on_failure = [] (error const &) {};
-
-    mutable std::function<void (std::string const &)> on_error = [] (std::string const &) {};
-    mutable std::function<void (std::string const &)> on_warn = [] (std::string const &) {};
-
-    /**
-     * Called when need to force peer expiration by discovery manager (using expire_peer method).
-     */
-    mutable std::function<void (universal_id)> defere_expire_peer;
-
-    /**
-     * Called when new writer socket ready (connected).
-     */
-    mutable std::function<void (host4_addr)> writer_ready = [] (host4_addr) {};
-
-    /**
-     * Called when writer socket closed/disconnected.
-     */
-    mutable std::function<void (host4_addr)> writer_closed = [] (host4_addr) {};
-
-    /**
-     * Called when new reader socket ready (handshaked).
-     */
-    mutable std::function<void (host4_addr)> reader_ready = [] (host4_addr) {};
-
-    /**
-     * Called when reader socket closed/disconnected.
-     */
-    mutable std::function<void (host4_addr)> reader_closed = [] (host4_addr) {};
-
-    /**
-     * Called when channel (reader and writer available) established.
-     */
-    mutable std::function<void (host4_addr)> channel_established = [] (host4_addr) {};
-
-    /**
-     * Message received.
-     */
-    mutable std::function<void (universal_id, std::vector<char>)> data_received
-        = [] (universal_id, std::vector<char>) {};
-
-    /**
-     * Called when channel closed.
-     */
-    mutable std::function<void (universal_id)> channel_closed = [] (universal_id) {};
-
-    /**
-     * Called when any file data received. These data must be passed to the file transporter
-     */
-    mutable std::function<void (universal_id, packet_type_enum, std::vector<char>)> file_data_received
-        = [] (universal_id, packet_type_enum packettype, std::vector<char> const &) {};
-
-    /**
-     * Called to request new file chunks for sending.
-     */
-    mutable std::function<void (universal_id, universal_id)> request_file_chunk
-        = [] (universal_id addressee, universal_id fileid) {};
-
 public:
     /**
      * Initializes underlying APIs and constructs delivery engine instance.
@@ -202,9 +141,9 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peer_id != universal_id{}) {
-                defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peer_id);
             } else {
-                on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
+                Callbacks::on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
                 this->on_failure(err);
             }
         };
@@ -217,9 +156,9 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peer_id != universal_id{}) {
-                defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peer_id);
             } else {
-                on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
+                Callbacks::on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
             }
         };
 
@@ -232,9 +171,9 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter) {
-                defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peer_id);
             } else {
-                on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
+                Callbacks::on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
                 this->on_failure(err);
             }
         };
@@ -243,9 +182,9 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
-                defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peer_id);
             } else {
-                on_error(tr::f_("connection refused: socket={}, but writer account not found", sock));
+                Callbacks::on_error(tr::f_("connection refused: socket={}, but writer account not found", sock));
             }
         };
 
@@ -257,9 +196,9 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
-                defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peer_id);
             } else {
-                on_error(tr::f_("connection disconnected: socket={}, but writer account not found", sock));
+                Callbacks::on_error(tr::f_("connection disconnected: socket={}, but writer account not found", sock));
             }
         };
 
@@ -272,7 +211,7 @@ public:
             if (awriter != nullptr) {
                 awriter->can_write = true;
             } else {
-                on_error(tr::f_("writer can write: socket={}, but writer account not found", sock));
+                Callbacks::on_error(tr::f_("writer can write: socket={}, but writer account not found", sock));
             }
         };
 
@@ -326,7 +265,7 @@ public:
     {
         release_reader(peer_id);
         release_writer(peer_id);
-        channel_closed(peer_id);
+        Callbacks::channel_closed(peer_id);
     }
 
     void release_peers ()
@@ -435,7 +374,7 @@ public:
         auto awriter = locate_writer_account(addressee);
 
         if (awriter == nullptr) {
-            on_error(tr::f_("file upload stopped/finished, but writer not found: addressee={}, fileid={}"
+            Callbacks::on_error(tr::f_("file upload stopped/finished, but writer not found: addressee={}, fileid={}"
                 , addressee, fileid));
             return;
         }
@@ -478,7 +417,7 @@ private:
         auto reader = _listener->accept_nonblocking(listener_sock, & err);
 
         if (err) {
-            on_error(tr::f_("accept connection failure: {}", err.what()));
+            Callbacks::on_error(tr::f_("accept connection failure: {}", err.what()));
             return nullptr;
         }
 
@@ -536,7 +475,7 @@ private:
         auto areader = locate_reader_account(peer_id);
 
         if (areader == nullptr) {
-            on_error(tr::f_("no reader account found for release: {}", peer_id));
+            Callbacks::on_error(tr::f_("no reader account found for release: {}", peer_id));
             return;
         };
 
@@ -547,7 +486,7 @@ private:
 
         _reader_account_map.erase(areader->reader.native());
 
-        reader_closed(host4_addr{peer_id, std::move(saddr)});
+        Callbacks::reader_closed(host4_addr{peer_id, std::move(saddr)});
     }
 
     writer_account & acquire_writer_account (universal_id peer_id)
@@ -576,7 +515,7 @@ private:
             auto & awriter = acquire_writer_account(haddr.host_id);
             awriter.writer = std::move(writer);
         } else {
-            on_error(tr::f_("connecting writer failure: {}: {}, writer ignored"
+            Callbacks::on_error(tr::f_("connecting writer failure: {}: {}, writer ignored"
                 , to_string(haddr), err.what()));
         }
     }
@@ -587,7 +526,7 @@ private:
         auto awriter = locate_writer_account(peer_id);
 
         if (awriter == nullptr) {
-            on_error(tr::f_("no writer found for release: {}", peer_id));
+            Callbacks::on_error(tr::f_("no writer found for release: {}", peer_id));
             return;
         }
 
@@ -598,7 +537,7 @@ private:
 
         _writer_account_map.erase(peer_id);
 
-        writer_closed(host4_addr{peer_id, std::move(saddr)});
+        Callbacks::writer_closed(host4_addr{peer_id, std::move(saddr)});
     }
 
     void check_complete_channel (universal_id peer_id)
@@ -616,7 +555,7 @@ private:
             complete++;
 
         if (complete == 2)
-            channel_established(host4_addr{peer_id, awriter->writer.saddr()});
+            Callbacks::channel_established(host4_addr{peer_id, awriter->writer.saddr()});
     }
 
     inline void enqueue_packets_helper (output_queue_type & q, packet_type_enum packettype
@@ -634,7 +573,7 @@ private:
         auto * awriter = locate_writer_account(addressee);
 
         if (awriter == nullptr) {
-            on_error(tr::f_("no writer account found for enqueue packets: {}", addressee));
+            Callbacks::on_error(tr::f_("no writer account found for enqueue packets: {}", addressee));
             return false;
         }
 
@@ -648,7 +587,7 @@ private:
         auto * awriter = locate_writer_account(addressee);
 
         if (awriter == nullptr) {
-            on_error(tr::f_("no writer account found for enqueue file chunk: {}", addressee));
+            Callbacks::on_error(tr::f_("no writer account found for enqueue file chunk: {}", addressee));
             return false;
         }
 
@@ -668,14 +607,14 @@ private:
         auto awriter = locate_writer_account(sock);
 
         if (awriter == nullptr) {
-            on_error(tr::f_("socket connected, but writer not found: socket={}", sock));
+            Callbacks::on_error(tr::f_("socket connected, but writer not found: socket={}", sock));
             return;
         }
 
         _writer_poller->wait_for_write(awriter->writer);
         awriter->connected = true;
 
-        writer_ready(host4_addr{awriter->peer_id, awriter->writer.saddr()});
+        Callbacks::writer_ready(host4_addr{awriter->peer_id, awriter->writer.saddr()});
 
         // Only addresser need by the receiver
         enqueue_packets(awriter->peer_id, packet_type_enum::hello, "HELO", 4);
@@ -688,7 +627,7 @@ private:
         auto areader = locate_reader_account(sock);
 
         if (areader == nullptr) {
-            on_error(tr::f_("no reader account located by socket for process input: {}", sock));
+            Callbacks::on_error(tr::f_("no reader account located by socket for process input: {}", sock));
             return;
         }
 
@@ -703,8 +642,8 @@ private:
             auto n = areader->reader.recv(buffer.data() + offset, available);
 
             if (n < 0) {
-                on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
-                defere_expire_peer(areader->peer_id);
+                Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
+                Callbacks::defere_expire_peer(areader->peer_id);
                 return;
             }
 
@@ -735,14 +674,14 @@ private:
             decltype(packet::packetsize) packetsize {0};
 
             if (!is_valid(packettype)) {
-                on_error(tr::f_("unexpected packet type ({}) received from: {}, ignored."
+                Callbacks::on_error(tr::f_("unexpected packet type ({}) received from: {}, ignored."
                     , static_cast<std::underlying_type<decltype(packettype)>::type>(packettype)
                     , to_string(areader->reader.saddr())));
 
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peer_id);
 
                 buffer_pos = buffer.end();
                 break;
@@ -753,7 +692,7 @@ private:
             packetsize = pkt.packetsize;
 
             if (packetsize != PACKET_SIZE) {
-                on_error(tr::f_("unexpected packet size ({}) received from: {}, expected: {}"
+                Callbacks::on_error(tr::f_("unexpected packet size ({}) received from: {}, expected: {}"
                     , PACKET_SIZE
                     , to_string(areader->reader.saddr())
                     , packetsize));
@@ -761,7 +700,7 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peer_id);
 
                 buffer_pos = buffer.end();
                 break;
@@ -780,13 +719,13 @@ private:
 
                 switch (packettype) {
                     case packet_type_enum::regular:
-                        this->data_received(peer_id, std::move(areader->b));
+                        Callbacks::data_received(peer_id, std::move(areader->b));
                         break;
 
                     case packet_type_enum::hello: {
                         // Complete reader account
                         areader->peer_id = peer_id;
-                        reader_ready(host4_addr{peer_id, areader->reader.saddr()});
+                        Callbacks::reader_ready(host4_addr{peer_id, areader->reader.saddr()});
                         check_complete_channel(peer_id);
                         break;
                     }
@@ -798,7 +737,7 @@ private:
                     case packet_type_enum::file_begin:
                     case packet_type_enum::file_end:
                     case packet_type_enum::file_state:
-                        file_data_received(peer_id, packettype, std::move(areader->b));
+                        Callbacks::file_data_received(peer_id, packettype, std::move(areader->b));
                         break;
                 }
             }
@@ -860,20 +799,20 @@ private:
 
             switch (sendresult.state) {
                 case netty::send_status::failure:
-                    on_error(tr::f_("send failure to {}: {}", to_string(awriter.writer.saddr())
+                    Callbacks::on_error(tr::f_("send failure to {}: {}", to_string(awriter.writer.saddr())
                         , err.what()));
 
                     // Expire peer
-                    defere_expire_peer(awriter.peer_id);
+                    Callbacks::defere_expire_peer(awriter.peer_id);
                     break_sending = true;
                     break;
 
                 case netty::send_status::network:
-                    on_error(tr::f_("send failure to {}: network failure: {}"
+                    Callbacks::on_error(tr::f_("send failure to {}: network failure: {}"
                         , to_string(awriter.writer.saddr()), err.what()));
 
                     // Expire peer
-                    defere_expire_peer(awriter.peer_id);
+                    Callbacks::defere_expire_peer(awriter.peer_id);
                     break_sending = true;
                     break;
 
@@ -924,7 +863,7 @@ private:
                             serialize_outgoing_packets(awriter.raw, chunks_output_queue, 10);
                             ++pos;
                         } else {
-                            request_file_chunk(awriter.peer_id, pos->first);
+                            Callbacks::request_file_chunk(awriter.peer_id, pos->first);
                             ++pos;
                         }
                     }

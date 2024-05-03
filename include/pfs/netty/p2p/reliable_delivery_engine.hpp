@@ -7,8 +7,9 @@
 //      2024.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "simple_message_id.hpp"
+#include "functional_reliable_delivery_callbacks.hpp"
 #include "peer_id.hpp"
+#include "simple_message_id.hpp"
 #include "pfs/i18n.hpp"
 #include <cstdint>
 #include <memory>
@@ -37,21 +38,15 @@ struct message_header
     typename MessageIdTraits::type id;
 };
 
-template <typename DeliveryEngine, typename PersistentStorage>
-class reliable_delivery_engine: public DeliveryEngine
+template <typename DeliveryEngine, typename PersistentStorage
+    , typename Callbacks = functional_reliable_delivery_callbacks>
+class reliable_delivery_engine: public DeliveryEngine, public Callbacks
 {
 public:
     using serializer_type = typename DeliveryEngine::serializer_type;
 
 private:
     std::unique_ptr<PersistentStorage> _storage;
-
-public:
-    /**
-     * Message received.
-     */
-    mutable std::function<void (universal_id, std::vector<char>)> data_received
-        = [] (universal_id, std::vector<char>) {};
 
 public:
     /**
@@ -81,7 +76,7 @@ public:
             std::vector<char> payload;
             in >> msgtype >> msgid >> payload;
 
-            this->data_received(addresser, payload);
+            Callbacks::message_received(addresser, payload);
         };
     }
 
