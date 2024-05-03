@@ -13,6 +13,7 @@
 #include "pfs/i18n.hpp"
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 namespace netty {
 namespace p2p {
@@ -23,11 +24,14 @@ enum class envelope_type_enum : std::uint8_t
         /// Envelope payload.
 
     , ack = 1
-        /// Envelope receive acknowledgement (used by reliable_delivery_engine).
+        /// Envelope receive acknowledgement.
 
     , nack = 2
         /// An envelope used to notify the sender that the payload has already been processed
-        /// previously. (used by reliable_delivery_engine).
+        /// previously.
+
+    , again = 3
+        /// Request the retransmission of envelopes.
 };
 
 template <typename EnvelopeTraits = simple_envelope_traits>
@@ -44,6 +48,7 @@ class reliable_delivery_engine: public DeliveryEngine, public Callbacks
 public:
     using serializer_type = typename DeliveryEngine::serializer_type;
     using envelope_traits = typename PersistentStorage::envelope_traits;
+    using envelope_id     = typename PersistentStorage::envelope_id;
     using envelope_header_type = envelope_header<envelope_traits>;
 
 private:
@@ -70,15 +75,46 @@ public:
             return;
         }
 
-        DeliveryEngine::data_received = [this] (universal_id addresser, std::vector<char> data) {
+        DeliveryEngine::data_received = [this] (peer_id addresser, std::vector<char> data) {
             typename serializer_type::istream_type in{data.data(), data.size()};
             envelope_header_type h;
-            // netty::p2p::envelope_type_enum etype;
-            // persistent_storage::envelope_id eid;
             std::vector<char> payload;
             in >> h.etype >> h.eid >> payload;
 
-            Callbacks::envelope_received(addresser, payload);
+            switch (h.etype) {
+                case envelope_type_enum::payload: {
+                    auto res = check_eid_sequence(addresser, h.eid);
+
+                    switch (res.first) {
+                        case envelope_type_enum::ack:
+                            if (enqueue_ack(addresser, res.second))
+                                this->message_received(addresser, payload);
+                            break;
+                        case envelope_type_enum::nack:
+                            enqueue_nack(addresser, res.second);
+                            break;
+                        case envelope_type_enum::again:
+                            enqueue_again(addresser, res.second);
+                            break;
+                        default:
+                            break;
+                    }
+
+                    break;
+                }
+                case envelope_type_enum::ack:
+                    _storage->ack(addresser, h.eid);
+                    break;
+                case envelope_type_enum::nack:
+                    _storage->nack(addresser, h.eid);
+                    break;
+                case envelope_type_enum::again:
+                    // TODO
+                    break;
+                default:
+                    this->on_error(tr::f_("invalid envelope type: {}, ignored", pfs::to_underlying(h.etype)));
+                    break;
+            }
         };
     }
 
@@ -93,18 +129,18 @@ public:
 public:
     bool enqueue (peer_id addressee, char const * data, int len)
     {
-        pfs::error err;
-        auto eid = _storage->save(addressee, data, len, & err);
-
-        if (err) {
-            this->on_failure(netty::error{err.code(), tr::f_("save envelope failure: {}", err.what())});
-            return false;
-        }
-
         typename serializer_type::ostream_type out;
-        envelope_header_type h {envelope_type_enum::payload, eid};
 
-        out << h.etype << h.eid << std::make_pair(data, len);
+        try {
+            auto eid = _storage->save(addressee, data, len);
+            envelope_header_type h {envelope_type_enum::payload, eid};
+            out << h.etype << h.eid << std::make_pair(data, len);
+        } catch (std::system_error const & ex ) {
+            this->on_failure(netty::error{ex.code(), tr::f_("save envelope failure: {}", ex.what())});
+        } catch (...) {
+            this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
+                , tr::_("save envelope failure")});
+        }
 
         return DeliveryEngine::enqueue(addressee, out.take());
     }
@@ -120,6 +156,69 @@ public:
     }
 
 private:
+    bool enqueue_ack (peer_id addressee, envelope_id eid)
+    {
+        typename serializer_type::ostream_type out;
+
+        try {
+            envelope_header_type h {envelope_type_enum::ack, eid};
+            out << h.etype << h.eid;
+        } catch (std::system_error const & ex ) {
+            this->on_failure(netty::error{ex.code(), tr::f_("`ack` envelope failure: {}", ex.what())});
+        } catch (...) {
+            this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
+                , tr::_("`ack` envelope failure")});
+        }
+
+        return DeliveryEngine::enqueue(addressee, out.take());
+    }
+
+    bool enqueue_nack (peer_id addressee, envelope_id eid)
+    {
+        typename serializer_type::ostream_type out;
+
+        try {
+            envelope_header_type h {envelope_type_enum::nack, eid};
+            out << h.etype << h.eid;
+        } catch (std::system_error const & ex ) {
+            this->on_failure(netty::error{ex.code(), tr::f_("`nack` envelope failure: {}", ex.what())});
+        } catch (...) {
+            this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
+                , tr::_("`nack` envelope failure")});
+        }
+
+        return DeliveryEngine::enqueue(addressee, out.take());
+    }
+
+    bool enqueue_again (peer_id addressee, envelope_id eid)
+    {
+        typename serializer_type::ostream_type out;
+
+        try {
+            envelope_header_type h {envelope_type_enum::nack, eid};
+            out << h.etype << h.eid;
+        } catch (std::system_error const & ex ) {
+            this->on_failure(netty::error{ex.code(), tr::f_("`again` envelope failure: {}", ex.what())});
+        } catch (...) {
+            this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
+                , tr::_("`again` envelope failure")});
+        }
+
+        return DeliveryEngine::enqueue(addressee, out.take());
+    }
+
+    std::pair<envelope_type_enum, envelope_id> check_eid_sequence (peer_id addresser, envelope_id eid)
+    {
+        auto recent_eid = _storage->recent_eid(addresser);
+
+        if (envelope_traits::eq(eid, envelope_traits::next(recent_eid)))
+            return std::make_pair(envelope_type_enum::ack, eid);
+
+        if (envelope_traits::less_or_eq(eid, recent_eid))
+            return std::make_pair(envelope_type_enum::nack, eid);
+
+        return std::make_pair(envelope_type_enum::again, recent_eid);
+    }
 };
 
 }} // namespace netty::p2p

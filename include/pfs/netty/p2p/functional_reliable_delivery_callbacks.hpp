@@ -19,7 +19,7 @@ struct functional_reliable_delivery_callbacks
     /**
      * Message received.
      */
-    mutable std::function<void (peer_id, std::vector<char>)> envelope_received
+    mutable std::function<void (peer_id, std::vector<char>)> message_received
         = [] (peer_id, std::vector<char>) {};
 };
 

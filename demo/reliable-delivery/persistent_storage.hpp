@@ -11,9 +11,11 @@
 #include <pfs/filesystem.hpp>
 #include "netty/p2p/peer_id.hpp"
 #include "netty/p2p/simple_envelope.hpp"
+#include "pfs/debby/keyvalue_database.hpp"
 #include "pfs/debby/relational_database.hpp"
 #include "pfs/debby/result.hpp"
 #include "pfs/debby/statement.hpp"
+#include "pfs/debby/backend/lmdb/database.hpp"
 #include "pfs/debby/backend/sqlite3/database.hpp"
 #include "pfs/debby/backend/sqlite3/result.hpp"
 #include <functional>
@@ -27,6 +29,7 @@ public:
     using envelope_id     = envelope_traits::id;
 
 private:
+    using keyvalue_database   = debby::keyvalue_database<debby::backend::lmdb::database>;
     using relational_database = debby::relational_database<debby::backend::sqlite3::database>;
     using result_type         = debby::result<debby::backend::sqlite3::result>;
     using statement_type      = debby::statement<debby::backend::sqlite3::statement>;
@@ -37,8 +40,11 @@ private:
     };
 
 private:
-    // Database for storing messages awaiting delivery confirmation.
+    // Database for storing envelopes awaiting delivery confirmation.
     std::unique_ptr<relational_database> _delivery_dbh;
+
+    // Database for storing recent envelope identified.
+    std::unique_ptr<keyvalue_database> _ack_dbh;
 
     // Peers cache
     std::unordered_map<netty::p2p::peer_id, peer_info> _peers;
@@ -48,32 +54,76 @@ public:
 
 public:
     /**
-     * Save message data into persistent storage.
+     * Save message data into persistent storage. Used by addresser.
      *
-     * @param addressee Message addressee.
-     * @param data Message serialized data.
-     * @param len Length of the message serialized data.
-     * @param perr Pointer to store an error if it occurs. May be @c nullptr.
+     * @param addressee Envelope addressee.
+     * @param payload Serialized envelope payload.
+     * @param len Length of the serialized envelope payload.
      *
      * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
      */
-    envelope_id save (netty::p2p::peer_id addressee, char const * data, int len, pfs::error * perr = nullptr);
+    envelope_id save (netty::p2p::peer_id addressee, char const * payload, int len);
 
     /**
-     * Remove message data from persistent storage.
+     * Commit the envelope in case of success delivery. Used by addresser.
      *
-     * @param addressee Message addressee.
-     * @param msgid Unique message identifier.
-     * @param perr Pointer to store an error if it occurs. May be @c nullptr.
+     * @param addressee Envelope addressee.
+     * @param eid Unique envelope identifier.
      *
      * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
      */
-    void remove (netty::p2p::peer_id addressee, envelope_id eid, pfs::error * perr = nullptr);
+    void ack (netty::p2p::peer_id addressee, envelope_id eid);
+
+    /**
+     * Commit the envelope in case of expired (duplicated) delivery. Used by addresser.
+     *
+     * @param addressee Envelope addressee.
+     * @param eid Unique envelope identifier.
+     *
+     * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
+     */
+    void nack (netty::p2p::peer_id addressee, envelope_id eid);
+
+    /**
+     * Fetch envelopes to retransmit again to the peer @a peer_id. Used by addresser.
+     *
+     * @param addressee Envelope addressee.
+     * @param eid The unique identifier of the envelope from which the retransmission should occur.
+     * @param f Callback to process fetched envelopes.
+     *
+     * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
+     */
+    void again (envelope_id eid, netty::p2p::peer_id addressee
+        , std::function<void (envelope_id, std::vector<char>)> f);
+
+    /**
+     * Sets recent envelope ID associated with @a addresser. Used by addressee.
+     *
+     * @param addresser Envelope addresser.
+     * @param eid Recent envelope ID.
+     *
+     * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
+     */
+    void set_recent_eid (netty::p2p::peer_id addresser, envelope_id eid);
+
+    /**
+     * Fetch recent envelope ID associated with @a addresser. Used by addressee.
+     *
+     * @param addresser Envelope addresser.
+     * @return Recent envelope ID.
+     *
+     * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
+     */
+    envelope_id recent_eid (netty::p2p::peer_id addresser);
+
+    /**
+     * Maintain the storage (removed ack'ed records, etc)
+     */
+    void maintain (netty::p2p::peer_id peer_id);
 
 private:
     void for_each (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
+    void for_each_eid_greater (envelope_id eid, netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void create_delivary_table (netty::p2p::peer_id peer_id);
     envelope_id fetch_recent_eid (netty::p2p::peer_id peer_id);
 };
-
-

@@ -31,9 +31,9 @@ struct simple_envelope_traits
         return a == b;
     }
 
-    static constexpr bool less (id a, id b)
+    static constexpr bool less_or_eq (id a, id b)
     {
-        return a < b;
+        return a <= b;
     }
 };
 
