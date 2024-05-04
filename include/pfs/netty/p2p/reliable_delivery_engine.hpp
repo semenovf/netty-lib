@@ -7,7 +7,6 @@
 //      2024.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "functional_reliable_delivery_callbacks.hpp"
 #include "peer_id.hpp"
 #include "simple_envelope.hpp"
 #include "pfs/i18n.hpp"
@@ -41,9 +40,8 @@ struct envelope_header
     typename EnvelopeTraits::id eid;
 };
 
-template <typename DeliveryEngine, typename PersistentStorage
-    , typename Callbacks = functional_reliable_delivery_callbacks>
-class reliable_delivery_engine: public DeliveryEngine, public Callbacks
+template <typename DeliveryEngine, typename PersistentStorage>
+class reliable_delivery_engine: public DeliveryEngine
 {
 public:
     using serializer_type = typename DeliveryEngine::serializer_type;
@@ -53,6 +51,10 @@ public:
 
 private:
     std::unique_ptr<PersistentStorage> _storage;
+
+    decltype(DeliveryEngine::data_received) _data_received_cb;
+    decltype(DeliveryEngine::channel_established) _channel_established_cb;
+    decltype(DeliveryEngine::channel_closed) _channel_closed_cb;
 
 public:
     /**
@@ -74,48 +76,6 @@ public:
 
             return;
         }
-
-        DeliveryEngine::data_received = [this] (peer_id addresser, std::vector<char> data) {
-            typename serializer_type::istream_type in{data.data(), data.size()};
-            envelope_header_type h;
-            std::vector<char> payload;
-            in >> h.etype >> h.eid >> payload;
-
-            switch (h.etype) {
-                case envelope_type_enum::payload: {
-                    auto res = check_eid_sequence(addresser, h.eid);
-
-                    switch (res.first) {
-                        case envelope_type_enum::ack:
-                            if (enqueue_ack(addresser, res.second))
-                                this->message_received(addresser, payload);
-                            break;
-                        case envelope_type_enum::nack:
-                            enqueue_nack(addresser, res.second);
-                            break;
-                        case envelope_type_enum::again:
-                            enqueue_again(addresser, res.second);
-                            break;
-                        default:
-                            break;
-                    }
-
-                    break;
-                }
-                case envelope_type_enum::ack:
-                    _storage->ack(addresser, h.eid);
-                    break;
-                case envelope_type_enum::nack:
-                    _storage->nack(addresser, h.eid);
-                    break;
-                case envelope_type_enum::again:
-                    // TODO
-                    break;
-                default:
-                    this->on_error(tr::f_("invalid envelope type: {}, ignored", pfs::to_underlying(h.etype)));
-                    break;
-            }
-        };
     }
 
     ~reliable_delivery_engine () = default;
@@ -127,6 +87,28 @@ public:
     reliable_delivery_engine & operator = (reliable_delivery_engine &&) = default;
 
 public:
+    /**
+     * Call this method before main loop to complete engine configuration.
+     */
+    void ready ()
+    {
+        _data_received_cb = std::move(DeliveryEngine::data_received);
+        _channel_established_cb = std::move(DeliveryEngine::channel_established);
+        _channel_closed_cb = std::move(DeliveryEngine::channel_closed);
+
+        DeliveryEngine::data_received = [this] (peer_id addresser, std::vector<char> data) {
+            process_data_received(addresser, std::move(data));
+        };
+
+        DeliveryEngine::channel_established = [this] (netty::host4_addr haddr) {
+            process_channel_established(std::move(haddr));
+        };
+
+        DeliveryEngine::channel_closed = [this] (peer_id peerid) {
+            process_channel_closed(peerid);
+        };
+    }
+
     bool enqueue (peer_id addressee, char const * data, int len)
     {
         typename serializer_type::ostream_type out;
@@ -135,6 +117,7 @@ public:
             auto eid = _storage->save(addressee, data, len);
             envelope_header_type h {envelope_type_enum::payload, eid};
             out << h.etype << h.eid << std::make_pair(data, len);
+            LOGD("<<<", "ENQUEUE PAYLOAD: {}", eid);
         } catch (std::system_error const & ex ) {
             this->on_failure(netty::error{ex.code(), tr::f_("save envelope failure: {}", ex.what())});
         } catch (...) {
@@ -165,11 +148,14 @@ private:
             out << h.etype << h.eid;
         } catch (std::system_error const & ex ) {
             this->on_failure(netty::error{ex.code(), tr::f_("`ack` envelope failure: {}", ex.what())});
+            return false;
         } catch (...) {
             this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
                 , tr::_("`ack` envelope failure")});
+            return false;
         }
 
+        LOGD("<<<", "ENQUEUE ACK: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -182,11 +168,14 @@ private:
             out << h.etype << h.eid;
         } catch (std::system_error const & ex ) {
             this->on_failure(netty::error{ex.code(), tr::f_("`nack` envelope failure: {}", ex.what())});
+            return false;
         } catch (...) {
             this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
                 , tr::_("`nack` envelope failure")});
+            return false;
         }
 
+        LOGD("<<<", "ENQUEUE NACK: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -199,11 +188,33 @@ private:
             out << h.etype << h.eid;
         } catch (std::system_error const & ex ) {
             this->on_failure(netty::error{ex.code(), tr::f_("`again` envelope failure: {}", ex.what())});
+            return false;
         } catch (...) {
             this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
                 , tr::_("`again` envelope failure")});
+            return false;
         }
 
+        LOGD("<<<", "ENQUEUE AGAIN: {}", eid);
+        return DeliveryEngine::enqueue(addressee, out.take());
+    }
+
+    bool enqueue_payload_again (peer_id addressee, envelope_id eid, std::vector<char> const & payload)
+    {
+        typename serializer_type::ostream_type out;
+
+        try {
+            envelope_header_type h {envelope_type_enum::payload, eid};
+            out << h.etype << h.eid << payload;
+        } catch (std::system_error const & ex ) {
+            this->on_failure(netty::error{ex.code(), tr::f_("retransmit `payload` envelope failure: {}: {}"
+                , eid, ex.what())});
+        } catch (...) {
+            this->on_failure(netty::error{make_error_code(pfs::errc::unexpected_error)
+                , tr::f_("retransmit `payload` envelope failure: {}", eid)});
+        }
+
+        LOGD("<<<", "ENQUEUE PAYLOAD AGAIN: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -218,6 +229,83 @@ private:
             return std::make_pair(envelope_type_enum::nack, eid);
 
         return std::make_pair(envelope_type_enum::again, recent_eid);
+    }
+
+    void process_data_received (peer_id addresser, std::vector<char> data)
+    {
+        typename serializer_type::istream_type in{data.data(), data.size()};
+        envelope_header_type h;
+        std::vector<char> payload;
+        in >> h.etype >> h.eid >> payload;
+
+        switch (h.etype) {
+            case envelope_type_enum::payload: {
+                LOGD(">>>", "PAYLOAD RECEIVED: {}", h.eid);
+
+                auto res = check_eid_sequence(addresser, h.eid);
+
+                switch (res.first) {
+                    case envelope_type_enum::ack:
+                        if (enqueue_ack(addresser, res.second)) {
+                            this->_data_received_cb(addresser, payload);
+                            _storage->set_recent_eid(addresser, res.second);
+                            LOGD("===", "SET RECENT ID: {}", res.second);
+                        }
+                        break;
+                    case envelope_type_enum::nack:
+                        enqueue_nack(addresser, res.second);
+                        break;
+                    case envelope_type_enum::again:
+                        enqueue_again(addresser, res.second);
+                        break;
+                    default:
+                        break;
+                }
+
+                break;
+            }
+
+            case envelope_type_enum::ack:
+                LOGD(">>>", "ACK RECEIVED: {}", h.eid);
+                _storage->ack(addresser, h.eid);
+                break;
+
+            case envelope_type_enum::nack:
+                LOGD(">>>", "NACK RECEIVED: {}", h.eid);
+                _storage->nack(addresser, h.eid);
+                break;
+
+            case envelope_type_enum::again:
+                LOGD(">>>", "AGAIN RECEIVED: {}", h.eid);
+                _storage->again(h.eid, addresser, [this, addresser] (envelope_id eid, std::vector<char> payload) {
+                    enqueue_payload_again(addresser, eid, std::move(payload));
+                });
+                break;
+
+            default:
+                this->on_error(tr::f_("invalid envelope type: {}, ignored", pfs::to_underlying(h.etype)));
+                break;
+        }
+    }
+
+    void process_channel_established (netty::host4_addr haddr)
+    {
+        auto addressee = haddr.host_id;
+
+        _storage->meet_peer(addressee);
+
+        _storage->again(addressee, [this, addressee] (envelope_id eid, std::vector<char> payload) {
+            enqueue_payload_again(addressee, eid, std::move(payload));
+        });
+
+        _channel_established_cb(std::move(haddr));
+    }
+
+    void process_channel_closed (peer_id peerid)
+    {
+        _storage->maintain(peerid);
+        _storage->spend_peer(peerid);
+        _channel_closed_cb(peerid);
     }
 };
 

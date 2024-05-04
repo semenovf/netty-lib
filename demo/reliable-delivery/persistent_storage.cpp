@@ -40,6 +40,18 @@ void persistent_storage::create_delivary_table (netty::p2p::peer_id peer_id)
     });
 }
 
+void persistent_storage::meet_peer (netty::p2p::peer_id peerid)
+{
+    create_delivary_table(peerid);
+    auto eid = fetch_recent_eid(peerid);
+    _peers[peerid] = peer_info {eid};
+}
+
+void persistent_storage::spend_peer (netty::p2p::peer_id peerid)
+{
+    _peers.erase(peerid);
+}
+
 persistent_storage::envelope_id
 persistent_storage::save (netty::p2p::peer_id addressee, char const * data, int len)
 {
@@ -95,6 +107,18 @@ void persistent_storage::ack (netty::p2p::peer_id addressee, envelope_id eid)
 void persistent_storage::nack (netty::p2p::peer_id addressee, envelope_id eid)
 {
     ack(addressee, eid);
+}
+
+void persistent_storage::again (envelope_id eid, netty::p2p::peer_id addressee
+    , std::function<void (envelope_id, std::vector<char>)> f)
+{
+    for_each_eid_greater(eid, addressee, std::move(f));
+}
+
+void persistent_storage::again (netty::p2p::peer_id addressee
+    , std::function<void (envelope_id, std::vector<char>)> f)
+{
+    for_each_unacked(addressee, std::move(f));
 }
 
 void persistent_storage::set_recent_eid (netty::p2p::peer_id addresser, envelope_id eid)
@@ -156,6 +180,32 @@ void persistent_storage::for_each_eid_greater (envelope_id eid, netty::p2p::peer
     _delivery_dbh->transaction([this, & sql, & eid, & f] () {
         auto stmt = _delivery_dbh->prepare(sql);
         stmt.bind("eid", eid);
+        auto res = stmt.exec();
+
+        while (res.has_more()) {
+            envelope_id eid;
+            std::vector<char> payload;
+
+            res["eid"] >> eid;
+            res["payload"] >> payload;
+
+            f(eid, std::move(payload));
+
+            res.next();
+        }
+
+        return true;
+    });
+}
+
+void persistent_storage::for_each_unacked (netty::p2p::peer_id peer_id
+    , std::function<void (envelope_id, std::vector<char>)> f)
+{
+    static char const * SELECT_GREATER_ENVELOPES_ASC = "SELECT eid, payload FROM `#{}` WHERE ack = FALSE ORDER BY eid ASC";
+    auto sql = fmt::format(SELECT_GREATER_ENVELOPES_ASC, to_string(peer_id));
+
+    _delivery_dbh->transaction([this, & sql, & f] () {
+        auto stmt = _delivery_dbh->prepare(sql);
         auto res = stmt.exec();
 
         while (res.has_more()) {

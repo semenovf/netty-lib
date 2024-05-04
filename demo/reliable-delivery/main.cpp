@@ -217,7 +217,7 @@ int main (int argc, char * argv[])
         LOGD("", "Channel closed: {}", peer_id);
     };
 
-    deliveryengine->message_received = [& sendVectorData] (netty::p2p::peer_id peer_id, std::vector<char> data) {
+    deliveryengine->data_received = [& sendVectorData] (netty::p2p::peer_id peer_id, std::vector<char> data) {
         LOGD("", "Message received from: {}", peer_id);
         sendVectorData(peer_id, std::move(data));
     };
@@ -230,6 +230,8 @@ int main (int argc, char * argv[])
     }
 
     milliseconds timeout {10};
+
+    deliveryengine->ready();
 
     while (!__failure) {
         auto t = discoveryengine->step_timing();

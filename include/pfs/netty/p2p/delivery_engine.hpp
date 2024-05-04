@@ -251,6 +251,12 @@ public:
     delivery_engine (delivery_engine &&) = default;
     delivery_engine & operator = (delivery_engine &&) = default;
 
+    /**
+     * Call this method before main loop to complete engine configuration.
+     */
+    void ready ()
+    {}
+
     universal_id host_id () const noexcept
     {
         return _host_id;

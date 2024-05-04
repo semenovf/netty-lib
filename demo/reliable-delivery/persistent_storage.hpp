@@ -53,6 +53,9 @@ public:
     persistent_storage (pfs::filesystem::path const & database_folder);
 
 public:
+    void meet_peer (netty::p2p::peer_id peerid);
+    void spend_peer (netty::p2p::peer_id peerid);
+
     /**
      * Save message data into persistent storage. Used by addresser.
      *
@@ -85,7 +88,7 @@ public:
     void nack (netty::p2p::peer_id addressee, envelope_id eid);
 
     /**
-     * Fetch envelopes to retransmit again to the peer @a peer_id. Used by addresser.
+     * Fetch envelopes to retransmit again to the peer @a addressee. Used by addresser.
      *
      * @param addressee Envelope addressee.
      * @param eid The unique identifier of the envelope from which the retransmission should occur.
@@ -95,6 +98,17 @@ public:
      */
     void again (envelope_id eid, netty::p2p::peer_id addressee
         , std::function<void (envelope_id, std::vector<char>)> f);
+
+    /**
+     * Fetch envelopes that is not ack'ed to retransmit again to the peer @a addressee.
+     * Used by addresser.
+     *
+     * @param addressee Envelope addressee.
+     * @param f Callback to process fetched envelopes.
+     *
+     * @note This method is `netty::p2p::reliable_delivery_engine` requirements.
+     */
+    void again (netty::p2p::peer_id addressee, std::function<void (envelope_id, std::vector<char>)> f);
 
     /**
      * Sets recent envelope ID associated with @a addresser. Used by addressee.
@@ -124,6 +138,7 @@ public:
 private:
     void for_each (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void for_each_eid_greater (envelope_id eid, netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
+    void for_each_unacked (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void create_delivary_table (netty::p2p::peer_id peer_id);
     envelope_id fetch_recent_eid (netty::p2p::peer_id peer_id);
 };

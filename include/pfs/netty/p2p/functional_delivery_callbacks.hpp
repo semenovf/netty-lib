@@ -60,15 +60,15 @@ struct functional_delivery_callbacks
     mutable std::function<void (host4_addr)> channel_established = [] (host4_addr) {};
 
     /**
-     * Message received.
-     */
-    mutable std::function<void (peer_id, std::vector<char>)> data_received
-        = [] (peer_id, std::vector<char>) {};
-
-    /**
      * Called when channel closed.
      */
     mutable std::function<void (peer_id)> channel_closed = [] (peer_id) {};
+
+    /**
+     * Data received.
+     */
+    mutable std::function<void (peer_id, std::vector<char>)> data_received
+        = [] (peer_id, std::vector<char>) {};
 
     /**
      * Called when any file data received. These data must be passed to the file transporter
