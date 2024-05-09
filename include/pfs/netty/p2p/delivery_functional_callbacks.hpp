@@ -18,7 +18,7 @@
 namespace netty {
 namespace p2p {
 
-struct functional_delivery_callbacks
+struct delivery_functional_callbacks
 {
     /**
      * Called when unrecoverable error occurred - engine became disfunctional.

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "engine_traits.hpp"
-#include "functional_delivery_callbacks.hpp"
+#include "delivery_functional_callbacks.hpp"
 #include "packet.hpp"
 #include "primal_serializer.hpp"
 #include "universal_id.hpp"
@@ -31,7 +31,7 @@ namespace netty {
 namespace p2p {
 
 template <typename EngineTraits = default_engine_traits
-    , typename Callbacks = functional_delivery_callbacks
+    , typename Callbacks = delivery_functional_callbacks
     , typename Serializer = primal_serializer<>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class delivery_engine: public Callbacks
@@ -137,7 +137,7 @@ public:
             this->on_failure(err);
         };
 
-        _reader_poller->on_reader_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
+        _reader_poller->on_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peer_id != universal_id{}) {

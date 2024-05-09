@@ -50,7 +50,7 @@ void start_server (netty::socket4_addr const & saddr)
             LOGE(TAG, "Error on server: {}", err.what());
         };
 
-        poller.on_reader_failure = [] (typename PollerType::native_socket_type, netty::error const & err) {
+        poller.on_failure = [] (typename PollerType::native_socket_type, netty::error const & err) {
             LOGE(TAG, "Error on peer socket (reader): {}", err.what());
         };
 

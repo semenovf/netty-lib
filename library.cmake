@@ -177,6 +177,10 @@ if (NETTY__ENABLE_QT5)
     list(APPEND _netty__qt5_components Core Network)
 endif(NETTY__ENABLE_QT5)
 
+if (_netty__sources)
+    list(REMOVE_DUPLICATES _netty__sources)
+endif()
+
 foreach(_target IN LISTS _netty__targets)
     portable_target(SOURCES ${_target} ${_netty__sources})
     portable_target(INCLUDE_DIRS ${_target} PUBLIC 

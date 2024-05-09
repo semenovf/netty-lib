@@ -13,10 +13,11 @@
 #include "connecting_poller.hpp"
 #include "reader_poller.hpp"
 #include "writer_poller.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/log.hpp"
-#include "pfs/stopwatch.hpp"
+#include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
+#include <pfs/stopwatch.hpp>
 #include <functional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -32,9 +33,12 @@ private:
     connecting_poller<Backend> _connecting_poller;
     reader_poller<Backend>     _reader_poller;
     writer_poller<Backend>     _writer_poller;
+    std::vector<native_socket_type> _addable_connecting_sockets;
+    std::vector<native_socket_type> _addable_readers;
     std::vector<native_socket_type> _removable_connecting_sockets;
     std::vector<native_socket_type> _removable_readers;
     std::vector<native_socket_type> _removable_writers;
+    std::set<native_socket_type> _released;
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
@@ -43,6 +47,7 @@ public:
     mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> can_write = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> released = [] (native_socket_type) {};
 
 public:
     client_poller ()
@@ -50,24 +55,28 @@ public:
         _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_connecting_sockets.push_back(sock);
+            _released.insert(sock);
             on_failure(sock, err);
         };
 
         _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
+            _released.insert(sock);
             on_failure(sock, err);
         };
 
         _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_writers.push_back(sock);
+            _released.insert(sock);
             on_failure(sock, err);
         };
 
         _connecting_poller.connection_refused = [this] (native_socket_type sock) {
             // Socket must be removed from monitoring later
             _removable_connecting_sockets.push_back(sock);
+            _released.insert(sock);
             connection_refused(sock);
         };
 
@@ -81,6 +90,7 @@ public:
         _reader_poller.disconnected = [this] (native_socket_type sock) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
+            _released.insert(sock);
             disconnected(sock);
         };
 
@@ -109,11 +119,9 @@ public:
     void add (Socket const & sock, conn_status state, error * perr = nullptr)
     {
         if (state == conn_status::connecting) {
-            _connecting_poller.add(sock.native(), perr);
-            LOG_TRACE_3("Client socket ({}) added to `client_poller` with CONNECTING state", to_string(sock.saddr()));
+            _addable_connecting_sockets.push_back(sock.native());
         } else if (state == conn_status::connected) {
-            _reader_poller.add(sock, perr);
-            LOG_TRACE_3("Client socket ({}) added to `client_poller` with CONNECTED state", to_string(sock.saddr()));
+            _addable_readers.push_back(sock.native());
         } else {
             pfs::throw_or(perr, error {
                   errc::poller_error
@@ -131,9 +139,10 @@ public:
     template <typename Socket>
     void remove (Socket const & sock, error * perr = nullptr)
     {
-        _connecting_poller.remove(sock.native(), perr);
-        _reader_poller.remove(sock.native(), perr);
-        _writer_poller.remove(sock.native(), perr);
+        _removable_connecting_sockets.push_back(sock);
+        _removable_readers.push_back(sock);
+        _removable_writers.push_back(sock);
+        _released.insert(sock);
 
         LOG_TRACE_3("Client socket ({}) removed from `client_poller`", to_string(sock.saddr()));
     }
@@ -234,22 +243,40 @@ public:
         if (!_connecting_poller.empty())
             n3 = _connecting_poller.poll(timeout, perr);
 
+        if (!_addable_connecting_sockets.empty()) {
+            for (auto sock: _addable_connecting_sockets)
+                _connecting_poller.add(sock);
+            _addable_connecting_sockets.clear();
+        }
+
+        if (!_addable_readers.empty()) {
+            for (auto sock: _addable_readers)
+                _reader_poller.add(sock, perr);
+            _addable_readers.clear();
+        }
+
         if (!_removable_connecting_sockets.empty()) {
-            for (auto const & sock: _removable_connecting_sockets)
+            for (auto sock: _removable_connecting_sockets)
                 _connecting_poller.remove(sock);
             _removable_connecting_sockets.clear();
         }
 
         if (!_removable_readers.empty()) {
-            for (auto const & sock: _removable_readers)
+            for (auto sock: _removable_readers)
                 _reader_poller.remove(sock);
             _removable_readers.clear();
         }
 
         if (!_removable_writers.empty()) {
-            for (auto const & sock: _removable_writers)
+            for (auto sock: _removable_writers)
                 _writer_poller.remove(sock);
             _removable_writers.clear();
+        }
+
+        if (!_released.empty()) {
+            for (auto sock: _released)
+                released(sock);
+            _released.clear();
         }
 
         if (n1 < 0 && n2 < 0 && n3 < 0)

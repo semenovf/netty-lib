@@ -42,8 +42,8 @@ struct default_engine_traits
 
 #elif NETTY__P2P_POLL_ENGINE
 
-    using client_poller_type = netty::client_epoll_poller_type;
-    using server_poller_type = netty::server_epoll_poller_type;
+    using client_poller_type = netty::client_poll_poller_type;
+    using server_poller_type = netty::server_poll_poller_type;
     using reader_type = netty::posix::tcp_socket;
     using writer_type = netty::posix::tcp_socket;
     using server_type = netty::posix::tcp_server;
