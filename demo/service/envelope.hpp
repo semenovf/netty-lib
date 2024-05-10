@@ -72,9 +72,9 @@ private:
     Serializer _out;
 
 public:
-    output_envelope (message_enum type, archive_type const & msg)
+    output_envelope (message_enum type, archive_type const & payload)
     {
-        _out << start_flag << type << msg << end_flag;
+        _out << start_flag << type << payload << end_flag;
     }
 
 public:

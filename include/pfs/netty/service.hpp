@@ -17,8 +17,6 @@
 #include <map>
 #include <vector>
 
-#include <pfs/log.hpp>
-
 namespace netty {
 
 template <typename ServerPoller
@@ -109,7 +107,9 @@ public:
                 this->process_input(sock);
             };
 
-            base_class::disconnected = [] (native_socket_type sock) {};
+            base_class::disconnected = [this] (native_socket_type sock) {
+                _clients.erase(sock);
+            };
 
             base_class::can_write = [this] (native_socket_type sock) {
                 auto aclient = locate_account(sock);
@@ -118,6 +118,15 @@ public:
                     return;
 
                 aclient->can_write = true;
+            };
+
+            base_class::released = [this] (native_socket_type sock) {
+                auto aclient = locate_account(sock);
+
+                if (aclient == nullptr)
+                    return;
+
+                aclient->sock.disconnect();
             };
 
             this->add_listener(_listener);
