@@ -16,5 +16,5 @@
 
 using discovery_engine = netty::p2p::discovery_engine<netty::p2p::posix::discovery_engine>;
 using delivery_engine = netty::p2p::delivery_engine<>;
-using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<delivery_engine, persistent_storage>;
+using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<delivery_engine, netty::sample::persistent_storage>;
 using serializer = reliable_delivery_engine::serializer_type;

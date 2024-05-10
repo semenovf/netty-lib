@@ -8,14 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "persistent_storage.hpp"
 
-#include "pfs/log.hpp"
+namespace netty {
+namespace sample {
 
 using namespace debby::backend::sqlite3;
+namespace fs = pfs::filesystem;
 
-persistent_storage::persistent_storage (pfs::filesystem::path const & database_folder)
+persistent_storage::persistent_storage (fs::path const & database_folder
+    , std::string const & delivery_db_name
+    , std::string const & delivery_ack_db_name)
 {
-    auto delivery_db_path = database_folder / PFS__LITERAL_PATH("delivery.db");
-    auto ack_db_path = database_folder / PFS__LITERAL_PATH("delivery_ack.db");
+    auto delivery_db_path = database_folder / fs::utf8_decode(delivery_db_name);
+    auto ack_db_path = database_folder / fs::utf8_decode(delivery_ack_db_name);
 
     _delivery_dbh = relational_database::make_unique(delivery_db_path, true);
     _ack_dbh = keyvalue_database::make_unique(ack_db_path, true);
@@ -244,3 +248,5 @@ persistent_storage::fetch_recent_eid (netty::p2p::peer_id peer_id)
 
     return eid;
 }
+
+}} // namespace netty::sample

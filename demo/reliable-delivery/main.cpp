@@ -139,7 +139,7 @@ int main (int argc, char * argv[])
     deliveryengineopts.listener_saddr = listener_saddr;
     deliveryengineopts.listener_backlog = 99;
 
-    auto storage = pfs::make_unique<persistent_storage>(pfs::filesystem::standard_paths::temp_folder());
+    auto storage = pfs::make_unique<netty::sample::persistent_storage>(pfs::filesystem::standard_paths::temp_folder());
     auto deliveryengine = pfs::make_unique<reliable_delivery_engine>(std::move(storage), host_id
         , std::move(deliveryengineopts));
 

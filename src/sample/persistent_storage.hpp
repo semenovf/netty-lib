@@ -22,6 +22,9 @@
 #include <memory>
 #include <unordered_map>
 
+namespace netty {
+namespace sample {
+
 class persistent_storage
 {
 public:
@@ -50,7 +53,9 @@ private:
     std::unordered_map<netty::p2p::peer_id, peer_info> _peers;
 
 public:
-    persistent_storage (pfs::filesystem::path const & database_folder);
+    persistent_storage (pfs::filesystem::path const & database_folder
+        , std::string const & delivery_db_name = std::string("delivery.db")
+        , std::string const & delivery_ack_db_name = std::string("delivery_ack.db"));
 
 public:
     void meet_peer (netty::p2p::peer_id peerid);
@@ -142,3 +147,5 @@ private:
     void create_delivary_table (netty::p2p::peer_id peer_id);
     envelope_id fetch_recent_eid (netty::p2p::peer_id peer_id);
 };
+
+}} // namespace netty::sample

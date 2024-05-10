@@ -9,7 +9,10 @@
 project(reliable-delivery-demo)
 
 add_executable(${PROJECT_NAME} main.cpp
-    persistent_storage.cpp persistent_storage.hpp)
+    ${CMAKE_SOURCE_DIR}/src/sample/persistent_storage.cpp
+    ${CMAKE_SOURCE_DIR}/src/sample/persistent_storage.hpp)
+
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/src/sample")
 
 if (TARGET pfs::netty_p2p)
     target_link_libraries(${PROJECT_NAME} pfs::netty_p2p)
