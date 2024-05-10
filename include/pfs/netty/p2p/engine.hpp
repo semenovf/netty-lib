@@ -338,7 +338,7 @@ public:
                 this->on_failure(err);
             };
 
-            _reader_poller->on_reader_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
+            _reader_poller->on_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
                 this->on_failure(err);
 
                 auto paccount = locate_reader_account(sock);
