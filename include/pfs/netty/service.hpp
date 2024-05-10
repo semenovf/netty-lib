@@ -7,6 +7,7 @@
 //      2024.05.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include <pfs/i18n.hpp>
 #include <netty/error.hpp>
 #include <netty/send_result.hpp>
 #include <netty/socket4_addr.hpp>
