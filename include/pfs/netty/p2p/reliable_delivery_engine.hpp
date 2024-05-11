@@ -117,7 +117,6 @@ public:
             auto eid = _storage->save(addressee, data, len);
             envelope_header_type h {envelope_type_enum::payload, eid};
             out << h.etype << h.eid << std::make_pair(data, len);
-            LOGD("<<<", "ENQUEUE PAYLOAD: {}", eid);
         } catch (std::system_error const & ex ) {
             this->on_failure(netty::error{ex.code(), tr::f_("save envelope failure: {}", ex.what())});
         } catch (...) {
@@ -125,6 +124,7 @@ public:
                 , tr::_("save envelope failure")});
         }
 
+        LOG_TRACE_3("<- PAYLOAD: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -155,7 +155,7 @@ private:
             return false;
         }
 
-        LOGD("<<<", "ENQUEUE ACK: {}", eid);
+        LOG_TRACE_3("<- ACK: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -175,7 +175,7 @@ private:
             return false;
         }
 
-        LOGD("<<<", "ENQUEUE NACK: {}", eid);
+        LOG_TRACE_3("<- NACK: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -195,7 +195,7 @@ private:
             return false;
         }
 
-        LOGD("<<<", "ENQUEUE AGAIN: {}", eid);
+        LOG_TRACE_3("<- AGAIN: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -214,7 +214,7 @@ private:
                 , tr::f_("retransmit `payload` envelope failure: {}", eid)});
         }
 
-        LOGD("<<<", "ENQUEUE PAYLOAD AGAIN: {}", eid);
+        LOG_TRACE_3("<- PAYLOAD AGAIN: {}", eid);
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
@@ -240,7 +240,7 @@ private:
 
         switch (h.etype) {
             case envelope_type_enum::payload: {
-                LOGD(">>>", "PAYLOAD RECEIVED: {}", h.eid);
+                LOG_TRACE_3("-> PAYLOAD: {}", h.eid);
 
                 auto res = check_eid_sequence(addresser, h.eid);
 
@@ -249,7 +249,6 @@ private:
                         if (enqueue_ack(addresser, res.second)) {
                             this->_data_received_cb(addresser, payload);
                             _storage->set_recent_eid(addresser, res.second);
-                            LOGD("===", "SET RECENT ID: {}", res.second);
                         }
                         break;
                     case envelope_type_enum::nack:
@@ -266,17 +265,17 @@ private:
             }
 
             case envelope_type_enum::ack:
-                LOGD(">>>", "ACK RECEIVED: {}", h.eid);
+                LOG_TRACE_3("-> ACK: {}", h.eid);
                 _storage->ack(addresser, h.eid);
                 break;
 
             case envelope_type_enum::nack:
-                LOGD(">>>", "NACK RECEIVED: {}", h.eid);
+                LOG_TRACE_3("-> NACK: {}", h.eid);
                 _storage->nack(addresser, h.eid);
                 break;
 
             case envelope_type_enum::again:
-                LOGD(">>>", "AGAIN RECEIVED: {}", h.eid);
+                LOG_TRACE_3("-> AGAIN: {}", h.eid);
                 _storage->again(h.eid, addresser, [this, addresser] (envelope_id eid, std::vector<char> payload) {
                     enqueue_payload_again(addresser, eid, std::move(payload));
                 });
