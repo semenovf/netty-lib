@@ -34,6 +34,7 @@ struct client_commands
 };
 
 static std::atomic_bool finish_flag {false};
+static std::atomic_bool s_connected_flag {false};
 
 void print_usage (pfs::filesystem::path const & programName
     , std::string const & errorString = std::string{})
@@ -159,33 +160,38 @@ int main (int argc, char * argv[])
         service_t::client c {};
         pfs::function_queue<> command_queue;
 
-        c.on_failure = [& failure] (netty::error const & err) {
+        c.on_failure = [& failure, & ready_cv] (netty::error const & err) {
             LOGE("", "Failure on client connection: {}", err.what());
             failure = true;
+            ready_cv.notify_one();
         };
 
-        c.on_error = [] (std::string const & errstr) {
+        c.on_error = [& ready_cv] (std::string const & errstr) {
             LOGE("", "{}", errstr);
+            ready_cv.notify_one();
         };
 
-        c.connected = [listener_saddr, & cmd] () {
+        c.connected = [listener_saddr, & ready_cv] () {
             LOGD("", "Connected to: {}", to_string(listener_saddr));
-
-            message_serializer_t ms {echo {"Hello, world!"}};
-            service_t::client::output_envelope_type env {message_enum::echo, ms.take()};
-
-            cmd.send(env.take());
+            s_connected_flag = true;
+            ready_cv.notify_one();
         };
 
-        c.connection_refused = [listener_saddr] () {
+        c.connection_refused = [listener_saddr, & ready_cv] () {
             LOGD("", "Connection refused to: {}", to_string(listener_saddr));
+            s_connected_flag = false;
+            ready_cv.notify_one();
         };
 
-        c.disconnected = [listener_saddr] () {
-            LOGD("", "Disconnected from: {}", to_string(listener_saddr));
+        c.disconnected = [] () { LOGE("", "Disconnected by the peer"); };
+
+        c.released = [listener_saddr, & ready_cv] () {
+            LOGD("", "Disconnected/released from: {}", to_string(listener_saddr));
+            s_connected_flag = false;
+            ready_cv.notify_one();
         };
 
-        c.on_message_received = [& c] (service_t::input_envelope_type const & env) {
+        c.on_message_received = [& c, & ready_cv] (service_t::input_envelope_type const & env) {
             client_connection_context conn {& c};
             client_message_processor_t mp;
             auto const & payload = env.payload();
@@ -193,8 +199,9 @@ int main (int argc, char * argv[])
 
             if (!success) {
                 LOGE("", "parse message failure: {}", fmt::underlying(env.message_type()));
-                return;
             }
+
+            ready_cv.notify_one();
         };
 
         cmd.connect_service.connect([& c, & command_queue] (netty::socket4_addr listener_saddr) {
@@ -209,7 +216,6 @@ int main (int argc, char * argv[])
             command_queue.push([& c, msg] {
                 LOGD("", "MESSAGE ENQUEUED: size={}", msg.size());
                 c.enqueue(msg);
-
             });
         });
 
@@ -225,41 +231,51 @@ int main (int argc, char * argv[])
     ready_cv.wait(ready_lk);
 
     LOGD("", "Service and client threads ready");
-    LOGD("", "Client connecting...");
+    // LOGD("", "Client connecting...");
 
-    cmd.connect_service(listener_saddr);
+    // cmd.connect_service(listener_saddr);
 
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
 
-    // while (true) {
-    //     auto line = linenoise("client> ");
-    //
-    //     if (line == nullptr) {
-    //         finish_flag = true;
-    //         break;
-    //     }
-    //
-    //     string_view sv {line};
-    //
-    //     if (sv == "/e" || sv == "/q" || sv == "/exit" || sv == "/quit") {
-    //         finish_flag = true;
-    //         break;
-    //     }
-    //
-    //     fmt::print("\r");
-    //
-    //     if (sv == "connect") {
-    //         cmd.connect_service(listener_saddr);
-    //     } else if (sv == "disconnect") {
-    //         cmd.disconnect_service();
-    //     } else if ("echo") {
-    //         echo e = {"Hello, world!"};
-    //         client_envelope_t::ostream_type out;
-    //         out << e;
-    //         cmd.send(out.take());
-    //     }
-    // }
+    while (true) {
+        auto line = linenoise("client> ");
+
+        if (line == nullptr) {
+            finish_flag = true;
+            break;
+        }
+
+        string_view sv {line};
+
+        if (sv == "/e" || sv == "/q" || sv == "/exit" || sv == "/quit") {
+            finish_flag = true;
+            break;
+        }
+
+        fmt::print("\r");
+
+        if (sv == "connect") {
+            if (!s_connected_flag) {
+                cmd.connect_service(listener_saddr);
+                ready_cv.wait(ready_lk);
+            } else {
+                LOGW("", "Already connected");
+            }
+        } else if (sv == "disconnect") {
+            if (s_connected_flag) {
+                cmd.disconnect_service();
+                ready_cv.wait(ready_lk);
+            } else {
+                LOGW("", "Already disconnected");
+            }
+        } else if (sv == "echo") {
+            message_serializer_t ms {echo {"Hello, world!"}};
+            service_t::client::output_envelope_type env {message_enum::echo, ms.take()};
+            cmd.send(env.take());
+            ready_cv.wait(ready_lk);
+        }
+    }
 
     service_thread.join();
     client_thread.join();

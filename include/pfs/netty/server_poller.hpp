@@ -38,7 +38,7 @@ private:
     std::vector<native_socket_type> _removable_listeners;
     std::vector<native_socket_type> _removable_readers;
     std::vector<native_socket_type> _removable_writers;
-    std::set<native_socket_type> _released;
+    std::set<native_socket_type> _removable;
 
 public: // callbacks
     mutable std::function<void(native_socket_type, error const &)> on_listener_failure
@@ -46,9 +46,11 @@ public: // callbacks
     mutable std::function<void(native_socket_type, error const &)> on_failure
         = [] (native_socket_type, error const &) {};
     mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> accepted = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> can_write = [] (native_socket_type) {};
-    mutable std::function<void(native_socket_type)> released = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> listener_removed = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type)> removed = [] (native_socket_type) {};
 
 private:
     std::function<native_socket_type(native_socket_type, bool &)> accept;
@@ -59,14 +61,13 @@ public:
         _listener_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_listeners.push_back(sock);
-            _released.insert(sock);
             on_listener_failure(sock, err);
         };
 
         _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             on_failure(sock, err);
         };
 
@@ -76,8 +77,10 @@ public:
             bool ok = true;
             auto sock = this->accept(listener_sock, ok);
 
-            if (ok)
+            if (ok) {
+                accepted(sock);
                 _addable_readers.push_back(sock);
+            }
         };
 
         _reader_poller.ready_read = [this] (native_socket_type sock) {
@@ -85,16 +88,14 @@ public:
         };
 
         _reader_poller.disconnected = [this] (native_socket_type sock) {
-            // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             disconnected(sock);
         };
 
         _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
-            // Socket must be removed from monitoring later
             _removable_writers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             on_failure(sock, err);
         };
 
@@ -127,7 +128,6 @@ public:
     void remove_listener (Listener const & listener, error * perr = nullptr)
     {
         _removable_listeners.push_back(listener.native());
-        _released.insert(listener.native());
     }
 
     /**
@@ -138,7 +138,7 @@ public:
     {
         _removable_readers.push_back(sock);
         _removable_writers.push_back(sock);
-        _released.insert(sock);
+        _removable.insert(sock);
     }
 
     /**
@@ -209,8 +209,10 @@ public:
         }
 
         if (!_removable_listeners.empty()) {
-            for (auto const & sock: _removable_listeners)
+            for (auto const & sock: _removable_listeners) {
                 _listener_poller.remove(sock);
+                listener_removed(sock);
+            }
             _removable_listeners.clear();
         }
 
@@ -226,10 +228,10 @@ public:
             _removable_writers.clear();
         }
 
-        if (!_released.empty()) {
-            for (auto sock: _released)
-                released(sock);
-            _released.clear();
+        if (!_removable.empty()) {
+            for (auto sock: _removable)
+                removed(sock);
+            _removable.clear();
         }
 
         if (n1 < 0 && n2 < 0)

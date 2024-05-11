@@ -59,6 +59,9 @@ public:
     public:
         mutable std::function<void (error const &)> on_failure = [] (error const &) {};
         mutable std::function<void (std::string const & )> on_error = [] (std::string const & ) {};
+        mutable std::function<void (native_socket_type)> accepted = [] (native_socket_type) {};
+        mutable std::function<void (native_socket_type)> disconnected = [] (native_socket_type) {};
+        mutable std::function<void (native_socket_type)> released = [] (native_socket_type) {};
         mutable std::function<void (native_socket_type, InputEnvelope const &)> on_message_received
             = [] (native_socket_type, InputEnvelope const &) {};
 
@@ -84,9 +87,10 @@ public:
                 if (res.second) {
                     client_account & c = res.first->second;
                     return c.sock.native();
+                } else {
+                    on_error(tr::_("socket already exists with the same identifier"));
                 }
 
-                on_error(tr::_("socket already exists with the same identifier"));
                 return Socket::kINVALID_SOCKET;
             };
         }
@@ -108,8 +112,12 @@ public:
                 this->process_input(sock);
             };
 
+            base_class::accepted = [this] (native_socket_type sock) {
+                this->accepted(sock);
+            };
+
             base_class::disconnected = [this] (native_socket_type sock) {
-                _clients.erase(sock);
+                this->disconnected(sock);
             };
 
             base_class::can_write = [this] (native_socket_type sock) {
@@ -121,13 +129,17 @@ public:
                 aclient->can_write = true;
             };
 
-            base_class::released = [this] (native_socket_type sock) {
+            base_class::listener_removed = [] (native_socket_type) {};
+
+            base_class::removed = [this] (native_socket_type sock) {
                 auto aclient = locate_account(sock);
 
                 if (aclient == nullptr)
                     return;
 
                 aclient->sock.disconnect();
+                _clients.erase(sock);
+                released(sock);
             };
 
             this->add_listener(_listener);
@@ -317,7 +329,17 @@ public:
         mutable std::function<void (std::string const & )> on_error = [] (std::string const & ) {};
         mutable std::function<void ()> connected = [] () {};
         mutable std::function<void ()> connection_refused = [] () {};
+
+        /**
+         * Client socket has been disconnected by the peer.
+         */
         mutable std::function<void ()> disconnected = [] () {};
+
+        /**
+         * Client socket has been destroyed/released.
+         */
+        mutable std::function<void ()> released = [] () {};
+
         mutable std::function<void (InputEnvelope const &)> on_message_received
             = [] (InputEnvelope const &) {};
 
@@ -349,10 +371,11 @@ public:
                 _can_write = true;
             };
 
-            base_class::released = [this] (native_socket_type) {
+            base_class::removed = [this] (native_socket_type) {
                 _sock.disconnect();
                 _sock = Socket{};
                 _can_write = false;
+                released();
             };
         }
 
@@ -480,8 +503,6 @@ public:
                     case send_status::failure:
                     case send_status::network:
                         base_class::remove(_sock);
-                        _sock.disconnect();
-
                         break_sending = true;
                         on_failure(err);
                         break;

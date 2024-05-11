@@ -38,16 +38,25 @@ private:
     std::vector<native_socket_type> _removable_connecting_sockets;
     std::vector<native_socket_type> _removable_readers;
     std::vector<native_socket_type> _removable_writers;
-    std::set<native_socket_type> _released;
+    std::set<native_socket_type> _removable;
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
     mutable std::function<void(native_socket_type)> connection_refused = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> connected = [] (native_socket_type) {};
+
+    /**
+     * Socket has been disconnected by the peer. No disconnection required.
+     */
     mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
+
     mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
     mutable std::function<void(native_socket_type)> can_write = [] (native_socket_type) {};
-    mutable std::function<void(native_socket_type)> released = [] (native_socket_type) {};
+
+    /**
+     * Socket has been removed from client poller. It can be disconnected and/or released safely.
+     */
+    mutable std::function<void(native_socket_type)> removed = [] (native_socket_type) {};
 
 public:
     client_poller ()
@@ -55,28 +64,28 @@ public:
         _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_connecting_sockets.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
             _removable_writers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _connecting_poller.connection_refused = [this] (native_socket_type sock) {
             // Socket must be removed from monitoring later
             _removable_connecting_sockets.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             connection_refused(sock);
         };
 
@@ -90,7 +99,7 @@ public:
         _reader_poller.disconnected = [this] (native_socket_type sock) {
             // Socket must be removed from monitoring later
             _removable_readers.push_back(sock);
-            _released.insert(sock);
+            _removable.insert(sock);
             disconnected(sock);
         };
 
@@ -142,7 +151,7 @@ public:
         _removable_connecting_sockets.push_back(sock);
         _removable_readers.push_back(sock);
         _removable_writers.push_back(sock);
-        _released.insert(sock);
+        _removable.insert(sock);
 
         LOG_TRACE_3("Client socket ({}) removed from `client_poller`", to_string(sock.saddr()));
     }
@@ -273,10 +282,10 @@ public:
             _removable_writers.clear();
         }
 
-        if (!_released.empty()) {
-            for (auto sock: _released)
-                released(sock);
-            _released.clear();
+        if (!_removable.empty()) {
+            for (auto sock: _removable)
+                removed(sock);
+            _removable.clear();
         }
 
         if (n1 < 0 && n2 < 0 && n3 < 0)

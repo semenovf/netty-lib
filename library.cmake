@@ -20,6 +20,7 @@ option(NETTY__BUILD_STATIC "Enable build static library" ON)
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
+option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" ON)
 
 if (NOT PORTABLE_TARGET__CURRENT_PROJECT_DIR)
     set(PORTABLE_TARGET__CURRENT_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -176,6 +177,17 @@ if (NETTY__ENABLE_QT5)
     list(APPEND _netty__definitions "NETTY__QT5_ENABLED=1")
     list(APPEND _netty__qt5_components Core Network)
 endif(NETTY__ENABLE_QT5)
+
+if (NETTY__ENABLE_ENET)
+    if (NOT TARGET enet)
+        portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet.cmake)
+    endif()
+
+    # FIXME
+    # list(APPEND _netty__sources ${CMAKE_CURRENT_LIST_DIR}/src/)
+
+    list(APPEND _netty__definitions "NETTY__ENET_ENABLED=1")
+endif(NETTY__ENABLE_ENET)
 
 if (_netty__sources)
     list(REMOVE_DUPLICATES _netty__sources)
