@@ -20,3 +20,7 @@ if (NETTY__BUILD_P2P)
     # add_subdirectory(p2p) // FIXME
     add_subdirectory(reliable-delivery)
 endif(NETTY__BUILD_P2P)
+
+if (TARGET enet)
+    add_subdirectory(enet-basic)
+endif()
