@@ -20,7 +20,7 @@ option(NETTY__BUILD_STATIC "Enable build static library" ON)
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
-option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" ON)
+option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
 
 if (NOT PORTABLE_TARGET__CURRENT_PROJECT_DIR)
     set(PORTABLE_TARGET__CURRENT_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
