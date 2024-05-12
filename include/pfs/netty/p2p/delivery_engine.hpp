@@ -47,6 +47,7 @@ private:
     using output_queue_type = pfs::ring_buffer<packet, 64 * 1024>;
 
 public:
+    using file_id_type = universal_id;
     using serializer_type = Serializer;
 
 public:
@@ -65,7 +66,7 @@ public:
 private:
     struct reader_account
     {
-        universal_id peer_id;
+        peer_id peerid;
         reader_type reader;
 
         // Buffer to accumulate payload from input packets
@@ -77,7 +78,7 @@ private:
 
     struct writer_account
     {
-        universal_id peer_id;
+        peer_id peerid;
         writer_type writer;
         bool can_write {false};
         bool connected {false}; // Used to check complete channel
@@ -86,7 +87,7 @@ private:
         output_queue_type regular_queue;
 
         // File chunks output queues (mapped by file identifier).
-        std::map<universal_id, output_queue_type> chunks;
+        std::map<file_id_type, output_queue_type> chunks;
 
         // Serialized (raw) data to send.
         std::vector<char> raw;
@@ -94,7 +95,7 @@ private:
 
 private:
     // Host (listener) identifier.
-    universal_id _host_id;
+    peer_id _host_id;
 
     options _opts;
 
@@ -103,7 +104,7 @@ private:
     std::unique_ptr<client_poller_type> _writer_poller;
 
     std::map<typename server_poller_type::native_socket_type, reader_account> _reader_account_map;
-    std::map<universal_id, writer_account> _writer_account_map;
+    std::map<peer_id, writer_account> _writer_account_map;
 
 public:
     /**
@@ -111,7 +112,7 @@ public:
      *
      * @param host_id Unique host identifier for this instance.
      */
-    delivery_engine (universal_id host_id, options && opts, netty::error * perr = nullptr)
+    delivery_engine (peer_id host_id, options && opts, netty::error * perr = nullptr)
         : _host_id(host_id)
         , _opts(std::move(opts))
     {
@@ -140,8 +141,8 @@ public:
         _reader_poller->on_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
             auto areader = locate_reader_account(sock);
 
-            if (areader != nullptr && areader->peer_id != universal_id{}) {
-                Callbacks::defere_expire_peer(areader->peer_id);
+            if (areader != nullptr && areader->peerid != peer_id{}) {
+                Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
                 this->on_failure(err);
@@ -155,8 +156,8 @@ public:
         _reader_poller->disconnected = [this] (typename server_poller_type::native_socket_type sock) {
             auto areader = locate_reader_account(sock);
 
-            if (areader != nullptr && areader->peer_id != universal_id{}) {
-                Callbacks::defere_expire_peer(areader->peer_id);
+            if (areader != nullptr && areader->peerid != peer_id{}) {
+                Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
             }
@@ -171,7 +172,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter) {
-                Callbacks::defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
                 this->on_failure(err);
@@ -182,7 +183,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
-                Callbacks::defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("connection refused: socket={}, but writer account not found", sock));
             }
@@ -196,7 +197,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
-                Callbacks::defere_expire_peer(awriter->peer_id);
+                Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("connection disconnected: socket={}, but writer account not found", sock));
             }
@@ -257,7 +258,7 @@ public:
     void ready ()
     {}
 
-    universal_id host_id () const noexcept
+    peer_id host_id () const noexcept
     {
         return _host_id;
     }
@@ -267,24 +268,24 @@ public:
         connect_writer(std::move(haddr));
     }
 
-    void release_peer (universal_id peer_id)
+    void release_peer (peer_id peerid)
     {
-        release_reader(peer_id);
-        release_writer(peer_id);
-        Callbacks::channel_closed(peer_id);
+        release_reader(peerid);
+        release_writer(peerid);
+        Callbacks::channel_closed(peerid);
     }
 
     void release_peers ()
     {
-        std::vector<universal_id> peers;
+        std::vector<peer_id> peers;
         std::accumulate(_writer_account_map.cbegin(), _writer_account_map.cend()
-            , & peers, [] (std::vector<universal_id> * peers, decltype(*_writer_account_map.cbegin()) x) {
+            , & peers, [] (std::vector<peer_id> * peers, decltype(*_writer_account_map.cbegin()) x) {
                 peers->push_back(x.first);
                 return peers;
             });
 
-        for (auto const & peer_id: peers)
-            release_peer(peer_id);
+        for (auto const & peerid: peers)
+            release_peer(peerid);
     }
 
     // FIXME
@@ -357,17 +358,17 @@ public:
      *
      * @return Unique message identifier.
      */
-    bool enqueue (universal_id addressee, char const * data, int len)
+    bool enqueue (peer_id addressee, char const * data, int len)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data, len);
     }
 
-    bool enqueue (universal_id addressee, std::string const & data)
+    bool enqueue (peer_id addressee, std::string const & data)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
     }
 
-    bool enqueue (universal_id addressee, std::vector<char> const & data)
+    bool enqueue (peer_id addressee, std::vector<char> const & data)
     {
         return enqueue_packets(addressee, packet_type_enum::regular, data.data(), data.size());
     }
@@ -375,7 +376,7 @@ public:
     /**
      * Process file upload stopped event from file transporter
      */
-    void file_upload_stopped (universal_id addressee, universal_id fileid)
+    void file_upload_stopped (peer_id addressee, file_id_type fileid)
     {
         auto awriter = locate_writer_account(addressee);
 
@@ -388,12 +389,12 @@ public:
         awriter->chunks.erase(fileid);
     }
 
-    void file_upload_complete (universal_id addressee, universal_id fileid)
+    void file_upload_complete (peer_id addressee, file_id_type fileid)
     {
         file_upload_stopped(addressee, fileid);
     }
 
-    void file_ready_send (universal_id addressee, universal_id fileid, packet_type_enum packettype
+    void file_ready_send (peer_id addressee, file_id_type fileid, packet_type_enum packettype
         , typename serializer_type::output_archive_type data)
     {
         switch (packettype) {
@@ -413,6 +414,17 @@ public:
                 break;
             default:
                 return;
+        }
+    }
+
+    /**
+     * Iterates over writers applying @a f (peer_id) to each writer.
+     */
+    template <typename F>
+    void broadcast (F && f)
+    {
+        for (auto & pair: _writer_account_map) {
+            f(pair.first);
         }
     }
 
@@ -446,10 +458,10 @@ private:
         return & pos->second;
     }
 
-    reader_account * locate_reader_account (universal_id peer_id)
+    reader_account * locate_reader_account (peer_id peerid)
     {
         for (auto & r: _reader_account_map) {
-            if (r.second.peer_id == peer_id)
+            if (r.second.peerid == peerid)
                 return & r.second;
         }
 
@@ -466,9 +478,9 @@ private:
         return nullptr;
     }
 
-    writer_account * locate_writer_account (universal_id peer_id)
+    writer_account * locate_writer_account (peer_id peerid)
     {
-        auto pos = _writer_account_map.find(peer_id);
+        auto pos = _writer_account_map.find(peerid);
 
         if (pos == _writer_account_map.end())
             return nullptr;
@@ -476,12 +488,12 @@ private:
         return & pos->second;
     }
 
-    void release_reader (universal_id peer_id)
+    void release_reader (peer_id peerid)
     {
-        auto areader = locate_reader_account(peer_id);
+        auto areader = locate_reader_account(peerid);
 
         if (areader == nullptr) {
-            Callbacks::on_error(tr::f_("no reader account found for release: {}", peer_id));
+            Callbacks::on_error(tr::f_("no reader account found for release: {}", peerid));
             return;
         };
 
@@ -492,13 +504,13 @@ private:
 
         _reader_account_map.erase(areader->reader.native());
 
-        Callbacks::reader_closed(host4_addr{peer_id, std::move(saddr)});
+        Callbacks::reader_closed(host4_addr{peerid, std::move(saddr)});
     }
 
-    writer_account & acquire_writer_account (universal_id peer_id)
+    writer_account & acquire_writer_account (peer_id peerid)
     {
-        auto & awriter = _writer_account_map[peer_id];
-        awriter.peer_id   = peer_id;
+        auto & awriter = _writer_account_map[peerid];
+        awriter.peerid = peerid;
         awriter.can_write = false;
         awriter.connected = false;
         awriter.regular_queue.clear();
@@ -527,12 +539,12 @@ private:
     }
 
     // Release writer by peer identifier
-    void release_writer (universal_id peer_id)
+    void release_writer (peer_id peerid)
     {
-        auto awriter = locate_writer_account(peer_id);
+        auto awriter = locate_writer_account(peerid);
 
         if (awriter == nullptr) {
-            Callbacks::on_error(tr::f_("no writer found for release: {}", peer_id));
+            Callbacks::on_error(tr::f_("no writer found for release: {}", peerid));
             return;
         }
 
@@ -541,27 +553,27 @@ private:
         if (_writer_poller)
             _writer_poller->remove(awriter->writer);
 
-        _writer_account_map.erase(peer_id);
+        _writer_account_map.erase(peerid);
 
-        Callbacks::writer_closed(host4_addr{peer_id, std::move(saddr)});
+        Callbacks::writer_closed(host4_addr{peerid, std::move(saddr)});
     }
 
-    void check_complete_channel (universal_id peer_id)
+    void check_complete_channel (peer_id peerid)
     {
         int complete = 0;
 
-        auto areader = locate_reader_account(peer_id);
+        auto areader = locate_reader_account(peerid);
 
-        if (areader != nullptr && areader->peer_id != universal_id{})
+        if (areader != nullptr && areader->peerid != peer_id{})
             complete++;
 
-        auto awriter = locate_writer_account(peer_id);
+        auto awriter = locate_writer_account(peerid);
 
         if (awriter != nullptr && awriter->connected)
             complete++;
 
         if (complete == 2)
-            Callbacks::channel_established(host4_addr{peer_id, awriter->writer.saddr()});
+            Callbacks::channel_established(host4_addr{peerid, awriter->writer.saddr()});
     }
 
     inline void enqueue_packets_helper (output_queue_type & q, packet_type_enum packettype
@@ -573,7 +585,7 @@ private:
     /**
      * Splits @a data into packets and enqueue them into output queue.
      */
-    bool enqueue_packets (universal_id addressee, packet_type_enum packettype
+    bool enqueue_packets (peer_id addressee, packet_type_enum packettype
         , char const * data, int len)
     {
         auto * awriter = locate_writer_account(addressee);
@@ -587,7 +599,7 @@ private:
         return true;
     }
 
-    bool enqueue_file_chunk (universal_id addressee, universal_id fileid, packet_type_enum packettype
+    bool enqueue_file_chunk (peer_id addressee, file_id_type fileid, packet_type_enum packettype
         , char const * data, int len)
     {
         auto * awriter = locate_writer_account(addressee);
@@ -620,12 +632,12 @@ private:
         _writer_poller->wait_for_write(awriter->writer);
         awriter->connected = true;
 
-        Callbacks::writer_ready(host4_addr{awriter->peer_id, awriter->writer.saddr()});
+        Callbacks::writer_ready(host4_addr{awriter->peerid, awriter->writer.saddr()});
 
         // Only addresser need by the receiver
-        enqueue_packets(awriter->peer_id, packet_type_enum::hello, "HELO", 4);
+        enqueue_packets(awriter->peerid, packet_type_enum::hello, "HELO", 4);
 
-        check_complete_channel(awriter->peer_id);
+        check_complete_channel(awriter->peerid);
     }
 
     void process_reader_input (typename server_poller_type::native_socket_type sock)
@@ -649,7 +661,7 @@ private:
 
             if (n < 0) {
                 Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
-                Callbacks::defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peerid);
                 return;
             }
 
@@ -687,7 +699,7 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                Callbacks::defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peerid);
 
                 buffer_pos = buffer.end();
                 break;
@@ -706,7 +718,7 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                Callbacks::defere_expire_peer(areader->peer_id);
+                Callbacks::defere_expire_peer(areader->peerid);
 
                 buffer_pos = buffer.end();
                 break;
@@ -721,18 +733,18 @@ private:
 
             // Message complete
             if (pkt.partindex == pkt.partcount) {
-                auto peer_id = pkt.addresser;
+                auto peerid = pkt.addresser;
 
                 switch (packettype) {
                     case packet_type_enum::regular:
-                        Callbacks::data_received(peer_id, std::move(areader->b));
+                        Callbacks::data_received(peerid, std::move(areader->b));
                         break;
 
                     case packet_type_enum::hello: {
                         // Complete reader account
-                        areader->peer_id = peer_id;
-                        Callbacks::reader_ready(host4_addr{peer_id, areader->reader.saddr()});
-                        check_complete_channel(peer_id);
+                        areader->peerid = peerid;
+                        Callbacks::reader_ready(host4_addr{peerid, areader->reader.saddr()});
+                        check_complete_channel(peerid);
                         break;
                     }
 
@@ -743,7 +755,7 @@ private:
                     case packet_type_enum::file_begin:
                     case packet_type_enum::file_end:
                     case packet_type_enum::file_state:
-                        Callbacks::file_data_received(peer_id, packettype, std::move(areader->b));
+                        Callbacks::file_data_received(peerid, packettype, std::move(areader->b));
                         break;
                 }
             }
@@ -809,7 +821,7 @@ private:
                         , err.what()));
 
                     // Expire peer
-                    Callbacks::defere_expire_peer(awriter.peer_id);
+                    Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;
 
@@ -818,7 +830,7 @@ private:
                         , to_string(awriter.writer.saddr()), err.what()));
 
                     // Expire peer
-                    Callbacks::defere_expire_peer(awriter.peer_id);
+                    Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;
 
@@ -869,7 +881,7 @@ private:
                             serialize_outgoing_packets(awriter.raw, chunks_output_queue, 10);
                             ++pos;
                         } else {
-                            Callbacks::request_file_chunk(awriter.peer_id, pos->first);
+                            Callbacks::request_file_chunk(awriter.peerid, pos->first);
                             ++pos;
                         }
                     }

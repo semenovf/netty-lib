@@ -19,10 +19,16 @@ persistent_storage::persistent_storage (fs::path const & database_folder
     , std::string const & delivery_ack_db_name)
 {
     auto delivery_db_path = database_folder / fs::utf8_decode(delivery_db_name);
-    auto ack_db_path = database_folder / fs::utf8_decode(delivery_ack_db_name);
+    _ack_db_path = database_folder / fs::utf8_decode(delivery_ack_db_name);
 
     _delivery_dbh = relational_database::make_unique(delivery_db_path, true);
-    _ack_dbh = keyvalue_database::make_unique(ack_db_path, true);
+    _ack_dbh = keyvalue_database::make_unique(_ack_db_path, true);
+}
+
+persistent_storage::~persistent_storage ()
+{
+    if (_wipe_on_destroy)
+        wipe();
 }
 
 void persistent_storage::create_delivary_table (netty::p2p::peer_id peer_id)
@@ -34,12 +40,26 @@ void persistent_storage::create_delivary_table (netty::p2p::peer_id peer_id)
         ", ack {} NOT NULL)"
         " WITHOUT ROWID";
 
+    static char const * CREATE_RECENT_EID_TABLE =
+        "CREATE TABLE IF NOT EXISTS `eids` ("
+        "peer_id {} UNIQUE NOT NULL PRIMARY KEY"
+        ", eid {} NOT NULL)" // Уникальный идентификатор конверта
+        " WITHOUT ROWID";
+
     _delivery_dbh->transaction([this, & peer_id] () {
         auto sql = fmt::format(CREATE_DELIVERY_TABLE
             , to_string(peer_id)
             , affinity_traits<envelope_id>::name()
             , affinity_traits<bool>::name());
+
         _delivery_dbh->query(sql);
+
+        sql = fmt::format(CREATE_RECENT_EID_TABLE
+            , affinity_traits<decltype(peer_id)>::name()
+            , affinity_traits<envelope_id>::name());
+
+        _delivery_dbh->query(sql);
+
         return true;
     });
 }
@@ -60,6 +80,7 @@ persistent_storage::envelope_id
 persistent_storage::save (netty::p2p::peer_id addressee, char const * data, int len)
 {
     static char const * INSERT_DATA = "INSERT INTO `#{}` (eid, payload, ack) VALUES (:eid, :payload, :ack)";
+    static char const * REPLACE_EID_DATA = "REPLACE INTO `eids` (peer_id, eid) VALUES (:peer_id, :eid)";
 
     envelope_id eid = envelope_traits::initial();
 
@@ -74,19 +95,28 @@ persistent_storage::save (netty::p2p::peer_id addressee, char const * data, int 
 
     // Reserve new message ID
     eid = envelope_traits::next(eid);
-    _peers[addressee] = peer_info {eid};
 
     // Persist message data
     _delivery_dbh->transaction([this, & addressee, eid, data, len] () {
         auto sql = fmt::format(INSERT_DATA, to_string(addressee));
-        auto stmt = _delivery_dbh->prepare(sql, false);
+        auto stmt = _delivery_dbh->prepare(sql, true);
 
         stmt.bind(":eid", eid);
         stmt.bind(":payload", data, len, debby::transient_enum::no);
         stmt.bind(":ack", false);
         stmt.exec();
+
+        sql = std::string(REPLACE_EID_DATA);
+        auto stmt1 = _delivery_dbh->prepare(sql, true);
+
+        stmt1.bind(":peer_id", addressee);
+        stmt1.bind(":eid", eid);
+        stmt1.exec();
+
         return true;
     });
+
+    _peers[addressee] = peer_info {eid};
 
     return eid;
 }
@@ -137,6 +167,11 @@ persistent_storage::envelope_id persistent_storage::recent_eid (netty::p2p::peer
 
 void persistent_storage::maintain (netty::p2p::peer_id peer_id)
 {
+    auto table_exists = _delivery_dbh->exists(fmt::format("#{}", to_string(peer_id)));
+
+    if (!table_exists)
+        return;
+
     static char const * DELETE_DATA = "DELETE FROM `#{}` WHERE ack=TRUE";
 
     auto sql = fmt::format(DELETE_DATA, to_string(peer_id));
@@ -146,6 +181,16 @@ void persistent_storage::maintain (netty::p2p::peer_id peer_id)
         stmt.exec();
         return true;
     });
+}
+
+void persistent_storage::wipe ()
+{
+    auto tables = _delivery_dbh->tables("^#");
+
+    if (!tables.empty())
+        _delivery_dbh->remove(tables);
+
+    _ack_dbh->wipe(_ack_db_path);
 }
 
 void persistent_storage::for_each (netty::p2p::peer_id peer_id
@@ -231,17 +276,20 @@ void persistent_storage::for_each_unacked (netty::p2p::peer_id peer_id
 persistent_storage::envelope_id
 persistent_storage::fetch_recent_eid (netty::p2p::peer_id peer_id)
 {
-    static char const * SELECT_RECENT_MESSAGE = "SELECT eid FROM `#{}` ORDER BY eid DESC";
+    static char const * SELECT_RECENT_EID = "SELECT eid FROM `eids` WHERE peer_id = :peer_id";
 
     auto eid = envelope_traits::initial();
-    auto sql = fmt::format(SELECT_RECENT_MESSAGE, to_string(peer_id));
+    auto sql = std::string(SELECT_RECENT_EID);
 
-    _delivery_dbh->transaction([this, & sql, & eid] () {
+    _delivery_dbh->transaction([this, & sql, peer_id, & eid] () {
         auto stmt = _delivery_dbh->prepare(sql);
+        stmt.bind(":peer_id", peer_id);
         auto res = stmt.exec();
 
         if (res.has_more())
             res["eid"] >> eid;
+        // else
+        //  use initial value
 
         return true;
     });

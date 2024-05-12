@@ -43,10 +43,14 @@ private:
     };
 
 private:
+    bool _wipe_on_destroy {false};
+
+    pfs::filesystem::path _ack_db_path;
+
     // Database for storing envelopes awaiting delivery confirmation.
     std::unique_ptr<relational_database> _delivery_dbh;
 
-    // Database for storing recent envelope identified.
+    // Database for storing envelope recent identifiers by receiver.
     std::unique_ptr<keyvalue_database> _ack_dbh;
 
     // Peers cache
@@ -56,6 +60,8 @@ public:
     persistent_storage (pfs::filesystem::path const & database_folder
         , std::string const & delivery_db_name = std::string("delivery.db")
         , std::string const & delivery_ack_db_name = std::string("delivery_ack.db"));
+
+    ~persistent_storage ();
 
 public:
     void meet_peer (netty::p2p::peer_id peerid);
@@ -140,12 +146,18 @@ public:
      */
     void maintain (netty::p2p::peer_id peer_id);
 
+    void wipe_on_destroy (bool enable)
+    {
+        _wipe_on_destroy = enable;
+    }
+
 private:
     void for_each (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void for_each_eid_greater (envelope_id eid, netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void for_each_unacked (netty::p2p::peer_id peer_id, std::function<void (envelope_id, std::vector<char>)> f);
     void create_delivary_table (netty::p2p::peer_id peer_id);
     envelope_id fetch_recent_eid (netty::p2p::peer_id peer_id);
+    void wipe ();
 };
 
 }} // namespace netty::sample

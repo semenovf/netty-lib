@@ -7,12 +7,13 @@
 //      2024.04.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "universal_id.hpp"
+#include "pfs/universal_id.hpp"
+#include "pfs/universal_id_crc.hpp"
+#include "pfs/universal_id_hash.hpp"
 
 namespace netty {
 namespace p2p {
 
-using peer_id = universal_id;
+using peer_id = pfs::universal_id;
 
 }} // namespace netty::p2p
-

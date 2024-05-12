@@ -755,11 +755,11 @@ public:
 
     void process_file_end (universal_id addresser, std::vector<char> const & data)
     {
-        LOG_TRACE_3("File received completely from: {} ({})", addresser, fe.fileid);
-
         typename Serializer::istream_type in {data.data(), data.size()};
         file_end fe;
         in >> fe;
+
+        LOG_TRACE_3("File received completely from: {} ({})", addresser, fe.fileid);
 
         commit_incoming_file(addresser, fe.fileid/*, fe.checksum*/);
     }
