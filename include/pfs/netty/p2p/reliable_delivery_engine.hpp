@@ -329,6 +329,7 @@ private:
     {
         auto addressee = haddr.host_id;
 
+        _storage->maintain(addressee);
         _storage->meet_peer(addressee);
 
         _storage->again(addressee, [this, addressee] (envelope_id eid, std::vector<char> payload) {
@@ -340,8 +341,12 @@ private:
 
     void process_channel_closed (peer_id peerid)
     {
-        _storage->maintain(peerid);
-        _storage->spend_peer(peerid);
+        // Storage may be destroyed already on engine destruction before
+        if (_storage) {
+            _storage->maintain(peerid);
+            _storage->spend_peer(peerid);
+        }
+
         _channel_closed_cb(peerid);
     }
 };
