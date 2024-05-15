@@ -54,17 +54,14 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
     addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
 
-    auto rc = ::connect(_socket
-        , reinterpret_cast<sockaddr *>(& addr_in4)
-        , sizeof(addr_in4));
+    auto rc = ::connect(_socket, reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
     bool in_progress = false;
 
     if (rc < 0) {
 #if _MSC_VER
         auto lastWsaError = WSAGetLastError();
-        in_progress = lastWsaError == WSAEINPROGRESS 
-            || lastWsaError == WSAEWOULDBLOCK; 
+        in_progress = lastWsaError == WSAEINPROGRESS || lastWsaError == WSAEWOULDBLOCK;
 #else
         in_progress = (errno == EINPROGRESS || errno == EWOULDBLOCK);
 #endif

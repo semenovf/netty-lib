@@ -13,14 +13,14 @@
 namespace netty {
 namespace posix {
 
-class tcp_server;
+class tcp_listener;
 
 /**
  * POSIX Inet TCP socket
  */
 class tcp_socket: public inet_socket
 {
-    friend class tcp_server;
+    friend class tcp_listener;
 
 protected:
     /**

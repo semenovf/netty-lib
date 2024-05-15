@@ -9,16 +9,27 @@
 #include "service.hpp"
 #include <pfs/log.hpp>
 
-bool process (server_connection_context & conn, echo const & e)
+struct ProcessTraits
 {
-    message_serializer_t ms {echo {e.text}};
-    service_t::client::output_envelope_type env {message_enum::echo, ms.take()};
-    conn.server->enqueue(conn.sock, env.take());
-    return true;
-}
+    template <typename Traits>
+    static bool process (typename Traits::server_connection_context & conn, echo const & e)
+    {
+        message_serializer_t ms {echo {e.text}};
+        output_envelope_t env {message_enum::echo, ms.take()};
+        conn.server->enqueue(conn.sock, env.take());
+        return true;
+    }
 
-bool process (client_connection_context &, echo const & e)
+    template <typename Traits>
+    static bool process (typename Traits::client_connection_context &, echo const & e)
+    {
+        LOGD("echo", "{}", e.text);
+        return true;
+    }
+};
+
+template <typename ConnectionContext>
+bool process (ConnectionContext & conn, echo const & e)
 {
-    LOGD("echo", "{}", e.text);
-    return true;
+    return ProcessTraits::process<typename ConnectionContext::traits_type>(conn, e);
 }

@@ -42,3 +42,11 @@ using server_udt_poller_type = netty::server_poller<netty::udt::epoll_poller>;
 } // namespace netty
 #endif
 
+#if NETTY__ENET_ENABLED
+#   include "enet/enet_poller.hpp"
+namespace netty {
+using client_enet_poller_type = netty::client_poller<netty::enet::enet_poller>;
+using server_enet_poller_type = netty::server_poller<netty::enet::enet_poller>;
+} // namespace netty
+#endif
+

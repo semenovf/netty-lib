@@ -47,7 +47,7 @@ list(APPEND _netty__sources
     ${CMAKE_CURRENT_LIST_DIR}/src/socket4_addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/startup.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet_socket.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_server.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_listener.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/tcp_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_receiver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp
@@ -183,10 +183,12 @@ if (NETTY__ENABLE_ENET)
         portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet.cmake)
     endif()
 
-    # FIXME
-    # list(APPEND _netty__sources ${CMAKE_CURRENT_LIST_DIR}/src/)
-
+    list(APPEND _netty__sources
+        ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_listener.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_socket.cpp)
     list(APPEND _netty__definitions "NETTY__ENET_ENABLED=1")
+    list(APPEND _netty__private_links enet)
 endif(NETTY__ENABLE_ENET)
 
 if (_netty__sources)

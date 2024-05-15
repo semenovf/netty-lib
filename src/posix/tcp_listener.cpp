@@ -7,7 +7,7 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/tcp_server.hpp"
+#include "pfs/netty/posix/tcp_listener.hpp"
 #include "pfs/endian.hpp"
 #include "pfs/i18n.hpp"
 
@@ -22,22 +22,22 @@
 namespace netty {
 namespace posix {
 
-tcp_server::tcp_server () : inet_socket() {}
+tcp_listener::tcp_listener () : inet_socket() {}
 
-tcp_server::tcp_server (socket4_addr const & saddr)
+tcp_listener::tcp_listener (socket4_addr const & saddr)
     : inet_socket(inet_socket::type_enum::stream)
 {
     if (bind(_socket, saddr, nullptr))
         _saddr = saddr;
 }
 
-tcp_server::tcp_server (socket4_addr const & saddr, int backlog)
-    : tcp_server(saddr)
+tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog)
+    : tcp_listener(saddr)
 {
     listen(backlog);
 }
 
-bool tcp_server::listen (int backlog, error * perr)
+bool tcp_listener::listen (int backlog, error * perr)
 {
     auto rc = ::listen(_socket, backlog);
 
@@ -60,7 +60,7 @@ bool tcp_server::listen (int backlog, error * perr)
     return true;
 }
 
-tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
+tcp_socket tcp_listener::accept (native_type listener_sock, error * perr)
 {
     sockaddr_in sa;
 
@@ -112,7 +112,7 @@ tcp_socket tcp_server::accept (native_type listener_sock, error * perr)
     return tcp_socket{uninitialized{}};
 }
 
-tcp_socket tcp_server::accept_nonblocking (native_type listener_sock, error * perr)
+tcp_socket tcp_listener::accept_nonblocking (native_type listener_sock, error * perr)
 {
     auto s = accept(listener_sock, perr);
 
@@ -122,12 +122,12 @@ tcp_socket tcp_server::accept_nonblocking (native_type listener_sock, error * pe
     return s;
 }
 
-tcp_socket tcp_server::accept (error * perr)
+tcp_socket tcp_listener::accept (error * perr)
 {
     return accept(_socket, perr);
 }
 
-tcp_socket tcp_server::accept_nonblocking (error * perr)
+tcp_socket tcp_listener::accept_nonblocking (error * perr)
 {
     return accept_nonblocking(_socket, perr);
 }

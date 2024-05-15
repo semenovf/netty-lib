@@ -33,7 +33,7 @@ struct client_commands
     pfs::emitter_mt<std::vector<char>> send;
 };
 
-static std::atomic_bool finish_flag {false};
+static std::atomic_bool s_finish_flag {false};
 static std::atomic_bool s_connected_flag {false};
 
 void print_usage (pfs::filesystem::path const & programName
@@ -49,7 +49,28 @@ void print_usage (pfs::filesystem::path const & programName
     fmt::println(out, "Usage:\n\n"
         "{0} --help | -h\n"
         "\tPrint this help and exit\n\n"
-        "{0} [--listener=ADDR:PORT]\n\n"
+        "{0} [--backend=BACKEND] [--listener=ADDR:PORT]\n\n"
+        "--backend=BACKEND\n"
+        "\tUse one of these backends:\n"
+#if NETTY__SELECT_ENABLED
+        "\t\t* select\n"
+#endif
+
+#if NETTY__POLL_ENABLED
+        "\t\t* poll\n"
+#endif
+
+#if NETTY__EPOLL_ENABLED
+        "\t\t* epoll\n"
+#endif
+
+#if NETTY__UDT_ENABLED
+        "\t\t* udt\n"
+#endif
+
+#if NETTY__ENET_ENABLED
+        "\t\t* enet\n"
+#endif
         "--listener=ADDR:PORT\n"
         "\tSpecify listener socket address. Default is 0.0.0.0:42142\n"
         , programName);
@@ -76,6 +97,124 @@ char * hints (const char * buf, int * color, int * bold)
     return nullptr;
 }
 
+template <PollerEnum P>
+void service_process (netty::socket4_addr listener_saddr, std::condition_variable & ready_cv)
+{
+    using service_type        = typename service_traits<P>::service_type;
+    using server_type         = typename service_type::server;
+    using native_socket_type  = typename server_type::native_socket_type;
+    using input_envelope_type = typename service_type::input_envelope_type;
+
+    server_type server {listener_saddr};
+
+    server.on_failure = [] (netty::error const & err) {
+        LOGE("", "FAILURE: {}", err.what());
+        s_finish_flag = true;
+    };
+
+    server.on_error = [] (std::string const & errstr) {
+        LOGE("", "{}", errstr);
+    };
+
+    server.on_message_received = [& server] (native_socket_type sock, input_envelope_type const & env) {
+        typename service_traits<P>::server_connection_context conn {& server, sock};
+        typename service_traits<P>::server_message_processor_type mp;
+        auto const & payload = env.payload();
+        auto success = mp.parse(conn, env.message_type(), payload.data(), payload.data() + payload.size());
+
+        if (!success) {
+            LOGE("", "parse message failure: {}", fmt::underlying(env.message_type()));
+            return;
+        }
+    };
+
+    LOGD("", "Service ready");
+    ready_cv.notify_one();
+
+    while (!s_finish_flag) {
+        server.step(std::chrono::milliseconds{10});
+    }
+}
+
+template <PollerEnum P>
+void client_process (client_commands & cmd, netty::socket4_addr listener_saddr, std::condition_variable & ready_cv)
+{
+    using service_type        = typename service_traits<P>::service_type;
+    using client_type         = typename service_type::client;
+    using input_envelope_type = typename service_type::input_envelope_type;
+
+    client_type c {};
+    pfs::function_queue<> command_queue;
+
+    c.on_failure = [& ready_cv] (netty::error const & err) {
+        LOGE("", "Failure on client connection: {}", err.what());
+        s_finish_flag = true;
+        ready_cv.notify_one();
+    };
+
+    c.on_error = [& ready_cv] (std::string const & errstr) {
+        LOGE("", "{}", errstr);
+        ready_cv.notify_one();
+    };
+
+    c.connected = [listener_saddr, & ready_cv] () {
+        LOGD("", "Connected to: {}", to_string(listener_saddr));
+        s_connected_flag = true;
+        ready_cv.notify_one();
+    };
+
+    c.connection_refused = [listener_saddr, & ready_cv] () {
+        LOGD("", "Connection refused to: {}", to_string(listener_saddr));
+        s_connected_flag = false;
+        ready_cv.notify_one();
+    };
+
+    c.disconnected = [] () { LOGE("", "Disconnected by the peer"); };
+
+    c.released = [listener_saddr, & ready_cv] () {
+        LOGD("", "Disconnected/released from: {}", to_string(listener_saddr));
+        s_connected_flag = false;
+        ready_cv.notify_one();
+    };
+
+    c.on_message_received = [& c, & ready_cv] (input_envelope_type const & env) {
+        typename service_traits<P>::client_connection_context conn {& c};
+        typename service_traits<P>::client_message_processor_type mp;
+
+        auto const & payload = env.payload();
+        auto success = mp.parse(conn, env.message_type(), payload.data(), payload.data() + payload.size());
+
+        if (!success) {
+            LOGE("", "parse message failure: {}", fmt::underlying(env.message_type()));
+        }
+
+        ready_cv.notify_one();
+    };
+
+    cmd.connect_service.connect([& c, & command_queue] (netty::socket4_addr listener_saddr) {
+        command_queue.push([& c, listener_saddr] { c.connect(listener_saddr); });
+    });
+
+    cmd.disconnect_service.connect([& c, & command_queue] () {
+        command_queue.push([& c] { c.disconnect(); });
+    });
+
+    cmd.send.connect([& c, & command_queue] (std::vector<char> && msg) {
+        command_queue.push([& c, msg] {
+            LOGD("", "MESSAGE ENQUEUED: size={}", msg.size());
+            c.enqueue(msg);
+        });
+    });
+
+    LOGD("", "Client ready");
+    ready_cv.notify_one();
+
+    while (!s_finish_flag) {
+        c.step(std::chrono::milliseconds{10});
+        command_queue.call_all();
+    }
+}
+
 int main (int argc, char * argv[])
 {
     //netty::socket4_addr listener_saddr {netty::inet4_addr::any_addr_value, 42142};
@@ -84,6 +223,7 @@ int main (int argc, char * argv[])
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
     auto commandLineIterator = commandLine.begin();
+    PollerEnum backend {PollerEnum::Unknown};
 
     if (commandLineIterator.has_more()) {
         while (commandLineIterator.has_more()) {
@@ -106,6 +246,41 @@ int main (int argc, char * argv[])
                 }
 
                 listener_saddr = std::move(*saddr);
+            } else if (x.is_option("backend")) {
+                if (!x.has_arg()) {
+                    print_usage(programName, "Expected backend");
+                    return EXIT_FAILURE;
+                }
+
+                if (x.arg() == "") {
+#if NETTY__SELECT_ENABLED
+                } else if (x.arg() == "select" ) {
+                    backend = PollerEnum::Select;
+#endif
+
+#if NETTY__POLL_ENABLED
+                } else if (x.arg() == "poll" ) {
+                    backend = PollerEnum::Poll;
+#endif
+
+#if NETTY__EPOLL_ENABLED
+                } else if (x.arg() == "epoll" ) {
+                    backend = PollerEnum::EPoll;
+#endif
+
+#if NETTY__UDT_ENABLED
+                } else if (x.arg() == "udt" ) {
+                    backend = PollerEnum::UDT;
+#endif
+
+#if NETTY__ENET_ENABLED
+                } else if (x.arg() == "enet" ) {
+                    backend = PollerEnum::ENet;
+#endif
+                } else {
+                    print_usage(programName, "Bad backend");
+                    return EXIT_FAILURE;
+                }
             } else {
                 fmt::println(stderr, "Bad arguments. Try --help option.");
                 return EXIT_FAILURE;
@@ -113,127 +288,95 @@ int main (int argc, char * argv[])
         }
     }
 
+    if (backend == PollerEnum::Unknown) {
+        fmt::println(stderr, "Backend must be specified. Try --help option.");
+        return EXIT_FAILURE;
+    }
+
     std::mutex ready_mtx;
     std::condition_variable ready_cv;
     std::unique_lock<std::mutex> ready_lk(ready_mtx);
 
-    std::thread service_thread {[listener_saddr, & ready_cv] () {
-        bool failure = false;
-        service_t::server server {listener_saddr};
-
-        server.on_failure = [& failure] (netty::error const & err) {
-            LOGE("", "FAILURE: {}", err.what());
-            failure = true;
-        };
-
-        server.on_error = [] (std::string const & errstr) {
-            LOGE("", "{}", errstr);
-        };
-
-        server.on_message_received = [& server] (service_t::server::native_socket_type sock
-            , service_t::input_envelope_type const & env) {
-
-            server_connection_context conn {& server, sock};
-            server_message_processor_t mp;
-            auto const & payload = env.payload();
-            auto success = mp.parse(conn, env.message_type(), payload.data(), payload.data() + payload.size());
-
-            if (!success) {
-                LOGE("", "parse message failure: {}", fmt::underlying(env.message_type()));
-                return;
-            }
-        };
-
-        LOGD("", "Service ready");
-        ready_cv.notify_one();
-
-        while (!(failure || finish_flag)) {
-            server.step(std::chrono::milliseconds{10});
+    std::thread service_thread {[backend, listener_saddr, & ready_cv] () {
+#if NETTY__SELECT_ENABLED
+        if (backend == PollerEnum::Select) {
+            service_process<PollerEnum::Select>(listener_saddr, ready_cv);
+            return;
         }
+#endif
+
+#if NETTY__POLL_ENABLED
+        if (backend == PollerEnum::Poll) {
+            service_process<PollerEnum::Poll>(listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__EPOLL_ENABLED
+        if (backend == PollerEnum::EPoll) {
+            service_process<PollerEnum::EPoll>(listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__UDT_ENABLED
+        if (backend == PollerEnum::UDT) {
+            service_process<PollerEnum::UDT>(listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__ENET_ENABLED
+        if (backend == PollerEnum::ENet) {
+            service_process<PollerEnum::ENet>(listener_saddr, ready_cv);
+            return;
+        }
+#endif
     }};
 
     ready_cv.wait(ready_lk);
     client_commands cmd;
 
-    std::thread client_thread {[listener_saddr, & ready_cv, & cmd] () {
-        bool failure = false;
-        service_t::client c {};
-        pfs::function_queue<> command_queue;
-
-        c.on_failure = [& failure, & ready_cv] (netty::error const & err) {
-            LOGE("", "Failure on client connection: {}", err.what());
-            failure = true;
-            ready_cv.notify_one();
-        };
-
-        c.on_error = [& ready_cv] (std::string const & errstr) {
-            LOGE("", "{}", errstr);
-            ready_cv.notify_one();
-        };
-
-        c.connected = [listener_saddr, & ready_cv] () {
-            LOGD("", "Connected to: {}", to_string(listener_saddr));
-            s_connected_flag = true;
-            ready_cv.notify_one();
-        };
-
-        c.connection_refused = [listener_saddr, & ready_cv] () {
-            LOGD("", "Connection refused to: {}", to_string(listener_saddr));
-            s_connected_flag = false;
-            ready_cv.notify_one();
-        };
-
-        c.disconnected = [] () { LOGE("", "Disconnected by the peer"); };
-
-        c.released = [listener_saddr, & ready_cv] () {
-            LOGD("", "Disconnected/released from: {}", to_string(listener_saddr));
-            s_connected_flag = false;
-            ready_cv.notify_one();
-        };
-
-        c.on_message_received = [& c, & ready_cv] (service_t::input_envelope_type const & env) {
-            client_connection_context conn {& c};
-            client_message_processor_t mp;
-            auto const & payload = env.payload();
-            auto success = mp.parse(conn, env.message_type(), payload.data(), payload.data() + payload.size());
-
-            if (!success) {
-                LOGE("", "parse message failure: {}", fmt::underlying(env.message_type()));
-            }
-
-            ready_cv.notify_one();
-        };
-
-        cmd.connect_service.connect([& c, & command_queue] (netty::socket4_addr listener_saddr) {
-            command_queue.push([& c, listener_saddr] { c.connect(listener_saddr); });
-        });
-
-        cmd.disconnect_service.connect([& c, & command_queue] () {
-            command_queue.push([& c] { c.disconnect(); });
-        });
-
-        cmd.send.connect([& c, & command_queue] (std::vector<char> && msg) {
-            command_queue.push([& c, msg] {
-                LOGD("", "MESSAGE ENQUEUED: size={}", msg.size());
-                c.enqueue(msg);
-            });
-        });
-
-        LOGD("", "Client ready");
-        ready_cv.notify_one();
-
-        while (!(failure || finish_flag)) {
-            c.step(std::chrono::milliseconds{10});
-            command_queue.call_all();
+    std::thread client_thread {[backend, listener_saddr, & ready_cv, & cmd] () {
+#if NETTY__SELECT_ENABLED
+        if (backend == PollerEnum::Select) {
+            client_process<PollerEnum::Select>(cmd, listener_saddr, ready_cv);
+            return;
         }
+#endif
+
+#if NETTY__POLL_ENABLED
+        if (backend == PollerEnum::Poll) {
+            client_process<PollerEnum::Poll>(cmd, listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__EPOLL_ENABLED
+        if (backend == PollerEnum::EPoll) {
+            client_process<PollerEnum::EPoll>(cmd, listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__UDT_ENABLED
+        if (backend == PollerEnum::UDT) {
+            client_process<PollerEnum::UDT>(cmd, listener_saddr, ready_cv);
+            return;
+        }
+#endif
+
+#if NETTY__ENET_ENABLED
+        if (backend == PollerEnum::ENet) {
+            client_process<PollerEnum::ENet>(cmd, listener_saddr, ready_cv);
+            return;
+        }
+#endif
     }};
 
     ready_cv.wait(ready_lk);
 
     LOGD("", "Service and client threads ready");
-    // LOGD("", "Client connecting...");
-
-    // cmd.connect_service(listener_saddr);
 
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
@@ -242,14 +385,14 @@ int main (int argc, char * argv[])
         auto line = linenoise("client> ");
 
         if (line == nullptr) {
-            finish_flag = true;
+            s_finish_flag = true;
             break;
         }
 
         string_view sv {line};
 
         if (sv == "/e" || sv == "/q" || sv == "/exit" || sv == "/quit") {
-            finish_flag = true;
+            s_finish_flag = true;
             break;
         }
 
@@ -271,7 +414,7 @@ int main (int argc, char * argv[])
             }
         } else if (sv == "echo") {
             message_serializer_t ms {echo {"Hello, world!"}};
-            service_t::client::output_envelope_type env {message_enum::echo, ms.take()};
+            output_envelope_t env {message_enum::echo, ms.take()};
             cmd.send(env.take());
             ready_cv.wait(ready_lk);
         }

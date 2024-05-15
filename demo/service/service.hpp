@@ -14,38 +14,145 @@
 #include "netty/service.hpp"
 #include "netty/poller_types.hpp"
 #include "netty/server_poller.hpp"
-#include "netty/posix/tcp_server.hpp"
-#include "netty/posix/tcp_socket.hpp"
-#include <map>
+
+#if defined(NETTY__SELECT_ENABLED) || defined(NETTY__POLL_ENABLED) || defined(NETTY__EPOLL_ENABLED)
+#   include "netty/posix/tcp_listener.hpp"
+#   include "netty/posix/tcp_socket.hpp"
+#endif
+
+#if NETTY__UDT_ENABLED
+#   include "netty/udt/udt_server.hpp"
+#   include "netty/udt/udt_socket.hpp"
+#endif
+
+#if NETTY__ENET_ENABLED
+#   include "netty/enet/enet_listener.hpp"
+#   include "netty/enet/enet_socket.hpp"
+#endif
+
+enum class PollerEnum {
+      Unknown
+#if NETTY__SELECT_ENABLED
+    , Select
+#endif
+
+#if NETTY__POLL_ENABLED
+    , Poll
+#endif
 
 #if NETTY__EPOLL_ENABLED
-using client_poller_t = netty::client_epoll_poller_type;
-using server_poller_t = netty::server_epoll_poller_type;
-#elif NETTY__POLL_ENABLED
-using client_poller_t = netty::client_poll_poller_type;
-using server_poller_t = netty::server_poll_poller_type;
+    , EPoll
 #endif
+
+#if NETTY__UDT_ENABLED
+    , UDT
+#endif
+
+#if NETTY__ENET_ENABLED
+    , ENet
+#endif
+
+}; // PollerEnum
 
 using message_serializer_impl_t = message_serializer_impl<pfs::endian::native>;
 using deserializer_t = message_serializer_impl_t::istream_type;
 using serializer_t   = message_serializer_impl_t::ostream_type;
-
-using service_t = netty::service<server_poller_t, client_poller_t
-    , netty::posix::tcp_server, netty::posix::tcp_socket
-    , input_envelope<deserializer_t>
-    , output_envelope<serializer_t>>;
-
-struct client_connection_context
-{
-    service_t::client * client;
-};
-
-struct server_connection_context
-{
-    service_t::server * server;
-    service_t::server::native_socket_type sock;
-};
-
-using client_message_processor_t = message_processor<client_connection_context, deserializer_t>;
-using server_message_processor_t = message_processor<server_connection_context, deserializer_t>;
 using message_serializer_t = message_serializer<serializer_t>;
+using input_envelope_t = input_envelope<deserializer_t>;
+using output_envelope_t = output_envelope<serializer_t>;
+
+template <PollerEnum P>
+struct service_traits;
+
+#define CONTEXT_DECLARATIONS                                    \
+    struct client_connection_context                            \
+    {                                                           \
+        using traits_type = service_traits;                     \
+        typename service_type::client * client;                 \
+    };                                                          \
+                                                                \
+    struct server_connection_context                            \
+    {                                                           \
+        using traits_type = service_traits;                     \
+        typename service_type::server * server;                 \
+        typename service_type::server::native_socket_type sock; \
+    };                                                          \
+                                                                \
+    using client_message_processor_type = message_processor<client_connection_context, deserializer_t>; \
+    using server_message_processor_type = message_processor<server_connection_context, deserializer_t>;
+
+
+#if NETTY__SELECT_ENABLED
+template <>
+struct service_traits<PollerEnum::Select>
+{
+    using service_type = netty::service<
+          netty::server_select_poller_type
+        , netty::client_select_poller_type
+        , netty::posix::tcp_listener, netty::posix::tcp_socket
+        , input_envelope_t
+        , output_envelope_t>;
+
+    CONTEXT_DECLARATIONS
+};
+#endif
+
+#if NETTY__POLL_ENABLED
+template <>
+struct service_traits<PollerEnum::Poll>
+{
+    using service_type = netty::service<
+          netty::server_poll_poller_type
+        , netty::client_poll_poller_type
+        , netty::posix::tcp_listener, netty::posix::tcp_socket
+        , input_envelope_t
+        , output_envelope_t>;
+
+    CONTEXT_DECLARATIONS
+};
+#endif
+
+#if NETTY__EPOLL_ENABLED
+template <>
+struct service_traits<PollerEnum::EPoll>
+{
+    using service_type = netty::service<
+          netty::server_epoll_poller_type
+        , netty::client_epoll_poller_type
+        , netty::posix::tcp_listener, netty::posix::tcp_socket
+        , input_envelope_t
+        , output_envelope_t>;
+
+    CONTEXT_DECLARATIONS
+};
+#endif
+
+#if NETTY__UDT_ENABLED
+template <>
+struct service_traits<PollerEnum::UDT>
+{
+    using service_type = netty::service<
+          netty::server_udt_poller_type
+        , netty::client_udt_poller_type
+        , netty::udt::udt_server, netty::udt::udt_socket
+        , input_envelope_t
+        , output_envelope_t>;
+
+    CONTEXT_DECLARATIONS
+};
+#endif
+
+#if NETTY__ENET_ENABLED
+template <>
+struct service_traits<PollerEnum::ENet>
+{
+    using service_type = netty::service<
+          netty::server_enet_poller_type
+        , netty::client_enet_poller_type
+        , netty::enet::enet_listener, netty::enet::enet_socket
+        , input_envelope_t
+        , output_envelope_t>;
+
+    CONTEXT_DECLARATIONS
+};
+#endif

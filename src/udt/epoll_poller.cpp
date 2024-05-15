@@ -54,18 +54,13 @@ void epoll_poller::add (native_socket_type sock, error * perr)
     auto rc = UDT::epoll_add_usock(eid, sock, & events);
 
     if (rc == UDT::ERROR) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::poller_error
             , tr::_("UDT epoll_poller: add socket failure")
             , UDT::getlasterror_desc()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
+        return;
     }
 
     LOGD(TAG, "ADD SOCKET: eid={}, sock={}", eid, sock);
@@ -80,30 +75,23 @@ void epoll_poller::remove (native_socket_type sock, error * perr)
     LOGD(TAG, "REMOVE SOCKET: eid={}, sock={}", eid, sock);
 
     if (rc == UDT::ERROR) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::poller_error
             , tr::_("UDT epoll_poller: delete failure")
             , UDT::getlasterror_desc()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
+        return;
     }
 
     --counter;
 
     if (counter < 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::poller_error
             , tr::_("UDT epoll_poller: counter management not consistent")
             , UDT::getlasterror_desc()
-        };
-
-        throw err;
+        });
     }
 }
 
@@ -129,18 +117,13 @@ int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
         if (ec == UDT::ERRORINFO::ETIMEOUT) {
             n = 0;
         } else {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::poller_error
                 , tr::_("UDT epoll_poller: poll failure")
                 , UDT::getlasterror_desc()
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return n;
-            } else {
-                throw err;
-            }
+            return n;
         }
     }
 
