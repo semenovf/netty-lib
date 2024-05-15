@@ -190,6 +190,37 @@ public:
             aclient->outq.push(std::move(data));
         }
 
+        void enqueue_broadcast (char const * data, int len)
+        {
+            for (auto & item: _clients) {
+                auto & aclient = item->second;
+                aclient.outq.push(std::vector<char>(data, len));
+            }
+        }
+
+        void enqueue_broadcast (std::string const & data)
+        {
+            enqueue_broadcast(data.data(), data.size());
+        }
+
+        void enqueue_broadcast (pfs::string_view data)
+        {
+            enqueue_broadcast(data.data(), data.size());
+        }
+
+        void enqueue_broadcast (std::vector<char> const & data)
+        {
+            enqueue_broadcast(data.data(), data.size());
+        }
+
+        void enqueue_broadcast (std::vector<char> && data)
+        {
+            for (auto & item: _clients) {
+                auto & aclient = item->second;
+                aclient.outq.push(data);
+            }
+        }
+
     private:
         client_account * locate_account (native_socket_type sock)
         {

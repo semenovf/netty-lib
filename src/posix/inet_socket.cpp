@@ -19,6 +19,7 @@
 #   include <sys/types.h>
 #   include <sys/socket.h>
 #   include <netinet/in.h>
+#   include <netinet/tcp.h>
 #   include <fcntl.h>
 #   include <string.h>
 #   include <unistd.h>
@@ -111,6 +112,19 @@ inet_socket::inet_socket (type_enum socktype)
                 , reinterpret_cast<char *>(& yes), sizeof(int));
 #else
             rc = ::setsockopt(_socket, SOL_SOCKET, SO_KEEPALIVE, & yes, sizeof(int));
+#endif
+        }
+    }
+#endif
+
+#if defined(TCP_NODELAY)
+    if (ai_socktype & SOCK_STREAM) {
+        if (rc == 0) {
+#   if _MSC_VER
+            rc = ::setsockopt(_socket, IPPROTO_TCP, TCP_NODELAY
+                , reinterpret_cast<char *>(& yes), sizeof(int));
+#else
+            rc = ::setsockopt(_socket, IPPROTO_TCP, TCP_NODELAY, & yes, sizeof(int));
 #endif
         }
     }
