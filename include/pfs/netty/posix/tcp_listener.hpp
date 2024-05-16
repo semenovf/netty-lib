@@ -27,7 +27,7 @@ public:
     NETTY__EXPORT tcp_listener ();
 
     /**
-     * Constructs POSIX TCP server and bind to the specified address.
+     * Constructs POSIX TCP server.
      */
     NETTY__EXPORT tcp_listener (socket4_addr const & saddr);
 
@@ -39,10 +39,9 @@ public:
 
 public:
     /**
-     * Listen for connections on a socket.
+     * Bind the socket to address and listen for connections on a socket.
      *
-     * @param backlog The maximum length to which the queue of pending
-     *        connections may grow.
+     * @param backlog The maximum length to which the queue of pending connections may grow.
      */
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 

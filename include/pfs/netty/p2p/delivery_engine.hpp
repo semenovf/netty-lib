@@ -224,12 +224,8 @@ public:
         netty::error err;
         _reader_poller->add_listener(*_listener, & err);
 
-        if (err) {
-            pfs::throw_or(perr, std::move(err));
-            return;
-        }
-
-        _listener->listen(_opts.listener_backlog, & err);
+        if (!err)
+            _listener->listen(_opts.listener_backlog, & err);
 
         if (err) {
             pfs::throw_or(perr, std::move(err));

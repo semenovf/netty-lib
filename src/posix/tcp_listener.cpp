@@ -27,8 +27,7 @@ tcp_listener::tcp_listener () : inet_socket() {}
 tcp_listener::tcp_listener (socket4_addr const & saddr)
     : inet_socket(inet_socket::type_enum::stream)
 {
-    if (bind(_socket, saddr, nullptr))
-        _saddr = saddr;
+    _saddr = saddr;
 }
 
 tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog)
@@ -39,6 +38,9 @@ tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog)
 
 bool tcp_listener::listen (int backlog, error * perr)
 {
+    if (!bind(_socket, _saddr, perr))
+        return false;
+
     auto rc = ::listen(_socket, backlog);
 
     if (rc != 0) {

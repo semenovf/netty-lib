@@ -216,7 +216,7 @@ public:
         void enqueue_broadcast (std::vector<char> && data)
         {
             for (auto & item: _clients) {
-                auto & aclient = item->second;
+                auto & aclient = item.second;
                 aclient.outq.push(data);
             }
         }
