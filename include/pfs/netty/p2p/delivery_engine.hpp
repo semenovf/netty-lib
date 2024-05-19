@@ -142,6 +142,7 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peerid != peer_id{}) {
+                LOG_TRACE_3("Defer peer expiration on reader poller failure");
                 Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
@@ -157,6 +158,7 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peerid != peer_id{}) {
+                LOG_TRACE_3("Defer peer expiration on socket disconnected detected by reader poller");
                 Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
@@ -172,6 +174,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter) {
+                LOG_TRACE_3("Defer peer expiration on writer poller failure");
                 Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
@@ -183,6 +186,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
+                Callbacks::on_error(tr::f_("connection refused: {}, expire peer", awriter->peerid));
                 Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("connection refused: socket={}, but writer account not found", sock));
@@ -197,6 +201,7 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
+                LOG_TRACE_3("Defer peer expiration on disconnected detected by writer poller");
                 Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("connection disconnected: socket={}, but writer account not found", sock));
@@ -656,6 +661,7 @@ private:
             auto n = areader->reader.recv(buffer.data() + offset, available);
 
             if (n < 0) {
+                LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
                 Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
                 Callbacks::defere_expire_peer(areader->peerid);
                 return;
@@ -695,6 +701,7 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
+                LOG_TRACE_3("Defer peer expiration on invalid packet type received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
                 buffer_pos = buffer.end();
@@ -714,6 +721,7 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
+                LOG_TRACE_3("Defer peer expiration on invalid packet size received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
                 buffer_pos = buffer.end();
@@ -817,6 +825,7 @@ private:
                         , err.what()));
 
                     // Expire peer
+                    LOG_TRACE_3("Defer peer expiration on failure whiel send to: {}", awriter.peerid);
                     Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;
@@ -826,6 +835,7 @@ private:
                         , to_string(awriter.writer.saddr()), err.what()));
 
                     // Expire peer
+                    LOG_TRACE_3("Defer peer expiration on network failure while send to: {}", awriter.peerid);
                     Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;
