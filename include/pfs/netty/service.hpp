@@ -354,6 +354,8 @@ public:
         bool _can_write {false};
         output_queue_type _q;
         std::vector<char> _inb;
+        bool _connected {false};
+        bool _connecting {false};
 
     public:
         mutable std::function<void (error const &)> on_failure = [] (error const &) {};
@@ -387,10 +389,14 @@ public:
 
             base_class::connected = [this] (native_socket_type) {
                 base_class::wait_for_write(_sock);
+                _connected = true;
+                _connecting = false;
                 this->connected();
             };
 
             base_class::disconnected = [this] (native_socket_type) {
+                _connected = false;
+                _connecting = false;
                 this->disconnected();
             };
 
@@ -406,11 +412,23 @@ public:
                 _sock.disconnect();
                 _sock = Socket{};
                 _can_write = false;
+                _connected = false;
+                _connecting = false;
                 released();
             };
         }
 
         ~client () = default;
+
+        bool is_connected () const noexcept
+        {
+            return _connected;
+        }
+
+        bool is_connecting () const noexcept
+        {
+            return _connecting;
+        }
 
         /**
          * @throws netty::error {...} See Socket::connect specific exceptions.
@@ -428,6 +446,7 @@ public:
                 return false;
             }
 
+            _connecting = true;
             return true;
         }
 
