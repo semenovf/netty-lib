@@ -162,7 +162,7 @@ public:
             if (aclient == nullptr)
                 return;
 
-            aclient.outq.push(std::vector<char>(data, len));
+            aclient.outq.push(std::vector<char>(data, data + len));
         }
 
         void enqueue (native_socket_type sock, std::string const & data)
@@ -194,7 +194,7 @@ public:
         {
             for (auto & item: _clients) {
                 auto & aclient = item->second;
-                aclient.outq.push(std::vector<char>(data, len));
+                aclient.outq.push(std::vector<char>(data, data + len));
             }
         }
 
@@ -457,17 +457,17 @@ public:
 
         void enqueue (char const * data, int len)
         {
-            _q.push(std::vector<char>(data, len));
+            _q.push(std::vector<char>(data, data + len));
         }
 
         void enqueue (std::string const & data)
         {
-            _q.push(std::vector<char>(data.data(), data.size()));
+            _q.push(std::vector<char>(data.data(), data.data() + data.size()));
         }
 
         void enqueue (pfs::string_view data)
         {
-            _q.push(std::vector<char>(data.data(), data.size()));
+            _q.push(std::vector<char>(data.data(), data.data() + data.size()));
         }
 
         void enqueue (std::vector<char> const & data)

@@ -691,7 +691,7 @@ private:
             static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
 
             auto packettype = static_cast<packet_type_enum>(*in.peek());
-            decltype(packet::packetsize) packetsize {0};
+            std::uint16_t packetsize {0};
 
             if (!is_valid(packettype)) {
                 Callbacks::on_error(tr::f_("unexpected packet type ({}) received from: {}, ignored."
