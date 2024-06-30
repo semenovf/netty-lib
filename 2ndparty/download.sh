@@ -7,13 +7,15 @@ GIT_DOWNLOADER="git clone"
 SSH_SOURCES="git@github.com:semenovf/portable-target.git -b master portable-target
 git@github.com:semenovf/common-lib.git -b master common
 git@github.com:semenovf/ionik-lib.git -b master ionik
-git@github.com:semenovf/debby-lib.git -b master debby"
+git@github.com:semenovf/debby-lib.git -b master debby
+git@github.com:semenovf/scripts.git -b master scripts"
 
 # HTTPS
 HTTPS_SOURCES="https://github.com/semenovf/portable-target.git -b master portable-target
 https://github.com/semenovf/common-lib.git -b master common
 https://github.com/semenovf/ionik-lib.git -b master ionik
-https://github.com/semenovf/debby-lib.git -b master debby"
+https://github.com/semenovf/debby-lib.git -b master debby
+https://github.com/semenovf/scripts.git --depth=1 -b master scripts"
 
 DEFAULT_SOURCES=${SSH_SOURCES}
 DEFAULT_DOWNLOADER=${GIT_DOWNLOADER}
