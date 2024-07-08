@@ -623,6 +623,9 @@ public:
             case packet_type_enum::file_state:
                 process_file_state(addresser, data);
                 break;
+
+            default:
+                break;
         }
     }
 
