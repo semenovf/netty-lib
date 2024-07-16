@@ -8,12 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/socket4_addr.hpp"
+#include <numeric>
 
 template <typename PollerType, typename SocketType>
 void start_client (netty::socket4_addr const & saddr)
 {
     bool finish = false;
-    bool can_write = true;
+    bool can_write = false;
     LOGD(TAG, "Starting client");
 
     SocketType socket;
@@ -29,13 +30,15 @@ void start_client (netty::socket4_addr const & saddr)
         finish = true;
     };
 
-    poller.connected = [] (typename PollerType::native_socket_type sock) {
+    poller.connected = [& can_write] (typename PollerType::native_socket_type sock) {
         LOGD(TAG, "Connected: {}", sock);
+        can_write = true;
     };
 
-    poller.disconnected = [& finish] (typename SocketType::native_type sock) {
+    poller.disconnected = [& finish, & can_write] (typename SocketType::native_type sock) {
         LOGD(TAG, "Disconnected: socket={}", sock);
         finish = true;
+        can_write = false;
     };
 
     poller.ready_read = [] (typename PollerType::native_socket_type sock) {
@@ -53,11 +56,16 @@ void start_client (netty::socket4_addr const & saddr)
 
         LOGD(TAG, "Connecting server: {}", to_string(saddr));
 
+        std::uint8_t counter_initial = 0;
+
         while (!finish) {
             poller.poll(poller_timeout);
 
             if (can_write) {
                 char data[100000] = {'H', 'e', 'l', 'o'};
+
+                std::iota(data + 4, data + 100000, counter_initial++);
+
                 auto send_result = socket.send(data, sizeof(data));
 
                 switch (send_result.state) {

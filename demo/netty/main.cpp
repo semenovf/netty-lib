@@ -91,6 +91,10 @@ int main (int argc, char * argv[])
     __pctx.poller_variants.push_back("udt");
 #endif
 
+#if NETTY__ENET_ENABLED
+    __pctx.poller_variants.push_back("enet");
+#endif
+
     __pctx.poller_variants_string = concat(
           __pctx.poller_variants.begin()
         , __pctx.poller_variants.end()
@@ -181,29 +185,36 @@ int main (int argc, char * argv[])
 #if NETTY__UDT_ENABLED
             start_server<netty::server_udt_poller_type, udt_server_type, udt_socket_type>(netty::socket4_addr{addr, port});
 #else
-            LOGE(TAG, "'udt' poller unavailable on this platform");
+            LOGE(TAG, "'udt' poller not supported by netty library");
+            return EXIT_FAILURE;
+#endif
+        } else if (poller_value == "enet") {
+#if NETTY__ENET_ENABLED
+            start_server<netty::server_enet_poller_type, enet_listener_type, enet_socket_type>(netty::socket4_addr{addr, port});
+#else
+            LOGE(TAG, "'enet' poller not supported by netty library");
             return EXIT_FAILURE;
 #endif
         } else if (is_tcp) {
             if (poller_value == "select") {
 #if NETTY__SELECT_ENABLED
-                start_server<netty::server_select_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+                start_server<netty::server_select_poller_type, tcp_listener_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'select' poller unavailable on this platform");
+                LOGE(TAG, "'select' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "poll") {
 #if NETTY__POLL_ENABLED
-                start_server<netty::server_poll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+                start_server<netty::server_poll_poller_type, tcp_listener_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'poll' poller unavailable on this platform");
+                LOGE(TAG, "'poll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "epoll") {
 #if NETTY__EPOLL_ENABLED
-                start_server<netty::server_epoll_poller_type, tcp_server_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
+                start_server<netty::server_epoll_poller_type, tcp_listener_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'epoll' poller unavailable on this platform");
+                LOGE(TAG, "'epoll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             }
@@ -215,7 +226,14 @@ int main (int argc, char * argv[])
 #if NETTY__UDT_ENABLED
             start_client<netty::client_udt_poller_type, udt_socket_type>(netty::socket4_addr{addr, port});
 #else
-            LOGE(TAG, "'udt' poller unavailable on this platform");
+            LOGE(TAG, "'udt' poller not supported by netty library");
+            return EXIT_FAILURE;
+#endif
+        } else if (poller_value == "enet") {
+#if NETTY__ENET_ENABLED
+            start_client<netty::client_enet_poller_type, enet_socket_type>(netty::socket4_addr{addr, port});
+#else
+            LOGE(TAG, "'enet' poller not supported by netty library");
             return EXIT_FAILURE;
 #endif
         } else if (is_tcp) {
@@ -223,21 +241,21 @@ int main (int argc, char * argv[])
 #if NETTY__SELECT_ENABLED
                 start_client<netty::client_select_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'select' poller unavailable on this platform");
+                LOGE(TAG, "'select' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "poll") {
 #if NETTY__POLL_ENABLED
                 start_client<netty::client_poll_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'poll' poller unavailable on this platform");
+                LOGE(TAG, "'poll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "epoll") {
 #if NETTY__EPOLL_ENABLED
                 start_client<netty::client_epoll_poller_type, tcp_socket_type>(netty::socket4_addr{ addr, port });
 #else
-                LOGE(TAG, "'epoll' poller unavailable on this platform");
+                LOGE(TAG, "'epoll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             }

@@ -8,12 +8,28 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/poller_types.hpp"
-#include "pfs/netty/posix/tcp_server.hpp"
+#include "pfs/netty/posix/tcp_listener.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
-#include "pfs/netty/udt/udt_server.hpp"
-#include "pfs/netty/udt/udt_socket.hpp"
 
-using tcp_socket_type = netty::posix::tcp_socket;
-using tcp_server_type = netty::posix::tcp_server;
-using udt_socket_type = netty::udt::udt_socket<>;
-using udt_server_type = netty::udt::udt_server<>;
+#if NETTY__UDT_ENABLED
+#   include "pfs/netty/udt/udt_socket.hpp"
+#   include "pfs/netty/udt/udt_server.hpp"
+#endif
+
+#if NETTY__ENET_ENABLED
+#   include "pfs/netty/enet/enet_listener.hpp"
+#   include "pfs/netty/enet/enet_socket.hpp"
+#endif
+
+using tcp_listener_type = netty::posix::tcp_listener;
+using tcp_socket_type   = netty::posix::tcp_socket;
+
+#if NETTY__UDT_ENABLED
+using udt_listener_type = netty::udt::udt_server<>;
+using udt_socket_type   = netty::udt::udt_socket<>;
+#endif
+
+#if NETTY__ENET_ENABLED
+using enet_listener_type = netty::enet::enet_listener;
+using enet_socket_type = netty::enet::enet_socket;
+#endif

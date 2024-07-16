@@ -12,12 +12,16 @@
 #include <pfs/netty/exports.hpp>
 #include <pfs/netty/send_result.hpp>
 #include <pfs/netty/socket4_addr.hpp>
+#include <cstdint>
+#include <vector>
 
 struct _ENetHost;
 struct _ENetPeer;
 
 namespace netty {
 namespace enet {
+
+class enet_listener;
 
 struct uninitialized {};
 
@@ -26,22 +30,24 @@ struct uninitialized {};
  */
 class enet_socket
 {
-public:
-    using native_type = int; // See ENetSocket definition
+    friend class enet_listener;
 
 public:
-    static native_type constexpr kINVALID_SOCKET = -1;
+    using native_type = std::uintptr_t;
+
+public:
+    static const native_type kINVALID_SOCKET;
 
 private:
     _ENetHost * _host {nullptr};
     _ENetPeer * _peer {nullptr};
+    std::vector<char> _inpb; // Input buffer
 
 protected:
     /**
      * Constructs ENet accepted socket.
      */
-    // FIXME
-    // enet_socket (/*native_type sock, socket4_addr const & saddr*/);
+    enet_socket (native_type sock);
 
     /**
      * Constructs uninitialized (invalid) ENet socket.

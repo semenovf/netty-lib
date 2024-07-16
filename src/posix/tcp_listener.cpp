@@ -44,17 +44,11 @@ bool tcp_listener::listen (int backlog, error * perr)
     auto rc = ::listen(_socket, backlog);
 
     if (rc != 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("listen failure")
             , pfs::system_error_text()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-        } else {
-            throw err;
-        }
+        });
 
         return false;
     }

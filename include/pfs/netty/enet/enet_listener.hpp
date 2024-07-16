@@ -12,6 +12,9 @@
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/enet/enet_socket.hpp>
 
+struct _ENetHost;
+struct _ENetPeer;
+
 namespace netty {
 namespace enet {
 
@@ -19,6 +22,10 @@ class enet_listener
 {
 public:
     using native_type = enet_socket::native_type;
+
+private:
+    socket4_addr _saddr;
+    _ENetHost * _host {nullptr};
 
 public:
     /**
@@ -35,7 +42,9 @@ public:
      * Constructs POSIX TCP server, bind to the specified address and start
      * listening
      */
-    NETTY__EXPORT enet_listener (socket4_addr const & addr, int backlog);
+    NETTY__EXPORT enet_listener (socket4_addr const & saddr, int backlog);
+
+    NETTY__EXPORT ~enet_listener ();
 
 public:
     NETTY__EXPORT native_type native () const noexcept;
@@ -57,8 +66,9 @@ public:
 public:
     NETTY__EXPORT static enet_socket accept (native_type listener_sock
         , error * perr = nullptr);
+
     NETTY__EXPORT static enet_socket accept_nonblocking (native_type listener_sock
-        , error * perr = nullptr);};
+        , error * perr = nullptr);
+};
 
 }} // namespace netty::enet
-

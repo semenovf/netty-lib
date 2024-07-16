@@ -9,7 +9,36 @@
 #pragma once
 #include "pfs/log.hpp"
 #include "pfs/netty/socket4_addr.hpp"
+#include <cstdio>
 #include <map>
+
+std::string stringify_bytes (char const * buf, int len, int nbytes)
+{
+    if (nbytes > len)
+        nbytes = len;
+
+    if (nbytes == 0)
+        return std::string{};
+
+    std::string result;
+    result.reserve(nbytes * 3);
+
+    char hex[3];
+    sprintf(hex, "%02X", static_cast<std::uint8_t>(buf[0]));
+    result += hex;
+
+    for (int i = 1; i < nbytes; i++) {
+        result += ' ';
+        sprintf(hex, "%02X", static_cast<std::uint8_t>(buf[i]));
+        result += hex;
+    }
+
+    if (nbytes < len) {
+        result += fmt::format(" ... {} bytes", len - nbytes);
+    }
+
+    return result;
+}
 
 template <typename PollerType, typename ServerType, typename SocketType>
 void start_server (netty::socket4_addr const & saddr)
@@ -65,12 +94,14 @@ void start_server (netty::socket4_addr const & saddr)
 
             char buf[512];
             std::memset(buf, 0, sizeof(buf));
-            auto n = pos->second.recv(buf, sizeof(buf));
+            int n = 0;
 
-            if (n > 0) {
-                LOGD(TAG, "Data received: {} bytes: {}", n, buf);
-            } else {
-                LOGE(TAG, "Data received failure: {}", n);
+            while ((n = pos->second.recv(buf, sizeof(buf))) > 0) {
+                LOGD(TAG, "Data received: {} bytes: {}", n, stringify_bytes(buf, n, 10));
+            }
+
+            if (n < 0) {
+                LOGE(TAG, "Receive data failure: {}", n);
             }
         };
 
@@ -83,8 +114,9 @@ void start_server (netty::socket4_addr const & saddr)
 
         poller.add_listener(server);
 
-        while (true)
+        while (true) {
             poller.poll(poller_timeout);
+        }
     } catch (netty::error const & ex) {
         LOGE(TAG, "ERROR: {}", ex.what());
     }
