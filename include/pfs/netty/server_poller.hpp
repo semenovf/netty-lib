@@ -55,8 +55,8 @@ public: // callbacks
 private:
     std::function<native_socket_type(native_socket_type, bool &)> accept;
 
-public:
-    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+private:
+    void init_callbacks (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
     {
         _listener_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
@@ -105,11 +105,37 @@ public:
         };
     }
 
+public:
+    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        init_callbacks(std::move(accept_proc));
+    }
+
+    server_poller (std::shared_ptr<Backend> shared_backend_poller
+        , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+        : _listener_poller(shared_backend_poller)
+        , _reader_poller(shared_backend_poller)
+        , _writer_poller(shared_backend_poller)
+    {
+        init_callbacks(std::move(accept_proc));
+    }
+
+    server_poller (std::shared_ptr<Backend> listener_backend_poller
+        , std::shared_ptr<Backend> reader_backend_poller
+        , std::shared_ptr<Backend> writer_backend_poller
+        , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+        : _listener_poller(listener_backend_poller)
+        , _reader_poller(reader_backend_poller)
+        , _writer_poller(writer_backend_poller)
+    {
+        init_callbacks(std::move(accept_proc));
+    }
+
     ~server_poller () = default;
 
     server_poller (server_poller const &) = delete;
     server_poller & operator = (server_poller const &) = delete;
-    server_poller (server_poller &&) = delete;
+    server_poller (server_poller &&) = default;
     server_poller & operator = (server_poller &&) = delete;
 
     /**

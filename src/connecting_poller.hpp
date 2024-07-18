@@ -13,8 +13,7 @@
 namespace netty {
 
 template <typename Backend>
-connecting_poller<Backend>::connecting_poller ()
-    : connecting_poller(specialized{})
+void connecting_poller<Backend>::init ()
 {
     on_failure = [] (native_socket_type, error const & err) {
         fmt::println(stderr, tr::_("ERROR: connecting poller: {}"), err.what());
@@ -30,19 +29,19 @@ connecting_poller<Backend>::~connecting_poller () = default;
 template <typename Backend>
 void connecting_poller<Backend>::add (native_socket_type sock, error * perr)
 {
-    _rep.add(sock, perr);
+    _rep->add(sock, perr);
 }
 
 template <typename Backend>
 void connecting_poller<Backend>::remove (native_socket_type sock, error * perr)
 {
-    _rep.remove(sock, perr);
+    _rep->remove(sock, perr);
 }
 
 template <typename Backend>
 bool connecting_poller<Backend>::empty () const noexcept
 {
-    return _rep.empty();
+    return _rep->empty();
 }
 
 } // namespace netty

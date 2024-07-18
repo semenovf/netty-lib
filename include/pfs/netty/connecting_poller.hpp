@@ -12,6 +12,7 @@
 #include "exports.hpp"
 #include <functional>
 #include <map>
+#include <memory>
 
 namespace netty {
 
@@ -22,7 +23,7 @@ public:
     using native_socket_type = typename Backend::native_socket_type;
 
 private:
-    Backend _rep;
+    std::shared_ptr<Backend> _rep;
     std::map<native_socket_type, clock_type::time_point> _connecting_sockets;
 
 public:
@@ -31,13 +32,10 @@ public:
     mutable std::function<void(native_socket_type)> connected;
 
 protected:
-    struct specialized {};
-
-    // Specialized poller
-    connecting_poller (specialized);
+    void init ();
 
 public:
-    NETTY__EXPORT connecting_poller ();
+    NETTY__EXPORT connecting_poller (std::shared_ptr<Backend> backend = nullptr);
     NETTY__EXPORT ~connecting_poller ();
 
     connecting_poller (connecting_poller const &) = delete;

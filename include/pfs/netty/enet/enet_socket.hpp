@@ -33,6 +33,13 @@ class enet_socket
     friend class enet_listener;
 
 public:
+    enum net_quality {
+          defaults // ENet default timeouts for peer
+        , fast
+        , normal
+        , poor
+    };
+
     using native_type = std::uintptr_t;
 
 public:
@@ -42,6 +49,7 @@ private:
     _ENetHost * _host {nullptr};
     _ENetPeer * _peer {nullptr};
     std::vector<char> _inpb; // Input buffer
+    net_quality _nq {net_quality::defaults};
 
 protected:
     /**
@@ -58,7 +66,7 @@ public:
     enet_socket (enet_socket const & other) = delete;
     enet_socket & operator = (enet_socket const & other) = delete;
 
-    NETTY__EXPORT enet_socket ();
+    NETTY__EXPORT enet_socket (net_quality nq = net_quality::normal);
     NETTY__EXPORT enet_socket (enet_socket && other);
     NETTY__EXPORT enet_socket & operator = (enet_socket && other);
     NETTY__EXPORT ~enet_socket ();
@@ -90,15 +98,6 @@ public:
      */
     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 
-    NETTY__EXPORT int recv_from (char * data, int len, socket4_addr * saddr = nullptr
-        , error * perr = nullptr);
-
-    /**
-     * See send description.
-     */
-    NETTY__EXPORT send_result send_to (socket4_addr const & dest, char const * data, int len
-        , error * perr = nullptr);
-
     /**
      * Connects to the ENet server.
      *
@@ -115,4 +114,3 @@ public:
 };
 
 }} // namespace netty::enet
-

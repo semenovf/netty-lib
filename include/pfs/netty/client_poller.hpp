@@ -58,8 +58,8 @@ public:
      */
     mutable std::function<void(native_socket_type)> removed = [] (native_socket_type) {};
 
-public:
-    client_poller ()
+private:
+    void init_callbacks ()
     {
         _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
             // Socket must be removed from monitoring later
@@ -113,6 +113,30 @@ public:
         };
     }
 
+public:
+    client_poller ()
+    {
+        init_callbacks();
+    }
+
+    client_poller (std::shared_ptr<Backend> shared_backend_poller)
+        : _connecting_poller(shared_backend_poller)
+        , _reader_poller(shared_backend_poller)
+        , _writer_poller(shared_backend_poller)
+    {
+        init_callbacks();
+    }
+
+    client_poller (std::shared_ptr<Backend> connecting_backend_poller
+        , std::shared_ptr<Backend> reader_backend_poller
+        , std::shared_ptr<Backend> writer_backend_poller)
+        : _connecting_poller(connecting_backend_poller)
+        , _reader_poller(reader_backend_poller)
+        , _writer_poller(writer_backend_poller)
+    {
+        init_callbacks();
+    }
+
     ~client_poller () = default;
 
     client_poller (client_poller const &) = delete;
@@ -143,7 +167,7 @@ public:
     }
 
     /**
-     * Remove sockets from connecting and regular pollers.
+     * Remove socket from connecting and regular pollers.
      */
     template <typename Socket>
     void remove (Socket const & sock, error * perr = nullptr)

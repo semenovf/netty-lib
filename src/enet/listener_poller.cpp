@@ -7,6 +7,9 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../listener_poller.hpp"
+#include "netty/socket4_addr.hpp"
+#include <pfs/assert.hpp>
+#include <pfs/endian.hpp>
 #include <pfs/log.hpp>
 #include <enet/enet.h>
 
@@ -19,49 +22,39 @@ namespace netty {
 #if NETTY__ENET_ENABLED
 
 template <>
-listener_poller<enet::enet_poller>::listener_poller (specialized)
-{}
+listener_poller<enet::enet_poller>::listener_poller (std::shared_ptr<enet::enet_poller> ptr)
+    : _rep(std::move(ptr))
+{
+    PFS__TERMINATE(_rep != nullptr, "ENet listener poller backend is null");
+    init();
+}
 
 template <>
 int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(millis, perr);
+    auto n = _rep->poll(millis, perr);
 
     if (n < 0)
         return n;
 
-    if (n > 0) {
-        while (_rep.has_more_events()) {
-            auto const & event = _rep.get_event();
-            auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
+    n = 0;
 
-            switch (ev->type) {
-                case ENET_EVENT_TYPE_CONNECT:
-                    LOG_TRACE_2("Accepted from: {}:{}", ev->peer->address.host, ev->peer->address.port);
-                    accept(event.sock);
-                    break;
+    while (_rep->has_more_events()) {
+        auto const & event = _rep->get_event();
+        auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
-                // FIXME
-                case ENET_EVENT_TYPE_DISCONNECT:
-                    LOG_TRACE_2("FIXME: listener_poller: ENET_EVENT_TYPE_DISCONNECT: {}:{}"
-                        , ev->peer->address.host, ev->peer->address.port);
+        if (ev->type == ENET_EVENT_TYPE_CONNECT) {
+            socket4_addr saddr {
+                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                , ev->peer->address.port
+            };
 
-                    // Reset the peer's client information
-                    ev->peer->data = nullptr;
-                    break;
-
-                // Ignore event in connecting poller
-                case ENET_EVENT_TYPE_RECEIVE:
-                    LOG_TRACE_2("FIXME: listener_poller: ENET_EVENT_TYPE_RECEIVE");
-                    enet_packet_destroy(ev->packet);
-                    break;
-
-                case ENET_EVENT_TYPE_NONE:
-                default:
-                    break;
-            }
-
-            _rep.pop_event();
+            LOG_TRACE_2("Accepted from: {}", to_string(saddr));
+            accept(event.sock);
+            _rep->pop_event();
+            n++;
+        } else {
+            break;
         }
     }
 
@@ -75,4 +68,3 @@ template class listener_poller<enet::enet_poller>;
 #endif
 
 } // namespace netty
-

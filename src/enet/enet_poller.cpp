@@ -22,7 +22,7 @@ static_assert(sizeof(enet_poller::event_item::ev) >= sizeof(ENetEvent)
 enet_poller::enet_poller () = default;
 enet_poller::~enet_poller () = default;
 
-void enet_poller::add (native_socket_type sock, error * perr)
+void enet_poller::add (native_socket_type sock, error * /*perr*/)
 {
     _sockets.push_back(sock);
 }
@@ -61,10 +61,13 @@ int enet_poller::poll_helper (native_socket_type sock, std::chrono::milliseconds
         case ENET_EVENT_TYPE_CONNECT:
         case ENET_EVENT_TYPE_RECEIVE:
         case ENET_EVENT_TYPE_DISCONNECT:
-            LOG_TRACE_2("=== enet_poller::poll_helper() ===");
             _events.emplace();
             _events.back().sock = sock;
             new (_events.back().ev) ENetEvent(std::move(event));
+
+            LOG_TRACE_2("=== ENET POLL: {}, total count={} ===", static_cast<int>(event.type)
+                , _events.size());
+
             break;
 
         case ENET_EVENT_TYPE_NONE:
@@ -104,10 +107,11 @@ int enet_poller::poll (std::chrono::milliseconds millis, error * perr)
     if (total_events > 0)
         return total_events;
 
+    std::chrono::milliseconds tolerance {5};
     std::chrono::milliseconds elapsed {stopwatch.count()};
 
-    if (elapsed < millis) {
-        auto remain_millis = millis - elapsed;
+    if (elapsed + tolerance < millis) {
+        auto remain_millis = millis - elapsed - tolerance;
 
         auto n = poll_helper(_sockets.front(), remain_millis, perr);
 

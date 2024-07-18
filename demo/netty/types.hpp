@@ -21,15 +21,135 @@
 #   include "pfs/netty/enet/enet_socket.hpp"
 #endif
 
-using tcp_listener_type = netty::posix::tcp_listener;
-using tcp_socket_type   = netty::posix::tcp_socket;
+struct select_server_poller
+{
+    using listener_type = netty::posix::tcp_listener;
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::server_select_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        return poller_type{std::move(accept_proc)};
+    }
+};
+
+struct poll_server_poller
+{
+    using listener_type = netty::posix::tcp_listener;
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::server_poll_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        return poller_type{std::move(accept_proc)};
+    }
+};
+
+struct epoll_server_poller
+{
+    using listener_type = netty::posix::tcp_listener;
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::server_epoll_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        return poller_type{std::move(accept_proc)};
+    }
+};
+
+struct select_client_poller
+{
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::client_select_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller ()
+    {
+        return poller_type{};
+    }
+};
+
+struct poll_client_poller
+{
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::client_poll_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller ()
+    {
+        return poller_type{};
+    }
+};
+
+struct epoll_client_poller
+{
+    using socket_type   = netty::posix::tcp_socket;
+    using poller_type   = netty::client_epoll_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller ()
+    {
+        return poller_type{};
+    }
+};
 
 #if NETTY__UDT_ENABLED
-using udt_listener_type = netty::udt::udt_server<>;
-using udt_socket_type   = netty::udt::udt_socket<>;
+
+struct udt_server_poller
+{
+    using listener_type = netty::udt::udt_server<>;
+    using socket_type   = netty::udt::udt_socket<>;
+    using poller_type   = netty::server_udt_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        return poller_type{std::move(accept_proc)};
+    }
+};
+
+struct udt_client_poller
+{
+    using socket_type   = netty::udt::udt_socket<>;
+    using poller_type   = netty::client_udt_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller ()
+    {
+        return poller_type{};
+    }
+};
+
 #endif
 
 #if NETTY__ENET_ENABLED
-using enet_listener_type = netty::enet::enet_listener;
-using enet_socket_type = netty::enet::enet_socket;
+
+struct enet_server_poller
+{
+    using listener_type = netty::enet::enet_listener;
+    using socket_type   = netty::enet::enet_socket;
+    using poller_type   = netty::server_enet_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+    {
+        return poller_type{std::make_shared<netty::enet::enet_poller>(), std::move(accept_proc)};
+    }
+};
+
+struct enet_client_poller
+{
+    using socket_type   = netty::enet::enet_socket;
+    using poller_type   = netty::client_enet_poller_type;
+    using native_socket_type = poller_type::native_socket_type;
+
+    static poller_type create_poller ()
+    {
+        return poller_type{std::make_shared<netty::enet::enet_poller>()};
+    }
+};
+
 #endif

@@ -7,6 +7,9 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
+#include "netty/socket4_addr.hpp"
+#include <pfs/assert.hpp>
+#include <pfs/endian.hpp>
 #include <pfs/log.hpp>
 #include <enet/enet.h>
 
@@ -19,49 +22,56 @@ namespace netty {
 #if NETTY__ENET_ENABLED
 
 template <>
-connecting_poller<enet::enet_poller>::connecting_poller (specialized)
-{}
+connecting_poller<enet::enet_poller>::connecting_poller (std::shared_ptr<enet::enet_poller> ptr)
+    : _rep(std::move(ptr))
+{
+    PFS__TERMINATE(_rep != nullptr, "ENet connecting poller backend is null");
+    init();
+}
 
 template <>
 int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(millis, perr);
+    auto n = _rep->poll(millis, perr);
 
     if (n < 0)
         return n;
 
-    if (n > 0) {
-        while (_rep.has_more_events()) {
-            auto const & event = _rep.get_event();
-            auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
+    n = 0;
 
-            switch (ev->type) {
-                case ENET_EVENT_TYPE_CONNECT:
-                    LOG_TRACE_2("Connected to: {}:{}", ev->peer->address.host, ev->peer->address.port);
-                    connected(event.sock);
-                    break;
+    while (_rep->has_more_events()) {
+        auto const & event = _rep->get_event();
+        auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
-                // FIXME Also need to wait connection timeout exceeded
-                case ENET_EVENT_TYPE_DISCONNECT:
-                    LOG_TRACE_2("Disconnected: {}:{}", ev->peer->address.host, ev->peer->address.port);
+        if (ev->type == ENET_EVENT_TYPE_CONNECT) {
+            socket4_addr saddr {
+                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                , ev->peer->address.port
+            };
 
-                    // Reset the peer's client information
-                    ev->peer->data = nullptr;
-                    connection_refused(event.sock);
-                    break;
+            LOG_TRACE_1("Connected to: {}", to_string(saddr));
 
-                case ENET_EVENT_TYPE_RECEIVE:
-                    LOG_TRACE_2("FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE");
-                    // Ignore event in connecting poller
-                    enet_packet_destroy(ev->packet);
-                    break;
+            connected(event.sock);
+            _rep->pop_event();
+            n++;
+        } else if (ev->type == ENET_EVENT_TYPE_DISCONNECT) {
+            socket4_addr saddr {
+                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                , ev->peer->address.port
+            };
 
-                case ENET_EVENT_TYPE_NONE:
-                default:
-                    break;
-            }
+            LOG_TRACE_1("Disconnected from: {}", to_string(saddr));
 
-            _rep.pop_event();
+            // Reset the peer's client information
+            ev->peer->data = nullptr;
+            connection_refused(event.sock);
+            _rep->pop_event();
+            n++;
+        } else if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
+            LOG_TRACE_1("FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE");
+            break;
+        } else {
+            break;
         }
     }
 

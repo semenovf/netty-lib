@@ -11,7 +11,7 @@
 #include "exports.hpp"
 #include <chrono>
 #include <functional>
-#include <utility>
+#include <memory>
 
 namespace netty {
 
@@ -22,20 +22,17 @@ public:
     using native_socket_type = typename Backend::native_socket_type;
 
 private:
-    Backend _rep;
+    std::shared_ptr<Backend> _rep;
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure;
     mutable std::function<void(native_socket_type)> can_write;
 
 protected:
-    struct specialized {};
-
-    // Specialized poller
-    writer_poller (specialized);
+    void init ();
 
 public:
-    NETTY__EXPORT writer_poller ();
+    NETTY__EXPORT writer_poller (std::shared_ptr<Backend> backend = nullptr);
     NETTY__EXPORT ~writer_poller ();
 
     writer_poller (writer_poller const &) = delete;

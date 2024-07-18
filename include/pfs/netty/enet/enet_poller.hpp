@@ -10,6 +10,7 @@
 #include "enet_socket.hpp"
 #include "pfs/netty/error.hpp"
 #include <chrono>
+#include <memory>
 #include <queue>
 #include <vector>
 
@@ -63,6 +64,11 @@ public:
     void pop_event ()
     {
         _events.pop();
+    }
+
+    std::size_t event_count () const
+    {
+        return _events.size();
     }
 };
 

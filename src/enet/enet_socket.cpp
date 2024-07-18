@@ -23,11 +23,30 @@ static_assert(std::is_same<std::uintptr_t, enet_socket::native_type>::value
 
 const enet_socket::native_type enet_socket::kINVALID_SOCKET {0};
 
+struct {
+    std::uint32_t timeout_limit;
+    std::uint32_t timeout_min;
+    std::uint32_t timeout_max;
+} NET_QUALITIES [] = {
+      { ENET_PEER_TIMEOUT_LIMIT, ENET_PEER_TIMEOUT_MINIMUM, ENET_PEER_TIMEOUT_MAXIMUM }
+    , {  8, 1000,  2000 }
+    , { 16, 2500,  5000 }
+    , { 96, 5000, 10000 }
+};
+
 enet_socket::enet_socket (uninitialized)
 {}
 
-enet_socket::enet_socket ()
+enet_socket::enet_socket (net_quality nq)
+    : _nq(nq)
 {
+    if (_nq < net_quality::defaults || _nq > net_quality::poor) {
+        throw error {
+              std::make_error_code(std::errc::invalid_argument)
+            , tr::_("bad network quality value")
+        };
+    }
+
     _host = enet_host_create(nullptr // create a client host
         , 1   // only allow 1 outgoing connection
         , 2   // allow up 2 channels to be used, 0 and 1
@@ -45,6 +64,7 @@ enet_socket::enet_socket ()
 enet_socket::enet_socket (enet_socket && other)
     : _host(other._host)
     , _peer(other._peer)
+    , _nq(other._nq)
 {
     other._host = nullptr;
     other._peer = nullptr;
@@ -57,6 +77,7 @@ enet_socket & enet_socket::operator = (enet_socket && other)
 
     _host = other._host;
     _peer = other._peer;
+    _nq = other._nq;
     other._host = nullptr;
     other._peer = nullptr;
 
@@ -185,6 +206,11 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
 
         return conn_status::failure;
     }
+
+    auto tlim = NET_QUALITIES[_nq].timeout_limit;
+    auto tmin = NET_QUALITIES[_nq].timeout_min;
+    auto tmax = NET_QUALITIES[_nq].timeout_max;
+    enet_peer_timeout(_peer, tlim, tmin, tmax);
 
     ENetEvent event;
     auto rc = enet_host_service(_host, & event, 0);

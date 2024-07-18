@@ -11,6 +11,7 @@
 #include "error.hpp"
 #include "exports.hpp"
 #include <functional>
+#include <memory>
 
 namespace netty {
 
@@ -21,7 +22,7 @@ public:
     using native_socket_type = typename Backend::native_socket_type;
 
 private:
-    Backend _rep;
+    std::shared_ptr<Backend> _rep;
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure;
@@ -29,13 +30,10 @@ public:
     mutable std::function<void(native_socket_type)> ready_read;
 
 protected:
-    struct specialized {};
-
-    // Specialized poller
-    reader_poller (specialized);
+    void init ();
 
 public:
-    NETTY__EXPORT reader_poller ();
+    NETTY__EXPORT reader_poller (std::shared_ptr<Backend> backend = nullptr);
     NETTY__EXPORT ~reader_poller ();
 
     reader_poller (reader_poller const &) = delete;

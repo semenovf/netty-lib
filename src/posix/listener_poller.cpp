@@ -29,16 +29,18 @@ namespace netty {
 #if NETTY__SELECT_ENABLED
 
 template <>
-listener_poller<posix::select_poller>::listener_poller (specialized)
-    : _rep(true, false)
-{}
+listener_poller<posix::select_poller>::listener_poller (std::shared_ptr<posix::select_poller>)
+    : _rep(std::make_shared<posix::select_poller>(true, false))
+{
+    init();
+}
 
 template <>
 int listener_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
     fd_set rfds;
 
-    auto n = _rep.poll(& rfds, nullptr, millis, perr);
+    auto n = _rep->poll(& rfds, nullptr, millis, perr);
 
     if (n < 0)
         return n;
@@ -48,8 +50,8 @@ int listener_poller<posix::select_poller>::poll (std::chrono::milliseconds milli
     if (n > 0) {
         int rcounter = n;
 
-        auto pos  = _rep.sockets.begin();
-        auto last = _rep.sockets.end();
+        auto pos  = _rep->sockets.begin();
+        auto last = _rep->sockets.end();
 
         for (; pos != last && rcounter > 0; ++pos) {
             auto fd = *pos;
@@ -70,8 +72,8 @@ int listener_poller<posix::select_poller>::poll (std::chrono::milliseconds milli
 #if NETTY__POLL_ENABLED
 
 template <>
-listener_poller<posix::poll_poller>::listener_poller (specialized)
-    : _rep(POLLERR | POLLIN
+listener_poller<posix::poll_poller>::listener_poller (std::shared_ptr<posix::poll_poller>)
+    : _rep(std::make_shared<posix::poll_poller>(POLLERR | POLLIN
 
 #ifdef POLLRDNORM
         | POLLRDNORM
@@ -80,13 +82,15 @@ listener_poller<posix::poll_poller>::listener_poller (specialized)
 #ifdef POLLRDBAND
         | POLLRDBAND
 #endif
-    )
-{}
+    ))
+{
+    init();
+}
 
 template <>
 int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(millis, perr);
+    auto n = _rep->poll(millis, perr);
 
     if (n < 0)
         return n;
@@ -94,7 +98,7 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
     int res = 0;
 
     if (n > 0) {
-        for (auto const & ev: _rep.events) {
+        for (auto const & ev: _rep->events) {
             if (n == 0)
                 break;
 

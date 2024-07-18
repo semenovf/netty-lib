@@ -19,14 +19,16 @@ namespace netty {
 #if NETTY__EPOLL_ENABLED
 
 template <>
-reader_poller<linux_os::epoll_poller>::reader_poller (specialized)
-    : _rep(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)
-{}
+reader_poller<linux_os::epoll_poller>::reader_poller (std::shared_ptr<linux_os::epoll_poller>)
+    : _rep(std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND))
+{
+    init();
+}
 
 template <>
 int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(millis, perr);
+    auto n = _rep->poll(millis, perr);
 
     if (n < 0)
         return n;
@@ -34,7 +36,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
     int res = 0;
 
     if (n > 0) {
-        for (auto const & ev: _rep.events) {
+        for (auto const & ev: _rep->events) {
             if (n == 0)
                 break;
 

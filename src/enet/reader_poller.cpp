@@ -7,6 +7,7 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller.hpp"
+#include <pfs/assert.hpp>
 #include <pfs/log.hpp>
 #include <enet/enet.h>
 
@@ -19,62 +20,55 @@ namespace netty {
 #if NETTY__ENET_ENABLED
 
 template <>
-reader_poller<enet::enet_poller>::reader_poller (specialized)
-{}
+reader_poller<enet::enet_poller>::reader_poller (std::shared_ptr<enet::enet_poller> ptr)
+    : _rep(std::move(ptr))
+{
+    PFS__TERMINATE(_rep != nullptr, "ENet reader poller backend is null");
+    init();
+}
 
 template <>
 int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(millis, perr);
+    auto n = _rep->poll(millis, perr);
 
     if (n < 0)
         return n;
 
-    if (n > 0) {
-        while (_rep.has_more_events()) {
-            auto const & event = _rep.get_event();
-            auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
+    n = 0;
 
-            switch (ev->type) {
+    while (_rep->has_more_events()) {
+        auto const & event = _rep->get_event();
+        auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
+
+        if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
+                LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE");
+                // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
+                //      event.packet -> dataLength,
+                //      event.packet -> data,
+                //      event.peer -> data,
+                //      event.channelID);
+
                 // FIXME
-                case ENET_EVENT_TYPE_CONNECT:
-                    LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_CONNECT: {}:{}"
-                        , ev->peer->address.host, ev->peer->address.port);
-                    break;
+                ready_read(event.sock);
+                enet_packet_destroy(ev->packet);
+                _rep->pop_event();
+                n++;
+        } else if (ev->type == ENET_EVENT_TYPE_DISCONNECT) {
+            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_DISCONNECT: {}:{}"
+                , ev->peer->address.host, ev->peer->address.port);
 
-                // FIXME
-                case ENET_EVENT_TYPE_DISCONNECT:
-                    LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_DISCONNECT: {}:{}"
-                        , ev->peer->address.host, ev->peer->address.port);
+            // Reset the peer's client information
+            ev->peer->data = nullptr;
 
-                    // Reset the peer's client information
-                    ev->peer->data = nullptr;
-
-                    disconnected(event.sock);
-                    break;
-
-                case ENET_EVENT_TYPE_RECEIVE:
-                    LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE");
-                    // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
-                    //      event.packet -> dataLength,
-                    //      event.packet -> data,
-                    //      event.peer -> data,
-                    //      event.channelID);
-
-                    // FIXME
-                    ready_read(event.sock);
-
-                    // Ignore event in connecting poller
-                    enet_packet_destroy(ev->packet);
-                    break;
-
-                case ENET_EVENT_TYPE_NONE:
-                default:
-                    break;
-            }
-
-            _rep.pop_event();
+            disconnected(event.sock);
+            _rep->pop_event();
+            n++;
+        } else {
+            break;
         }
+
+        LOG_TRACE_2("### reader_poller: events remain: {}", _rep->event_count());
     }
 
     return n;

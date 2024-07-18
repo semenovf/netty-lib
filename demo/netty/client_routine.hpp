@@ -10,42 +10,44 @@
 #include "pfs/netty/socket4_addr.hpp"
 #include <numeric>
 
-template <typename PollerType, typename SocketType>
+template <typename ClientPollerType>
 void start_client (netty::socket4_addr const & saddr)
 {
+    using native_socket_type = typename ClientPollerType::native_socket_type;
+
     bool finish = false;
     bool can_write = false;
     LOGD(TAG, "Starting client");
 
-    SocketType socket;
-    PollerType poller;
+    typename ClientPollerType::socket_type socket;
+    typename ClientPollerType::poller_type poller = ClientPollerType::create_poller();
 
-    poller.on_failure = [& finish] (typename PollerType::native_socket_type, netty::error const & err) {
+    poller.on_failure = [& finish] (native_socket_type, netty::error const & err) {
         LOGE(TAG, "Error on client: {}", err.what());
         finish = true;
     };
 
-    poller.connection_refused = [& finish] (typename PollerType::native_socket_type sock) {
+    poller.connection_refused = [& finish] (native_socket_type sock) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
     };
 
-    poller.connected = [& can_write] (typename PollerType::native_socket_type sock) {
+    poller.connected = [& can_write] (native_socket_type sock) {
         LOGD(TAG, "Connected: {}", sock);
         can_write = true;
     };
 
-    poller.disconnected = [& finish, & can_write] (typename SocketType::native_type sock) {
+    poller.disconnected = [& finish, & can_write] (native_socket_type sock) {
         LOGD(TAG, "Disconnected: socket={}", sock);
         finish = true;
         can_write = false;
     };
 
-    poller.ready_read = [] (typename PollerType::native_socket_type sock) {
+    poller.ready_read = [] (native_socket_type sock) {
         LOGD(TAG, "Ready read");
     };
 
-    poller.can_write = [& can_write] (typename PollerType::native_socket_type sock) {
+    poller.can_write = [& can_write] (native_socket_type sock) {
         can_write = true;
     };
 
