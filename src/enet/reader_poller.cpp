@@ -42,18 +42,18 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
         if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
-                LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE");
-                // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
-                //      event.packet -> dataLength,
-                //      event.packet -> data,
-                //      event.peer -> data,
-                //      event.channelID);
+            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE");
+            // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
+            //      event.packet -> dataLength,
+            //      event.packet -> data,
+            //      event.peer -> data,
+            //      event.channelID);
 
-                // FIXME
-                ready_read(event.sock);
-                enet_packet_destroy(ev->packet);
-                _rep->pop_event();
-                n++;
+            // FIXME
+            ready_read(event.sock);
+            enet_packet_destroy(ev->packet);
+            _rep->pop_event();
+            n++;
         } else if (ev->type == ENET_EVENT_TYPE_DISCONNECT) {
             LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_DISCONNECT: {}:{}"
                 , ev->peer->address.host, ev->peer->address.port);

@@ -55,19 +55,13 @@ void start_server (netty::socket4_addr const & saddr)
         auto accept_proc = [& listener, & sockets] (native_socket_type listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);
 
-            auto pos = sockets.find(listener_sock);
-
-            // Forgot to release entry!!!
-            if (pos != sockets.end())
-                sockets.erase(pos);
-
             auto client = listener.accept(listener_sock);
 
             if (client) {
-                 LOGD(TAG, "Client accepted: socket={}", client.native());
+                LOGD(TAG, "Client accepted: socket={}", client.native());
 
                 auto fd = client.native();
-                sockets.emplace(client.native(), std::move(client));
+                sockets[fd] = std::move(client);
                 ok = true;
                 return fd;
             }

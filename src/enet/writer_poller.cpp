@@ -41,9 +41,11 @@ int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         auto const & event = _rep->get_event();
         auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
-        if (ev->type == ENET_EVENT_TYPE_CONNECT) {
-            can_write(event.sock);
-            n++;
+        if (ev->peer != nullptr) {
+            if (!enet_peer_has_outgoing_commands(ev->peer)) {
+                can_write(event.sock);
+                n++;
+            }
         }
     }
 

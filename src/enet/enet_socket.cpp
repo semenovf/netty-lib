@@ -149,10 +149,23 @@ int enet_socket::recv (char * data, int len, error * perr)
 
 send_result enet_socket::send (char const * data, int len, error * perr)
 {
+    if (enet_peer_has_outgoing_commands(_peer))
+        return send_result{netty::send_status::again, 0};
+
     ENetPacket * packet = enet_packet_create(data, len, ENET_PACKET_FLAG_RELIABLE);
+
+    if (packet == nullptr) {
+        pfs::throw_or(perr, error {
+              std::make_error_code(std::errc::not_enough_memory)
+            , tr::_("create packet for sending failure")
+        });
+    }
+
     auto rc = enet_peer_send(_peer, 0, packet);
 
     if (rc < 0) {
+        enet_packet_destroy(packet);
+
         pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("send packet failure")
@@ -161,11 +174,12 @@ send_result enet_socket::send (char const * data, int len, error * perr)
         return send_result{send_status::failure, 0};
     }
 
-    // FIXME
     // One could just use enet_host_service() instead.
-    enet_host_flush(_host);
+    // enet_host_flush(_host);
 
-    enet_packet_destroy(packet);
+    // Once the packet is handed over to ENet with enet_peer_send(), ENet will handle its
+    // deallocation and enet_packet_destroy() should not be used upon it.
+    // enet_packet_destroy(packet);
 
     return send_result{send_status::good, len};
 }

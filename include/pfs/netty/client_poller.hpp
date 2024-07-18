@@ -40,6 +40,9 @@ private:
     std::vector<native_socket_type> _removable_writers;
     std::set<native_socket_type> _removable;
 
+    // Reader and writer pollers backends are shared or not
+    bool _is_pollers_shared {false};
+
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
     mutable std::function<void(native_socket_type)> connection_refused = [] (native_socket_type) {};
@@ -62,42 +65,45 @@ private:
     void init_callbacks ()
     {
         _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
-            // Socket must be removed from monitoring later
+            // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
-            // Socket must be removed from monitoring later
+            // The socket must later be removed from monitoring
             _removable_readers.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
-            // Socket must be removed from monitoring later
+            // The socket must later be removed from monitoring
             _removable_writers.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
         _connecting_poller.connection_refused = [this] (native_socket_type sock) {
-            // Socket must be removed from monitoring later
+            // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);
             connection_refused(sock);
         };
 
         _connecting_poller.connected = [this] (native_socket_type sock) {
-            // Socket must be removed from monitoring later
-            _removable_connecting_sockets.push_back(sock);
-            _reader_poller.add(sock); // safe to add to poller
+            // The socket must later be removed from monitoring
+            if (!_is_pollers_shared) {
+                _removable_connecting_sockets.push_back(sock);
+                _reader_poller.add(sock); // safe to add to poller
+            }
+
             connected(sock);
         };
 
         _reader_poller.disconnected = [this] (native_socket_type sock) {
-            // Socket must be removed from monitoring later
+            // The socket must later be removed from monitoring
             _removable_readers.push_back(sock);
             _removable.insert(sock);
             disconnected(sock);
@@ -108,7 +114,10 @@ private:
         };
 
         _writer_poller.can_write = [this] (native_socket_type sock) {
-            _removable_writers.push_back(sock);
+            // If writer poller is shared, so no need to remove socket from it
+            if (!_is_pollers_shared)
+                _removable_writers.push_back(sock);
+
             can_write(sock);
         };
     }
@@ -123,6 +132,7 @@ public:
         : _connecting_poller(shared_backend_poller)
         , _reader_poller(shared_backend_poller)
         , _writer_poller(shared_backend_poller)
+        , _is_pollers_shared(true)
     {
         init_callbacks();
     }
@@ -134,6 +144,8 @@ public:
         , _reader_poller(reader_backend_poller)
         , _writer_poller(writer_backend_poller)
     {
+        _is_pollers_shared = (reader_backend_poller == writer_backend_poller);
+
         init_callbacks();
     }
 

@@ -40,6 +40,9 @@ private:
     std::vector<native_socket_type> _removable_writers;
     std::set<native_socket_type> _removable;
 
+    // Reader and writer pollers backends are shared or not
+    bool _is_pollers_shared {false};
+
 public: // callbacks
     mutable std::function<void(native_socket_type, error const &)> on_listener_failure
         = [] (native_socket_type, error const &) {};
@@ -100,7 +103,10 @@ private:
         };
 
         _writer_poller.can_write = [this] (native_socket_type sock) {
-            _removable_writers.push_back(sock);
+            // If writer poller is shared, so no need to remove socket from it
+            if (!_is_pollers_shared)
+                _removable_writers.push_back(sock);
+
             can_write(sock);
         };
     }
@@ -116,6 +122,7 @@ public:
         : _listener_poller(shared_backend_poller)
         , _reader_poller(shared_backend_poller)
         , _writer_poller(shared_backend_poller)
+        , _is_pollers_shared(true)
     {
         init_callbacks(std::move(accept_proc));
     }
@@ -128,6 +135,8 @@ public:
         , _reader_poller(reader_backend_poller)
         , _writer_poller(writer_backend_poller)
     {
+        _is_pollers_shared = (reader_backend_poller == writer_backend_poller);
+
         init_callbacks(std::move(accept_proc));
     }
 

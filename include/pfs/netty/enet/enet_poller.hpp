@@ -70,6 +70,12 @@ public:
     {
         return _events.size();
     }
+
+    std::size_t socket_count () const
+    {
+        return _sockets.size();
+    }
+
 };
 
 }} // namespace netty::enet

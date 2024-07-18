@@ -24,7 +24,10 @@ enet_poller::~enet_poller () = default;
 
 void enet_poller::add (native_socket_type sock, error * /*perr*/)
 {
-    _sockets.push_back(sock);
+    auto pos = std::find(_sockets.begin(), _sockets.end(), sock);
+
+    if (pos == _sockets.end())
+        _sockets.push_back(sock);
 }
 
 void enet_poller::remove (native_socket_type sock, error * /*perr*/)
