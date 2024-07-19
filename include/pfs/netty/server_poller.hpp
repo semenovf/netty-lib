@@ -189,7 +189,7 @@ public:
     template <typename Socket>
     void wait_for_write (Socket const & sock, error * perr = nullptr)
     {
-        _writer_poller.add(sock.native(), perr);
+        _writer_poller.wait_for_write(sock.native(), perr);
     }
 
     /**

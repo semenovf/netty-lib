@@ -23,10 +23,8 @@ poll_poller::poll_poller (short int observable_events)
 poll_poller::~poll_poller ()
 {}
 
-void poll_poller::add (native_socket_type sock, error * perr)
+void poll_poller::add_socket (native_socket_type sock, error * /*perr*/)
 {
-    (void)perr;
-
     auto pos = std::find_if(events.begin(), events.end()
         , [& sock] (pollfd const & p) { return sock == p.fd;});
 
@@ -41,7 +39,17 @@ void poll_poller::add (native_socket_type sock, error * perr)
     ev.events = oevents;
 }
 
-void poll_poller::remove (native_socket_type sock, error * perr)
+void poll_poller::add_listener (native_listener_type sock, error * perr)
+{
+    add_socket(sock);
+}
+
+void poll_poller::wait_for_write (native_socket_type sock, error * perr)
+{
+    add_socket(sock, perr);
+}
+
+void poll_poller::remove_socket (native_socket_type sock, error * perr)
 {
     (void)perr;
 
@@ -59,6 +67,11 @@ void poll_poller::remove (native_socket_type sock, error * perr)
         memcpy(ptr + index, ptr + index + 1, n);
         events.resize(sz - 1);
     }
+}
+
+void poll_poller::remove_listener (native_listener_type sock, error * perr)
+{
+    remove_socket(sock, perr);
 }
 
 int poll_poller::poll (std::chrono::milliseconds millis, error * perr)

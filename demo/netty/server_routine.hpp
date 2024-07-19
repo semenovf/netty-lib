@@ -55,7 +55,7 @@ void start_server (netty::socket4_addr const & saddr)
         auto accept_proc = [& listener, & sockets] (native_socket_type listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);
 
-            auto client = listener.accept(listener_sock);
+            auto client = listener.accept_nonblocking(listener_sock);
 
             if (client) {
                 LOGD(TAG, "Client accepted: socket={}", client.native());

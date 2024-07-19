@@ -21,7 +21,8 @@ namespace enet {
 class enet_listener
 {
 public:
-    using native_type = enet_socket::native_type;
+    using native_type = std::uintptr_t; // _ENetHost *
+    using native_socket_type = std::uintptr_t; // _ENetPeer *
 
 private:
     socket4_addr _saddr;
@@ -57,17 +58,13 @@ public:
      */
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
-    /**
-     * Accept a connection on a server socket.
-     */
-    NETTY__EXPORT enet_socket accept (error * perr = nullptr);
-    NETTY__EXPORT enet_socket accept_nonblocking (error * perr = nullptr);
-
 public:
-    NETTY__EXPORT static enet_socket accept (native_type listener_sock
+    NETTY__EXPORT static enet_socket accept (
+          native_type listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 
-    NETTY__EXPORT static enet_socket accept_nonblocking (native_type listener_sock
+    NETTY__EXPORT static enet_socket accept_nonblocking (
+          native_type listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 };
 

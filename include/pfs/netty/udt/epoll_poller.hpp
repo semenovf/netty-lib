@@ -17,7 +17,9 @@ class epoll_poller
 {
 public:
     using native_socket_type = int;
+    using native_listener_type = native_socket_type;
 
+public:
     int eid {-1}; // -1 is same as CUDT::ERROR
     int counter {0}; // number of sockets polled currently
     std::set<native_socket_type> readfds;

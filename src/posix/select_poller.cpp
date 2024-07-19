@@ -29,7 +29,7 @@ select_poller::~select_poller ()
     FD_ZERO(& writefds);
 }
 
-void select_poller::add (native_socket_type sock, error * perr)
+void select_poller::add_socket (native_socket_type sock, error * perr)
 {
     auto pos = std::find(sockets.begin(), sockets.end(), sock);
 
@@ -66,10 +66,18 @@ void select_poller::add (native_socket_type sock, error * perr)
 #endif
 }
 
-void select_poller::remove (native_socket_type sock, error * perr)
+void select_poller::add_listener (native_listener_type sock, error * perr)
 {
-    (void)perr;
+    add_socket(sock);
+}
 
+void select_poller::wait_for_write (native_socket_type sock, error * perr)
+{
+    add_socket(sock, perr);
+}
+
+void select_poller::remove_socket (native_socket_type sock, error * /*perr*/)
+{
     if (observe_read) {
         FD_CLR(sock, & readfds);
     }
@@ -90,6 +98,11 @@ void select_poller::remove (native_socket_type sock, error * perr)
     if (max_fd == sock)
         --max_fd;
 #endif
+}
+
+void select_poller::remove_listener (native_listener_type sock, error * perr)
+{
+    remove_socket(sock);
 }
 
 int select_poller::poll (fd_set * rfds, fd_set * wfds

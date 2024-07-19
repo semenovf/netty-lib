@@ -20,13 +20,14 @@ class listener_poller
 {
 public:
     using native_socket_type = typename Backend::native_socket_type;
+    using native_listener_type = typename Backend::native_listener_type;
 
 private:
     std::shared_ptr<Backend> _rep;
 
 public:
-    mutable std::function<void(native_socket_type, error const &)> on_failure;
-    mutable std::function<void(native_socket_type)> accept;
+    mutable std::function<void(native_listener_type, error const &)> on_failure;
+    mutable std::function<void(native_listener_type)> accept;
 
 protected:
     void init ();
@@ -40,8 +41,8 @@ public:
     listener_poller (listener_poller &&) = delete;
     listener_poller & operator = (listener_poller &&) = delete;
 
-    NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
-    NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
+    NETTY__EXPORT void add (native_listener_type sock, error * perr = nullptr);
+    NETTY__EXPORT void remove (native_listener_type sock, error * perr = nullptr);
 
     /**
      * @resturn Number of pending connections, or negative value on error.

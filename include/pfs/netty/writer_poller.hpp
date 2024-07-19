@@ -40,7 +40,7 @@ public:
     writer_poller (writer_poller &&) = delete;
     writer_poller & operator = (writer_poller &&) = delete;
 
-    NETTY__EXPORT void add (native_socket_type sock, error * perr = nullptr);
+    NETTY__EXPORT void wait_for_write (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
     NETTY__EXPORT bool empty () const noexcept;

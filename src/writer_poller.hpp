@@ -26,15 +26,15 @@ template <typename Backend>
 writer_poller<Backend>::~writer_poller () = default;
 
 template <typename Backend>
-void writer_poller<Backend>::add (native_socket_type sock, error * perr)
+void writer_poller<Backend>::wait_for_write (native_socket_type sock, error * perr)
 {
-    _rep->add(sock, perr);
+    _rep->wait_for_write(sock, perr);
 }
 
 template <typename Backend>
 void writer_poller<Backend>::remove (native_socket_type sock, error * perr)
 {
-    _rep->remove(sock, perr);
+    _rep->remove_socket(sock, perr);
 }
 
 template <typename Backend>

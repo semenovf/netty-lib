@@ -18,8 +18,8 @@
 namespace netty {
 namespace enet {
 
-static_assert(std::is_same<std::uintptr_t, enet_socket::native_type>::value
-    , "`std::uintptr_t` and `enet_socket::native_type` types must be same");
+static_assert(sizeof(ENetPeer *) == sizeof(enet_socket::native_type)
+    , "Size of `ENetPeer *` and `enet_socket::native_type` types must be equal");
 
 const enet_socket::native_type enet_socket::kINVALID_SOCKET {0};
 
@@ -93,26 +93,23 @@ enet_socket::~enet_socket ()
     }
 }
 
-enet_socket::enet_socket (native_type sock)
-{
-    _host = reinterpret_cast<ENetHost *>(sock);
-}
+enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
+    : _host(host)
+    , _peer(peer)
+{}
 
 enet_socket::operator bool () const noexcept
 {
-    return _host != nullptr;
+    return _peer != nullptr;
 }
 
 enet_socket::native_type enet_socket::native () const noexcept
 {
-    return _host == nullptr ? kINVALID_SOCKET : reinterpret_cast<native_type>(_host);
+    return _peer == nullptr ? kINVALID_SOCKET : reinterpret_cast<native_type>(_peer);
 }
 
 socket4_addr enet_socket::saddr () const noexcept
 {
-    if (_host == nullptr)
-        return socket4_addr{};
-
     // Socket connected
     if (_peer != nullptr) {
         return socket4_addr {

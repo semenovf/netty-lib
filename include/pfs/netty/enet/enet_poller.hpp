@@ -8,11 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "enet_socket.hpp"
+#include "enet_listener.hpp"
 #include "pfs/netty/error.hpp"
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <queue>
+#include <set>
 #include <vector>
+
+struct _ENetHost;
 
 namespace netty {
 namespace enet {
@@ -20,7 +25,8 @@ namespace enet {
 class enet_poller
 {
 public:
-    using native_socket_type = enet_socket::native_type;
+    using native_socket_type   = enet_socket::native_type;
+    using native_listener_type = enet_listener::native_type;
 
     struct event_item
     {
@@ -31,16 +37,21 @@ public:
 private:
     std::queue<event_item> _events;
     std::vector<native_socket_type> _sockets;
+    std::vector<native_listener_type> _listeners;
+    std::set<native_socket_type> _wait_for_write_sockets;
 
 private:
-    int poll_helper (native_socket_type sock, std::chrono::milliseconds millis, error * perr);
+    int poll_helper (_ENetHost * host, std::chrono::milliseconds millis, error * perr);
 
 public:
     enet_poller ();
     ~enet_poller ();
 
-    void add (native_socket_type sock, error * perr = nullptr);
-    void remove (native_socket_type sock, error * perr = nullptr);
+    void add_socket (native_socket_type sock, error * perr = nullptr);
+    void add_listener (native_listener_type sock, error * perr = nullptr);
+    void wait_for_write (native_socket_type sock, error * perr = nullptr);
+    void remove_socket (native_socket_type sock, error * perr = nullptr);
+    void remove_listener (native_listener_type sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 
@@ -76,6 +87,15 @@ public:
         return _sockets.size();
     }
 
+    bool has_wait_for_write_sockets () const noexcept
+    {
+        return !_wait_for_write_sockets.empty();
+    }
+
+    /**
+     * @return number of sockets can write.
+     */
+    int notify_can_write (std::function<void (native_socket_type)> && can_write);
 };
 
 }} // namespace netty::enet

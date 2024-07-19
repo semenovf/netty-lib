@@ -18,6 +18,9 @@ class poll_poller
 {
 public:
     using native_socket_type = int;
+    using native_listener_type = native_socket_type;
+
+public:
     std::vector<pollfd> events;
     short int oevents; // Observable events
 
@@ -25,8 +28,11 @@ public:
     poll_poller (short int observable_events);
     ~poll_poller ();
 
-    void add (native_socket_type sock, error * perr = nullptr);
-    void remove (native_socket_type sock, error * perr = nullptr);
+    void add_socket (native_socket_type sock, error * perr = nullptr);
+    void add_listener (native_listener_type sock, error * perr = nullptr);
+    void wait_for_write (native_socket_type sock, error * perr = nullptr);
+    void remove_socket (native_socket_type sock, error * perr = nullptr);
+    void remove_listener (native_listener_type sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };

@@ -40,6 +40,7 @@ public:
         , poor
     };
 
+    // _ENetPeer *
     using native_type = std::uintptr_t;
 
 public:
@@ -55,7 +56,7 @@ protected:
     /**
      * Constructs ENet accepted socket.
      */
-    enet_socket (native_type sock);
+    enet_socket (_ENetHost * host, _ENetPeer * peer);
 
     /**
      * Constructs uninitialized (invalid) ENet socket.

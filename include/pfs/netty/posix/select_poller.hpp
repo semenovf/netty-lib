@@ -37,6 +37,8 @@ public:
     native_socket_type max_fd {0};
 #endif
 
+    using native_listener_type = native_socket_type;
+
     std::vector<native_socket_type> sockets;
     int count = 0;
 
@@ -50,8 +52,11 @@ public:
     select_poller (bool observe_read, bool observe_write);
     ~select_poller ();
 
-    void add (native_socket_type sock, error * perr = nullptr);
-    void remove (native_socket_type sock, error * perr = nullptr);
+    void add_socket (native_socket_type sock, error * perr = nullptr);
+    void add_listener (native_listener_type sock, error * perr = nullptr);
+    void wait_for_write (native_socket_type sock, error * perr = nullptr);
+    void remove_socket (native_socket_type sock, error * perr = nullptr);
+    void remove_listener (native_listener_type sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds millis, error * perr = nullptr);
 };

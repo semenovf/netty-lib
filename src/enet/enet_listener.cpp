@@ -14,6 +14,9 @@
 namespace netty {
 namespace enet {
 
+static_assert(sizeof(ENetHost *) == sizeof(enet_listener::native_type)
+    , "Size of `ENetHost *` and `enet_socket::native_type` types must be equal");
+
 enet_listener::enet_listener ()
 {}
 
@@ -70,26 +73,19 @@ enet_listener::native_type enet_listener::native () const noexcept
     return reinterpret_cast<native_type>(_host);
 }
 
-enet_socket enet_listener::accept (error * perr)
-{
-    return accept(reinterpret_cast<native_type>(_host), perr);
-}
-
-enet_socket enet_listener::accept_nonblocking (error * perr)
-{
-    return accept_nonblocking(reinterpret_cast<native_type>(_host), perr);
-}
-
 // [static]
-enet_socket enet_listener::accept (native_type listener_sock , error * /*perr*/)
+enet_socket enet_listener::accept (native_type listener_sock , error * perr)
 {
-    return enet_socket{listener_sock};
+    return accept_nonblocking(listener_sock, perr);
 }
 
 // [static]
 enet_socket enet_listener::accept_nonblocking (native_type listener_sock, error * /*perr*/)
 {
-    return enet_socket{listener_sock};
+    auto peer = reinterpret_cast<ENetPeer *>(listener_sock);
+    auto host = peer->host;
+
+    return enet_socket{host, peer};
 }
 
 }} // namespace netty::enet

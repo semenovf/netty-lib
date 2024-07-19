@@ -45,12 +45,12 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
 
         if (ev->type == ENET_EVENT_TYPE_CONNECT) {
             socket4_addr saddr {
-                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                  inet4_addr {pfs::to_native_order(ev->peer->address.host)}
                 , ev->peer->address.port
             };
 
             LOG_TRACE_2("Accepted from: {}", to_string(saddr));
-            accept(event.sock);
+            accept(reinterpret_cast<native_listener_type>(ev->peer)); // <= ENetPeer *
             _rep->pop_event();
             n++;
         } else {

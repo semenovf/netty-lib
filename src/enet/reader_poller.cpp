@@ -42,7 +42,8 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
         if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
-            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE");
+            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE: dataLength={}"
+                , ev->packet->dataLength);
             // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
             //      event.packet -> dataLength,
             //      event.packet -> data,
