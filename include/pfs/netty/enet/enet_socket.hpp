@@ -33,6 +33,8 @@ class enet_socket
     friend class enet_listener;
 
 public:
+    using input_buffer_type = std::vector<char>;
+
     enum net_quality {
           defaults // ENet default timeouts for peer
         , fast
@@ -49,8 +51,11 @@ public:
 private:
     _ENetHost * _host {nullptr};
     _ENetPeer * _peer {nullptr};
-    std::vector<char> _inpb; // Input buffer
     net_quality _nq {net_quality::defaults};
+
+    // Input buffer. Set by listener by accept procedure or when connected if this
+    // is a client socket.
+    input_buffer_type _inpb;
 
 protected:
     /**

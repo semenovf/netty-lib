@@ -65,9 +65,13 @@ enet_socket::enet_socket (enet_socket && other)
     : _host(other._host)
     , _peer(other._peer)
     , _nq(other._nq)
+    , _inpb(std::move(other._inpb))
 {
     other._host = nullptr;
     other._peer = nullptr;
+
+    if (_peer != nullptr)
+        _peer->data = & _inpb;
 }
 
 enet_socket & enet_socket::operator = (enet_socket && other)
@@ -78,8 +82,12 @@ enet_socket & enet_socket::operator = (enet_socket && other)
     _host = other._host;
     _peer = other._peer;
     _nq = other._nq;
+    _inpb = std::move(other._inpb);
     other._host = nullptr;
     other._peer = nullptr;
+
+    if (_peer != nullptr)
+        _peer->data = & _inpb;
 
     return *this;
 }
@@ -96,7 +104,9 @@ enet_socket::~enet_socket ()
 enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
     : _host(host)
     , _peer(peer)
-{}
+{
+    _peer->data = & _inpb;
+}
 
 enet_socket::operator bool () const noexcept
 {
@@ -217,6 +227,8 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
 
         return conn_status::failure;
     }
+
+    _peer->data = & _inpb;
 
     auto tlim = NET_QUALITIES[_nq].timeout_limit;
     auto tmin = NET_QUALITIES[_nq].timeout_min;

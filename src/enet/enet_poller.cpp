@@ -87,10 +87,6 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
             _events.emplace();
             _events.back().sock = reinterpret_cast<native_socket_type>(event.peer);
             new (_events.back().ev) ENetEvent(std::move(event));
-
-            // LOG_TRACE_2("=== ENET POLL: {}, total count={} ===", static_cast<int>(event.type)
-            //     , _events.size());
-
             break;
 
         case ENET_EVENT_TYPE_NONE:

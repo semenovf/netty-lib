@@ -42,6 +42,8 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
 
         if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
+            PFS__TERMINATE(ev->peer->data != nullptr, "ENet peer data is null");
+
             LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE: dataLength={}"
                 , ev->packet->dataLength);
             // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
@@ -50,7 +52,11 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
             //      event.peer -> data,
             //      event.channelID);
 
-            // FIXME
+            auto * inpb_ptr = reinterpret_cast<enet::enet_socket::input_buffer_type *>(ev->peer->data);
+            auto offset = inpb_ptr->size();
+            inpb_ptr->resize(offset + ev->packet->dataLength);
+            std::memcpy(inpb_ptr->data() + offset, ev->packet->data, ev->packet->dataLength);
+
             ready_read(event.sock);
             enet_packet_destroy(ev->packet);
             _rep->pop_event();

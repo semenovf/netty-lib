@@ -68,7 +68,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
             _rep->pop_event();
             n++;
         } else if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
-            LOG_TRACE_1("FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE");
+            LOG_TRACE_1("FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE: unexpected event");
             break;
         } else {
             break;
