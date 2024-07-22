@@ -45,7 +45,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
 
         if (ev->type == ENET_EVENT_TYPE_CONNECT) {
             socket4_addr saddr {
-                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                  inet4_addr {pfs::to_native_order(ev->peer->address.host)}
                 , ev->peer->address.port
             };
 
@@ -56,7 +56,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
             n++;
         } else if (ev->type == ENET_EVENT_TYPE_DISCONNECT) {
             socket4_addr saddr {
-                    inet4_addr {pfs::to_native_order(ev->peer->address.host)}
+                  inet4_addr {pfs::to_native_order(ev->peer->address.host)}
                 , ev->peer->address.port
             };
 

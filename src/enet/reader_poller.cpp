@@ -56,9 +56,6 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
             _rep->pop_event();
             n++;
         } else if (ev->type == ENET_EVENT_TYPE_DISCONNECT) {
-            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_DISCONNECT: {}:{}"
-                , ev->peer->address.host, ev->peer->address.port);
-
             // Reset the peer's client information
             ev->peer->data = nullptr;
 
@@ -68,8 +65,6 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         } else {
             break;
         }
-
-        LOG_TRACE_2("### reader_poller: events remain: {}", _rep->event_count());
     }
 
     return n;

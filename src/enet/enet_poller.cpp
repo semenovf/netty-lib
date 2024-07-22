@@ -12,6 +12,7 @@
 #include <pfs/stopwatch.hpp>
 #include <enet/enet.h>
 #include <algorithm>
+#include <thread>
 
 namespace netty {
 namespace enet {
@@ -58,7 +59,7 @@ void enet_poller::remove_listener (native_listener_type sock, error * perr)
 
 bool enet_poller::empty () const noexcept
 {
-    return _sockets.empty();
+    return _sockets.empty() && _listeners.empty();
 }
 
 int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis, error * perr)
@@ -87,8 +88,8 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
             _events.back().sock = reinterpret_cast<native_socket_type>(event.peer);
             new (_events.back().ev) ENetEvent(std::move(event));
 
-            LOG_TRACE_2("=== ENET POLL: {}, total count={} ===", static_cast<int>(event.type)
-                , _events.size());
+            // LOG_TRACE_2("=== ENET POLL: {}, total count={} ===", static_cast<int>(event.type)
+            //     , _events.size());
 
             break;
 
@@ -148,8 +149,25 @@ int enet_poller::poll (std::chrono::milliseconds millis, error * perr)
             return total_events;
 
         std::chrono::milliseconds elapsed {stopwatch.count()};
+
         remain_millis -= elapsed;
 
+        stopwatch.start();
+
+        if (elapsed == std::chrono::milliseconds{0}) {
+            std::chrono::milliseconds quant {10};
+
+            if (remain_millis > quant) {
+                std::this_thread::sleep_for(quant);
+            } else {
+                std::this_thread::sleep_for(remain_millis);
+            }
+        }
+
+        stopwatch.stop();
+
+        elapsed = std::chrono::milliseconds{stopwatch.count()};
+        remain_millis -= elapsed;
     } while (remain_millis > std::chrono::milliseconds{0});
 
     return success ? total_events : -1;

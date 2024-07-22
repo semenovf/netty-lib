@@ -126,7 +126,7 @@ int enet_socket::available (error * /*perr*/) const
     return pfs::numeric_cast<int>(_inpb.size());
 }
 
-int enet_socket::recv (char * data, int len, error * perr)
+int enet_socket::recv (char * data, int len, error * /*perr*/)
 {
     std::size_t sz = len > 0 ? static_cast<std::size_t>(len) : 0;
     sz = (std::min)(sz, _inpb.size());

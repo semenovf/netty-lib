@@ -85,6 +85,10 @@ void start_client (netty::socket4_addr const & saddr)
                         can_write = false;
                         poller.wait_for_write(socket);
                         break;
+                    case netty::send_status::network:
+                        LOGD(TAG, "Network failure");
+                        finish = true;
+                        break;
                     case netty::send_status::good:
                         // FIXME need to check size of data sent really
                         LOGD(TAG, "Sent: bytes_written={}", send_result.n);
