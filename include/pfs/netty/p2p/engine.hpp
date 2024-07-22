@@ -47,9 +47,9 @@ namespace p2p {
  * @deprecated Use `delivery_engine`, `discovery_engine`.
  */
 template <
-      typename DiscoveryEngineBackend
+      typename EngineTraits
+    , typename DiscoveryEngineBackend
     , typename Serializer       = primal_serializer<>
-    , typename EngineTraits     = default_engine_traits
     , typename FileTransporter  = file_transporter<Serializer>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
 class engine
@@ -61,7 +61,7 @@ private:
     using entity_id = std::uint64_t; // Zero value is invalid entity
     using client_poller_type    = typename EngineTraits::client_poller_type;
     using server_poller_type    = typename EngineTraits::server_poller_type;
-    using server_type           = typename EngineTraits::server_type;
+    using listener_type         = typename EngineTraits::listener_type;
     using reader_type           = typename EngineTraits::reader_type;
     using writer_type           = typename EngineTraits::writer_type;
     using reader_id             = typename EngineTraits::reader_id_type;
@@ -117,7 +117,7 @@ private:
     // Host (listener) identifier.
     universal_id _host_uuid;
 
-    server_type _server;
+    listener_type _server;
 
     std::unique_ptr<discovery_engine_type> _discovery;
     std::unique_ptr<FileTransporter>       _transporter;
@@ -288,7 +288,7 @@ public:
         // Call befor any network operations
         startup();
 
-        _server = server_type(server_addr);
+        _server = listener_type(server_addr);
 
         configure_discovery();
         configure_transporter();

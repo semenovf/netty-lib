@@ -30,7 +30,7 @@
 namespace netty {
 namespace p2p {
 
-template <typename EngineTraits = default_engine_traits
+template <typename EngineTraits
     , typename Callbacks = delivery_functional_callbacks
     , typename Serializer = primal_serializer<>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
