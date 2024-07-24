@@ -44,8 +44,6 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
         if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
             PFS__TERMINATE(ev->peer->data != nullptr, "ENet peer data is null");
 
-            LOG_TRACE_2("FIXME: reader_poller: ENET_EVENT_TYPE_RECEIVE: dataLength={}"
-                , ev->packet->dataLength);
             // printf ("A packet of length %u containing %s was received from %s on channel %u.\n",
             //      event.packet -> dataLength,
             //      event.packet -> data,

@@ -18,7 +18,7 @@ add_subdirectory(service)
 if (NETTY__BUILD_P2P)
     add_subdirectory(discovery)
     # add_subdirectory(p2p) // FIXME
-    add_subdirectory(reliable-delivery)
+    # add_subdirectory(reliable-delivery) // FIXME UNCOMMENT
 endif(NETTY__BUILD_P2P)
 
 if (TARGET enet)

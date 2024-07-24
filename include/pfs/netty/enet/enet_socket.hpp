@@ -52,6 +52,7 @@ private:
     _ENetHost * _host {nullptr};
     _ENetPeer * _peer {nullptr};
     net_quality _nq {net_quality::defaults};
+    bool _accepted_socket {false};
 
     // Input buffer. Set by listener by accept procedure or when connected if this
     // is a client socket.

@@ -20,18 +20,15 @@ static_assert(sizeof(ENetHost *) == sizeof(enet_listener::native_type)
 enet_listener::enet_listener ()
 {}
 
+/*
+ * With backlog = ENET_PROTOCOL_MAXIMUM_PEER_ID rised segmenatation fault when listener destroying.
+ */
 enet_listener::enet_listener (socket4_addr const & saddr)
-{
-    _saddr = saddr;
-}
+    : enet_listener(saddr, 10)
+{}
 
 enet_listener::enet_listener (socket4_addr const & saddr, int backlog)
-    : enet_listener(saddr)
-{
-    listen(backlog);
-}
-
-bool enet_listener::listen (int backlog, error * perr)
+    : _saddr(saddr)
 {
     ENetAddress address;
 
@@ -46,15 +43,16 @@ bool enet_listener::listen (int backlog, error * perr)
 
 
     if (_host == nullptr) {
-        pfs::throw_or(perr, error {
+        throw error {
               errc::socket_error
             , tr::_("create ENet listener failure")
-        });
-
-        return false;
+        };
     }
+}
 
-    return true;
+bool enet_listener::listen (int /*backlog*/, error * perr)
+{
+    return _host == nullptr ? false : true;
 }
 
 enet_listener::~enet_listener ()

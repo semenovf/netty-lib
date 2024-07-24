@@ -65,6 +65,7 @@ enet_socket::enet_socket (enet_socket && other)
     : _host(other._host)
     , _peer(other._peer)
     , _nq(other._nq)
+    , _accepted_socket(other._accepted_socket)
     , _inpb(std::move(other._inpb))
 {
     other._host = nullptr;
@@ -82,6 +83,7 @@ enet_socket & enet_socket::operator = (enet_socket && other)
     _host = other._host;
     _peer = other._peer;
     _nq = other._nq;
+    _accepted_socket = other._accepted_socket;
     _inpb = std::move(other._inpb);
     other._host = nullptr;
     other._peer = nullptr;
@@ -95,15 +97,18 @@ enet_socket & enet_socket::operator = (enet_socket && other)
 enet_socket::~enet_socket ()
 {
     if (_host != nullptr) {
-        enet_host_destroy(_host);
-        _peer = nullptr; // Peer destroyed automatically in enet_host_destroy()
-        _host = nullptr;
+        if (!_accepted_socket)
+            enet_host_destroy(_host);
     }
+
+    _peer = nullptr; // Peer destroyed automatically in enet_host_destroy()
+    _host = nullptr;
 }
 
 enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
     : _host(host)
     , _peer(peer)
+    , _accepted_socket(true)
 {
     _peer->data = & _inpb;
 }

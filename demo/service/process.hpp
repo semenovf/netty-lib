@@ -16,7 +16,7 @@ struct ProcessTraits
     {
         message_serializer_t ms {echo {e.text}};
         output_envelope_t env {message_enum::echo, ms.take()};
-        conn.server->enqueue(conn.sock, env.take());
+        conn.respondent->enqueue(conn.sock, env.take());
         return true;
     }
 

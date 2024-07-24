@@ -28,6 +28,7 @@ class server_poller
 {
 public:
     using native_socket_type = typename Backend::native_socket_type;
+    using backend_type = Backend;
 
 private:
     listener_poller<Backend> _listener_poller;
@@ -117,25 +118,26 @@ public:
         init_callbacks(std::move(accept_proc));
     }
 
-    server_poller (std::shared_ptr<Backend> shared_backend_poller
+    server_poller (std::shared_ptr<Backend> shared_poller_backend
         , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
-        : _listener_poller(shared_backend_poller)
-        , _reader_poller(shared_backend_poller)
-        , _writer_poller(shared_backend_poller)
+        : _listener_poller(shared_poller_backend)
+        , _reader_poller(shared_poller_backend)
+        , _writer_poller(shared_poller_backend)
         , _is_pollers_shared(true)
     {
         init_callbacks(std::move(accept_proc));
     }
 
-    server_poller (std::shared_ptr<Backend> listener_backend_poller
-        , std::shared_ptr<Backend> reader_backend_poller
-        , std::shared_ptr<Backend> writer_backend_poller
+    server_poller (std::shared_ptr<Backend> listener_poller_backend
+        , std::shared_ptr<Backend> reader_poller_backend
+        , std::shared_ptr<Backend> writer_poller_backend
         , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
-        : _listener_poller(listener_backend_poller)
-        , _reader_poller(reader_backend_poller)
-        , _writer_poller(writer_backend_poller)
+        : _listener_poller(listener_poller_backend)
+        , _reader_poller(reader_poller_backend)
+        , _writer_poller(writer_poller_backend)
     {
-        _is_pollers_shared = (reader_backend_poller == writer_backend_poller);
+        // Only reader_poller_backend and writer_poller_backend matter
+        _is_pollers_shared = (reader_poller_backend == writer_poller_backend);
 
         init_callbacks(std::move(accept_proc));
     }

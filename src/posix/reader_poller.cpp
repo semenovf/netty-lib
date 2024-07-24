@@ -32,8 +32,10 @@ namespace netty {
 #if NETTY__SELECT_ENABLED
 
 template <>
-reader_poller<posix::select_poller>::reader_poller (std::shared_ptr<posix::select_poller>)
-    : _rep(std::make_shared<posix::select_poller>(true, false))
+reader_poller<posix::select_poller>::reader_poller (std::shared_ptr<posix::select_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<posix::select_poller>(true, false)
+        : std::move(ptr))
 {
     init();
 }
@@ -110,8 +112,8 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #if NETTY__POLL_ENABLED
 
 template <>
-reader_poller<posix::poll_poller>::reader_poller (std::shared_ptr<posix::poll_poller>)
-    : _rep(std::make_shared<posix::poll_poller>(POLLERR | POLLIN | POLLNVAL
+reader_poller<posix::poll_poller>::reader_poller (std::shared_ptr<posix::poll_poller> ptr)
+    : _rep(ptr == nullptr ? std::make_shared<posix::poll_poller>(POLLERR | POLLIN | POLLNVAL
 
 #ifdef POLLRDNORM
         | POLLRDNORM
@@ -120,7 +122,7 @@ reader_poller<posix::poll_poller>::reader_poller (std::shared_ptr<posix::poll_po
 #ifdef POLLRDBAND
         | POLLRDBAND
 #endif
-    ))
+    ) : std::move(ptr))
 {
     init();
 }

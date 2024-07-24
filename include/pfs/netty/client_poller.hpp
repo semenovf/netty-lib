@@ -28,6 +28,7 @@ class client_poller
 {
 public:
     using native_socket_type = typename Backend::native_socket_type;
+    using backend_type = Backend;
 
 private:
     connecting_poller<Backend> _connecting_poller;
@@ -128,23 +129,25 @@ public:
         init_callbacks();
     }
 
-    client_poller (std::shared_ptr<Backend> shared_backend_poller)
-        : _connecting_poller(shared_backend_poller)
-        , _reader_poller(shared_backend_poller)
-        , _writer_poller(shared_backend_poller)
-        , _is_pollers_shared(true)
+    client_poller (std::shared_ptr<Backend> shared_poller_backend)
+        : _connecting_poller(shared_poller_backend)
+        , _reader_poller(shared_poller_backend)
+        , _writer_poller(shared_poller_backend)
+        , _is_pollers_shared(shared_poller_backend != nullptr)
     {
         init_callbacks();
     }
 
-    client_poller (std::shared_ptr<Backend> connecting_backend_poller
-        , std::shared_ptr<Backend> reader_backend_poller
-        , std::shared_ptr<Backend> writer_backend_poller)
-        : _connecting_poller(connecting_backend_poller)
-        , _reader_poller(reader_backend_poller)
-        , _writer_poller(writer_backend_poller)
+    client_poller (std::shared_ptr<Backend> connecting_poller_backend
+        , std::shared_ptr<Backend> reader_poller_backend
+        , std::shared_ptr<Backend> writer_poller_backend)
+        : _connecting_poller(connecting_poller_backend)
+        , _reader_poller(reader_poller_backend)
+        , _writer_poller(writer_poller_backend)
     {
-        _is_pollers_shared = (reader_backend_poller == writer_backend_poller);
+        // Only reader_poller_backend and writer_poller_backend matter
+        _is_pollers_shared = (reader_poller_backend == writer_poller_backend)
+            && (reader_poller_backend != nullptr);
 
         init_callbacks();
     }

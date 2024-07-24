@@ -35,7 +35,7 @@ public:
     NETTY__EXPORT enet_listener ();
 
     /**
-     * Constructs ENet server and bind to the specified address.
+     * Constructs ENet server and bind to the specified address with backlog equal to 10.
      */
     NETTY__EXPORT enet_listener (socket4_addr const & saddr);
 
@@ -54,7 +54,9 @@ public:
      * Listen for connections on a socket.
      *
      * @param backlog The maximum length to which the queue of pending
-     *        connections may grow.
+     *        connections may grow (will be ignored, set this value in the constructor).
+     *
+     * @note This method do nothing, only to support unified API.
      */
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 

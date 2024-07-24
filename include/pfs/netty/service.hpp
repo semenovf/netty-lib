@@ -35,13 +35,17 @@ public:
     using output_envelope_type = OutputEnvelope;
 
     ////////////////////////////////////////////////////////////////////////////
-    // server
+    // respondent (server)
     ////////////////////////////////////////////////////////////////////////////
-    class server: protected ServerPoller
+    class respondent: protected ServerPoller
     {
+    public:
+        using poller_backend_type = typename ServerPoller::backend_type;
+
+    private:
         using base_class = ServerPoller;
 
-        struct client_account
+        struct requester_account
         {
             Socket sock;
             bool can_write {true};
@@ -54,7 +58,7 @@ public:
 
     private:
         ListenerSocket _listener;
-        std::map<native_socket_type, client_account> _clients;
+        std::map<native_socket_type, requester_account> _requesters;
 
     public:
         mutable std::function<void (error const &)> on_failure = [] (error const &) {};
@@ -80,12 +84,12 @@ public:
                     success = true;
                 }
 
-                client_account c;
+                requester_account c;
                 c.sock = std::move(accepted_sock);
-                auto res = _clients.emplace(c.sock.native(), std::move(c));
+                auto res = _requesters.emplace(c.sock.native(), std::move(c));
 
                 if (res.second) {
-                    client_account & c = res.first->second;
+                    requester_account & c = res.first->second;
                     return c.sock.native();
                 } else {
                     on_error(tr::_("socket already exists with the same identifier"));
@@ -95,10 +99,7 @@ public:
             };
         }
 
-    public:
-        server (socket4_addr listener_saddr, int backlog = 10)
-            : base_class(accept_proc())
-            , _listener(std::move(listener_saddr))
+        void init_callbacks ()
         {
             base_class::on_listener_failure = [this] (native_socket_type, error const & err) {
                 this->on_failure(err);
@@ -121,27 +122,59 @@ public:
             };
 
             base_class::can_write = [this] (native_socket_type sock) {
-                auto aclient = locate_account(sock);
+                auto arequester = locate_account(sock);
 
-                if (aclient == nullptr)
+                if (arequester == nullptr)
                     return;
 
-                aclient->can_write = true;
+                arequester->can_write = true;
             };
 
             base_class::listener_removed = [] (native_socket_type) {};
 
             base_class::removed = [this] (native_socket_type sock) {
-                auto aclient = locate_account(sock);
+                auto arequester = locate_account(sock);
 
-                if (aclient == nullptr)
+                if (arequester == nullptr)
                     return;
 
-                aclient->sock.disconnect();
-                _clients.erase(sock);
+                arequester->sock.disconnect();
+                _requesters.erase(sock);
                 released(sock);
             };
+        }
 
+    public:
+        respondent (socket4_addr listener_saddr, int backlog = 10)
+            : base_class(accept_proc())
+            , _listener(std::move(listener_saddr))
+        {
+            init_callbacks();
+            this->add_listener(_listener);
+            _listener.listen(backlog);
+        }
+
+        respondent (std::shared_ptr<poller_backend_type> shared_poller_backend
+            , socket4_addr listener_saddr, int backlog = 10)
+            : base_class(std::move(shared_poller_backend), accept_proc())
+            , _listener(std::move(listener_saddr))
+        {
+            init_callbacks();
+            this->add_listener(_listener);
+            _listener.listen(backlog);
+        }
+
+        respondent (std::shared_ptr<poller_backend_type> listener_poller_backend
+            , std::shared_ptr<poller_backend_type> reader_poller_backend
+            , std::shared_ptr<poller_backend_type> writer_poller_backend
+            , socket4_addr listener_saddr, int backlog = 10)
+            : base_class(std::move(listener_poller_backend)
+                , std::move(reader_poller_backend)
+                , std::move(writer_poller_backend)
+                , accept_proc())
+            , _listener(std::move(listener_saddr))
+        {
+            init_callbacks();
             this->add_listener(_listener);
             _listener.listen(backlog);
         }
@@ -157,12 +190,12 @@ public:
 
         void enqueue (native_socket_type sock, char const * data, int len)
         {
-            auto aclient = locate_account(sock);
+            auto arequester = locate_account(sock);
 
-            if (aclient == nullptr)
+            if (arequester == nullptr)
                 return;
 
-            aclient.outq.push(std::vector<char>(data, data + len));
+            arequester.outq.push(std::vector<char>(data, data + len));
         }
 
         void enqueue (native_socket_type sock, std::string const & data)
@@ -182,19 +215,19 @@ public:
 
         void enqueue (native_socket_type sock, std::vector<char> && data)
         {
-            auto aclient = locate_account(sock);
+            auto arequester = locate_account(sock);
 
-            if (aclient == nullptr)
+            if (arequester == nullptr)
                 return;
 
-            aclient->outq.push(std::move(data));
+            arequester->outq.push(std::move(data));
         }
 
         void enqueue_broadcast (char const * data, int len)
         {
-            for (auto & item: _clients) {
-                auto & aclient = item->second;
-                aclient.outq.push(std::vector<char>(data, data + len));
+            for (auto & item: _requesters) {
+                auto & arequester = item->second;
+                arequester.outq.push(std::vector<char>(data, data + len));
             }
         }
 
@@ -215,21 +248,21 @@ public:
 
         void enqueue_broadcast (std::vector<char> && data)
         {
-            for (auto & item: _clients) {
-                auto & aclient = item.second;
-                aclient.outq.push(data);
+            for (auto & item: _requesters) {
+                auto & arequester = item.second;
+                arequester.outq.push(data);
             }
         }
 
     private:
-        client_account * locate_account (native_socket_type sock)
+        requester_account * locate_account (native_socket_type sock)
         {
-            auto pos = _clients.find(sock);
+            auto pos = _requesters.find(sock);
 
-            if (pos == _clients.end()) {
+            if (pos == _requesters.end()) {
                 on_failure(error {
                       make_error_code(pfs::errc::unexpected_error)
-                    , tr::f_("client socket not found: {}", sock)
+                    , tr::f_("requester socket not found: {}", sock)
                 });
 
                 return nullptr;
@@ -240,13 +273,13 @@ public:
 
         void process_input (native_socket_type sock)
         {
-            auto aclient = locate_account(sock);
+            auto arequester = locate_account(sock);
 
-            if (aclient == nullptr)
+            if (arequester == nullptr)
                 return;
 
-            auto & reader = aclient->sock;
-            auto & inb = aclient->inb;
+            auto & reader = arequester->sock;
+            auto & inb = arequester->inb;
 
             auto available = reader.available();
             auto offset = inb.size();
@@ -288,21 +321,21 @@ public:
             error err;
             bool break_sending = false;
 
-            for (auto & item: _clients) {
-                auto * aclient = & item.second;
+            for (auto & item: _requesters) {
+                auto * arequester = & item.second;
 
-                if (!aclient->can_write)
+                if (!arequester->can_write)
                     continue;
 
-                while (!break_sending && !aclient->outq.empty()) {
-                    auto & data = aclient->outq.front();
-                    auto sendresult = aclient->sock.send(data.data(), data.size(), & err);
+                while (!break_sending && !arequester->outq.empty()) {
+                    auto & data = arequester->outq.front();
+                    auto sendresult = arequester->sock.send(data.data(), data.size(), & err);
 
                     switch (sendresult.state) {
                         case netty::send_status::good:
                             if (sendresult.n > 0) {
                                 if (sendresult.n == data.size()) {
-                                    aclient->outq.pop();
+                                    arequester->outq.pop();
                                 } else {
                                     data.erase(data.cbegin(), data.cbegin() + sendresult.n);
                                 }
@@ -314,8 +347,8 @@ public:
 
                         case send_status::failure:
                         case send_status::network:
-                            base_class::remove(aclient->sock);
-                            aclient->sock.disconnect();
+                            base_class::remove(arequester->sock);
+                            arequester->sock.disconnect();
 
                             break_sending = true;
                             on_failure(err);
@@ -323,9 +356,9 @@ public:
 
                         case send_status::again:
                         case send_status::overflow:
-                            if (aclient->can_write != false) {
-                                aclient->can_write = false;
-                                this->wait_for_write(aclient->sock);
+                            if (arequester->can_write != false) {
+                                arequester->can_write = false;
+                                this->wait_for_write(arequester->sock);
                             }
 
                             break_sending = true;
@@ -339,12 +372,16 @@ public:
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    // client
+    // requester (client)
     ////////////////////////////////////////////////////////////////////////////
-    class client: protected ClientPoller
+    class requester: protected ClientPoller
     {
+    public:
+        using poller_backend_type = typename ClientPoller::backend_type;
+
+    private:
         using base_class = ClientPoller;
-        using native_socket_type = typename ServerPoller::native_socket_type;
+        using native_socket_type = typename ClientPoller::native_socket_type;
 
     public:
         using output_envelope_type = OutputEnvelope;
@@ -376,8 +413,8 @@ public:
         mutable std::function<void (InputEnvelope const &)> on_message_received
             = [] (InputEnvelope const &) {};
 
-    public:
-        client ()
+    private:
+        void init_callbacks ()
         {
             base_class::on_failure = [this] (native_socket_type, error const & err) {
                 this->on_failure(err);
@@ -418,7 +455,29 @@ public:
             };
         }
 
-        ~client () = default;
+    public:
+        requester () : base_class()
+        {
+            init_callbacks();
+        }
+
+        requester (std::shared_ptr<poller_backend_type> shared_poller_backend)
+            : base_class(std::move(shared_poller_backend))
+        {
+            init_callbacks();
+        }
+
+        requester (std::shared_ptr<poller_backend_type> connecting_poller_backend
+            , std::shared_ptr<poller_backend_type> reader_poller_backend
+            , std::shared_ptr<poller_backend_type> writer_poller_backend)
+            : base_class(std::move(connecting_poller_backend)
+                , std::move(reader_poller_backend)
+                , std::move(writer_poller_backend))
+        {
+            init_callbacks();
+        }
+
+        ~requester () = default;
 
         bool is_connected () const noexcept
         {
@@ -450,7 +509,7 @@ public:
             return true;
         }
 
-        void disconnect (netty::error * perr = nullptr)
+        void disconnect (netty::error * /*perr*/ = nullptr)
         {
             base_class::remove(_sock);
         }

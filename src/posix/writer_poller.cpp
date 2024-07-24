@@ -29,8 +29,10 @@ namespace netty {
 #if NETTY__SELECT_ENABLED
 
 template <>
-writer_poller<posix::select_poller>::writer_poller (std::shared_ptr<posix::select_poller>)
-    : _rep(std::make_shared<posix::select_poller>(false, true))
+writer_poller<posix::select_poller>::writer_poller (std::shared_ptr<posix::select_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<posix::select_poller>(false, true)
+        : std::move(ptr))
 {
     init();
 }
@@ -72,8 +74,8 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #if NETTY__POLL_ENABLED
 
 template <>
-writer_poller<posix::poll_poller>::writer_poller (std::shared_ptr<posix::poll_poller>)
-    : _rep(std::make_shared<posix::poll_poller>(POLLERR | POLLOUT
+writer_poller<posix::poll_poller>::writer_poller (std::shared_ptr<posix::poll_poller> ptr)
+    : _rep(ptr == nullptr ? std::make_shared<posix::poll_poller>(POLLERR | POLLOUT
 
 #ifdef POLLWRNORM
         | POLLWRNORM
@@ -82,7 +84,7 @@ writer_poller<posix::poll_poller>::writer_poller (std::shared_ptr<posix::poll_po
 #ifdef POLLWRBAND
         | POLLWRBAND
 #endif
-    ))
+    ) : std::move(ptr))
 {
     init();
 }

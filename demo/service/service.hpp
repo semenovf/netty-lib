@@ -68,14 +68,14 @@ struct service_traits;
     struct client_connection_context                            \
     {                                                           \
         using traits_type = service_traits;                     \
-        typename service_type::client * client;                 \
+        typename service_type::requester * requester;           \
     };                                                          \
                                                                 \
     struct server_connection_context                            \
     {                                                           \
         using traits_type = service_traits;                     \
-        typename service_type::server * server;                 \
-        typename service_type::server::native_socket_type sock; \
+        typename service_type::respondent * respondent;         \
+        typename service_type::respondent::native_socket_type sock; \
     };                                                          \
                                                                 \
     using client_message_processor_type = message_processor<client_connection_context, deserializer_t>; \

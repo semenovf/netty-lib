@@ -19,8 +19,10 @@ namespace netty {
 #if NETTY__EPOLL_ENABLED
 
 template <>
-connecting_poller<linux_os::epoll_poller>::connecting_poller (std::shared_ptr<linux_os::epoll_poller>)
-    : _rep(std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND))
+connecting_poller<linux_os::epoll_poller>::connecting_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)
+        : std::move(ptr))
 {
     init();
 }
