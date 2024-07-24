@@ -32,6 +32,10 @@ if (NETTY__BUILD_STRICT)
     set(CMAKE_CXX_EXTENSIONS OFF) # use -std=c++XX rather than -std=gnu++XX
 endif()
 
+if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet/CMakeLists.txt)
+    set(NETTY__ENABLE_ENET ON CACHE BOOL "")
+endif()
+
 portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
 if (NETTY__BUILD_P2P)

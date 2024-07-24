@@ -32,7 +32,7 @@ void print_usage (pfs::filesystem::path const & programName
     fmt::println(out, "Usage:\n\n"
         "{0} --help | -h\n"
         "\tPrint this help and exit\n\n"
-        "{0} [--host-id=HOST_ID] [--listener=ADDR:PORT] --peer=ADDR:PORT...\n\n"
+        "{0} [--host-id=HOST_ID] [--listener=ADDR:PORT] --peer=ADDR...\n\n"
         "--host-id=HOST_ID\n"
         "\tSet host ID. If not specified then it will be generated automatically\n"
         "--listener=ADDR:PORT\n"

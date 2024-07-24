@@ -98,21 +98,21 @@ char * hints (const char * buf, int * color, int * bold)
     return nullptr;
 }
 
-template <PollerEnum P>
-inline
-std::shared_ptr<typename service_traits<P>::service_type::respondent::poller_backend_type>
-make_respondent_poller ()
-{
-    return std::shared_ptr<typename service_traits<P>::service_type::respondent::poller_backend_type>{};
-}
-
-template <>
-inline
-std::shared_ptr<typename service_traits<PollerEnum::ENet>::service_type::respondent::poller_backend_type>
-make_respondent_poller<PollerEnum::ENet> ()
-{
-    return std::make_shared<typename service_traits<PollerEnum::ENet>::service_type::respondent::poller_backend_type>();
-}
+// template <PollerEnum P>
+// inline
+// std::shared_ptr<typename service_traits<P>::service_type::respondent::poller_backend_type>
+// make_respondent_poller ()
+// {
+//     return std::shared_ptr<typename service_traits<P>::service_type::respondent::poller_backend_type>{};
+// }
+//
+// template <>
+// inline
+// std::shared_ptr<typename service_traits<PollerEnum::ENet>::service_type::respondent::poller_backend_type>
+// make_respondent_poller<PollerEnum::ENet> ()
+// {
+//     return std::make_shared<typename service_traits<PollerEnum::ENet>::service_type::respondent::poller_backend_type>();
+// }
 
 template <PollerEnum P>
 void service_process (netty::socket4_addr listener_saddr, std::condition_variable & ready_cv)
@@ -122,7 +122,7 @@ void service_process (netty::socket4_addr listener_saddr, std::condition_variabl
     using native_socket_type  = typename respondent_type::native_socket_type;
     using input_envelope_type = typename service_type::input_envelope_type;
 
-    respondent_type respondent (make_respondent_poller<P>(), listener_saddr);
+    respondent_type respondent {listener_saddr};
 
     respondent.on_failure = [] (netty::error const & err) {
         LOGE("", "FAILURE: {}", err.what());
@@ -153,21 +153,21 @@ void service_process (netty::socket4_addr listener_saddr, std::condition_variabl
     }
 }
 
-template <PollerEnum P>
-inline
-std::shared_ptr<typename service_traits<P>::service_type::requester::poller_backend_type>
-make_requester_poller ()
-{
-    return std::shared_ptr<typename service_traits<P>::service_type::requester::poller_backend_type>{};
-}
-
-template <>
-inline
-std::shared_ptr<typename service_traits<PollerEnum::ENet>::service_type::requester::poller_backend_type>
-make_requester_poller<PollerEnum::ENet> ()
-{
-    return std::make_shared<typename service_traits<PollerEnum::ENet>::service_type::requester::poller_backend_type>();
-}
+// template <PollerEnum P>
+// inline
+// std::shared_ptr<typename service_traits<P>::service_type::requester::poller_backend_type>
+// make_requester_poller ()
+// {
+//     return std::shared_ptr<typename service_traits<P>::service_type::requester::poller_backend_type>{};
+// }
+//
+// template <>
+// inline
+// std::shared_ptr<typename service_traits<PollerEnum::ENet>::service_type::requester::poller_backend_type>
+// make_requester_poller<PollerEnum::ENet> ()
+// {
+//     return std::make_shared<typename service_traits<PollerEnum::ENet>::service_type::requester::poller_backend_type>();
+// }
 
 template <PollerEnum P>
 void client_process (client_commands & cmd, netty::socket4_addr listener_saddr, std::condition_variable & ready_cv)
@@ -176,7 +176,7 @@ void client_process (client_commands & cmd, netty::socket4_addr listener_saddr, 
     using requester_type      = typename service_type::requester;
     using input_envelope_type = typename service_type::input_envelope_type;
 
-    requester_type c = requester_type(make_requester_poller<P>());
+    requester_type c;
     pfs::function_queue<> command_queue;
 
     c.on_failure = [& ready_cv] (netty::error const & err) {

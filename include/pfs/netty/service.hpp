@@ -154,31 +154,6 @@ public:
             _listener.listen(backlog);
         }
 
-        respondent (std::shared_ptr<poller_backend_type> shared_poller_backend
-            , socket4_addr listener_saddr, int backlog = 10)
-            : base_class(std::move(shared_poller_backend), accept_proc())
-            , _listener(std::move(listener_saddr))
-        {
-            init_callbacks();
-            this->add_listener(_listener);
-            _listener.listen(backlog);
-        }
-
-        respondent (std::shared_ptr<poller_backend_type> listener_poller_backend
-            , std::shared_ptr<poller_backend_type> reader_poller_backend
-            , std::shared_ptr<poller_backend_type> writer_poller_backend
-            , socket4_addr listener_saddr, int backlog = 10)
-            : base_class(std::move(listener_poller_backend)
-                , std::move(reader_poller_backend)
-                , std::move(writer_poller_backend)
-                , accept_proc())
-            , _listener(std::move(listener_saddr))
-        {
-            init_callbacks();
-            this->add_listener(_listener);
-            _listener.listen(backlog);
-        }
-
     public:
         void step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
         {
@@ -457,22 +432,6 @@ public:
 
     public:
         requester () : base_class()
-        {
-            init_callbacks();
-        }
-
-        requester (std::shared_ptr<poller_backend_type> shared_poller_backend)
-            : base_class(std::move(shared_poller_backend))
-        {
-            init_callbacks();
-        }
-
-        requester (std::shared_ptr<poller_backend_type> connecting_poller_backend
-            , std::shared_ptr<poller_backend_type> reader_poller_backend
-            , std::shared_ptr<poller_backend_type> writer_poller_backend)
-            : base_class(std::move(connecting_poller_backend)
-                , std::move(reader_poller_backend)
-                , std::move(writer_poller_backend))
         {
             init_callbacks();
         }

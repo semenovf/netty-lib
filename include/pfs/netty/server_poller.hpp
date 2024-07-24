@@ -112,12 +112,6 @@ private:
         };
     }
 
-public:
-    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
-    {
-        init_callbacks(std::move(accept_proc));
-    }
-
     server_poller (std::shared_ptr<Backend> shared_poller_backend
         , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
         : _listener_poller(shared_poller_backend)
@@ -128,20 +122,8 @@ public:
         init_callbacks(std::move(accept_proc));
     }
 
-    server_poller (std::shared_ptr<Backend> listener_poller_backend
-        , std::shared_ptr<Backend> reader_poller_backend
-        , std::shared_ptr<Backend> writer_poller_backend
-        , std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
-        : _listener_poller(listener_poller_backend)
-        , _reader_poller(reader_poller_backend)
-        , _writer_poller(writer_poller_backend)
-    {
-        // Only reader_poller_backend and writer_poller_backend matter
-        _is_pollers_shared = (reader_poller_backend == writer_poller_backend);
-
-        init_callbacks(std::move(accept_proc));
-    }
-
+public:
+    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc);
     ~server_poller () = default;
 
     server_poller (server_poller const &) = delete;

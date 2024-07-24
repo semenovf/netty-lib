@@ -10,17 +10,17 @@
 #include "pfs/netty/socket4_addr.hpp"
 #include <numeric>
 
-template <typename ClientPollerType>
+template <typename ClientTraits>
 void start_client (netty::socket4_addr const & saddr)
 {
-    using native_socket_type = typename ClientPollerType::native_socket_type;
+    using native_socket_type = typename ClientTraits::native_socket_type;
 
     bool finish = false;
     bool can_write = false;
     LOGD(TAG, "Starting client");
 
-    typename ClientPollerType::socket_type socket;
-    typename ClientPollerType::poller_type poller = ClientPollerType::create_poller();
+    typename ClientTraits::socket_type socket;
+    typename ClientTraits::poller_type poller;
 
     poller.on_failure = [& finish] (native_socket_type, netty::error const & err) {
         LOGE(TAG, "Error on client: {}", err.what());

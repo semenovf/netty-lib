@@ -40,17 +40,17 @@ std::string stringify_bytes (char const * buf, int len, int nbytes)
     return result;
 }
 
-template <typename ServerPollerType>
+template <typename ServerTraits>
 void start_server (netty::socket4_addr const & saddr)
 {
-    using native_socket_type = typename ServerPollerType::native_socket_type;
+    using native_socket_type = typename ServerTraits::native_socket_type;
 
     LOGD(TAG, "Starting listener on: {}", to_string(saddr));
 
-    std::map<native_socket_type, typename ServerPollerType::socket_type> sockets;
+    std::map<native_socket_type, typename ServerTraits::socket_type> sockets;
 
     try {
-        typename ServerPollerType::listener_type listener {saddr, 10};
+        typename ServerTraits::listener_type listener {saddr, 10};
 
         auto accept_proc = [& listener, & sockets] (native_socket_type listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);
@@ -70,7 +70,7 @@ void start_server (netty::socket4_addr const & saddr)
             return client.kINVALID_SOCKET;
         };
 
-        auto poller = ServerPollerType::create_poller(std::move(accept_proc));
+        typename ServerTraits::poller_type poller {std::move(accept_proc)};
 
         poller.on_listener_failure = [] (native_socket_type, netty::error const & err) {
             LOGE(TAG, "Error on server: {}", err.what());

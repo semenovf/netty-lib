@@ -19,7 +19,7 @@ option(NETTY__BUILD_SHARED "Enable build shared library" OFF)
 option(NETTY__BUILD_STATIC "Enable build static library" ON)
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
-option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
+# option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
 option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
 
 if (NOT PORTABLE_TARGET__CURRENT_PROJECT_DIR)
@@ -81,10 +81,12 @@ CHECK_INCLUDE_FILE("poll.h" __has_poll)
 
 if (__has_poll)
     list(APPEND _netty__sources
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__POLL_ENABLED=1")
 endif()
@@ -95,10 +97,12 @@ endif()
 
 if (MSVC OR __has_sys_select)
     list(APPEND _netty__sources
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__SELECT_ENABLED=1")
 endif()
@@ -108,10 +112,12 @@ if (UNIX OR ANDROID)
 
     if (__has_sys_epoll)
         list(APPEND _netty__sources
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/client_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/connecting_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/listener_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/reader_poller.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/linux/server_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
         list(APPEND _netty__definitions "NETTY__EPOLL_ENABLED=1")
     endif()
@@ -169,14 +175,14 @@ if (NETTY__ENABLE_UDT)
     endif(NETTY__UDT_PATCHED)
 endif(NETTY__ENABLE_UDT)
 
-if (NETTY__ENABLE_QT5)
-    list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_recever.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_sender.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_socket.cpp)
-    list(APPEND _netty__definitions "NETTY__QT5_ENABLED=1")
-    list(APPEND _netty__qt5_components Core Network)
-endif(NETTY__ENABLE_QT5)
+# if (NETTY__ENABLE_QT5)
+#     list(APPEND _netty__sources
+#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_recever.cpp
+#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_sender.cpp
+#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_socket.cpp)
+#     list(APPEND _netty__definitions "NETTY__QT5_ENABLED=1")
+#     list(APPEND _netty__qt5_components Core Network)
+# endif(NETTY__ENABLE_QT5)
 
 if (NETTY__ENABLE_ENET)
     if (NOT TARGET enet)
@@ -187,9 +193,11 @@ if (NETTY__ENABLE_ENET)
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_listener.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_socket.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/enet/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/reader_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/enet/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__ENET_ENABLED=1")
     list(APPEND _netty__private_links enet)

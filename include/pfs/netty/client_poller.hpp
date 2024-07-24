@@ -123,12 +123,6 @@ private:
         };
     }
 
-public:
-    client_poller ()
-    {
-        init_callbacks();
-    }
-
     client_poller (std::shared_ptr<Backend> shared_poller_backend)
         : _connecting_poller(shared_poller_backend)
         , _reader_poller(shared_poller_backend)
@@ -138,20 +132,8 @@ public:
         init_callbacks();
     }
 
-    client_poller (std::shared_ptr<Backend> connecting_poller_backend
-        , std::shared_ptr<Backend> reader_poller_backend
-        , std::shared_ptr<Backend> writer_poller_backend)
-        : _connecting_poller(connecting_poller_backend)
-        , _reader_poller(reader_poller_backend)
-        , _writer_poller(writer_poller_backend)
-    {
-        // Only reader_poller_backend and writer_poller_backend matter
-        _is_pollers_shared = (reader_poller_backend == writer_poller_backend)
-            && (reader_poller_backend != nullptr);
-
-        init_callbacks();
-    }
-
+public:
+    client_poller (); // Backend specific
     ~client_poller () = default;
 
     client_poller (client_poller const &) = delete;

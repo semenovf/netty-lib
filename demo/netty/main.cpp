@@ -20,7 +20,7 @@
 using string_view = pfs::string_view;
 static char const * TAG = "NETTY";
 
-#include "types.hpp"
+#include "traits.hpp"
 #include "client_routine.hpp"
 #include "server_routine.hpp"
 
@@ -183,14 +183,14 @@ int main (int argc, char * argv[])
     if (is_server) {
         if (poller_value == "udt") {
 #if NETTY__UDT_ENABLED
-            start_server<udt_server_poller>(netty::socket4_addr{addr, port});
+            start_server<udt_server_traits>(netty::socket4_addr{addr, port});
 #else
             LOGE(TAG, "'udt' poller not supported by netty library");
             return EXIT_FAILURE;
 #endif
         } else if (poller_value == "enet") {
 #if NETTY__ENET_ENABLED
-            start_server<enet_server_poller>(netty::socket4_addr{addr, port});
+            start_server<enet_server_traits>(netty::socket4_addr{addr, port});
 #else
             LOGE(TAG, "'enet' poller not supported by netty library");
             return EXIT_FAILURE;
@@ -198,21 +198,21 @@ int main (int argc, char * argv[])
         } else if (is_tcp) {
             if (poller_value == "select") {
 #if NETTY__SELECT_ENABLED
-                start_server<select_server_poller>(netty::socket4_addr{ addr, port });
+                start_server<select_server_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'select' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "poll") {
 #if NETTY__POLL_ENABLED
-                start_server<poll_server_poller>(netty::socket4_addr{ addr, port });
+                start_server<poll_server_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'poll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "epoll") {
 #if NETTY__EPOLL_ENABLED
-                start_server<epoll_server_poller>(netty::socket4_addr{ addr, port });
+                start_server<epoll_server_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'epoll' poller not supported by netty library");
                 return EXIT_FAILURE;
@@ -224,14 +224,14 @@ int main (int argc, char * argv[])
     } else {
         if (poller_value == "udt") {
 #if NETTY__UDT_ENABLED
-            start_client<udt_client_poller>(netty::socket4_addr{addr, port});
+            start_client<udt_client_traits>(netty::socket4_addr{addr, port});
 #else
             LOGE(TAG, "'udt' poller not supported by netty library");
             return EXIT_FAILURE;
 #endif
         } else if (poller_value == "enet") {
 #if NETTY__ENET_ENABLED
-            start_client<enet_client_poller>(netty::socket4_addr{addr, port});
+            start_client<enet_client_traits>(netty::socket4_addr{addr, port});
 #else
             LOGE(TAG, "'enet' poller not supported by netty library");
             return EXIT_FAILURE;
@@ -239,21 +239,21 @@ int main (int argc, char * argv[])
         } else if (is_tcp) {
             if (poller_value == "select") {
 #if NETTY__SELECT_ENABLED
-                start_client<select_client_poller>(netty::socket4_addr{ addr, port });
+                start_client<select_client_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'select' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "poll") {
 #if NETTY__POLL_ENABLED
-                start_client<poll_client_poller>(netty::socket4_addr{ addr, port });
+                start_client<poll_client_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'poll' poller not supported by netty library");
                 return EXIT_FAILURE;
 #endif
             } else if (poller_value == "epoll") {
 #if NETTY__EPOLL_ENABLED
-                start_client<epoll_client_poller>(netty::socket4_addr{ addr, port });
+                start_client<epoll_client_traits>(netty::socket4_addr{ addr, port });
 #else
                 LOGE(TAG, "'epoll' poller not supported by netty library");
                 return EXIT_FAILURE;
