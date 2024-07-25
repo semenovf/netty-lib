@@ -48,13 +48,17 @@ void enet_poller::wait_for_write (native_socket_type sock, error * perr)
 void enet_poller::remove_socket (native_socket_type sock, error * /*perr*/)
 {
     auto pos = std::find(_sockets.begin(), _sockets.end(), sock);
-    _sockets.erase(pos);
+
+    if (pos != _sockets.end())
+        _sockets.erase(pos);
 }
 
 void enet_poller::remove_listener (native_listener_type sock, error * perr)
 {
     auto pos = std::find(_listeners.begin(), _listeners.end(), sock);
-    _listeners.erase(pos);
+
+    if (pos != _listeners.end())
+        _listeners.erase(pos);
 }
 
 bool enet_poller::empty () const noexcept
@@ -71,11 +75,14 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
     if (rc == 0)
         return 0;
 
+    // For now believe that the error is not fatal
     if (rc < 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("ENet poll failure")
-        });
+        if (perr) {
+            *perr = error {
+                  errc::socket_error
+                , tr::_("ENet poll (enet_host_service) error")
+            };
+        }
 
         return rc;
     }
@@ -169,16 +176,17 @@ int enet_poller::poll (std::chrono::milliseconds millis, error * perr)
     return success ? total_events : -1;
 }
 
-int enet_poller::notify_can_write (std::function<void (native_socket_type)> && can_write)
+int enet_poller::check_and_notify_can_write (std::function<void (native_socket_type)> && can_write)
 {
     int n = 0;
 
     for (auto pos = _wait_for_write_sockets.begin(); pos != _wait_for_write_sockets.end();) {
         ENetPeer * peer = reinterpret_cast<ENetPeer *>(*pos);
 
-        if (enet_peer_has_outgoing_commands(peer)) {
+        if (!enet_peer_has_outgoing_commands(peer)) {
+            auto sock = *pos;
             pos = _wait_for_write_sockets.erase(pos);
-            can_write(*pos);
+            can_write(sock);
             n++;
         } else {
             ++pos;

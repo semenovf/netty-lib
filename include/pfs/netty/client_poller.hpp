@@ -167,12 +167,12 @@ public:
      * Remove socket from connecting and regular pollers.
      */
     template <typename Socket>
-    void remove (Socket const & sock, error * perr = nullptr)
+    void remove (Socket const & sock, error * /*perr*/ = nullptr)
     {
-        _removable_connecting_sockets.push_back(sock);
-        _removable_readers.push_back(sock);
-        _removable_writers.push_back(sock);
-        _removable.insert(sock);
+        _removable_connecting_sockets.push_back(sock.native());
+        _removable_readers.push_back(sock.native());
+        _removable_writers.push_back(sock.native());
+        _removable.insert(sock.native());
 
         LOG_TRACE_3("Client socket ({}) removed from `client_poller`", to_string(sock.saddr()));
     }
@@ -281,7 +281,7 @@ public:
 
         if (!_addable_readers.empty()) {
             for (auto sock: _addable_readers)
-                _reader_poller.add(sock, perr);
+                _reader_poller.add(sock);
             _addable_readers.clear();
         }
 

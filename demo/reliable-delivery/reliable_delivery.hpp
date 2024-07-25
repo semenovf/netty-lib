@@ -14,10 +14,15 @@
 #include "netty/p2p/reliable_delivery_engine.hpp"
 #include "netty/p2p/posix/discovery_engine.hpp"
 
+#if NETTY__EPOLL_ENABLED
+    using epoll_delivery_engine = netty::p2p::delivery_engine<netty::p2p::epoll_engine_traits>;
+#endif
+
 #if NETTY__ENET_ENABLED
     using enet_delivery_engine = netty::p2p::delivery_engine<netty::p2p::enet_engine_traits>;
 #endif
 
 using discovery_engine = netty::p2p::discovery_engine<netty::p2p::posix::discovery_engine>;
 using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<enet_delivery_engine, netty::sample::persistent_storage>;
+//using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<epoll_delivery_engine, netty::sample::persistent_storage>;
 using serializer = reliable_delivery_engine::serializer_type;

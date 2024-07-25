@@ -95,7 +95,7 @@ public:
     /**
      * @return number of sockets can write.
      */
-    int notify_can_write (std::function<void (native_socket_type)> && can_write);
+    int check_and_notify_can_write (std::function<void (native_socket_type)> && can_write);
 };
 
 }} // namespace netty::enet

@@ -38,20 +38,10 @@ int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
     n = 0;
 
     if (_rep->has_wait_for_write_sockets()) {
-        n = _rep->notify_can_write([this] (native_socket_type sock) { can_write(sock); });
+        n = _rep->check_and_notify_can_write([this] (native_socket_type sock) {
+            can_write(sock);
+        });
     }
-
-    // if (_rep->has_more_events()) {
-    //     auto const & event = _rep->get_event();
-    //     auto ev = reinterpret_cast<ENetEvent const *>(event.ev);
-    //
-    //     if (ev->peer != nullptr) {
-    //         if (!enet_peer_has_outgoing_commands(ev->peer)) {
-    //             can_write(event.sock);
-    //             n++;
-    //         }
-    //     }
-    // }
 
     return n;
 }

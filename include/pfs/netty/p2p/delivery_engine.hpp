@@ -299,7 +299,8 @@ private:
     pfs::stopwatch<std::milli> _stopwatch;
 
 public:
-    int step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
+    int step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0}
+        , error * perr = nullptr)
     {
         int n1 = 0;
         int n2 = 0;
@@ -316,7 +317,7 @@ public:
                 timeout = zero_millis;
 
             _stopwatch.start();
-            n1 = _reader_poller->poll(timeout);
+            n1 = _reader_poller->poll(timeout, perr);
             _stopwatch.stop();
 
             timeout -= std::chrono::milliseconds{_stopwatch.count()};
@@ -324,11 +325,11 @@ public:
             if(timeout < zero_millis)
                 timeout = zero_millis;
 
-            n2 = _writer_poller->poll(timeout);
+            n2 = _writer_poller->poll(timeout, perr);
         } else {
             send_outgoing_packets();
-            n1 = _reader_poller->poll(zero_millis);
-            n2 = _writer_poller->poll(zero_millis);
+            n1 = _reader_poller->poll(zero_millis, perr);
+            n2 = _writer_poller->poll(zero_millis, perr);
         }
 
         if (n1 < 0)

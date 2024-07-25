@@ -155,9 +155,9 @@ public:
     template <typename Socket>
     void remove (Socket const & sock, error * perr = nullptr)
     {
-        _removable_readers.push_back(sock);
-        _removable_writers.push_back(sock);
-        _removable.insert(sock);
+        _removable_readers.push_back(sock.native());
+        _removable_writers.push_back(sock.native());
+        _removable.insert(sock.native());
     }
 
     /**
