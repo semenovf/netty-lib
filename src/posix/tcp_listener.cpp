@@ -24,16 +24,17 @@ namespace posix {
 
 tcp_listener::tcp_listener () : inet_socket() {}
 
-tcp_listener::tcp_listener (socket4_addr const & saddr)
-    : inet_socket(inet_socket::type_enum::stream)
+tcp_listener::tcp_listener (socket4_addr const & saddr, netty::error * perr)
+    : inet_socket(inet_socket::type_enum::stream, perr)
 {
     _saddr = saddr;
 }
 
-tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog)
-    : tcp_listener(saddr)
+tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog, netty::error * perr)
+    : tcp_listener(saddr, perr)
 {
-    listen(backlog);
+    if (perr && !*perr)
+        listen(backlog, perr);
 }
 
 bool tcp_listener::listen (int backlog, error * perr)

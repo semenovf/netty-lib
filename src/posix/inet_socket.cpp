@@ -32,12 +32,12 @@ inet_socket::native_type const inet_socket::kINVALID_SOCKET;
 
 inet_socket::inet_socket () = default;
 
-inet_socket::inet_socket (native_type sock, socket4_addr const & saddr)
+inet_socket::inet_socket (native_type sock, socket4_addr const & saddr, error * /*perr*/)
     : _socket(sock)
     , _saddr(saddr)
 {}
 
-inet_socket::inet_socket (type_enum socktype)
+inet_socket::inet_socket (type_enum socktype, error * perr)
 {
     int ai_family = AF_INET;
     int ai_socktype = -1;
@@ -68,11 +68,11 @@ inet_socket::inet_socket (type_enum socktype)
     _socket = ::socket(ai_family, ai_socktype, ai_protocol);
 
     if (_socket < 0) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("create INET socket failure")
             , pfs::system_error_text()
-        };
+        });
     }
 
 #if _MSC_VER
@@ -81,11 +81,11 @@ inet_socket::inet_socket (type_enum socktype)
         auto rc = ::ioctlsocket(_socket, FIONBIO, & nonblocking);
 
         if (rc != 0) {
-            throw error {
+            pfs::throw_or(perr, error {
                   errc::socket_error
                 , tr::_("create INET socket failure: set non-blocking")
                 , pfs::system_error_text()
-            };
+            });
         }
     }
 #endif
@@ -131,11 +131,11 @@ inet_socket::inet_socket (type_enum socktype)
 #endif
 
     if (rc != 0) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("set socket option failure")
             , pfs::system_error_text()
-        };
+        });
     }
 }
 

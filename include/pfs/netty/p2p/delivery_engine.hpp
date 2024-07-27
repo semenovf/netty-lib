@@ -224,10 +224,12 @@ public:
         // Call befor any network operations
         startup();
 
-        _listener = pfs::make_unique<listener_type>(_opts.listener_saddr);
-
         netty::error err;
-        _reader_poller->add_listener(*_listener, & err);
+
+        _listener = pfs::make_unique<listener_type>(_opts.listener_saddr, & err);
+
+        if (!err)
+            _reader_poller->add_listener(*_listener, & err);
 
         if (!err)
             _listener->listen(_opts.listener_backlog, & err);

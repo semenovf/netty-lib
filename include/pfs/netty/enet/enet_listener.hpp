@@ -37,13 +37,13 @@ public:
     /**
      * Constructs ENet server and bind to the specified address with backlog equal to 10.
      */
-    NETTY__EXPORT enet_listener (socket4_addr const & saddr);
+    NETTY__EXPORT enet_listener (socket4_addr const & saddr, netty::error * perr = nullptr);
 
     /**
      * Constructs POSIX TCP server, bind to the specified address and start
      * listening
      */
-    NETTY__EXPORT enet_listener (socket4_addr const & saddr, int backlog);
+    NETTY__EXPORT enet_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
 
     NETTY__EXPORT ~enet_listener ();
 

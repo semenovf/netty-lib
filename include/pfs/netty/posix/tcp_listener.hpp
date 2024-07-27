@@ -29,13 +29,13 @@ public:
     /**
      * Constructs POSIX TCP server.
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & saddr);
+    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, netty::error * perr = nullptr);
 
     /**
      * Constructs POSIX TCP server, bind to the specified address and start
      * listening
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & addr, int backlog);
+    NETTY__EXPORT tcp_listener (socket4_addr const & addr, int backlog, netty::error * perr = nullptr);
 
 public:
     /**

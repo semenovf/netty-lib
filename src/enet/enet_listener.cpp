@@ -23,11 +23,11 @@ enet_listener::enet_listener ()
 /*
  * With backlog = ENET_PROTOCOL_MAXIMUM_PEER_ID rised segmenatation fault when listener destroying.
  */
-enet_listener::enet_listener (socket4_addr const & saddr)
-    : enet_listener(saddr, 10)
+enet_listener::enet_listener (socket4_addr const & saddr, error * perr)
+    : enet_listener(saddr, 10, perr)
 {}
 
-enet_listener::enet_listener (socket4_addr const & saddr, int backlog)
+enet_listener::enet_listener (socket4_addr const & saddr, int backlog, error * perr)
     : _saddr(saddr)
 {
     ENetAddress address;
@@ -43,10 +43,10 @@ enet_listener::enet_listener (socket4_addr const & saddr, int backlog)
 
 
     if (_host == nullptr) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("create ENet listener failure")
-        };
+        });
     }
 }
 

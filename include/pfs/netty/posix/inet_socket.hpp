@@ -59,12 +59,12 @@ protected:
     /**
      * Constructs POSIX socket.
      */
-    inet_socket (type_enum socktype);
+    inet_socket (type_enum socktype, error * perr = nullptr);
 
     /**
      * Constructs POSIX socket from native socket.
      */
-    inet_socket (native_type sock, socket4_addr const & saddr);
+    inet_socket (native_type sock, socket4_addr const & saddr, error * perr = nullptr);
 
     inet_socket (inet_socket const &) = delete;
     inet_socket & operator = (inet_socket const &) = delete;
