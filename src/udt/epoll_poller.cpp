@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -12,8 +12,6 @@
 #include <set>
 
 #include "pfs/log.hpp"
-
-static char const * TAG = "UDT";
 
 namespace netty {
 namespace udt {
@@ -41,7 +39,7 @@ epoll_poller::~epoll_poller ()
     }
 }
 
-void epoll_poller::add (native_socket_type sock, error * perr)
+void epoll_poller::add_socket (native_socket_type sock, error * perr)
 {
     int events = UDT_EPOLL_ERR;
 
@@ -56,23 +54,33 @@ void epoll_poller::add (native_socket_type sock, error * perr)
     if (rc == UDT::ERROR) {
         pfs::throw_or(perr, error {
               errc::poller_error
-            , tr::_("UDT epoll_poller: add socket failure")
+            , tr::f_("UDT epoll_poller: add socket ({}) failure", sock)
             , UDT::getlasterror_desc()
         });
 
         return;
     }
 
-    LOGD(TAG, "ADD SOCKET: eid={}, sock={}", eid, sock);
+    LOGD("--", "ADD SOCKET: eid={}, sock={}", eid, sock);
 
     ++counter;
 }
 
-void epoll_poller::remove (native_socket_type sock, error * perr)
+void epoll_poller::add_listener (native_listener_type sock, error * perr)
+{
+    add_socket(sock);
+}
+
+void epoll_poller::wait_for_write (native_socket_type sock, error * perr)
+{
+    add_socket(sock, perr);
+}
+
+void epoll_poller::remove_socket (native_socket_type sock, error * perr)
 {
     auto rc = UDT::epoll_remove_usock(eid, sock);
 
-    LOGD(TAG, "REMOVE SOCKET: eid={}, sock={}", eid, sock);
+    LOGD("--", "REMOVE SOCKET: eid={}, sock={}", eid, sock);
 
     if (rc == UDT::ERROR) {
         pfs::throw_or(perr, error {
@@ -93,6 +101,11 @@ void epoll_poller::remove (native_socket_type sock, error * perr)
             , UDT::getlasterror_desc()
         });
     }
+}
+
+void epoll_poller::remove_listener (native_listener_type sock, error * perr)
+{
+    remove_socket(sock);
 }
 
 bool epoll_poller::empty () const noexcept

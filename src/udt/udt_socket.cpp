@@ -1,18 +1,20 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2021 Vladislav Trifochkin
+// Copyright (c) 2021-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2021.10.26 Initial version.
 //      2023.01.06 Renamed to `udt_socket` and refactored.
+//      2024.07.29 Refactored `udt_socket`.
 ////////////////////////////////////////////////////////////////////////////////
 #include "newlib/udt.hpp"
+#include "pfs/assert.hpp"
 #include "pfs/endian.hpp"
 #include "pfs/i18n.hpp"
+#include "pfs/optional.hpp"
 #include "pfs/netty/udt/udt_socket.hpp"
 #include <cerrno>
-#include <cassert>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -34,95 +36,162 @@ namespace udt {
 // -----------------------------------------------------------------------------
 // Home Wi-Fi   1.499        | 2               | 625
 
-int basic_socket::default_exp_counter ()
-{
-    return 2;
-}
+// int basic_socket::default_exp_counter ()
+// {
+//     return 2;
+// }
+//
+// std::chrono::milliseconds basic_socket::default_exp_threshold ()
+// {
+//     return std::chrono::milliseconds{625};
+// }
 
-std::chrono::milliseconds basic_socket::default_exp_threshold ()
-{
-    return std::chrono::milliseconds{625};
-}
+static constexpr int kDefaultExpMaxCounter = 8;
+static std::chrono::milliseconds const kDefaultExpThreshold {1000};
 
-basic_socket::basic_socket () = default;
-
-basic_socket::basic_socket (type_enum, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold)
+void udt_socket::init (type_enum, int mtu, int exp_max_counter
+    , std::chrono::milliseconds exp_threshold, error * perr)
 {
     int ai_family   = AF_INET;    // AF_INET | AF_INET6
     int ai_socktype = SOCK_DGRAM; // SOCK_DGRAM | SOCK_STREAM
     int ai_protocol = 0;
 
-    _socket = UDT::socket(ai_family, ai_socktype, ai_protocol);
+    native_type sock = UDT::socket(ai_family, ai_socktype, ai_protocol);
 
-    if (_socket == UDT::INVALID_SOCK) {
-        throw error {
+    if (sock == UDT::INVALID_SOCK) {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("create UDT socket failure")
             , UDT::getlasterror_desc()
-        };
+        });
+
+        return;
     }
 
     bool true_value  = true;
     bool false_value = false;
 
     // UDT Options
-    auto rc = UDT::setsockopt(_socket, 0, UDT_REUSEADDR, & true_value, sizeof(bool));
+    auto rc = UDT::setsockopt(sock, 0, UDT_REUSEADDR, & true_value, sizeof(bool));
 
     if (rc != UDT::ERROR)
-        rc = UDT::setsockopt(_socket, 0, UDT_SNDSYN, & false_value, sizeof(bool)); // sending is non-blocking
+        rc = UDT::setsockopt(sock, 0, UDT_SNDSYN, & false_value, sizeof(bool)); // sending is non-blocking
 
     if (rc != UDT::ERROR)
-        rc = UDT::setsockopt(_socket, 0, UDT_RCVSYN, & false_value, sizeof(bool)); // receiving is non-blocking
+        rc = UDT::setsockopt(sock, 0, UDT_RCVSYN, & false_value, sizeof(bool)); // receiving is non-blocking
 
     if (rc != UDT::ERROR) {
         int mtu_value = mtu;
-        rc = UDT::setsockopt(_socket, 0, UDT_MSS, & mtu_value, sizeof(mtu_value));
+        rc = UDT::setsockopt(sock, 0, UDT_MSS, & mtu_value, sizeof(mtu_value));
     }
 
 //     if (rc != UDT::ERROR) {
 //         int bufsz = 10000000;
-//         rc = UDT::setsockopt(_socket, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
+//         rc = UDT::setsockopt(sock, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
 //     }
 
 //     if (rc != UDT::ERROR) {
 //         int bufsz = 10000000;
-//         rc = UDT::setsockopt(_socket, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
+//         rc = UDT::setsockopt(sock, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
 //     }
 
     if (rc != UDT::ERROR) {
-        if (exp_max_counter < 0)
-            exp_max_counter = default_exp_counter();
+        if (exp_max_counter < 0) {
+            pfs::throw_or(perr, error {
+                  std::make_error_code(std::errc::invalid_argument)
+                , tr::_("bad `exp_max_counter` value")
+                , UDT::getlasterror_desc()
+            });
 
-        if (exp_threshold < std::chrono::milliseconds{0})
-            exp_threshold = default_exp_threshold();
+            UDT::close(sock);
+            return;
+        }
+
+        if (exp_threshold < std::chrono::milliseconds{0}) {
+            pfs::throw_or(perr, error {
+                  std::make_error_code(std::errc::invalid_argument)
+                , tr::_("bad `exp_threshold` value")
+                , UDT::getlasterror_desc()
+            });
+
+            UDT::close(sock);
+            return;
+        }
 
         std::uint64_t exp_threshold_usecs = static_cast<std::uint64_t>(exp_threshold.count()) * 1000;
 
-        rc = UDT::setsockopt(_socket, 0, UDT_EXP_MAX_COUNTER, & exp_max_counter, sizeof(exp_max_counter));
+        rc = UDT::setsockopt(sock, 0, UDT_EXP_MAX_COUNTER, & exp_max_counter, sizeof(exp_max_counter));
 
         if (rc != UDT::ERROR)
-            rc = UDT::setsockopt(_socket, 0, UDT_EXP_THRESHOLD, & exp_threshold_usecs, sizeof(exp_threshold_usecs));
+            rc = UDT::setsockopt(sock, 0, UDT_EXP_THRESHOLD, & exp_threshold_usecs, sizeof(exp_threshold_usecs));
 
     }
 
-    //UDT::setsockopt(_socket, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
+    //UDT::setsockopt(sock, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
 
     if (rc == UDT::ERROR) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("UDT set socket option failure")
             , UDT::getlasterror_desc()
-        };
+        });
+
+        UDT::close(sock);
+        return;
     }
+
+    _socket = sock;
 }
 
-basic_socket::basic_socket (native_type sock, socket4_addr const & saddr)
+udt_socket::udt_socket (uninitialized)
+{}
+
+udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
     : _socket(sock)
     , _saddr(saddr)
 {}
 
-basic_socket::~basic_socket ()
+udt_socket::udt_socket (type_enum type, int mtu, int exp_max_counter
+    , std::chrono::milliseconds exp_threshold)
+{
+    init(type, mtu, exp_max_counter, exp_threshold);
+}
+
+udt_socket::udt_socket (type_enum type, int mtu)
+    : udt_socket(type, mtu, kDefaultExpMaxCounter, kDefaultExpThreshold)
+{}
+
+    /**
+     * Constructs UDT listener with specified properties. Accepts the following parameters:
+     *      - "mtu" (std::intmax_t) - MTU;
+     *      - "exp_max_counter" (std::intmax_t) - max socket expiration counter;
+     *      - "exp_threshold" (std::intmax_t) - socket (peer, accepted) expiration threshold in milliseconds.
+     */
+udt_socket::udt_socket (property_map_t const & props, error * perr)
+{
+    type_enum type = type_enum::dgram;
+    auto mtu = get_or<int>(props, "mtu", 1500);
+    auto exp_max_counter = get_or<int>(props, "exp_max_counter", kDefaultExpMaxCounter);
+    auto exp_threshold_millis = get_or<int>(props, "exp_max_counter", kDefaultExpThreshold.count());
+
+    init(type, mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis));
+}
+
+udt_socket::udt_socket (udt_socket && other)
+{
+    this->operator = (std::move(other));
+}
+
+udt_socket & udt_socket::operator = (udt_socket && other)
+{
+    this->~udt_socket();
+    _socket = other._socket;
+    _saddr  = other._saddr;
+    other._socket = kINVALID_SOCKET;
+    return *this;
+}
+
+udt_socket::~udt_socket ()
 {
     if (_socket >= 0) {
         UDT::close(_socket);
@@ -130,9 +199,19 @@ basic_socket::~basic_socket ()
     }
 }
 
-basic_socket::native_type basic_socket::native () const noexcept
+udt_socket::operator bool () const noexcept
+{
+    return _socket != kINVALID_SOCKET;
+}
+
+udt_socket::native_type udt_socket::native () const noexcept
 {
     return _socket;
+}
+
+socket4_addr udt_socket::saddr () const noexcept
+{
+    return _saddr;
 }
 
 static std::string state_string (int state)
@@ -152,56 +231,55 @@ static std::string state_string (int state)
     return std::string{"<INVALID STATE>"};
 }
 
-std::vector<std::pair<std::string, std::string>> basic_socket::dump_options () const
+void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> & out) const
 {
-    std::vector<std::pair<std::string, std::string>> result;
     int opt_size {0};
 
     // UDT_MSS - Maximum packet size (bytes). Including all UDT, UDP, and IP
     // headers. Default 1500 bytes.
     int mss {0};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_MSS, & mss, & opt_size));
-    result.push_back(std::make_pair("UDT_MSS", std::to_string(mss)
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_MSS, & mss, & opt_size), "");
+    out.push_back(std::make_pair("UDT_MSS", std::to_string(mss)
         + ' ' + "bytes (max packet size)"));
 
     // UDT_SNDSYN - Synchronization mode of data sending. True for blocking
     // sending; false for non-blocking sending. Default true.
     bool sndsyn {false};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_SNDSYN, & sndsyn, & opt_size));
-    result.push_back(std::make_pair("UDT_SNDSYN", sndsyn
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_SNDSYN, & sndsyn, & opt_size), "");
+    out.push_back(std::make_pair("UDT_SNDSYN", sndsyn
         ? "TRUE (sending blocking)"
         : "FALSE (sending non-blocking)"));
 
     // UDT_RCVSYN - Synchronization mode for receiving.	true for blocking
     // receiving; false for non-blocking receiving. Default true.
     bool rcvsyn {false};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_RCVSYN, & rcvsyn, & opt_size));
-    result.push_back(std::make_pair("UDT_RCVSYN", rcvsyn
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_RCVSYN, & rcvsyn, & opt_size), "");
+    out.push_back(std::make_pair("UDT_RCVSYN", rcvsyn
         ? "TRUE (receiving blocking)"
         : "FALSE (receiving non-blocking)"));
 
     // UDT_FC - Maximum window size (packets). Default 25600.
     int fc {0};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_FC, & fc, & opt_size));
-    result.push_back(std::make_pair("UDT_FC", std::to_string(fc)
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_FC, & fc, & opt_size), "");
+    out.push_back(std::make_pair("UDT_FC", std::to_string(fc)
         + ' ' + "packets (max window size)"));
 
     // UDT_STATE - Current status of the UDT socket.
     std::int32_t state {0};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_STATE, & state, & opt_size));
-    result.push_back(std::make_pair("UDT_STATE", state_string(state)));
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_STATE, & state, & opt_size), "");
+    out.push_back(std::make_pair("UDT_STATE", state_string(state)));
 
     // UDT_LINGER - Linger time on close().
     linger lng {0, 0};
     int linger_sz = sizeof(linger);
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_LINGER, & lng, & linger_sz));
-    result.push_back(std::make_pair("UDT_LINGER"
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_LINGER, & lng, & linger_sz), "");
+    out.push_back(std::make_pair("UDT_LINGER"
         , "{" + std::to_string(lng.l_onoff)
         + ", " + std::to_string(lng.l_linger) + "}"));
 
     // UDT_EVENT - The EPOLL events available to this socket.
     std::int32_t event {0};
-    assert(0 == UDT::getsockopt(_socket, 0, UDT_EVENT, & event, & opt_size));
+    PFS__ASSERT(0 == UDT::getsockopt(_socket, 0, UDT_EVENT, & event, & opt_size), "");
 
     std::string event_str;
 
@@ -212,54 +290,16 @@ std::vector<std::pair<std::string, std::string>> basic_socket::dump_options () c
     if (event & UDT_EPOLL_ERR)
         event_str += (event_str.empty() ? std::string{} : " | ") + "UDT_EPOLL_ERR";
 
-    result.push_back(std::make_pair("UDT_EVENT", event_str.empty() ? "<empty>" : event_str));
-
-    return result;
-}
-
-basic_udt_socket::basic_udt_socket (int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold)
-    : basic_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
-{}
-
-basic_udt_socket::basic_udt_socket (uninitialized): basic_socket() {}
-
-basic_udt_socket::basic_udt_socket (native_type sock, socket4_addr const & saddr)
-    : basic_socket(sock, saddr)
-{}
-
-basic_udt_socket::basic_udt_socket (basic_udt_socket && other)
-{
-    this->operator = (std::move(other));
-}
-
-basic_udt_socket & basic_udt_socket::operator = (basic_udt_socket && other)
-{
-    this->~basic_udt_socket();
-    _socket = other._socket;
-    _saddr  = other._saddr;
-    other._socket = kINVALID_SOCKET;
-    return *this;
-}
-
-basic_udt_socket::~basic_udt_socket () = default;
-
-basic_udt_socket::operator bool () const noexcept
-{
-    return _socket != kINVALID_SOCKET;
-}
-
-basic_udt_socket::native_type basic_udt_socket::native () const noexcept
-{
-    return _socket;
+    out.push_back(std::make_pair("UDT_EVENT", event_str.empty() ? "<empty>" : event_str));
 }
 
 // TODO Need to correct handle error
-int basic_udt_socket::recv (char * data, int len, error * /*perr*/)
+int udt_socket::recv (char * data, int len, error * /*perr*/)
 {
     auto rc = UDT::recvmsg(_socket, data, len);
 
     if (rc == UDT::ERROR) {
+        LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
         // Error code: 6002
         // Error desc: Non-blocking call failure: no data available for reading.
         if (CUDTException{6, 2, 0}.getErrorCode() == UDT::getlasterror_code())
@@ -270,7 +310,7 @@ int basic_udt_socket::recv (char * data, int len, error * /*perr*/)
 }
 
 // TODO Need to correct handle error
-send_result basic_udt_socket::send (char const * data, int len, error * /*perr*/)
+send_result udt_socket::send (char const * data, int len, error * /*perr*/)
 {
     int ttl_millis = -1;
     bool inorder = true;
@@ -283,7 +323,7 @@ send_result basic_udt_socket::send (char const * data, int len, error * /*perr*/
     auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
     if (rc == UDT::ERROR) {
-        LOGE(TAG, "SEND: code={}, text={}", UDT::getlasterror_code(), UDT::getlasterror_desc());
+        LOGE(TAG, "SEND: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
 
         // Error code: 6001
         // Error desc: Non-blocking call failure: no buffer available for sending.
@@ -294,7 +334,7 @@ send_result basic_udt_socket::send (char const * data, int len, error * /*perr*/
     return send_result{send_status::good, static_cast<decltype(send_result::n)>(rc)};
 }
 
-conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
+conn_status udt_socket::connect (socket4_addr const & saddr, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -309,17 +349,11 @@ conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
         , sizeof(addr_in4));
 
     if (rc == UDT::ERROR) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("socket connect error")
             , UDT::getlasterror_desc()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-        } else {
-            throw err;
-        }
+        });
 
         return conn_status::failure;
     }
@@ -334,22 +368,16 @@ conn_status basic_udt_socket::connect (socket4_addr const & saddr, error * perr)
     if (status == CONNECTED)
         return conn_status::connected;
 
-    error err {
+    pfs::throw_or(perr, error {
           errc::socket_error
         , tr::f_("unexpected UDT socket state while connecting: {}"
             , static_cast<int>(status))
-    };
-
-    if (perr) {
-        *perr = std::move(err);
-    } else {
-        throw err;
-    }
+    });
 
     return conn_status::failure;
 }
 
-void basic_udt_socket::disconnect (error * perr)
+void udt_socket::disconnect (error * perr)
 {
     (void)perr;
     UDT::close(_socket);

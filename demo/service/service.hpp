@@ -21,7 +21,7 @@
 #endif
 
 #if NETTY__UDT_ENABLED
-#   include "netty/udt/udt_server.hpp"
+#   include "netty/udt/udt_listener.hpp"
 #   include "netty/udt/udt_socket.hpp"
 #endif
 
@@ -134,7 +134,7 @@ struct service_traits<PollerEnum::UDT>
     using service_type = netty::service<
           netty::server_udt_poller_type
         , netty::client_udt_poller_type
-        , netty::udt::udt_server, netty::udt::udt_socket
+        , netty::udt::udt_listener, netty::udt::udt_socket
         , input_envelope_t
         , output_envelope_t>;
 

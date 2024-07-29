@@ -18,14 +18,18 @@ namespace netty {
 #if NETTY__UDT_ENABLED
 
 template <>
-reader_poller<udt::epoll_poller>::reader_poller (specialized)
-    : _rep(true, false)
-{}
+reader_poller<udt::epoll_poller>::reader_poller (std::shared_ptr<udt::epoll_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<udt::epoll_poller>(true, false)
+        : std::move(ptr))
+{
+    init();
+}
 
 template <>
 int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(_rep.eid, & _rep.readfds, nullptr, millis, perr);
+    auto n = _rep->poll(_rep->eid, & _rep->readfds, nullptr, millis, perr);
 
     if (n < 0)
         return n;
@@ -33,8 +37,8 @@ int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
     auto res = 0;
 
     if (n > 0) {
-        if (!_rep.readfds.empty()) {
-            for (UDTSOCKET u: _rep.readfds) {
+        if (!_rep->readfds.empty()) {
+            for (UDTSOCKET u: _rep->readfds) {
                 auto state = UDT::getsockstate(u);
 
                 if (state == CONNECTED || state == OPENED) {

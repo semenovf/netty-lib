@@ -1,24 +1,21 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2022 Vladislav Trifochkin
+// Copyright (c) 2023-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.06 Initial version.
+//      2024.07.29 `basic_udt_listener` renamed to `basic_udt_listener`.
 ////////////////////////////////////////////////////////////////////////////////
 #include "newlib/udt.hpp"
-#include "pfs/netty/udt/udt_server.hpp"
+#include "pfs/netty/udt/udt_listener.hpp"
 #include "pfs/endian.hpp"
 #include "pfs/i18n.hpp"
 
 namespace netty {
 namespace udt {
 
-basic_udt_server::basic_udt_server () : basic_socket() {}
-
-basic_udt_server::basic_udt_server (socket4_addr const & saddr, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold)
-    : basic_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
+void udt_listener::init (socket4_addr const & saddr, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -33,41 +30,72 @@ basic_udt_server::basic_udt_server (socket4_addr const & saddr, int mtu, int exp
         , sizeof(addr_in4));
 
     if (rc == UDT::ERROR) {
-        throw error {
+        pfs::throw_or(perr,  error {
               errc::socket_error
             , tr::f_("bind name to socket failure: {}", to_string(saddr))
             , UDT::getlasterror_desc()
-        };
+        });
+
+        return;
     }
 
     _saddr = saddr;
 }
 
-basic_udt_server::basic_udt_server (socket4_addr const & saddr, int backlog
-    , int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold)
-    : basic_udt_server(saddr, mtu, exp_max_counter, exp_threshold)
+udt_listener::udt_listener ()
+    : udt_socket(uninitialized{})
+{}
+
+udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_counter
+    , std::chrono::milliseconds exp_threshold
+    , error * perr)
+    : udt_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
 {
-    listen(backlog);
+    init(saddr);
 }
 
-basic_udt_server::~basic_udt_server () = default;
+udt_listener::udt_listener (socket4_addr const & saddr, int backlog
+    , int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr)
+    : udt_listener(saddr, mtu, exp_max_counter, exp_threshold, perr)
+{
+    if (perr && *perr)
+        return;
 
-bool basic_udt_server::listen (int backlog, error * perr)
+    listen(backlog, perr);
+}
+
+udt_listener::udt_listener (socket4_addr const & saddr, property_map_t const & props, error * perr)
+    : udt_socket(props, perr)
+{
+    init(saddr);
+}
+
+udt_listener::udt_listener (socket4_addr const & addr, int backlog, property_map_t const & props, error * perr)
+    : udt_listener(addr, props, perr)
+{
+    if (perr && *perr)
+        return;
+
+    listen(backlog, perr);
+}
+
+udt_listener::~udt_listener () = default;
+
+udt_listener::native_type udt_listener::native () const noexcept
+{
+    return udt_socket::native();
+}
+
+bool udt_listener::listen (int backlog, error * perr)
 {
     auto rc = UDT::listen(_socket, backlog);
 
     if (rc == UDT::ERROR) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("listen failure")
             , UDT::getlasterror_desc()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-        } else {
-            throw err;
-        }
+        });
 
         return false;
     }
@@ -75,8 +103,14 @@ bool basic_udt_server::listen (int backlog, error * perr)
     return true;
 }
 
-void basic_udt_server::accept (native_type listener_sock
-    , basic_udt_socket & result,  error * perr)
+// [static]
+udt_socket udt_listener::accept (native_type listener_sock , error * perr)
+{
+    return accept_nonblocking(listener_sock, perr);
+}
+
+// [static]
+udt_socket udt_listener::accept_nonblocking (native_type listener_sock, error * perr)
 {
     sockaddr sa;
     int addrlen;
@@ -108,41 +142,23 @@ void basic_udt_server::accept (native_type listener_sock
             UDT::setsockopt(u, 0, UDT_EXP_THRESHOLD  , & exp_threshold, sizeof(exp_threshold));
             UDT::setsockopt(u, 0, UDT_MSS            , & mtu, sizeof(mtu));
 
-            result = basic_udt_socket{u, socket4_addr{addr, port}};
-            return;
+            return udt_socket{u, socket4_addr{addr, port}};
         } else {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::socket_error
                 , tr::_("socket accept failure: unsupported sockaddr family"
                   " (AF_INET supported only)")
-            };
-
-            if (perr) {
-                *perr = std::move(err);
-            } else {
-                throw err;
-            }
+            });
         }
     } else {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("socket accept failure")
             , UDT::getlasterror_desc()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-        } else {
-            throw err;
-        }
+        });
     }
 
-    result = basic_udt_socket{uninitialized{}};
-}
-
-void basic_udt_server::accept (basic_udt_socket & result, error * perr)
-{
-    accept(_socket, result, perr);
+    return udt_socket{uninitialized{}};
 }
 
 }} // namespace netty::udt

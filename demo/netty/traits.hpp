@@ -13,7 +13,7 @@
 
 #if NETTY__UDT_ENABLED
 #   include "pfs/netty/udt/udt_socket.hpp"
-#   include "pfs/netty/udt/udt_server.hpp"
+#   include "pfs/netty/udt/udt_listener.hpp"
 #endif
 
 #if NETTY__ENET_ENABLED
@@ -70,15 +70,15 @@ struct epoll_client_traits
 
 struct udt_server_traits
 {
-    using listener_type = netty::udt::udt_server<>;
-    using socket_type   = netty::udt::udt_socket<>;
+    using listener_type = netty::udt::udt_listener;
+    using socket_type   = netty::udt::udt_socket;
     using poller_type   = netty::server_udt_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
 
 struct udt_client_traits
 {
-    using socket_type   = netty::udt::udt_socket<>;
+    using socket_type   = netty::udt::udt_socket;
     using poller_type   = netty::client_udt_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };

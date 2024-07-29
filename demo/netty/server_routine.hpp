@@ -50,7 +50,8 @@ void start_server (netty::socket4_addr const & saddr)
     std::map<native_socket_type, typename ServerTraits::socket_type> sockets;
 
     try {
-        typename ServerTraits::listener_type listener {saddr, 10};
+        netty::property_map_t props;
+        typename ServerTraits::listener_type listener {saddr, 10, props};
 
         auto accept_proc = [& listener, & sockets] (native_socket_type listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);

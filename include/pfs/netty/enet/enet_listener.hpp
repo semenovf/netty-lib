@@ -9,6 +9,7 @@
 #pragma once
 #include <pfs/netty/error.hpp>
 #include <pfs/netty/exports.hpp>
+#include <pfs/netty/property.hpp>
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/enet/enet_socket.hpp>
 
@@ -44,6 +45,16 @@ public:
      * listening
      */
     NETTY__EXPORT enet_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
+
+    enet_listener (socket4_addr const & saddr, property_map_t const & /*props*/
+        , netty::error * perr = nullptr)
+        : enet_listener(saddr, perr)
+        {}
+
+    enet_listener (socket4_addr const & saddr, int backlog, property_map_t const & /*props*/
+        , error * perr = nullptr)
+        : enet_listener(saddr, backlog, perr)
+        {}
 
     NETTY__EXPORT ~enet_listener ();
 

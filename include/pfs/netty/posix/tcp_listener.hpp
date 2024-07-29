@@ -10,6 +10,7 @@
 #pragma once
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/error.hpp"
+#include "pfs/netty/property.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 
 namespace netty {
@@ -29,13 +30,22 @@ public:
     /**
      * Constructs POSIX TCP server.
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, netty::error * perr = nullptr);
+    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, error * perr = nullptr);
 
     /**
      * Constructs POSIX TCP server, bind to the specified address and start
      * listening
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & addr, int backlog, netty::error * perr = nullptr);
+    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
+
+    tcp_listener (socket4_addr const & saddr, property_map_t const & /*props*/, error * perr = nullptr)
+        : tcp_listener(saddr, perr)
+    {}
+
+    tcp_listener (socket4_addr const & saddr, int backlog, property_map_t const & /*props*/
+        , error * perr = nullptr)
+        : tcp_listener(saddr, backlog, perr)
+    {}
 
 public:
     /**

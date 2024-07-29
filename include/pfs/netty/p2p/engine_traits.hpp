@@ -14,7 +14,7 @@
 #include "pfs/netty/posix/tcp_socket.hpp"
 
 #if NETTY__UDT_ENABLED
-#   include "pfs/netty/udt/udt_server.hpp"
+#   include "pfs/netty/udt/udt_listener.hpp"
 #   include "pfs/netty/udt/udt_socket.hpp"
 #endif
 
@@ -78,7 +78,7 @@ struct udt_engine_traits
     using server_poller_type = netty::server_udt_poller_type;
     using reader_type   = netty::udt::udt_socket;
     using writer_type   = netty::udt::udt_socket;
-    using listener_type = netty::udt::udt_server;
+    using listener_type = netty::udt::udt_listener;
 };
 #endif
 

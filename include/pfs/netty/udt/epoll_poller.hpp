@@ -31,8 +31,11 @@ public:
     epoll_poller (bool observe_read, bool observe_write);
     ~epoll_poller ();
 
-    void add (native_socket_type sock, error * perr = nullptr);
-    void remove (native_socket_type sock, error * perr = nullptr);
+    void add_socket (native_socket_type sock, error * perr = nullptr);
+    void add_listener (native_listener_type sock, error * perr = nullptr);
+    void wait_for_write (native_socket_type sock, error * perr = nullptr);
+    void remove_socket (native_socket_type sock, error * perr = nullptr);
+    void remove_listener (native_listener_type sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (int eid, std::set<native_socket_type> * readfds
         , std::set<native_socket_type> * writefds

@@ -1,10 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2023-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.09 Initial version.
+//      2024.07.29 Fixed `connecting_poller` specialization.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
 #include "pfs/i18n.hpp"
@@ -21,17 +22,22 @@ namespace netty {
 #if NETTY__UDT_ENABLED
 
 template <>
-connecting_poller<udt::epoll_poller>::connecting_poller (specialized)
-    : _rep(false, true)
-{}
-
+connecting_poller<udt::epoll_poller>::connecting_poller (std::shared_ptr<udt::epoll_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<udt::epoll_poller>(false, true)
+        : std::move(ptr))
+{
+    init();
+}
 
 template<>
 void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error * perr)
 {
+    // FIXME CHECK
+
     error err;
 
-    _rep.add(sock, & err);
+    _rep->add_socket(sock, & err);
 
     if (err) {
         if (perr) {
@@ -74,7 +80,7 @@ void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error *
 template <>
 int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(_rep.eid, nullptr, & _rep.writefds, millis, perr);
+    auto n = _rep->poll(_rep->eid, nullptr, & _rep->writefds, millis, perr);
 
     if (n < 0)
         return n;
@@ -82,12 +88,12 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
     int res = 0;
 
     if (n > 0) {
-        if (!_rep.writefds.empty()) {
-            for (UDTSOCKET u: _rep.writefds) {
+        if (!_rep->writefds.empty()) {
+            for (UDTSOCKET u: _rep->writefds) {
                 auto state = UDT::getsockstate(u);
-                LOG_TRACE_1(tr::f_("UDT connected socket state: {} ({})"
+                LOG_TRACE_1("UDT connected socket state: {} ({})"
                     , static_cast<int>(state)
-                    , state == CONNECTED ? tr::_("CONNECTED") : "?"));
+                    , state == CONNECTED ? tr::_("CONNECTED") : "?");
 
                 remove(u);
 

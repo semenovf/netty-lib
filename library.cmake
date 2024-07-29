@@ -151,11 +151,13 @@ if (NETTY__ENABLE_UDT)
         ${NETTY__UDT_ROOT}/window.cpp)
 
     list(APPEND _netty__sources
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/reader_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_server.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/server_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_listener.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_socket.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)

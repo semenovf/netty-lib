@@ -18,24 +18,28 @@ namespace netty {
 #if NETTY__UDT_ENABLED
 
 template <>
-writer_poller<udt::epoll_poller>::writer_poller (specialized)
-    : _rep(false, true)
-{}
+writer_poller<udt::epoll_poller>::writer_poller (std::shared_ptr<udt::epoll_poller> ptr)
+    : _rep(ptr == nullptr
+        ? std::make_shared<udt::epoll_poller>(false, true)
+        : std::move(ptr))
+{
+    init();
+}
 
 template <>
 int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto n = _rep.poll(_rep.eid, nullptr, & _rep.writefds, millis, perr);
+    auto n = _rep->poll(_rep->eid, nullptr, & _rep->writefds, millis, perr);
 
     if (n < 0)
         return n;
 
-    auto res = 0;
+    auto rc = 0;
 
     if (n > 0) {
-        if (!_rep.writefds.empty()) {
-            for (UDTSOCKET u: _rep.writefds) {
-                res++;
+        if (!_rep->writefds.empty()) {
+            for (UDTSOCKET u: _rep->writefds) {
+                rc++;
 
                 //auto state = UDT::getsockstate(u);
                 //LOGD(TAG, "UDT write socket state: {}", state);
@@ -45,7 +49,7 @@ int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
         }
     }
 
-    return res;
+    return rc;
 }
 
 #endif // NETTY__UDT_ENABLED

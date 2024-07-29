@@ -55,18 +55,13 @@ void epoll_poller::add_socket (native_socket_type sock, error * perr)
         if (errno == EEXIST)
             return;
 
-        error err {
+        pfs::throw_or(perr, error {
               errc::poller_error
             , tr::f_("epoll add socket ({}) failure", sock)
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
+        return;
     }
 
     if (events.size() % DEFAULT_INCREMENT == 0 )

@@ -33,8 +33,10 @@ tcp_listener::tcp_listener (socket4_addr const & saddr, netty::error * perr)
 tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog, netty::error * perr)
     : tcp_listener(saddr, perr)
 {
-    if (perr && !*perr)
-        listen(backlog, perr);
+    if (perr && *perr)
+        return;
+
+    listen(backlog, perr);
 }
 
 bool tcp_listener::listen (int backlog, error * perr)
@@ -76,35 +78,24 @@ tcp_socket tcp_listener::accept (native_type listener_sock, error * perr)
 
             return tcp_socket{sock, socket4_addr{addr, port}};
         } else {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::socket_error
                 , tr::f_("socket accept failure: unsupported sockaddr family: {}"
                         " (AF_INET supported only)", sa.sin_family)
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-            } else {
-                throw err;
-            }
+            return tcp_socket{uninitialized{}};
         }
     }
 
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK)
         return tcp_socket{uninitialized{}};
-    }
 
-    error err {
+    pfs::throw_or(perr, error {
           errc::socket_error
         , tr::_("socket accept failure")
         , pfs::system_error_text()
-    };
-
-    if (perr) {
-        *perr = std::move(err);
-    } else {
-        throw err;
-    }
+    });
 
     return tcp_socket{uninitialized{}};
 }
