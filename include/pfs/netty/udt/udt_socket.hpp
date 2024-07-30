@@ -9,12 +9,13 @@
 //      2024.07.29 Refactored `udt_socket`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/conn_status.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/property.hpp"
-#include "pfs/netty/send_result.hpp"
-#include "pfs/netty/socket4_addr.hpp"
+#include <pfs/netty/conn_status.hpp>
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/exports.hpp>
+#include <pfs/netty/property.hpp>
+#include <pfs/netty/send_result.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include <pfs/netty/uninitialized.hpp>
 #include <chrono>
 #include <string>
 #include <vector>
@@ -23,8 +24,6 @@ namespace netty {
 namespace udt {
 
 class udt_listener;
-
-struct uninitialized {};
 
 class udt_socket
 {
@@ -53,11 +52,6 @@ private:
 
 protected:
     /**
-     * Constructs uninitialized (invalid) UDT socket.
-     */
-    udt_socket (uninitialized);
-
-    /**
      * Constructs UDT accepted socket.
      */
     udt_socket (native_type sock, socket4_addr const & saddr);
@@ -69,7 +63,15 @@ public:
     udt_socket (udt_socket const & other) = delete;
     udt_socket & operator = (udt_socket const & other) = delete;
 
-    udt_socket (): udt_socket(uninitialized {}) {}
+    /**
+     * Constructs uninitialized (invalid) UDT socket.
+     */
+    NETTY__EXPORT udt_socket (uninitialized);
+
+    /**
+     * Constructs UDT socket with default properties.
+     */
+    NETTY__EXPORT udt_socket ();
 
     NETTY__EXPORT udt_socket (udt_socket && other);
     NETTY__EXPORT udt_socket & operator = (udt_socket && other);
@@ -88,10 +90,11 @@ public:
      * @note Descriptions for `exp_max_counter` and `exp_threshold` see in
      *       `udt/newlib/core.hpp`.
      */
-    NETTY__EXPORT udt_socket (type_enum type, int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold);
+    NETTY__EXPORT udt_socket (type_enum type, int mtu, int exp_max_counter
+        , std::chrono::milliseconds exp_threshold, error * perr = nullptr);
 
     /**
-     * Constructs new UDT socket with set `exp_max_counter` to 8 and `exp_threshold` to 1 second.
+     * Constructs new UDT socket with set `exp_max_counter` to 2 and `exp_threshold` to 625 milliseconds.
      *
      * @param type UDT socket type (only `type_enum::dgram` supported).
      * @param mtu MTU value.
@@ -99,13 +102,13 @@ public:
      * @note Descriptions for `exp_max_counter` and `exp_threshold` see in
      *       `udt/newlib/core.hpp`.
      */
-    NETTY__EXPORT udt_socket (type_enum type, int mtu);
+    NETTY__EXPORT udt_socket (type_enum type, int mtu, error * perr = nullptr);
 
     /**
-     * Constructs UDT listener with specified properties. Accepts the following parameters:
-     *      - "mtu" (std::intmax_t) - MTU;
-     *      - "exp_max_counter" (std::intmax_t) - max socket expiration counter;
-     *      - "exp_threshold" (std::intmax_t) - socket (peer, accepted) expiration threshold in milliseconds.
+     * Constructs UDT socket with specified properties. Accepts the following parameters:
+     *      - "mtu" (int) - MTU;
+     *      - "exp_max_counter" (int) - max socket expiration counter;
+     *      - "exp_threshold" (int) - socket (peer, accepted) expiration threshold in milliseconds.
      */
     NETTY__EXPORT udt_socket (property_map_t const & props, error * perr = nullptr);
 
@@ -123,6 +126,7 @@ public:
      */
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
+    NETTY__EXPORT int available (error * perr = nullptr) const;
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 

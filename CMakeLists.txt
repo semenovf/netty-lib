@@ -34,6 +34,7 @@ endif()
 
 if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet/CMakeLists.txt)
     set(NETTY__ENABLE_ENET ON CACHE BOOL "")
+    set(NETTY__ENABLE_UDT ON CACHE BOOL "")
 endif()
 
 portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library.cmake)

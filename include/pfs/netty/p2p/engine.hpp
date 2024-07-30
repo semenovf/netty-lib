@@ -17,13 +17,14 @@
 #include "file.hpp"
 #include "packet.hpp"
 #include "universal_id.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/log.hpp"
-#include "pfs/memory.hpp"
-#include "pfs/ring_buffer.hpp"
-#include "pfs/netty/chrono.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "pfs/netty/startup.hpp"
+#include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
+#include <pfs/memory.hpp>
+#include <pfs/ring_buffer.hpp>
+#include <pfs/netty/chrono.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include <pfs/netty/startup.hpp>
+#include <pfs/netty/uninitialized.hpp>
 #include <bitset>
 #include <limits>
 #include <map>
@@ -131,7 +132,7 @@ private:
         universal_id uuid;
         bool can_write;
         bool connected; // Used to check complete channel
-        writer_type writer;
+        writer_type writer {uninitialized{}};
 
         // Regular packets output queue
         oqueue_type regular_queue;
@@ -151,7 +152,7 @@ private:
 
     struct reader_account {
         universal_id uuid;
-        reader_type reader;
+        reader_type reader {uninitialized{}};
 
         // Buffer to accumulate payload from input packets
         std::vector<char> b;

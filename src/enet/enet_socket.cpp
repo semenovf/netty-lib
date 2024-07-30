@@ -34,19 +34,8 @@ struct {
     , { 96, 5000, 10000 }
 };
 
-enet_socket::enet_socket (uninitialized)
-{}
-
-enet_socket::enet_socket (net_quality nq)
-    : _nq(nq)
+void enet_socket::init (int timeout_limit, int timeout_min, int timeout_max, error * perr)
 {
-    if (_nq < net_quality::defaults || _nq > net_quality::poor) {
-        throw error {
-              std::make_error_code(std::errc::invalid_argument)
-            , tr::_("bad network quality value")
-        };
-    }
-
     _host = enet_host_create(nullptr // create a client host
         , 1   // only allow 1 outgoing connection
         , 2   // allow up 2 channels to be used, 0 and 1
@@ -54,17 +43,60 @@ enet_socket::enet_socket (net_quality nq)
         , 0); // assume any amount of outgoing bandwidth
 
     if (_host == nullptr) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("create ENet socket failure")
-        };
+        });
+
+        return;
     }
+
+    _timeout_limit = timeout_limit;
+    _timeout_min   = timeout_min;
+    _timeout_max   = timeout_max;
+}
+
+enet_socket::enet_socket (uninitialized)
+{}
+
+enet_socket::enet_socket (net_quality nq, error * perr)
+{
+    if (nq < net_quality::defaults || nq > net_quality::poor) {
+        pfs::throw_or(perr, error {
+              std::make_error_code(std::errc::invalid_argument)
+            , tr::_("bad network quality value")
+        });
+
+        return;
+    }
+
+    init(NET_QUALITIES[nq].timeout_limit, NET_QUALITIES[nq].timeout_min
+        , NET_QUALITIES[nq].timeout_max, perr);
+}
+
+enet_socket::enet_socket (property_map_t const & props, error * perr)
+{
+    auto timeout_limit = get_or<int>(props, "timeout_limit", NET_QUALITIES[net_quality::normal].timeout_limit);
+    auto timeout_min = get_or<int>(props, "timeout_min", NET_QUALITIES[net_quality::normal].timeout_min);
+    auto timeout_max = get_or<int>(props, "timeout_max", NET_QUALITIES[net_quality::normal].timeout_max);
+
+    init(timeout_limit, timeout_min, timeout_max, perr);
+}
+
+enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
+    : _host(host)
+    , _peer(peer)
+    , _accepted_socket(true)
+{
+    _peer->data = & _inpb;
 }
 
 enet_socket::enet_socket (enet_socket && other)
     : _host(other._host)
     , _peer(other._peer)
-    , _nq(other._nq)
+    , _timeout_limit(other._timeout_limit)
+    , _timeout_min(other._timeout_min)
+    , _timeout_max(other._timeout_max)
     , _accepted_socket(other._accepted_socket)
     , _inpb(std::move(other._inpb))
 {
@@ -82,7 +114,9 @@ enet_socket & enet_socket::operator = (enet_socket && other)
 
     _host = other._host;
     _peer = other._peer;
-    _nq = other._nq;
+    _timeout_limit = other._timeout_limit;
+    _timeout_min = other._timeout_min;
+    _timeout_max = other._timeout_max;
     _accepted_socket = other._accepted_socket;
     _inpb = std::move(other._inpb);
     other._host = nullptr;
@@ -103,14 +137,6 @@ enet_socket::~enet_socket ()
 
     _peer = nullptr; // Peer destroyed automatically in enet_host_destroy()
     _host = nullptr;
-}
-
-enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
-    : _host(host)
-    , _peer(peer)
-    , _accepted_socket(true)
-{
-    _peer->data = & _inpb;
 }
 
 enet_socket::operator bool () const noexcept
@@ -235,10 +261,7 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
 
     _peer->data = & _inpb;
 
-    auto tlim = NET_QUALITIES[_nq].timeout_limit;
-    auto tmin = NET_QUALITIES[_nq].timeout_min;
-    auto tmax = NET_QUALITIES[_nq].timeout_max;
-    enet_peer_timeout(_peer, tlim, tmin, tmax);
+    enet_peer_timeout(_peer, _timeout_limit, _timeout_min, _timeout_max);
 
     ENetEvent event;
     auto rc = enet_host_service(_host, & event, 0);

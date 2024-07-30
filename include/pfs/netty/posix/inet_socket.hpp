@@ -7,11 +7,12 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/inet4_addr.hpp"
-#include "pfs/netty/send_result.hpp"
-#include "pfs/netty/socket4_addr.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/exports.hpp>
+#include <pfs/netty/inet4_addr.hpp>
+#include <pfs/netty/send_result.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include <pfs/netty/uninitialized.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -19,8 +20,6 @@
 
 namespace netty {
 namespace posix {
-
-struct uninitialized {};
 
 /**
  * POSIX inet socket

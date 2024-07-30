@@ -43,7 +43,7 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
     if (n > 0) {
         for (UDTSOCKET u: _rep->readfds) {
             auto status = UDT::getsockstate(u);
-            LOGD(TAG, "UDT server socket state: {}", static_cast<int>(status));
+            LOGD(TAG, "Socket ACCEPTED: listener sock={}; state={}", u, static_cast<int>(status));
 
             res++;
 

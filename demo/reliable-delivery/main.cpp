@@ -192,7 +192,7 @@ int main (int argc, char * argv[])
     };
 
     deliveryengine->writer_closed = [] (netty::host4_addr haddr) {
-        LOGD("", "Writer ready: {}", to_string(haddr));
+        LOGD("", "Writer closed: {}", to_string(haddr));
     };
 
     deliveryengine->reader_ready = [] (netty::host4_addr haddr) {

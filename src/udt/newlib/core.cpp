@@ -2452,10 +2452,10 @@ void CUDT::checkTimers()
     }
 
     if (currtime > next_exp_time) {
-        LOG_TRACE_3("UDT: CHECK BROKEN: id: {}, exp_counter={}, exp_max_counter={}"
-            ", m_ullCPUFrequency={}, currtime={}, next_exp_time={}, currtime - next_exp_time={}"
-            , m_SocketID, m_iEXPCount, m_iEXPMaxCounter, m_ullCPUFrequency
-            , currtime, next_exp_time, currtime - next_exp_time);
+        // LOG_TRACE_3("UDT: CHECK BROKEN: id: {}, exp_counter={}, exp_max_counter={}"
+        //     ", m_ullCPUFrequency={}, currtime={}, next_exp_time={}, currtime - next_exp_time={}"
+        //     , m_SocketID, m_iEXPCount, m_iEXPMaxCounter, m_ullCPUFrequency
+        //     , currtime, next_exp_time, currtime - next_exp_time);
 
         // Haven't receive any information from the peer, is it dead?!
         // timeout: at least 16 expirations and must be greater than 10 seconds

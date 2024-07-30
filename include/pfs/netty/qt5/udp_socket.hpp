@@ -7,18 +7,17 @@
 //      2023.01.18 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/exports.hpp"
-#include "pfs/netty/inet4_addr.hpp"
-#include "pfs/netty/send_result.hpp"
-#include "pfs/netty/socket4_addr.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/exports.hpp>
+#include <pfs/netty/inet4_addr.hpp>
+#include <pfs/netty/send_result.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include <pfs/netty/uninitialized.hpp>
 #include <QUdpSocket>
 #include <memory>
 
 namespace netty {
 namespace qt5 {
-
-struct uninitialized {};
 
 /**
  * Qt5 Inet UDP socket
@@ -32,11 +31,6 @@ protected:
     std::unique_ptr<QUdpSocket> _socket;
 
 protected:
-    /**
-     * Constructs uninitialized (invalid) UDP socket.
-     */
-    udp_socket (uninitialized);
-
     /**
       * Joins the multicast group specified by @a group on the default interface
       * chosen by the operating system.
@@ -63,6 +57,11 @@ protected:
 public:
     udp_socket (udp_socket const &) = delete;
     udp_socket & operator = (udp_socket const &) = delete;
+
+    /**
+     * Constructs uninitialized (invalid) UDP socket.
+     */
+    NETTY__EXPORT udp_socket (uninitialized);
 
     NETTY__EXPORT udp_socket ();
     NETTY__EXPORT udp_socket (udp_socket &&);

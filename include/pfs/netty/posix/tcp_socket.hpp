@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/conn_status.hpp"
+#include "pfs/netty/property.hpp"
 #include "pfs/netty/posix/inet_socket.hpp"
 
 namespace netty {
@@ -28,14 +29,18 @@ protected:
      */
     tcp_socket (native_type sock, socket4_addr const & saddr);
 
-    /**
-     * Constructs uninitialized (invalid) TCP socket.
-     */
-    tcp_socket (uninitialized);
-
 public:
     tcp_socket (tcp_socket const & s) = delete;
     tcp_socket & operator = (tcp_socket const & s) = delete;
+
+    /**
+     * Constructs uninitialized (invalid) TCP socket.
+     */
+    NETTY__EXPORT tcp_socket (uninitialized);
+
+    tcp_socket (property_map_t const & /*props*/, error * perr = nullptr)
+        : tcp_socket()
+    {}
 
     NETTY__EXPORT tcp_socket ();
     NETTY__EXPORT tcp_socket (tcp_socket && s);

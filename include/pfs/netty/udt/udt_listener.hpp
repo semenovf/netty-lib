@@ -62,13 +62,15 @@ public:
      *      - "exp_max_counter" (std::intmax_t) - max socket expiration counter;
      *      - "exp_threshold" (std::intmax_t) - socket (peer, accepted) expiration threshold in milliseconds.
      */
-    NETTY__EXPORT udt_listener (socket4_addr const & addr, property_map_t const & props, error * perr = nullptr);
+    NETTY__EXPORT udt_listener (socket4_addr const & addr
+        , property_map_t const & props = property_map_t{}, error * perr = nullptr);
 
     /**
      * Constructs UDT listener with specified properties, bind to the specified address and start
      * listening.
      */
-    NETTY__EXPORT udt_listener (socket4_addr const & addr, int backlog, property_map_t const & props, error * perr = nullptr);
+    NETTY__EXPORT udt_listener (socket4_addr const & addr, int backlog
+        , property_map_t const & props = property_map_t{}, error * perr = nullptr);
 
     NETTY__EXPORT ~udt_listener ();
 

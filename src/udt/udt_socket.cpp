@@ -46,8 +46,8 @@ namespace udt {
 //     return std::chrono::milliseconds{625};
 // }
 
-static constexpr int kDefaultExpMaxCounter = 8;
-static std::chrono::milliseconds const kDefaultExpThreshold {1000};
+static constexpr int kDefaultExpMaxCounter = 2;
+static std::chrono::milliseconds const kDefaultExpThreshold {625};
 
 void udt_socket::init (type_enum, int mtu, int exp_max_counter
     , std::chrono::milliseconds exp_threshold, error * perr)
@@ -146,27 +146,28 @@ void udt_socket::init (type_enum, int mtu, int exp_max_counter
 udt_socket::udt_socket (uninitialized)
 {}
 
+udt_socket::udt_socket ()
+{
+    init(type_enum::dgram, 1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
+}
+
 udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
     : _socket(sock)
     , _saddr(saddr)
-{}
-
-udt_socket::udt_socket (type_enum type, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold)
 {
-    init(type, mtu, exp_max_counter, exp_threshold);
+    LOGD(TAG, "CONSTRUCT Socket ACCEPTED: {}", sock);
 }
 
-udt_socket::udt_socket (type_enum type, int mtu)
-    : udt_socket(type, mtu, kDefaultExpMaxCounter, kDefaultExpThreshold)
+udt_socket::udt_socket (type_enum type, int mtu, int exp_max_counter
+    , std::chrono::milliseconds exp_threshold, error * perr)
+{
+    init(type, mtu, exp_max_counter, exp_threshold, perr);
+}
+
+udt_socket::udt_socket (type_enum type, int mtu, error * perr)
+    : udt_socket(type, mtu, kDefaultExpMaxCounter, kDefaultExpThreshold, perr)
 {}
 
-    /**
-     * Constructs UDT listener with specified properties. Accepts the following parameters:
-     *      - "mtu" (std::intmax_t) - MTU;
-     *      - "exp_max_counter" (std::intmax_t) - max socket expiration counter;
-     *      - "exp_threshold" (std::intmax_t) - socket (peer, accepted) expiration threshold in milliseconds.
-     */
 udt_socket::udt_socket (property_map_t const & props, error * perr)
 {
     type_enum type = type_enum::dgram;
@@ -174,7 +175,7 @@ udt_socket::udt_socket (property_map_t const & props, error * perr)
     auto exp_max_counter = get_or<int>(props, "exp_max_counter", kDefaultExpMaxCounter);
     auto exp_threshold_millis = get_or<int>(props, "exp_max_counter", kDefaultExpThreshold.count());
 
-    init(type, mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis));
+    init(type, mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis), perr);
 }
 
 udt_socket::udt_socket (udt_socket && other)
@@ -291,6 +292,25 @@ void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> 
         event_str += (event_str.empty() ? std::string{} : " | ") + "UDT_EPOLL_ERR";
 
     out.push_back(std::make_pair("UDT_EVENT", event_str.empty() ? "<empty>" : event_str));
+}
+
+int udt_socket::available (error * perr) const
+{
+    std::int32_t n {0};
+    int opt_size {sizeof(n)};
+    auto rc = UDT::getsockopt(_socket, 0, UDT_RCVDATA, & n, & opt_size);
+
+    if (rc != 0) {
+        pfs::throw_or(perr, error {
+              errc::socket_error
+            , tr::_("read available data size from socket failure")
+            , UDT::getlasterror_desc()
+        });
+
+        return -1;
+    }
+
+    return n;
 }
 
 // TODO Need to correct handle error

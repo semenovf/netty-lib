@@ -7,7 +7,9 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/chrono.hpp>
+#include <map>
 #include <set>
 
 namespace netty {
@@ -26,6 +28,9 @@ public:
     std::set<native_socket_type> writefds;
     bool observe_read {false};
     bool observe_write {false};
+
+    // Need to control expiration timeout for connecting sockets.
+    std::map<native_socket_type, clock_type::time_point> _connecting_sockets;
 
 public:
     epoll_poller (bool observe_read, bool observe_write);

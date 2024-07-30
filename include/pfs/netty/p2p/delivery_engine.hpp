@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2024.04.16 Initial version.
+//      2024.07.30 Add Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "engine_traits.hpp"
@@ -12,15 +13,16 @@
 #include "packet.hpp"
 #include "primal_serializer.hpp"
 #include "universal_id.hpp"
-#include "netty/error.hpp"
-#include "netty/host4_addr.hpp"
-#include "netty/send_result.hpp"
-#include "netty/socket4_addr.hpp"
-#include "netty/startup.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/optional.hpp"
-#include "pfs/ring_buffer.hpp"
-#include "pfs/stopwatch.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/host4_addr.hpp>
+#include <pfs/netty/property.hpp>
+#include <pfs/netty/send_result.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include <pfs/netty/startup.hpp>
+#include <pfs/i18n.hpp>
+#include <pfs/optional.hpp>
+#include <pfs/ring_buffer.hpp>
+#include <pfs/stopwatch.hpp>
 #include <functional>
 #include <map>
 #include <numeric>
@@ -59,6 +61,8 @@ public:
         // for listener may grow.
         int listener_backlog {100};
 
+        property_map_t listener_props;
+
         // Fixed C2512 on MSVC 2017
         options () {}
     };
@@ -67,7 +71,7 @@ private:
     struct reader_account
     {
         peer_id peerid;
-        reader_type reader;
+        reader_type reader {uninitialized{}};
 
         // Buffer to accumulate payload from input packets
         std::vector<char> b;
@@ -79,7 +83,7 @@ private:
     struct writer_account
     {
         peer_id peerid;
-        writer_type writer;
+        writer_type writer {uninitialized{}};
         bool can_write {false};
         bool connected {false}; // Used to check complete channel
 
@@ -221,12 +225,13 @@ public:
             }
         };
 
-        // Call befor any network operations
+        // Call before any network operations
         startup();
 
         netty::error err;
 
-        _listener = pfs::make_unique<listener_type>(_opts.listener_saddr, & err);
+        _listener = pfs::make_unique<listener_type>(_opts.listener_saddr
+            , _opts.listener_backlog, _opts.listener_props, & err);
 
         if (!err)
             _reader_poller->add_listener(*_listener, & err);

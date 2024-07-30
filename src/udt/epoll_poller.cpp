@@ -78,6 +78,9 @@ void epoll_poller::wait_for_write (native_socket_type sock, error * perr)
 
 void epoll_poller::remove_socket (native_socket_type sock, error * perr)
 {
+    if (counter == 0)
+        return;
+
     auto rc = UDT::epoll_remove_usock(eid, sock);
 
     LOGD("--", "REMOVE SOCKET: eid={}, sock={}", eid, sock);
@@ -98,7 +101,6 @@ void epoll_poller::remove_socket (native_socket_type sock, error * perr)
         pfs::throw_or(perr, error {
               errc::poller_error
             , tr::_("UDT epoll_poller: counter management not consistent")
-            , UDT::getlasterror_desc()
         });
     }
 }

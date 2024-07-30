@@ -33,19 +33,13 @@ connecting_poller<udt::epoll_poller>::connecting_poller (std::shared_ptr<udt::ep
 template<>
 void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error * perr)
 {
-    // FIXME CHECK
-
     error err;
 
     _rep->add_socket(sock, & err);
 
     if (err) {
-        if (perr) {
-            *perr = std::move(err);
-            return;
-        } else {
-            throw err;
-        }
+        pfs::throw_or(perr, std::move(err));
+        return;
     }
 
     auto status = UDT::getsockstate(sock);
@@ -58,22 +52,17 @@ void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error *
         auto rc = UDT::getsockopt(sock, 0, UDT_EXP_THRESHOLD, & exp_threshold, & exp_threshold_size);
 
         if (rc == UDT::ERROR) {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::poller_error
                 , tr::_("UDT get socket option failure")
                 , UDT::getlasterror_desc()
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return;
-            } else {
-                throw err;
-            }
+            return;
         }
 
         auto exp_timepoint = future_timepoint(std::chrono::milliseconds{exp_threshold / 1000});
-        _connecting_sockets.emplace(sock, exp_timepoint);
+        _rep->_connecting_sockets.emplace(sock, exp_timepoint);
     }
 }
 
@@ -91,13 +80,12 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
         if (!_rep->writefds.empty()) {
             for (UDTSOCKET u: _rep->writefds) {
                 auto state = UDT::getsockstate(u);
-                LOG_TRACE_1("UDT connected socket state: {} ({})"
+                LOG_TRACE_1("Socket CONNECTED: sock={}; state={} ({})"
+                    , u
                     , static_cast<int>(state)
                     , state == CONNECTED ? tr::_("CONNECTED") : "?");
 
-                remove(u);
-
-                _connecting_sockets.erase(u);
+                _rep->_connecting_sockets.erase(u);
 
                 res++;
 
@@ -107,18 +95,16 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
         }
     }
 
-    // Check expired connecting sockets
-    if (!_connecting_sockets.empty()) {
-        auto pos  = _connecting_sockets.begin();
-        auto last = _connecting_sockets.end();
+    // Check expiration timeout for connecting sockets
+    if (!_rep->_connecting_sockets.empty()) {
+        auto pos  = _rep->_connecting_sockets.begin();
+        auto last = _rep->_connecting_sockets.end();
 
         while (pos != last) {
             if (timepoint_expired(pos->second)) {
                 auto u = pos->first;
 
-                remove(u);
-
-                pos = _connecting_sockets.erase(pos);
+                pos = _rep->_connecting_sockets.erase(pos);
 
                 if (connection_refused)
                     connection_refused(u);

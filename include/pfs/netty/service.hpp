@@ -7,10 +7,11 @@
 //      2024.05.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/property.hpp>
+#include <pfs/netty/send_result.hpp>
+#include <pfs/netty/socket4_addr.hpp>
 #include <pfs/i18n.hpp>
-#include <netty/error.hpp>
-#include <netty/send_result.hpp>
-#include <netty/socket4_addr.hpp>
 #include <pfs/ring_buffer.hpp>
 #include <pfs/string_view.hpp>
 #include <functional>
@@ -153,6 +154,20 @@ public:
             this->add_listener(_listener);
             _listener.listen(backlog);
         }
+
+        respondent (socket4_addr listener_saddr, int backlog, property_map_t const & props)
+            : base_class(accept_proc())
+            , _listener(std::move(listener_saddr), props)
+        {
+            init_callbacks();
+            this->add_listener(_listener);
+            _listener.listen(backlog);
+        }
+
+        respondent (socket4_addr listener_saddr, property_map_t const & props)
+            : base_class(accept_proc())
+            , _listener(std::move(listener_saddr), 10, props)
+        {}
 
     public:
         void step (std::chrono::milliseconds timeout = std::chrono::milliseconds{0})

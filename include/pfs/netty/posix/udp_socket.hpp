@@ -19,11 +19,6 @@ class udp_socket: public inet_socket
 {
 protected:
     /**
-     * Constructs uninitialized (invalid) UDP socket.
-     */
-    udp_socket (uninitialized);
-
-    /**
       * Joins the multicast group specified by @a group on the default interface
       * chosen by the operating system.
       *
@@ -49,6 +44,11 @@ protected:
 public:
     udp_socket (udp_socket const &) = delete;
     udp_socket & operator = (udp_socket const &) = delete;
+
+    /**
+     * Constructs uninitialized (invalid) UDP socket.
+     */
+    NETTY__EXPORT udp_socket (uninitialized);
 
     NETTY__EXPORT udp_socket ();
     NETTY__EXPORT udp_socket (udp_socket &&);

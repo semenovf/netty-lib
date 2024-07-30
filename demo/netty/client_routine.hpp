@@ -19,7 +19,8 @@ void start_client (netty::socket4_addr const & saddr)
     bool can_write = false;
     LOGD(TAG, "Starting client");
 
-    typename ClientTraits::socket_type socket;
+    netty::property_map_t props; // Use default properties
+    typename ClientTraits::socket_type socket {props};
     typename ClientTraits::poller_type poller;
 
     poller.on_failure = [& finish] (native_socket_type, netty::error const & err) {

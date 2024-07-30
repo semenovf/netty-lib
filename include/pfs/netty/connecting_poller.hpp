@@ -7,11 +7,9 @@
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
 #include <functional>
-#include <map>
 #include <memory>
 
 namespace netty {
@@ -24,7 +22,6 @@ public:
 
 private:
     std::shared_ptr<Backend> _rep;
-    std::map<native_socket_type, clock_type::time_point> _connecting_sockets;
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure;

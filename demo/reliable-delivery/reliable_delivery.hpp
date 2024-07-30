@@ -22,7 +22,12 @@
     using enet_delivery_engine = netty::p2p::delivery_engine<netty::p2p::enet_engine_traits>;
 #endif
 
+#if NETTY__UDT_ENABLED
+    using udt_delivery_engine = netty::p2p::delivery_engine<netty::p2p::udt_engine_traits>;
+#endif
+
 using discovery_engine = netty::p2p::discovery_engine<netty::p2p::posix::discovery_engine>;
-using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<enet_delivery_engine, netty::sample::persistent_storage>;
+//using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<enet_delivery_engine, netty::sample::persistent_storage>;
 //using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<epoll_delivery_engine, netty::sample::persistent_storage>;
+using reliable_delivery_engine = netty::p2p::reliable_delivery_engine<udt_delivery_engine, netty::sample::persistent_storage>;
 using serializer = reliable_delivery_engine::serializer_type;

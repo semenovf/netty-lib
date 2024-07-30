@@ -122,7 +122,7 @@ void service_process (netty::socket4_addr listener_saddr, std::condition_variabl
     using native_socket_type  = typename respondent_type::native_socket_type;
     using input_envelope_type = typename service_type::input_envelope_type;
 
-    respondent_type respondent {listener_saddr};
+    respondent_type respondent {listener_saddr, netty::property_map_t{}};
 
     respondent.on_failure = [] (netty::error const & err) {
         LOGE("", "FAILURE: {}", err.what());

@@ -326,19 +326,13 @@ int inet_socket::available (error * perr) const
                     n = 0;
                     break;
                 default: {
-                    error err {
+                    pfs::throw_or(perr, error {
                           errc::socket_error
                         , tr::_("read available data size from socket failure")
                         , pfs::system_error_text()
-                    };
+                    });
 
-                    if (perr) {
-                        *perr = std::move(err);
-                        n = -1;
-                    } else {
-                        throw err;
-                    }
-                    break;
+                    return -1;
                 }
             }
 
