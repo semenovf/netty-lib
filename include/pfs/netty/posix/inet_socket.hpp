@@ -92,6 +92,7 @@ public:
 
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
+    // TODO DEPRECATED
     NETTY__EXPORT int available (error * perr = nullptr) const;
 
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);

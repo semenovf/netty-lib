@@ -57,7 +57,7 @@ private:
 
     bool _accepted_socket {false};
 
-    // Input buffer. Set by listener by accept procedure or when connected if this
+    // Input buffer. Set by the listener in accept procedure or when connected if this
     // is a client socket.
     input_buffer_type _inpb;
 
@@ -116,6 +116,7 @@ public:
      */
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
+    // TODO DEPRECATED
     NETTY__EXPORT int available (error * perr = nullptr) const;
 
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);

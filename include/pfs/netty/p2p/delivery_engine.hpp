@@ -231,7 +231,7 @@ public:
         netty::error err;
 
         _listener = pfs::make_unique<listener_type>(_opts.listener_saddr
-            , _opts.listener_backlog, _opts.listener_props, & err);
+            /*, _opts.listener_backlog*/, _opts.listener_props, & err);
 
         if (!err)
             _reader_poller->add_listener(*_listener, & err);
@@ -658,43 +658,67 @@ private:
             return;
         }
 
-        auto & buffer = areader->raw;
+        auto & inpb = areader->raw;
 
-        while (buffer.size() < PACKET_SIZE) {
-            auto available = areader->reader.available();
+        // Read all received data and put it into input buffer.
+        for (;;) {
+            error err;
+            auto offset = inpb.size();
+            inpb.resize(offset + PACKET_SIZE);
 
-            auto offset = buffer.size();
-            buffer.resize(offset + available);
-
-            auto n = areader->reader.recv(buffer.data() + offset, available);
+            auto n = areader->reader.recv(inpb.data() + offset, PACKET_SIZE, & err);
 
             if (n < 0) {
                 LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
-                Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
+                Callbacks::on_error(tr::f_("receive data failure ({}) from: {}"
+                    , err.what(), to_string(areader->reader.saddr())));
                 Callbacks::defere_expire_peer(areader->peerid);
                 return;
             }
 
-            buffer.resize(offset + n);
-
-            if (n == 0)
-                break;
+            inpb.resize(offset + n);
 
             if (n < PACKET_SIZE)
                 break;
         }
 
-        auto available = buffer.size();
+        // auto & buffer = areader->raw;
+        //
+        // while (buffer.size() < PACKET_SIZE) {
+        //     auto available = areader->reader.available();
+        //
+        //     auto offset = buffer.size();
+        //     buffer.resize(offset + available);
+        //
+        //     auto n = areader->reader.recv(buffer.data() + offset, available);
+        //
+        //     if (n < 0) {
+        //         LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
+        //         Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
+        //         Callbacks::defere_expire_peer(areader->peerid);
+        //         return;
+        //     }
+        //
+        //     buffer.resize(offset + n);
+        //
+        //     if (n == 0)
+        //         break;
+        //
+        //     if (n < PACKET_SIZE)
+        //         break;
+        // }
+
+        auto available = inpb.size();
 
         if (available < PACKET_SIZE)
             return;
 
-        auto buffer_pos = buffer.begin();
+        auto inpb_pos = inpb.begin();
 
         do {
-            typename Serializer::istream_type in {& *buffer_pos, PACKET_SIZE};
+            typename Serializer::istream_type in {& *inpb_pos, PACKET_SIZE};
             available -= PACKET_SIZE;
-            buffer_pos += PACKET_SIZE;
+            inpb_pos += PACKET_SIZE;
 
             static_assert(sizeof(packet_type_enum) <= sizeof(char), "");
 
@@ -712,7 +736,7 @@ private:
                 LOG_TRACE_3("Defer peer expiration on invalid packet type received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
-                buffer_pos = buffer.end();
+                inpb_pos = inpb.end();
                 break;
             }
 
@@ -732,7 +756,7 @@ private:
                 LOG_TRACE_3("Defer peer expiration on invalid packet size received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
-                buffer_pos = buffer.end();
+                inpb_pos = inpb.end();
                 break;
             }
 
@@ -774,9 +798,9 @@ private:
         } while (available >= PACKET_SIZE);
 
         if (available == 0)
-            buffer.clear();
+            inpb.clear();
         else
-            buffer.erase(buffer.begin(), buffer_pos);
+            inpb.erase(inpb.begin(), inpb_pos);
     }
 
     /**

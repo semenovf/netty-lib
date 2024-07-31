@@ -380,7 +380,7 @@ public:
         Socket _sock;
         bool _can_write {false};
         output_queue_type _q;
-        std::vector<char> _inb;
+        std::vector<char> _inpb;
         bool _connected {false};
         bool _connecting {false};
 
@@ -525,20 +525,41 @@ public:
     private:
         void process_input (native_socket_type /*sock*/)
         {
-            netty::error err;
-            auto available = _sock.available();
-            auto offset = _inb.size();
-            _inb.resize(offset + available);
-            auto n = _sock.recv(_inb.data() + offset, available, & err);
+            constexpr std::size_t k_input_size_quant = 512;
 
-            if (n < 0) {
-                on_error(tr::f_("receive data failure from: {}, disconnecting (socket={})"
-                    , to_string(_sock.saddr()), _sock.native()));
-                _sock.disconnect();
-                return;
+            for (;;) {
+                netty::error err;
+                auto offset = _inpb.size();
+                _inpb.resize(offset + k_input_size_quant);
+
+                auto n = _sock.recv(_inpb.data() + offset, k_input_size_quant, & err);
+
+                if (n < 0) {
+                    on_error(tr::f_("receive data failure ({}) from: {}, disconnecting (socket={})"
+                        , err.what(), to_string(_sock.saddr()), _sock.native()));
+                    _sock.disconnect();
+                    return;
+                }
+
+                _inpb.resize(offset + n);
+
+                if (n < k_input_size_quant)
+                    break;
+
+                // auto available = _sock.available();
+                // auto offset = _inpb.size();
+                // _inpb.resize(offset + available);
+                // auto n = _sock.recv(_inpb.data() + offset, available, & err);
+                //
+                // if (n < 0) {
+                //     on_error(tr::f_("receive data failure from: {}, disconnecting (socket={})"
+                //         , to_string(_sock.saddr()), _sock.native()));
+                //     _sock.disconnect();
+                //     return;
+                // }
             }
 
-            typename InputEnvelope::deserializer_type in {_inb.data(), _inb.size()};
+            typename InputEnvelope::deserializer_type in {_inpb.data(), _inpb.size()};
 
             while (in) {
                 InputEnvelope env {in};
@@ -553,10 +574,10 @@ public:
                 on_message_received(env);
             }
 
-            auto bytes_processed = std::distance(& *_inb.cbegin(), in.begin());
+            auto bytes_processed = std::distance(& *_inpb.cbegin(), in.begin());
 
             if (bytes_processed > 0)
-                _inb.erase(_inb.cbegin(), _inb.cbegin() + bytes_processed);
+                _inpb.erase(_inpb.cbegin(), _inpb.cbegin() + bytes_processed);
         }
 
         void send_outgoing_data ()

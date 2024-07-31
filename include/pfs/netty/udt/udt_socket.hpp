@@ -36,6 +36,8 @@ public:
 
     static UDTSOCKET const kINVALID_SOCKET = -1;
 
+    using input_buffer_type = std::vector<char>;
+
 protected:
     enum class type_enum {
           unknown
@@ -49,6 +51,8 @@ private:
     // Bound address for listener.
     // Listener address for connected socket.
     socket4_addr _saddr;
+
+    input_buffer_type _inpb;
 
 protected:
     /**
@@ -126,7 +130,8 @@ public:
      */
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
-    NETTY__EXPORT int available (error * perr = nullptr) const;
+    // TODO DEPRECATED
+    //NETTY__EXPORT int available (error * perr = nullptr) const;
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 

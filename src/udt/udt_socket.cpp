@@ -12,6 +12,7 @@
 #include "pfs/assert.hpp"
 #include "pfs/endian.hpp"
 #include "pfs/i18n.hpp"
+#include "pfs/numeric_cast.hpp"
 #include "pfs/optional.hpp"
 #include "pfs/netty/udt/udt_socket.hpp"
 #include <cerrno>
@@ -85,15 +86,15 @@ void udt_socket::init (type_enum, int mtu, int exp_max_counter
         rc = UDT::setsockopt(sock, 0, UDT_MSS, & mtu_value, sizeof(mtu_value));
     }
 
-//     if (rc != UDT::ERROR) {
-//         int bufsz = 10000000;
-//         rc = UDT::setsockopt(sock, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
-//     }
+    if (rc != UDT::ERROR) {
+        int bufsz = 10000000;
+        rc = UDT::setsockopt(sock, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
+    }
 
-//     if (rc != UDT::ERROR) {
-//         int bufsz = 10000000;
-//         rc = UDT::setsockopt(sock, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
-//     }
+    if (rc != UDT::ERROR) {
+        int bufsz = 10000000;
+        rc = UDT::setsockopt(sock, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
+    }
 
     if (rc != UDT::ERROR) {
         if (exp_max_counter < 0) {
@@ -154,9 +155,7 @@ udt_socket::udt_socket ()
 udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
     : _socket(sock)
     , _saddr(saddr)
-{
-    LOGD(TAG, "CONSTRUCT Socket ACCEPTED: {}", sock);
-}
+{}
 
 udt_socket::udt_socket (type_enum type, int mtu, int exp_max_counter
     , std::chrono::milliseconds exp_threshold, error * perr)
@@ -294,36 +293,46 @@ void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> 
     out.push_back(std::make_pair("UDT_EVENT", event_str.empty() ? "<empty>" : event_str));
 }
 
-int udt_socket::available (error * perr) const
-{
-    std::int32_t n {0};
-    int opt_size {sizeof(n)};
-    auto rc = UDT::getsockopt(_socket, 0, UDT_RCVDATA, & n, & opt_size);
+// int udt_socket::available (error * perr) const
+// {
+//     // NOTE: UDT::getsockopt(..., UDT_RCVDATA,...) do not return expected result.
+//     //
+//     std::int32_t n {0};
+//     int opt_size {sizeof(n)};
+//     auto rc = UDT::getsockopt(_socket, 0, UDT_RCVDATA, & n, & opt_size);
+//
+//     if (rc != 0) {
+//         pfs::throw_or(perr, error {
+//               errc::socket_error
+//             , tr::_("read available data size from socket failure")
+//             , UDT::getlasterror_desc()
+//         });
+//
+//         return -1;
+//     }
+//
+//     return n;
+// }
 
-    if (rc != 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("read available data size from socket failure")
-            , UDT::getlasterror_desc()
-        });
-
-        return -1;
-    }
-
-    return n;
-}
-
-// TODO Need to correct handle error
-int udt_socket::recv (char * data, int len, error * /*perr*/)
+int udt_socket::recv (char * data, int len, error * perr)
 {
     auto rc = UDT::recvmsg(_socket, data, len);
 
+    LOGD(TAG, "RECV: sock={}, rc={}", _socket, rc);
+
     if (rc == UDT::ERROR) {
-        LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
         // Error code: 6002
         // Error desc: Non-blocking call failure: no data available for reading.
-        if (CUDTException{6, 2, 0}.getErrorCode() == UDT::getlasterror_code())
+        if (CUDTException{6, 2, 0}.getErrorCode() == UDT::getlasterror_code()) {
             rc = 0;
+        } else {
+            LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
+
+            pfs::throw_or(perr, error {
+                  errc::socket_error
+                , UDT::getlasterror_desc()
+            });
+        }
     }
 
     return rc;

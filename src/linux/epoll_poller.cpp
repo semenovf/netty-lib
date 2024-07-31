@@ -87,18 +87,13 @@ void epoll_poller::remove_socket (native_socket_type sock, error * perr)
     if (rc != 0) {
         // ENOENT is not a failure
         if (errno != ENOENT) {
-            error err {
+            pfs::throw_or(perr, error {
                   errc::poller_error
                 , tr::_("epoll delete failure")
                 , pfs::system_error_text()
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return;
-            } else {
-                throw err;
-            }
+            return;
         }
     }
 }
