@@ -86,13 +86,17 @@ void udt_socket::init (type_enum, int mtu, int exp_max_counter
         rc = UDT::setsockopt(sock, 0, UDT_MSS, & mtu_value, sizeof(mtu_value));
     }
 
+    // Set to UDT default value.
+    // Default is 8192 * 1500(MSS) = 12288000
     if (rc != UDT::ERROR) {
-        int bufsz = 10000000;
+        int bufsz = 12288000;
         rc = UDT::setsockopt(sock, 0, UDT_SNDBUF, & bufsz, sizeof(bufsz));
     }
 
+    // Set to UDT default value.
+    // Default is 8192 * 1500(MSS) = 12288000
     if (rc != UDT::ERROR) {
-        int bufsz = 10000000;
+        int bufsz = 12288000;
         rc = UDT::setsockopt(sock, 0, UDP_RCVBUF, & bufsz, sizeof(bufsz));
     }
 
@@ -316,9 +320,10 @@ void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> 
 
 int udt_socket::recv (char * data, int len, error * perr)
 {
-    auto rc = UDT::recvmsg(_socket, data, len);
+    bool haveMsgStill = false;
+    auto rc = UDT::recvmsg(_socket, data, len, & haveMsgStill);
 
-    LOGD(TAG, "RECV: sock={}, rc={}", _socket, rc);
+    LOGD(TAG, "RECV: socket={}; rc={}; haveMsgStill={}", _socket, rc, haveMsgStill);
 
     if (rc == UDT::ERROR) {
         // Error code: 6002
@@ -351,13 +356,16 @@ send_result udt_socket::send (char const * data, int len, error * /*perr*/)
     // -1              - on error
     auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
+    LOGD(TAG, "SENDMSG: sock={}, rc={}", _socket, rc);
+
     if (rc == UDT::ERROR) {
-        LOGE(TAG, "SEND: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
+        auto ecode = UDT::getlasterror_code();
+        LOGE(TAG, "SEND: code={}, text={} (FIXME handle error)", ecode, UDT::getlasterror_desc());
 
         // Error code: 6001
         // Error desc: Non-blocking call failure: no buffer available for sending.
-        if (CUDTException{6, 1, 0}.getErrorCode() == UDT::getlasterror_code())
-            return send_result{send_status::failure, 0};
+        // if (CUDTException{6, 1, 0}.getErrorCode() == ecode)
+        return send_result{send_status::failure, 0};
     }
 
     return send_result{send_status::good, static_cast<decltype(send_result::n)>(rc)};

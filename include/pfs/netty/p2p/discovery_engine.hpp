@@ -125,8 +125,7 @@ private:
             // Ignore self received packets (can happen during
             // multicast / broadcast transmission)
             if (packet.uuid != _host_uuid) {
-                LOG_TRACE_3("HELO packet received from: {} ({})", packet.uuid
-                    , to_string(saddr));
+                // LOG_TRACE_3("HELO packet received from: {} ({})", packet.uuid, to_string(saddr));
 
                 auto pos = _discovered_peers.find(packet.uuid);
                 auto expiration_interval = seconds_type(packet.expiration_interval);

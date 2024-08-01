@@ -130,6 +130,7 @@ public:
                 success = false;
                 return areader->reader.kINVALID_SOCKET;
             } else {
+                LOG_TRACE_3("Socket accepted: listener={}, accepted={}", listener_sock, areader->reader.native());
                 success = true;
             }
 
@@ -660,13 +661,16 @@ private:
 
         auto & inpb = areader->raw;
 
+        // constexpr std::size_t k_input_size_quant = PACKET_SIZE;
+        constexpr std::size_t k_input_size_quant = 64000;
+
         // Read all received data and put it into input buffer.
         for (;;) {
             error err;
             auto offset = inpb.size();
-            inpb.resize(offset + PACKET_SIZE);
+            inpb.resize(offset + k_input_size_quant);
 
-            auto n = areader->reader.recv(inpb.data() + offset, PACKET_SIZE, & err);
+            auto n = areader->reader.recv(inpb.data() + offset, k_input_size_quant, & err);
 
             if (n < 0) {
                 LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
@@ -678,7 +682,7 @@ private:
 
             inpb.resize(offset + n);
 
-            if (n < PACKET_SIZE)
+            if (n < k_input_size_quant)
                 break;
         }
 

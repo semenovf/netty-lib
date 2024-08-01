@@ -1903,7 +1903,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0) {
             //this should not happen: attack or bug
             m_bBroken = true;
-            LOG_TRACE_3("UDT: STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+            LOG_TRACE_2("UDT: STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
 
             m_iBrokenCounter = 0;
             break;
@@ -2056,7 +2056,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         if (!secure) {
             //this should not happen: attack or bug
             m_bBroken = true;
-            LOG_TRACE_3("UDT: STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+            LOG_TRACE_2("UDT: STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
 
             m_iBrokenCounter = 0;
             break;
@@ -2114,7 +2114,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
         m_bBroken = true;
 
-        LOG_TRACE_3("UDT: STATUS CHANGED: Socket BROKEN (SHUTDOWN): {} ({}:{})", m_SocketID, __FILE__, __LINE__);
+        LOG_TRACE_2("UDT: STATUS CHANGED: Socket BROKEN (SHUTDOWN): {} ({}:{})", m_SocketID, __FILE__, __LINE__);
 
         m_iBrokenCounter = 60;
 
