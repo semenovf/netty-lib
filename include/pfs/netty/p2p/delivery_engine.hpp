@@ -29,6 +29,8 @@
 #include <queue>
 #include <vector>
 
+#include <pfs/log.hpp>
+
 namespace netty {
 namespace p2p {
 
@@ -47,6 +49,7 @@ private:
     using reader_type = typename EngineTraits::reader_type;
     using writer_type = typename EngineTraits::writer_type;
     using output_queue_type = pfs::ring_buffer<packet, 64 * 1024>;
+    using expired_peers_queue_type = std::queue<peer_id>;
 
 public:
     using file_id_type = universal_id;
@@ -110,6 +113,8 @@ private:
     std::map<typename server_poller_type::native_socket_type, reader_account> _reader_account_map;
     std::map<peer_id, writer_account> _writer_account_map;
 
+    expired_peers_queue_type _expired_peers;
+
 public:
     /**
      * Initializes underlying APIs and constructs delivery engine instance.
@@ -167,6 +172,11 @@ public:
             }
         };
 
+        _reader_poller->removed = [this] (typename server_poller_type::native_socket_type sock) {
+            // Actually destroy socket here
+            _reader_account_map.erase(sock);
+        };
+
         ////////////////////////////////////////////////////////////////////////
         // Create and configure writer poller
         ////////////////////////////////////////////////////////////////////////
@@ -221,6 +231,17 @@ public:
             }
         };
 
+        _writer_poller->removed = [this] (typename client_poller_type::native_socket_type sock) {
+            // Actually destroy socket here
+            writer_account * awriter = locate_writer_account(sock);
+
+            if (awriter != nullptr) {
+                _writer_account_map.erase(awriter->peerid);
+            } else {
+                Callbacks::on_error(tr::f_("no writer account found by socket for release: socket={}", sock));
+            }
+        };
+
         // Call before any network operations
         startup();
 
@@ -270,6 +291,21 @@ public:
     void connect (host4_addr haddr)
     {
         connect_writer(std::move(haddr));
+    }
+
+    void expire_peer (peer_id peerid)
+    {
+        _expired_peers.push(peerid);
+    }
+
+private:
+    void release_expired_peers ()
+    {
+        while (!_expired_peers.empty()) {
+            auto peerid = _expired_peers.front();
+            _expired_peers.pop();
+            release_peer(peerid);
+        }
     }
 
     void release_peer (peer_id peerid)
@@ -329,10 +365,16 @@ public:
                 timeout = zero_millis;
 
             n2 = _writer_poller->poll(timeout, perr);
+
+            if (!_expired_peers.empty())
+                release_expired_peers();
         } else {
             send_outgoing_packets();
             n1 = _reader_poller->poll(zero_millis, perr);
             n2 = _writer_poller->poll(zero_millis, perr);
+
+            if (!_expired_peers.empty())
+                release_expired_peers();
         }
 
         if (n1 < 0)
@@ -506,7 +548,8 @@ private:
         if (_reader_poller)
             _reader_poller->remove(areader->reader);
 
-        _reader_account_map.erase(areader->reader.native());
+        // Moved to _reader_poller removed() callback
+        // _reader_account_map.erase(areader->reader.native());
 
         Callbacks::reader_closed(host4_addr{peerid, std::move(saddr)});
     }
@@ -557,7 +600,8 @@ private:
         if (_writer_poller)
             _writer_poller->remove(awriter->writer);
 
-        _writer_account_map.erase(peerid);
+        // Moved to _writer_poller removed() callback
+        // _writer_account_map.erase(peerid);
 
         Callbacks::writer_closed(host4_addr{peerid, std::move(saddr)});
     }

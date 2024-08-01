@@ -171,7 +171,7 @@ int main (int argc, char * argv[])
 
     discoveryengine->peer_expired2 = [& deliveryengine] (netty::host4_addr haddr) {
         LOGD("", "Peer expired: {}", to_string(haddr));
-        deliveryengine->release_peer(haddr.host_id);
+        deliveryengine->expire_peer(haddr.host_id);
     };
 
     deliveryengine->on_failure = [] (netty::error const & err) {

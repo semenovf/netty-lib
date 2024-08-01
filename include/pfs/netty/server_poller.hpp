@@ -153,7 +153,7 @@ public:
      * Remove reader socket.
      */
     template <typename Socket>
-    void remove (Socket const & sock, error * perr = nullptr)
+    void remove (Socket const & sock, error * /*perr*/ = nullptr)
     {
         _removable_readers.push_back(sock.native());
         _removable_writers.push_back(sock.native());
