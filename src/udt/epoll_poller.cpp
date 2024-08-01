@@ -11,8 +11,6 @@
 #include "pfs/netty/udt/epoll_poller.hpp"
 #include <set>
 
-#include "pfs/log.hpp"
-
 namespace netty {
 namespace udt {
 
@@ -61,8 +59,6 @@ void epoll_poller::add_socket (native_socket_type sock, error * perr)
         return;
     }
 
-    LOGD("--", "ADD SOCKET: eid={}, sock={}", eid, sock);
-
     ++counter;
 }
 
@@ -82,8 +78,6 @@ void epoll_poller::remove_socket (native_socket_type sock, error * perr)
         return;
 
     auto rc = UDT::epoll_remove_usock(eid, sock);
-
-    LOGD("--", "REMOVE SOCKET: eid={}, sock={}", eid, sock);
 
     if (rc == UDT::ERROR) {
         pfs::throw_or(perr, error {
@@ -146,4 +140,3 @@ int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
 }
 
 }}  // namespace netty::udt
-

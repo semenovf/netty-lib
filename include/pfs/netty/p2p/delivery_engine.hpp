@@ -130,7 +130,6 @@ public:
                 success = false;
                 return areader->reader.kINVALID_SOCKET;
             } else {
-                LOG_TRACE_3("Socket accepted: listener={}, accepted={}", listener_sock, areader->reader.native());
                 success = true;
             }
 
@@ -147,7 +146,6 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peerid != peer_id{}) {
-                LOG_TRACE_3("Defer peer expiration on reader poller failure");
                 Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_error(tr::f_("reader socket failure: socket={}, but reader account is incomplete yet", sock));
@@ -163,7 +161,6 @@ public:
             auto areader = locate_reader_account(sock);
 
             if (areader != nullptr && areader->peerid != peer_id{}) {
-                LOG_TRACE_3("Defer peer expiration on socket disconnected detected by reader poller");
                 Callbacks::defere_expire_peer(areader->peerid);
             } else {
                 Callbacks::on_warn(tr::f_("reader disconnected: socket={}, but reader account is incomplete yet", sock));
@@ -179,7 +176,6 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter) {
-                LOG_TRACE_3("Defer peer expiration on writer poller failure");
                 Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("writer socket failure: socket={}, but writer account not found", sock));
@@ -206,7 +202,6 @@ public:
             auto awriter = locate_writer_account(sock);
 
             if (awriter != nullptr) {
-                LOG_TRACE_3("Defer peer expiration on disconnected detected by writer poller");
                 Callbacks::defere_expire_peer(awriter->peerid);
             } else {
                 Callbacks::on_error(tr::f_("connection disconnected: socket={}, but writer account not found", sock));
@@ -413,7 +408,6 @@ public:
             case packet_type_enum::file_request:
             case packet_type_enum::file_stop:
             case packet_type_enum::file_state:
-                LOG_TRACE_3("Enqueue file control packets to: {}", addressee);
                 enqueue_packets(addressee, packettype, data.data(), pfs::numeric_cast<int>(data.size()));
                 break;
             // Data
@@ -661,19 +655,15 @@ private:
 
         auto & inpb = areader->raw;
 
-        // constexpr std::size_t k_input_size_quant = PACKET_SIZE;
-        constexpr std::size_t k_input_size_quant = 64000;
-
         // Read all received data and put it into input buffer.
         for (;;) {
             error err;
             auto offset = inpb.size();
-            inpb.resize(offset + k_input_size_quant);
+            inpb.resize(offset + PACKET_SIZE);
 
-            auto n = areader->reader.recv(inpb.data() + offset, k_input_size_quant, & err);
+            auto n = areader->reader.recv(inpb.data() + offset, PACKET_SIZE, & err);
 
             if (n < 0) {
-                LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
                 Callbacks::on_error(tr::f_("receive data failure ({}) from: {}"
                     , err.what(), to_string(areader->reader.saddr())));
                 Callbacks::defere_expire_peer(areader->peerid);
@@ -682,35 +672,9 @@ private:
 
             inpb.resize(offset + n);
 
-            if (n < k_input_size_quant)
+            if (n < PACKET_SIZE)
                 break;
         }
-
-        // auto & buffer = areader->raw;
-        //
-        // while (buffer.size() < PACKET_SIZE) {
-        //     auto available = areader->reader.available();
-        //
-        //     auto offset = buffer.size();
-        //     buffer.resize(offset + available);
-        //
-        //     auto n = areader->reader.recv(buffer.data() + offset, available);
-        //
-        //     if (n < 0) {
-        //         LOG_TRACE_3("Defer peer expiration on receive data failure from: {}", to_string(areader->reader.saddr()));
-        //         Callbacks::on_error(tr::f_("receive data failure from: {}", to_string(areader->reader.saddr())));
-        //         Callbacks::defere_expire_peer(areader->peerid);
-        //         return;
-        //     }
-        //
-        //     buffer.resize(offset + n);
-        //
-        //     if (n == 0)
-        //         break;
-        //
-        //     if (n < PACKET_SIZE)
-        //         break;
-        // }
 
         auto available = inpb.size();
 
@@ -737,7 +701,6 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                LOG_TRACE_3("Defer peer expiration on invalid packet type received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
                 inpb_pos = inpb.end();
@@ -757,7 +720,6 @@ private:
                 // There is a problem in communication (or this engine
                 // implementation is wrong). Expiration can restore
                 // functionality at next connection (after discovery).
-                LOG_TRACE_3("Defer peer expiration on invalid packet size received from: {}", areader->peerid);
                 Callbacks::defere_expire_peer(areader->peerid);
 
                 inpb_pos = inpb.end();
@@ -861,7 +823,6 @@ private:
                         , err.what()));
 
                     // Expire peer
-                    LOG_TRACE_3("Defer peer expiration on failure whiel send to: {}", awriter.peerid);
                     Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;
@@ -871,7 +832,6 @@ private:
                         , to_string(awriter.writer.saddr()), err.what()));
 
                     // Expire peer
-                    LOG_TRACE_3("Defer peer expiration on network failure while send to: {}", awriter.peerid);
                     Callbacks::defere_expire_peer(awriter.peerid);
                     break_sending = true;
                     break;

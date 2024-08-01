@@ -50,11 +50,10 @@ namespace udt {
 static constexpr int kDefaultExpMaxCounter = 2;
 static std::chrono::milliseconds const kDefaultExpThreshold {625};
 
-void udt_socket::init (type_enum, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold, error * perr)
+void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr)
 {
-    int ai_family   = AF_INET;    // AF_INET | AF_INET6
-    int ai_socktype = SOCK_DGRAM; // SOCK_DGRAM | SOCK_STREAM
+    int ai_family   = AF_INET;     // AF_INET | AF_INET6
+    int ai_socktype = SOCK_STREAM; // SOCK_DGRAM | SOCK_STREAM
     int ai_protocol = 0;
 
     native_type sock = UDT::socket(ai_family, ai_socktype, ai_protocol);
@@ -153,7 +152,7 @@ udt_socket::udt_socket (uninitialized)
 
 udt_socket::udt_socket ()
 {
-    init(type_enum::dgram, 1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
+    init(1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
 }
 
 udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
@@ -161,24 +160,22 @@ udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
     , _saddr(saddr)
 {}
 
-udt_socket::udt_socket (type_enum type, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold, error * perr)
+udt_socket::udt_socket (int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr)
 {
-    init(type, mtu, exp_max_counter, exp_threshold, perr);
+    init(mtu, exp_max_counter, exp_threshold, perr);
 }
 
-udt_socket::udt_socket (type_enum type, int mtu, error * perr)
-    : udt_socket(type, mtu, kDefaultExpMaxCounter, kDefaultExpThreshold, perr)
+udt_socket::udt_socket (int mtu, error * perr)
+    : udt_socket(mtu, kDefaultExpMaxCounter, kDefaultExpThreshold, perr)
 {}
 
 udt_socket::udt_socket (property_map_t const & props, error * perr)
 {
-    type_enum type = type_enum::dgram;
     auto mtu = get_or<int>(props, "mtu", 1500);
     auto exp_max_counter = get_or<int>(props, "exp_max_counter", kDefaultExpMaxCounter);
     auto exp_threshold_millis = get_or<int>(props, "exp_max_counter", kDefaultExpThreshold.count());
 
-    init(type, mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis), perr);
+    init(mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis), perr);
 }
 
 udt_socket::udt_socket (udt_socket && other)
@@ -299,7 +296,7 @@ void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> 
 
 // int udt_socket::available (error * perr) const
 // {
-//     // NOTE: UDT::getsockopt(..., UDT_RCVDATA,...) do not return expected result.
+//     // NOTE: UDT::getsockopt(..., UDT_RCVDATA,...) returns expected result only for STREAM UDT socket.
 //     //
 //     std::int32_t n {0};
 //     int opt_size {sizeof(n)};
@@ -320,18 +317,17 @@ void udt_socket::dump_options (std::vector<std::pair<std::string, std::string>> 
 
 int udt_socket::recv (char * data, int len, error * perr)
 {
-    bool haveMsgStill = false;
-    auto rc = UDT::recvmsg(_socket, data, len, & haveMsgStill);
-
-    LOGD(TAG, "RECV: socket={}; rc={}; haveMsgStill={}", _socket, rc, haveMsgStill);
+    auto rc = UDT::recv(_socket, data, len, 0);
 
     if (rc == UDT::ERROR) {
+        auto ecode = UDT::getlasterror_code();
+
         // Error code: 6002
         // Error desc: Non-blocking call failure: no data available for reading.
-        if (CUDTException{6, 2, 0}.getErrorCode() == UDT::getlasterror_code()) {
+        if (CUDTException{6, 2, 0}.getErrorCode() == ecode) {
             rc = 0;
         } else {
-            LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", UDT::getlasterror_code(), UDT::getlasterror_desc());
+            LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", ecode, UDT::getlasterror_desc());
 
             pfs::throw_or(perr, error {
                   errc::socket_error
@@ -343,20 +339,19 @@ int udt_socket::recv (char * data, int len, error * perr)
     return rc;
 }
 
-// TODO Need to correct handle error
 send_result udt_socket::send (char const * data, int len, error * /*perr*/)
 {
-    int ttl_millis = -1;
-    bool inorder = true;
-
+    // int ttl_millis = -1;
+    // bool inorder = true;
+    //
     // Return
     // > 0             - on success;
     // = 0             - if UDT_SNDTIMEO > 0 and the message cannot be sent
     //                   before the timer expires;
     // -1              - on error
-    auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
+    // auto rc = UDT::sendmsg(_socket, data, len, ttl_millis, inorder);
 
-    LOGD(TAG, "SENDMSG: sock={}, rc={}", _socket, rc);
+    auto rc = UDT::send(_socket, data, len, 0);
 
     if (rc == UDT::ERROR) {
         auto ecode = UDT::getlasterror_code();

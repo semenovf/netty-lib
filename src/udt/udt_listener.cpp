@@ -49,7 +49,7 @@ udt_listener::udt_listener ()
 udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_counter
     , std::chrono::milliseconds exp_threshold
     , error * perr)
-    : udt_socket(type_enum::dgram, mtu, exp_max_counter, exp_threshold)
+    : udt_socket(mtu, exp_max_counter, exp_threshold, perr)
 {
     init(saddr);
 }

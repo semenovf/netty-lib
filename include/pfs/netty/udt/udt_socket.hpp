@@ -38,13 +38,6 @@ public:
 
     using input_buffer_type = std::vector<char>;
 
-protected:
-    enum class type_enum {
-          unknown
-        , stream = 0x001
-        , dgram  = 0x002
-    };
-
 private:
     native_type _socket {kINVALID_SOCKET};
 
@@ -60,8 +53,7 @@ protected:
      */
     udt_socket (native_type sock, socket4_addr const & saddr);
 
-    void init (type_enum, int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold
-        , error * perr = nullptr);
+    void init (int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr = nullptr);
 
 public:
     udt_socket (udt_socket const & other) = delete;
@@ -94,8 +86,8 @@ public:
      * @note Descriptions for `exp_max_counter` and `exp_threshold` see in
      *       `udt/newlib/core.hpp`.
      */
-    NETTY__EXPORT udt_socket (type_enum type, int mtu, int exp_max_counter
-        , std::chrono::milliseconds exp_threshold, error * perr = nullptr);
+    NETTY__EXPORT udt_socket (int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold
+        , error * perr = nullptr);
 
     /**
      * Constructs new UDT socket with set `exp_max_counter` to 2 and `exp_threshold` to 625 milliseconds.
@@ -106,7 +98,7 @@ public:
      * @note Descriptions for `exp_max_counter` and `exp_threshold` see in
      *       `udt/newlib/core.hpp`.
      */
-    NETTY__EXPORT udt_socket (type_enum type, int mtu, error * perr = nullptr);
+    NETTY__EXPORT udt_socket (int mtu, error * perr = nullptr);
 
     /**
      * Constructs UDT socket with specified properties. Accepts the following parameters:
@@ -130,8 +122,6 @@ public:
      */
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
-    // TODO DEPRECATED
-    //NETTY__EXPORT int available (error * perr = nullptr) const;
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 
