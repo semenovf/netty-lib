@@ -410,7 +410,7 @@ public:
                 this->on_failure(err);
             };
 
-            base_class::connection_refused = [this] (native_socket_type) {
+            base_class::connection_refused = [this] (native_socket_type, bool) {
                 this->connection_refused();
             };
 

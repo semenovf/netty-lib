@@ -46,7 +46,7 @@ private:
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
-    mutable std::function<void(native_socket_type)> connection_refused = [] (native_socket_type) {};
+    mutable std::function<void(native_socket_type, bool)> connection_refused = [] (native_socket_type, bool) {};
     mutable std::function<void(native_socket_type)> connected = [] (native_socket_type) {};
 
     /**
@@ -86,11 +86,11 @@ private:
             on_failure(sock, err);
         };
 
-        _connecting_poller.connection_refused = [this] (native_socket_type sock) {
+        _connecting_poller.connection_refused = [this] (native_socket_type sock, bool timedout) {
             // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);
-            connection_refused(sock);
+            connection_refused(sock, timedout);
         };
 
         _connecting_poller.connected = [this] (native_socket_type sock) {

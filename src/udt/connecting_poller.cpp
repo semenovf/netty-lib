@@ -107,7 +107,7 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
                 pos = _rep->_connecting_sockets.erase(pos);
 
                 if (connection_refused)
-                    connection_refused(u);
+                    connection_refused(u, false);
             } else {
                 ++pos;
             }

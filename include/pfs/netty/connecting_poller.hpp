@@ -25,7 +25,7 @@ private:
 
 public:
     mutable std::function<void(native_socket_type, error const &)> on_failure;
-    mutable std::function<void(native_socket_type)> connection_refused;
+    mutable std::function<void(native_socket_type, bool timedout)> connection_refused;
     mutable std::function<void(native_socket_type)> connected;
 
 protected:

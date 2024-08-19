@@ -19,7 +19,7 @@ void connecting_poller<Backend>::init ()
         fmt::println(stderr, tr::_("ERROR: connecting poller: {}"), err.what());
     };
 
-    connection_refused = [] (native_socket_type) {};
+    connection_refused = [] (native_socket_type, bool) {};
     connected = [] (native_socket_type) {};
 }
 

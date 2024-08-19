@@ -386,7 +386,7 @@ public:
                 }
             };
 
-            _writer_poller->connection_refused = [this] (typename client_poller_type::native_socket_type sock) {
+            _writer_poller->connection_refused = [this] (typename client_poller_type::native_socket_type sock, bool timedout) {
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount) {

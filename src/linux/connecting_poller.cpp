@@ -80,7 +80,11 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(ev.data.fd);
+                            connection_refused(ev.data.fd, false);
+                            break;
+
+                        case ETIMEDOUT:
+                            connection_refused(ev.data.fd, true);
                             break;
 
                         default:
@@ -102,7 +106,7 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
             // a. Attempt to connect to defunct server address/port
             // b. ...
             if (ev.events & (EPOLLHUP | EPOLLRDHUP)) {
-                connection_refused(ev.data.fd);
+                connection_refused(ev.data.fd, false);
                 continue;
             }
 
