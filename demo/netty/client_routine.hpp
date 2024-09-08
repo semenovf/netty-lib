@@ -28,7 +28,7 @@ void start_client (netty::socket4_addr const & saddr)
         finish = true;
     };
 
-    poller.connection_refused = [& finish] (native_socket_type sock) {
+    poller.connection_refused = [& finish] (native_socket_type sock, bool /*timedout*/) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
     };

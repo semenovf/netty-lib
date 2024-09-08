@@ -6,12 +6,13 @@
 // Changelog:
 //      2024.05.11 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/endian.hpp"
-#include "pfs/emitter.hpp"
-#include "pfs/log.hpp"
-#include "pfs/string_view.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include "linenoise/linenoise.h"
+#include <pfs/endian.hpp>
+#include <pfs/emitter.hpp>
+#include <pfs/log.hpp>
+#include <pfs/string_view.hpp>
+#include <pfs/windows.hpp>
+#include <pfs/netty/socket4_addr.hpp>
+#include "linenoise.h"
 #include <enet/enet.h>
 #include <atomic>
 #include <condition_variable>
@@ -85,7 +86,11 @@ void completion (char const * buf, linenoiseCompletions * lc)
 
 char * hints (const char * buf, int * color, int * bold)
 {
+#if _MSC_VER 
+    if (_stricmp(buf, "hello") == 0) {
+#else
     if (strcasecmp(buf, "hello") == 0) {
+#endif
         *color = 35;
         *bold = 0;
         return const_cast<char *>(" World");
@@ -210,7 +215,7 @@ int main (int /*argc*/, char * /*argv*/[])
     LOGD("", "Server and client threads ready: {}", !sFinishFlag.load());
 
     linenoiseSetCompletionCallback(completion);
-    linenoiseSetHintsCallback(hints);
+    //linenoiseSetHintsCallback(hints);
 
     while (!sFinishFlag) {
         auto line = linenoise("client> ");

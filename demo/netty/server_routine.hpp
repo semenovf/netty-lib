@@ -24,18 +24,25 @@ std::string stringify_bytes (char const * buf, int len, int nbytes)
     result.reserve(nbytes * 3);
 
     char hex[3];
+#if _MSC_VER
+    sprintf_s(hex, sizeof(hex), "%02X", static_cast<std::uint8_t>(buf[0]));
+#else
     sprintf(hex, "%02X", static_cast<std::uint8_t>(buf[0]));
+#endif
     result += hex;
 
     for (int i = 1; i < nbytes; i++) {
         result += ' ';
+#if _MSC_VER
+        sprintf_s(hex, sizeof(hex), "%02X", static_cast<std::uint8_t>(buf[i]));
+#else
         sprintf(hex, "%02X", static_cast<std::uint8_t>(buf[i]));
+#endif
         result += hex;
     }
 
-    if (nbytes < len) {
+    if (nbytes < len)
         result += fmt::format(" ... {} bytes", len - nbytes);
-    }
 
     return result;
 }

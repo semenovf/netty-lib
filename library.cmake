@@ -89,6 +89,7 @@ if (__has_poll)
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__POLL_ENABLED=1")
+    portable_target(SET NETTY__POLL_ENABLED ON)
 endif()
 
 if (NOT MSVC)
@@ -105,6 +106,7 @@ if (MSVC OR __has_sys_select)
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__SELECT_ENABLED=1")
+    portable_target(SET NETTY__SELECT_ENABLED ON)
 endif()
 
 if (UNIX OR ANDROID)
@@ -120,6 +122,7 @@ if (UNIX OR ANDROID)
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/server_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
         list(APPEND _netty__definitions "NETTY__EPOLL_ENABLED=1")
+        portable_target(SET NETTY__EPOLL_ENABLED ON)
     endif()
 
     CHECK_INCLUDE_FILE("libmnl/libmnl.h" __has_libmnl)
@@ -171,6 +174,7 @@ if (NETTY__ENABLE_UDT)
     endif()
 
     list(APPEND _netty__definitions "NETTY__UDT_ENABLED=1")
+    portable_target(SET NETTY__UDT_ENABLED ON)
 
     if (NETTY__UDT_PATCHED)
         list(APPEND _netty__private_definitions "NETTY__UDT_PATCHED=1")
@@ -203,6 +207,7 @@ if (NETTY__ENABLE_ENET)
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/writer_poller.cpp)
     list(APPEND _netty__definitions "NETTY__ENET_ENABLED=1")
     list(APPEND _netty__private_links enet)
+    portable_target(SET NETTY__ENET_ENABLED ON)
 endif(NETTY__ENABLE_ENET)
 
 if (_netty__sources)

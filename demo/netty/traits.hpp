@@ -21,6 +21,7 @@
 #   include "pfs/netty/enet/enet_socket.hpp"
 #endif
 
+#if NETTY__SELECT_ENABLED
 struct select_server_traits
 {
     using listener_type = netty::posix::tcp_listener;
@@ -28,7 +29,9 @@ struct select_server_traits
     using poller_type   = netty::server_select_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
+#if NETTY__POLL_ENABLED
 struct poll_server_traits
 {
     using listener_type = netty::posix::tcp_listener;
@@ -36,7 +39,9 @@ struct poll_server_traits
     using poller_type   = netty::server_poll_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
+#if NETTY__EPOLL_ENABLED
 struct epoll_server_traits
 {
     using listener_type = netty::posix::tcp_listener;
@@ -44,27 +49,34 @@ struct epoll_server_traits
     using poller_type   = netty::server_epoll_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
+#if NETTY__SELECT_ENABLED
 struct select_client_traits
 {
     using socket_type   = netty::posix::tcp_socket;
     using poller_type   = netty::client_select_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
+#if NETTY__POLL_ENABLED
 struct poll_client_traits
 {
     using socket_type   = netty::posix::tcp_socket;
     using poller_type   = netty::client_poll_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
+#if NETTY__EPOLL_ENABLED
 struct epoll_client_traits
 {
     using socket_type   = netty::posix::tcp_socket;
     using poller_type   = netty::client_epoll_poller_type;
     using native_socket_type = poller_type::native_socket_type;
 };
+#endif
 
 #if NETTY__UDT_ENABLED
 

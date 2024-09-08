@@ -12,12 +12,34 @@ project(service-demo
     HOMEPAGE_URL "https://github.com/semenovf/netty-lib"
     LANGUAGES CXX C)
 
-add_executable(${PROJECT_NAME} main.cpp
+list(APPEND _sources main.cpp
     envelope.hpp
     message.hpp
     serializer.hpp
-    service.hpp
-    linenoise/linenoise.c linenoise/linenoise.h)
+    service.hpp)
+
+if (MSVC)
+    list(APPEND _sources
+        ../shared/linenoise-ng/linenoise.cpp 
+        ../shared/linenoise-ng/linenoise.h
+        ../shared/linenoise-ng/ConvertUTF.cpp
+        ../shared/linenoise-ng/ConvertUTF.h
+        ../shared/linenoise-ng/wcwidth.cpp)
+else()
+    list(APPEND _sources
+        ../shared/linenoise/linenoise.c 
+        ../shared/linenoise/linenoise.h)
+endif()
+
+add_executable(${PROJECT_NAME} ${_sources})
+
+if (MSVC)
+    target_include_directories(${PROJECT_NAME} PRIVATE 
+        ${CMAKE_CURRENT_LIST_DIR}/../shared/linenoise-ng)
+else()
+    target_include_directories(${PROJECT_NAME} PRIVATE 
+        ${CMAKE_CURRENT_LIST_DIR}/../shared/linenoise)
+endif()
 
 if (TARGET pfs::netty)
     target_link_libraries(${PROJECT_NAME} pfs::netty)

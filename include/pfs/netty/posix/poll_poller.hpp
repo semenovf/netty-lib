@@ -9,10 +9,15 @@
 #pragma once
 #include "pfs/netty/error.hpp"
 #include <vector>
-#include <poll.h>
+
+#if NETTY__POLL_ENABLED
+#   include <poll.h>
+#endif
 
 namespace netty {
 namespace posix {
+
+#if NETTY__POLL_ENABLED
 
 class poll_poller
 {
@@ -36,6 +41,7 @@ public:
     bool empty () const noexcept;
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
+#endif
 
 }} // namespace netty::posix
 

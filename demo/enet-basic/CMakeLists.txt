@@ -13,7 +13,22 @@ project(enet-basic-demo
     LANGUAGES CXX C)
 
 if (TARGET enet)
-    add_executable(${PROJECT_NAME} main.cpp linenoise/linenoise.c linenoise/linenoise.h)
+    if (MSVC)
+        add_executable(${PROJECT_NAME} main.cpp 
+            ../shared/linenoise-ng/linenoise.cpp 
+            ../shared/linenoise-ng/linenoise.h
+            ../shared/linenoise-ng/ConvertUTF.cpp
+            ../shared/linenoise-ng/ConvertUTF.h
+            ../shared/linenoise-ng/wcwidth.cpp)
+        target_include_directories(${PROJECT_NAME} PRIVATE 
+            ${CMAKE_CURRENT_LIST_DIR}/../shared/linenoise-ng)
+    else()
+        add_executable(${PROJECT_NAME} main.cpp 
+            ../shared/linenoise/linenoise.c 
+            ../shared/linenoise/linenoise.h)
+        target_include_directories(${PROJECT_NAME} PRIVATE 
+            ${CMAKE_CURRENT_LIST_DIR}/../shared/linenoise)
+    endif()
 
     if (TARGET pfs::netty)
         target_link_libraries(${PROJECT_NAME} pfs::netty)

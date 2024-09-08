@@ -89,7 +89,11 @@ void completion (char const * buf, linenoiseCompletions * lc)
 
 char * hints (const char * buf, int * color, int * bold)
 {
+#if _MSC_VER
+    if (_stricmp(buf, "hello") == 0) {
+#else
     if (strcasecmp(buf, "hello") == 0) {
+#endif
         *color = 35;
         *bold = 0;
         return const_cast<char *>(" World");
@@ -416,7 +420,7 @@ int main (int argc, char * argv[])
     LOGD("", "Service and client threads ready");
 
     linenoiseSetCompletionCallback(completion);
-    linenoiseSetHintsCallback(hints);
+    //linenoiseSetHintsCallback(hints);
 
     while (true) {
         auto line = linenoise("client> ");
