@@ -46,7 +46,7 @@ public:
     using native_type = std::uintptr_t;
 
 public:
-    static const native_type kINVALID_SOCKET;
+    static NETTY__EXPORT const native_type kINVALID_SOCKET;
 
 private:
     _ENetHost * _host {nullptr};

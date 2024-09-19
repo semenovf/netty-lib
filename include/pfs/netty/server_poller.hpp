@@ -9,6 +9,7 @@
 #pragma once
 #include "chrono.hpp"
 #include "error.hpp"
+#include "exports.hpp"
 #include "listener_poller.hpp"
 #include "reader_poller.hpp"
 #include "writer_poller.hpp"
@@ -123,7 +124,7 @@ private:
     }
 
 public:
-    server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc);
+    NETTY__EXPORT server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc);
     ~server_poller () = default;
 
     server_poller (server_poller const &) = delete;

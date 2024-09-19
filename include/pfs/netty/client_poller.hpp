@@ -9,6 +9,7 @@
 #pragma once
 #include "chrono.hpp"
 #include "error.hpp"
+#include "exports.hpp"
 #include "conn_status.hpp"
 #include "connecting_poller.hpp"
 #include "reader_poller.hpp"
@@ -133,7 +134,7 @@ private:
     }
 
 public:
-    client_poller (); // Backend specific
+    NETTY__EXPORT client_poller (); // Backend specific
     ~client_poller () = default;
 
     client_poller (client_poller const &) = delete;
