@@ -25,9 +25,6 @@ option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
 
-# Netty-p2p library specific options
-option(NETTY_P2P__BUILD_SHARED "Enable build shared library" OFF)
-
 if (DEBBY__BUILD_STRICT)
     if (NOT CMAKE_CXX_STANDARD)
         set(CMAKE_CXX_STANDARD 14)
