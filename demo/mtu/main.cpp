@@ -7,10 +7,10 @@
 //      2021.06.21 Initial version (netty-lib).
 //      2024.04.08 Refactored.
 ////////////////////////////////////////////////////////////////////////////////
-#include "netty/utils/network_interface.hpp"
-#include "pfs/argvapi.hpp"
-#include "pfs/fmt.hpp"
-#include "pfs/log.hpp"
+#include "pfs/netty/utils/network_interface.hpp"
+#include <pfs/argvapi.hpp>
+#include <pfs/fmt.hpp>
+#include <pfs/log.hpp>
 #include <string>
 
 void printUsage (pfs::filesystem::path const & programName

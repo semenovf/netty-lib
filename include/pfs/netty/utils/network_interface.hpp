@@ -8,9 +8,9 @@
 //      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "netty/exports.hpp"
-#include "netty/error.hpp"
-#include "netty/inet4_addr.hpp"
+#include "pfs/netty/exports.hpp"
+#include "pfs/netty/error.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include <cstdint>
 #include <functional>
 #include <string>

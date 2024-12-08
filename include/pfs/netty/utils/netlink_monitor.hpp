@@ -8,20 +8,14 @@
 //      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "netty/error.hpp"
-#include "netty/exports.hpp"
-#include "netty/inet4_addr.hpp"
+#include "pfs/netty/error.hpp"
+#include "pfs/netty/exports.hpp"
+#include "pfs/netty/inet4_addr.hpp"
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-
-#if _MSC_VER
-#   include <minwinbase.h>
-#   include <iphlpapi.h>
-#else
-#   include "netlink_socket.hpp"
-#endif
 
 namespace netty {
 namespace utils {
@@ -40,14 +34,10 @@ struct netlink_attributes
 //
 class netlink_monitor
 {
-#if _MSC_VER
-    OVERLAPPED _overlap;
-    HANDLE _handle {nullptr};
-    MIB_IPADDRTABLE * _ip_addr_table {nullptr};
-#else
-    netlink_socket _sock;
-    int _epoll_id {-1};
-#endif
+    class impl;
+
+private:
+    std::unique_ptr<impl> _d;
 
 public:
     mutable std::function<void (error const &)> on_failure = [] (error const &) {};

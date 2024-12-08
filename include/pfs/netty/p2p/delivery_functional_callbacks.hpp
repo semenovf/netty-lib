@@ -9,8 +9,8 @@
 #pragma once
 #include "packet.hpp"
 #include "peer_id.hpp"
-#include "netty/error.hpp"
-#include "netty/host4_addr.hpp"
+#include "pfs/netty/error.hpp"
+#include "pfs/netty/host4_addr.hpp"
 #include <functional>
 #include <string>
 #include <vector>
@@ -74,7 +74,7 @@ struct delivery_functional_callbacks
      * Called when any file data received. These data must be passed to the file transporter
      */
     mutable std::function<void (peer_id, packet_type_enum, std::vector<char>)> file_data_received
-        = [] (peer_id, packet_type_enum packettype, std::vector<char> const &) {};
+        = [] (peer_id, packet_type_enum packettype, std::vector<char>) {};
 
     /**
      * Called to request new file chunks for sending.

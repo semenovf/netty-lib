@@ -6,11 +6,11 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/fmt.hpp"
-#include "pfs/integer.hpp"
-#include "pfs/log.hpp"
-#include "pfs/string_view.hpp"
-#include "pfs/netty/startup.hpp"
+#include <pfs/fmt.hpp>
+#include <pfs/integer.hpp>
+#include <pfs/log.hpp>
+#include <pfs/string_view.hpp>
+#include <pfs/netty/startup.hpp>
 #include <algorithm>
 #include <map>
 #include <string>
@@ -32,16 +32,17 @@ static struct program_context {
 
 static void print_usage ()
 {
-    fmt::print(stdout, "Usage\n\t{} --poller={} --tcp|--udp [--server]\n"
+    fmt::println("Usage\n\t{} --poller={{{}}} {{--tcp|--udp}} [--server]"
         , __pctx.program, __pctx.poller_variants_string);
-    fmt::print(stdout, "\t\t--addr=ip4_addr [--port=port]\n");
-    fmt::print(stdout, "\nRun TCP server\n\t{} --tcp --server --addr=127.0.0.1\n", __pctx.program);
-    fmt::print(stdout, "\nSend echo packets to TCP server\n\t{} --tcp --addr=127.0.0.1\n", __pctx.program);
-    fmt::print(stdout, "\nRun UDP server\n\t{} --udp --server --addr=127.0.0.1\n", __pctx.program);
-    fmt::print(stdout, "\nSend echo packets to UDP server\n\t{} --udp --addr=127.0.0.1\n", __pctx.program);
-    fmt::print(stdout, "\n\nNotes:\n");
-    fmt::print(stdout, "\t'select', 'poll' and 'epoll' pollers on Linux are compatible,\n");
-    fmt::print(stdout, "\ti.e. server and client sides can be different types.\n");
+    fmt::println("\t\t--addr=ip4_addr [--port=port]");
+    fmt::println("\nRun TCP server\n\t{} --poller=poll --tcp --server --addr=127.0.0.1", __pctx.program);
+    fmt::println("\nSend echo packets to TCP server\n\t{} --poller=poll --tcp --addr=127.0.0.1", __pctx.program);
+    fmt::println("\nRun UDP server\n\t{} --poller=select --udp --server --addr=127.0.0.1", __pctx.program);
+    fmt::println("\nSend echo packets to UDP server\n\t{} --poller=select --udp --addr=127.0.0.1", __pctx.program);
+    fmt::println("\n\nNotes:");
+    fmt::println("\t* 'select', 'poll' and 'epoll' pollers on Linux are compatible,");
+    fmt::println("\ti.e. server and client sides can be different poller types from this list.");
+    fmt::println("\t* UDP server is not implemented yet");
 }
 
 template <typename Iter>

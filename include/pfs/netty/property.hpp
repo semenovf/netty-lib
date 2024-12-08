@@ -7,7 +7,7 @@
 //      2024.07.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <netty/error.hpp>
+#include "error.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/variant.hpp>
 #include <cstdint>

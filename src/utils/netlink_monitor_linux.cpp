@@ -7,7 +7,8 @@
 //      2023.02.16 Initial version.
 //      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
-#include "netlink_monitor.hpp"
+#include "netlink_socket.hpp"
+#include "netty/utils/netlink_monitor.hpp"
 #include "pfs/i18n.hpp"
 #include "pfs/endian.hpp"
 #include "pfs/log.hpp"
@@ -36,6 +37,13 @@ enum class callback_result {
     , stop  =  0
     , ok    =  1
 #endif
+};
+
+class netlink_monitor::impl
+{
+public:
+    netlink_socket netsock {netlink_socket::type_enum::route};
+    int epoll_id {-1};
 };
 
 template <typename IfMsgType>
@@ -341,11 +349,11 @@ static callback_result parse (void const * buf, std::size_t len
 }
 
 netlink_monitor::netlink_monitor (error * perr)
-    : _sock(netlink_socket::type_enum::route)
+    : _d(new impl)
 {
-    _epoll_id = epoll_create1(0);
+    _d->epoll_id = epoll_create1(0);
 
-    if (_epoll_id < 0) {
+    if (_d->epoll_id < 0) {
         pfs::throw_or(perr, error {
               make_error_code(pfs::errc::system_error)
             , tr::_("epoll create failure")
@@ -357,9 +365,9 @@ netlink_monitor::netlink_monitor (error * perr)
 
     struct epoll_event ev;
     ev.events = EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND;
-    ev.data.fd = _sock.native();
+    ev.data.fd = _d->netsock.native();
 
-    int rc = epoll_ctl(_epoll_id, EPOLL_CTL_ADD, _sock.native(), & ev);
+    int rc = epoll_ctl(_d->epoll_id, EPOLL_CTL_ADD, _d->netsock.native(), & ev);
 
     if (rc != 0) {
         // Is not an error
@@ -378,9 +386,9 @@ netlink_monitor::netlink_monitor (error * perr)
 
 netlink_monitor::~netlink_monitor ()
 {
-    if (_epoll_id > 0) {
-        ::close(_epoll_id);
-        _epoll_id = -1;
+    if (_d->epoll_id > 0) {
+        ::close(_d->epoll_id);
+        _d->epoll_id = -1;
     }
 }
 
@@ -390,7 +398,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
     epoll_event events[MAX_EVENTS];
     std::memset(events, 0, sizeof(epoll_event) * MAX_EVENTS);
 
-    auto n = epoll_wait(_epoll_id, events, MAX_EVENTS, millis.count());
+    auto n = epoll_wait(_d->epoll_id, events, MAX_EVENTS, millis.count());
 
     if (n < 0) {
         if (errno == EINTR) {

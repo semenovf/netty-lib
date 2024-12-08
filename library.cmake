@@ -9,39 +9,29 @@
 #      2022.01.14 Refactored for use `portable_target`.
 #      2023.02.10 Separated static and shared builds.
 #      2024.04.03 Replaced the sequence of two target configurations with a foreach statement.
+#      2024.12.08 Removed `portable_target` dependency.
+#                 Min CMake version is 3.19.
 ################################################################################
-cmake_minimum_required (VERSION 3.11)
+cmake_minimum_required (VERSION 3.19)
 project(netty CXX)
 
 include(CheckIncludeFile)
 
-option(NETTY__BUILD_SHARED "Enable build shared library" OFF)
-option(NETTY__BUILD_STATIC "Enable build static library" ON)
-option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
-option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
-# option(NETTY__ENABLE_QT5 "Enable Qt5 library (network backend)" OFF)
-option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
-
-if (NOT PORTABLE_TARGET__CURRENT_PROJECT_DIR)
-    set(PORTABLE_TARGET__CURRENT_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-endif()
-
 if (NETTY__BUILD_SHARED)
-    portable_target(ADD_SHARED ${PROJECT_NAME} ALIAS pfs::netty EXPORTS NETTY__EXPORTS)
-    list(APPEND _netty__targets ${PROJECT_NAME})
+    add_library(netty SHARED)
+    target_compile_definitions(netty PRIVATE NETTY__EXPORTS)
+else()
+    add_library(netty STATIC)
+    target_compile_definitions(netty PRIVATE NETTY__STATIC)
 endif()
 
-if (NETTY__BUILD_STATIC)
-    set(STATIC_PROJECT_NAME ${PROJECT_NAME}-static)
-    portable_target(ADD_STATIC ${STATIC_PROJECT_NAME} ALIAS pfs::netty::static EXPORTS NETTY__STATIC)
-    list(APPEND _netty__targets ${STATIC_PROJECT_NAME})
+add_library(pfs::netty ALIAS netty)
+
+if (MSVC)
+    target_compile_definitions(netty PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-if (PFS__LOG_LEVEL)
-    list(APPEND _netty__definitions "PFS__LOG_LEVEL=${PFS__LOG_LEVEL}")
-endif()
-
-list(APPEND _netty__sources
+target_sources(netty PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/socket4_addr.cpp
@@ -53,34 +43,45 @@ list(APPEND _netty__sources
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_socket.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/posix/udp_sender.cpp)
 
-if (UNIX OR ANDROID)
-    list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_linux.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_linux.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_socket.cpp)
-elseif (MSVC)
-    list(APPEND _netty__sources
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_win32.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_win32.cpp)
-else()
-    message (FATAL_ERROR "Unsupported platform")
+if (NETTY__ENABLE_UTILS)
+    if (UNIX OR ANDROID)
+        target_sources(netty PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_linux.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_linux.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_socket.cpp)
+    elseif (MSVC)
+        target_sources(netty PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/network_interface_win32.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/src/utils/netlink_monitor_win32.cpp)
+    else()
+        message (FATAL_ERROR "Unsupported platform")
+    endif()
 endif()
 
 if (NOT TARGET pfs::common)
-    portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/2ndparty/common/library.cmake)
+    set(FETCHCONTENT_UPDATES_DISCONNECTED_COMMON ON)
+    message(STATUS "Fetching common ...")
+    include(FetchContent)
+    FetchContent_Declare(common
+        GIT_REPOSITORY https://github.com/semenovf/common-lib.git
+        GIT_TAG master
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/common
+        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/common)
+    FetchContent_MakeAvailable(common)
+    message(STATUS "Fetching common complete")
 endif()
 
 if (MSVC)
-    list(APPEND _netty__compile_options "/wd4251" "/wd4267" "/wd4244")
-    list(APPEND _netty__private_links Ws2_32 Iphlpapi)
+    target_compile_options(netty PRIVATE "/wd4251" "/wd4267" "/wd4244")
+    target_link_libraries(netty PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
 
-CHECK_INCLUDE_FILE("poll.h" __has_poll)
+check_include_file("poll.h" __has_poll)
 
 if (__has_poll)
-    list(APPEND _netty__sources
+    target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
@@ -88,16 +89,14 @@ if (__has_poll)
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
-    list(APPEND _netty__definitions "NETTY__POLL_ENABLED=1")
-    portable_target(SET NETTY__POLL_ENABLED ON)
+    target_compile_definitions(netty PUBLIC "NETTY__POLL_ENABLED=1")
+    set_target_properties(netty PROPERTIES NETTY__POLL_ENABLED ON)
 endif()
 
-if (NOT MSVC)
-    CHECK_INCLUDE_FILE("sys/select.h" __has_sys_select) # Linux
-endif()
+check_include_file("sys/select.h" __has_sys_select) # Linux
 
 if (MSVC OR __has_sys_select)
-    list(APPEND _netty__sources
+    target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
@@ -105,15 +104,15 @@ if (MSVC OR __has_sys_select)
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
-    list(APPEND _netty__definitions "NETTY__SELECT_ENABLED=1")
-    portable_target(SET NETTY__SELECT_ENABLED ON)
+    target_compile_definitions(netty PUBLIC "NETTY__SELECT_ENABLED=1")
+    set_target_properties(netty PROPERTIES NETTY__SELECT_ENABLED ON)
 endif()
 
 if (UNIX OR ANDROID)
-    CHECK_INCLUDE_FILE("sys/epoll.h" __has_sys_epoll)
+    check_include_file("sys/epoll.h" __has_sys_epoll)
 
     if (__has_sys_epoll)
-        list(APPEND _netty__sources
+        target_sources(netty PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/client_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/connecting_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp
@@ -121,24 +120,23 @@ if (UNIX OR ANDROID)
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/reader_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/server_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
-        list(APPEND _netty__definitions "NETTY__EPOLL_ENABLED=1")
-        portable_target(SET NETTY__EPOLL_ENABLED ON)
+        target_compile_definitions(netty PUBLIC "NETTY__EPOLL_ENABLED=1")
+        set_target_properties(netty PROPERTIES NETTY__EPOLL_ENABLED ON)
     endif()
 
-    CHECK_INCLUDE_FILE("libmnl/libmnl.h" __has_libmnl)
+    check_include_file("libmnl/libmnl.h" __has_libmnl)
 
     if (__has_libmnl)
-        list(APPEND _netty__definitions "NETTY__LIBMNL_ENABLED=1")
-        list(APPEND _netty__private_links mnl)
+        target_compile_definitions(netty PUBLIC "NETTY__LIBMNL_ENABLED=1")
+        target_link_libraries(netty PRIVATE mnl)
     endif()
 endif()
 
 if (NETTY__ENABLE_UDT)
-    set(NETTY__UDT_ENABLED ON CACHE BOOL "UDT (modified) enabled")
     set(NETTY__UDT_ROOT "${CMAKE_CURRENT_LIST_DIR}/src/udt/newlib")
 
     # UDT sources
-    list(APPEND _netty__sources
+    target_sources(netty PRIVATE
         ${NETTY__UDT_ROOT}/api.cpp
         ${NETTY__UDT_ROOT}/buffer.cpp
         ${NETTY__UDT_ROOT}/cache.cpp
@@ -153,7 +151,7 @@ if (NETTY__ENABLE_UDT)
         ${NETTY__UDT_ROOT}/queue.cpp
         ${NETTY__UDT_ROOT}/window.cpp)
 
-    list(APPEND _netty__sources
+    target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
@@ -165,37 +163,39 @@ if (NETTY__ENABLE_UDT)
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)
 
-    if (NETTY__BUILD_SHARED)
-        portable_target(DEFINITIONS ${PROJECT_NAME} PUBLIC UDT_EXPORTS)
-    endif()
+    # if (NETTY__BUILD_SHARED)
+    #     target_compile_definitions(netty PRIVATE UDT_EXPORTS)
+    # endif()
 
-    if (NETTY__BUILD_STATIC)
-        portable_target(DEFINITIONS ${STATIC_PROJECT_NAME} PUBLIC UDT_EXPORTS)
-    endif()
-
-    list(APPEND _netty__definitions "NETTY__UDT_ENABLED=1")
-    portable_target(SET NETTY__UDT_ENABLED ON)
+    target_compile_definitions(netty PUBLIC "NETTY__UDT_ENABLED=1")
+    set_target_properties(netty PROPERTIES NETTY__UDT_ENABLED ON)
 
     if (NETTY__UDT_PATCHED)
-        list(APPEND _netty__private_definitions "NETTY__UDT_PATCHED=1")
+        target_compile_definitions(netty PRIVATE "NETTY__UDT_PATCHED=1")
     endif(NETTY__UDT_PATCHED)
 endif(NETTY__ENABLE_UDT)
 
-# if (NETTY__ENABLE_QT5)
-#     list(APPEND _netty__sources
-#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_recever.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_sender.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/qt5/udp_socket.cpp)
-#     list(APPEND _netty__definitions "NETTY__QT5_ENABLED=1")
-#     list(APPEND _netty__qt5_components Core Network)
-# endif(NETTY__ENABLE_QT5)
-
 if (NETTY__ENABLE_ENET)
-    if (NOT TARGET enet)
-        portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet.cmake)
+    set(FETCHCONTENT_UPDATES_DISCONNECTED_ENET ON)
+    message(STATUS "Fetching ENet ...")
+    include(FetchContent)
+    FetchContent_Declare(enet
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG "v1.3.18"
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/enet
+        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/3rdparty/enet)
+    FetchContent_MakeAvailable(enet)
+    message(STATUS "Fetching ENet complete")
+
+    target_include_directories(enet PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/enet/include)
+
+    # This link can be removed with new ENet release (> 1.3.18)
+    if (MSVC)
+        cmake_policy(SET CMP0079 NEW)
+        target_link_libraries(enet PRIVATE winmm ws2_32)
     endif()
 
-    list(APPEND _netty__sources
+    target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_listener.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_socket.cpp
@@ -205,49 +205,54 @@ if (NETTY__ENABLE_ENET)
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/writer_poller.cpp)
-    list(APPEND _netty__definitions "NETTY__ENET_ENABLED=1")
-    list(APPEND _netty__private_links enet)
-    portable_target(SET NETTY__ENET_ENABLED ON)
+    target_compile_definitions(netty PUBLIC "NETTY__ENET_ENABLED=1")
+    target_link_libraries(netty PRIVATE enet)
+    set_target_properties(netty PROPERTIES NETTY__ENET_ENABLED ON)
 endif(NETTY__ENABLE_ENET)
 
-if (_netty__sources)
-    list(REMOVE_DUPLICATES _netty__sources)
+if (NETTY__ENABLE_P2P)
+    target_sources(netty PRIVATE
+        # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_protocol.cpp
+        # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_provider.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
+
+    set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
+    message(STATUS "Fetching pfs::ionik ...")
+    include(FetchContent)
+    FetchContent_Declare(ionik
+        GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
+        GIT_TAG master
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/ionik
+        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/ionik)
+    FetchContent_MakeAvailable(ionik)
+    message(STATUS "Fetching pfs::ionik complete")
+
+    target_link_libraries(netty PRIVATE pfs::ionik)
 endif()
 
-foreach(_target IN LISTS _netty__targets)
-    portable_target(SOURCES ${_target} ${_netty__sources})
-    portable_target(INCLUDE_DIRS ${_target} PUBLIC 
+target_include_directories(netty
+    PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/include/pfs)
-    portable_target(INCLUDE_DIRS ${_target} PRIVATE 
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include/pfs
         ${CMAKE_CURRENT_LIST_DIR}/include/pfs/netty
         ${CMAKE_CURRENT_LIST_DIR}/include/pfs/netty/utils)
 
-    portable_target(LINK ${_target} PUBLIC pfs::common)
-
-    if (_netty__compile_options)
-        portable_target(COMPILE_OPTIONS ${_target} PUBLIC ${_netty__compile_options})
-    endif()
-
-    if (_netty__private_definitions)
-        portable_target(DEFINITIONS ${_target} PRIVATE ${_netty__private_definitions})
-    endif()
-
-    if (_netty__definitions)
-        portable_target(DEFINITIONS ${_target} PUBLIC ${_netty__definitions})
-    endif()
-
-    if (_netty__private_links)
-        portable_target(LINK ${_target} PRIVATE ${_netty__private_links})
-    endif()
-
-    if (_netty__qt5_components)
-        portable_target(LINK_QT5_COMPONENTS ${_target} PRIVATE ${_netty__qt5_components})
-    endif()
-endforeach()
+target_link_libraries(netty PUBLIC pfs::common)
 
 if (ANDROID)
-    portable_target(BUILD_JAR pfs.netty
+    find_package(Java "1.8" COMPONENTS Development REQUIRED)
+
+    if (NOT DEFINED Java_Development_FOUND)
+        message(FATAL_ERROR "No Java found, may be JAVA_HOME environment variable has invalid value")
+    endif()
+
+    include(UseJava)
+
+    #set(CMAKE_JAVA_COMPILE_FLAGS ...)
+    set(CMAKE_JAVA_INCLUDE_PATH "${CMAKE_ANDROID_NDK}/../platforms/${ANDROID_PLATFORM}/android.jar:${CMAKE_JAVA_INCLUDE_PATH}") # CLASSPATH
+
+    add_jar(pfs.netty
         SOURCES
             ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncDatagramSocket.java
             ${CMAKE_CURRENT_LIST_DIR}/src/android/com/koushikdutta/async/AsyncNetworkSocket.java
@@ -302,7 +307,11 @@ if (ANDROID)
             ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/FileRpcRouter.java
             ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/LogTag.java
             ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/RpcRouter.java
-            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/RpcService.java
-        LINK_ANDROID)
-endif()
+            ${CMAKE_CURRENT_LIST_DIR}/src/android/pfs/netty/RpcService.java)
 
+    get_target_property(_jar_file pfs.netty JAR_FILE)
+    get_target_property(_class_dir pfs.netty CLASSDIR)
+
+    message(TRACE "JAR file path: ${_jar_file}")
+    message(TRACE "Class compiled to: ${_class_dir}")
+endif()

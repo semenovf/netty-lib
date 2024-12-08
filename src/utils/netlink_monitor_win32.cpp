@@ -106,34 +106,42 @@ PMIB_IPADDRTABLE get_ip_addr_table (error * perr)
     return ip_addr_table;
 }
 
-netlink_monitor::netlink_monitor (error * perr)
-    : _handle(nullptr)
+class netlink_monitor::impl
 {
-    _overlap.hEvent = WSACreateEvent();
+public:
+    OVERLAPPED overlap;
+    HANDLE handle {nullptr};
+    MIB_IPADDRTABLE * ip_addr_table {nullptr};
+};
 
-    auto err = notify_addr_change(& _handle, & _overlap);
+netlink_monitor::netlink_monitor (error * perr)
+    : _d(new impl)
+{
+    _d->overlap.hEvent = WSACreateEvent();
+
+    auto err = notify_addr_change(& _d->handle, & _d->overlap);
 
     if (err) {
         pfs::throw_or(perr, std::move(err));
         return;
     }
 
-    _ip_addr_table = get_ip_addr_table(perr);
+    _d->ip_addr_table = get_ip_addr_table(perr);
 }
 
 netlink_monitor::~netlink_monitor ()
 {
-    if (_ip_addr_table != nullptr) {
-        FREE(_ip_addr_table);
-        _ip_addr_table = nullptr;
+    if (_d->ip_addr_table != nullptr) {
+        FREE(_d->ip_addr_table);
+        _d->ip_addr_table = nullptr;
     }
 
-    WSACloseEvent(_overlap.hEvent);
+    WSACloseEvent(_d->overlap.hEvent);
 }
 
 int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 {
-    auto rc = WaitForSingleObject(_overlap.hEvent, millis.count());
+    auto rc = WaitForSingleObject(_d->overlap.hEvent, millis.count());
     int n = 0;
 
     switch (rc) {
@@ -141,7 +149,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
             if (inet4_addr_added)
                 inet4_addr_added(0, 0);
 
-            BOOL success = WSAResetEvent(_overlap.hEvent);
+            BOOL success = WSAResetEvent(_d->overlap.hEvent);
 
             if (success != TRUE) {
                 on_failure(netty::error {
@@ -154,7 +162,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
                 break;
             }
 
-            auto err = notify_addr_change(& _handle, & _overlap);
+            auto err = notify_addr_change(& _d->handle, & _d->overlap);
 
             if (err) {
                 on_failure(err);
@@ -172,14 +180,14 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
             }
 
             auto nentries1 = pfs::numeric_cast<int>(ip_addr_table->dwNumEntries);
-            auto nentries2 = pfs::numeric_cast<int>(_ip_addr_table->dwNumEntries);
+            auto nentries2 = pfs::numeric_cast<int>(_d->ip_addr_table->dwNumEntries);
 
             // Find new (added) IP addresses
             for (int i = 0; i < nentries1; i++) {
                 bool found = false;
 
                 for (int j = 0; j < nentries2; j++) {
-                    if (ip_addr_table->table[i].dwAddr == _ip_addr_table->table[j].dwAddr) {
+                    if (ip_addr_table->table[i].dwAddr == _d->ip_addr_table->table[j].dwAddr) {
                         found = true;
                         break;
                     }
@@ -200,7 +208,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
                 bool found = false;
 
                 for (int i = 0; i < nentries1; i++) {
-                    if (ip_addr_table->table[i].dwAddr == _ip_addr_table->table[j].dwAddr) {
+                    if (ip_addr_table->table[i].dwAddr == _d->ip_addr_table->table[j].dwAddr) {
                         found = true;
                         break;
                     }
@@ -208,18 +216,18 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 
                 if (!found) {
                     if (inet4_addr_removed) {
-                        auto addr = pfs::numeric_cast<std::uint32_t>(_ip_addr_table->table[j].dwAddr);
+                        auto addr = pfs::numeric_cast<std::uint32_t>(_d->ip_addr_table->table[j].dwAddr);
                         addr = pfs::to_native_order(addr);
-                        auto index = pfs::numeric_cast<std::uint32_t>(_ip_addr_table->table[j].dwIndex);
+                        auto index = pfs::numeric_cast<std::uint32_t>(_d->ip_addr_table->table[j].dwIndex);
                         inet4_addr_added(inet4_addr(addr), index);
                     }
                 }
             }
 
-            if (_ip_addr_table != nullptr)
-                FREE(_ip_addr_table);
+            if (_d->ip_addr_table != nullptr)
+                FREE(_d->ip_addr_table);
 
-            _ip_addr_table = ip_addr_table;
+            _d->ip_addr_table = ip_addr_table;
 
             break;
         }

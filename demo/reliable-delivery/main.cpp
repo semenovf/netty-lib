@@ -144,14 +144,9 @@ int main (int argc, char * argv[])
         , std::move(deliveryengineopts));
 
     std::vector<netty::p2p::peer_id> defered_expired_peers;
-    pfs::emitter<netty::p2p::peer_id, std::string> sendStringData;
-    pfs::emitter<netty::p2p::peer_id, std::vector<char>> sendVectorData;
+    pfs::emitter<netty::p2p::peer_id, std::vector<char>> sendData;
 
-    sendStringData.connect([& deliveryengine] (netty::p2p::peer_id addressee, std::string data) {
-        deliveryengine->enqueue(addressee, std::move(data));
-    });
-
-    sendVectorData.connect([& deliveryengine] (netty::p2p::peer_id addressee, std::vector<char> data) {
+    sendData.connect([& deliveryengine] (netty::p2p::peer_id addressee, std::vector<char> data) {
         deliveryengine->enqueue(addressee, std::move(data));
     });
 
@@ -207,19 +202,19 @@ int main (int argc, char * argv[])
         discoveryengine->expire_peer(peer_id);
     };
 
-    deliveryengine->channel_established = [& sendStringData] (netty::host4_addr haddr) {
+    deliveryengine->channel_established = [& sendData] (netty::host4_addr haddr) {
         LOGD("", "Channel established: {}", to_string(haddr));
 
-        sendStringData(haddr.host_id, "HELLO");
+        sendData(haddr.host_id, std::vector<char>{'H', 'E', 'L', 'L', 'O'});
     };
 
     deliveryengine->channel_closed = [] (netty::p2p::peer_id peer_id) {
         LOGD("", "Channel closed: {}", peer_id);
     };
 
-    deliveryengine->data_received = [& sendVectorData] (netty::p2p::peer_id peer_id, std::vector<char> data) {
+    deliveryengine->data_received = [& sendData] (netty::p2p::peer_id peer_id, std::vector<char> data) {
         LOGD("", "Message received from: {}", peer_id);
-        sendVectorData(peer_id, std::move(data));
+        sendData(peer_id, std::move(data));
     };
 
     discoveryengine->add_receiver(discovery_saddr);

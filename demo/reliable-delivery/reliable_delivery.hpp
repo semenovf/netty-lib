@@ -8,11 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "persistent_storage.hpp"
-#include "netty/p2p/delivery_engine.hpp"
-#include "netty/p2p/discovery_engine.hpp"
-#include "netty/p2p/primal_serializer.hpp"
-#include "netty/p2p/reliable_delivery_engine.hpp"
-#include "netty/p2p/posix/discovery_engine.hpp"
+#include <pfs/netty/p2p/delivery_engine.hpp>
+#include <pfs/netty/p2p/discovery_engine.hpp>
+#include <pfs/netty/p2p/primal_serializer.hpp>
+#include <pfs/netty/p2p/reliable_delivery_engine.hpp>
+#include <pfs/netty/p2p/posix/discovery_engine.hpp>
 
 using discovery_engine = netty::p2p::discovery_engine<netty::p2p::posix::discovery_engine>;
 

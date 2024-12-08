@@ -7,9 +7,9 @@
 //      2023.02.15 Initial version (netty-lib).
 //      2024.04.08 Windows support implemented.
 ////////////////////////////////////////////////////////////////////////////////
-#include "netty/utils/netlink_monitor.hpp"
-#include "pfs/filesystem.hpp"
-#include "pfs/log.hpp"
+#include <pfs/filesystem.hpp>
+#include <pfs/log.hpp>
+#include <pfs/netty/utils/netlink_monitor.hpp>
 
 using netlink_monitor = netty::utils::netlink_monitor;
 using netlink_attributes = netty::utils::netlink_attributes;

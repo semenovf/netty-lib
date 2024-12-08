@@ -8,10 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "remote_file_protocol.hpp"
-#include "pfs/netty/p2p/remote_file.hpp"
-#include "pfs/netty/client_socket_engine.hpp"
-#include "pfs/netty/default_poller_types.hpp"
-#include "pfs/netty/posix/tcp_socket.hpp"
+#include "netty/p2p/remote_file.hpp"
+#include "netty/client_socket_engine.hpp"
+#include "netty/default_poller_types.hpp"
+#include "netty/posix/tcp_socket.hpp"
 #include <cstdint>
 
 namespace netty {

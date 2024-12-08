@@ -6,8 +6,8 @@
 // Changelog:
 //      2024.04.04 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "netty/utils/network_interface.hpp"
-#include "pfs/fmt.hpp"
+#include <pfs/netty/utils/network_interface.hpp>
+#include <pfs/fmt.hpp>
 
 int main (int , char *[])
 {

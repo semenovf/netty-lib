@@ -238,7 +238,7 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Reader closed: {}@{}:{}", peer_uuid, to_string(addr), port);
     };
 
-    engine.data_received = [] (p2p::universal_id sender_uuid, std::string data) {
+    engine.data_received = [] (p2p::universal_id sender_uuid, std::vector<char> data) {
         LOGD(TAG, "Data received from: {}, {} bytes", sender_uuid, data.size());
 
         if (data.size() > 20) {

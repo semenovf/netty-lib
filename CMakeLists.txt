@@ -4,43 +4,59 @@
 # This file is part of `netty-lib`.
 #
 # Changelog:
-#      2021.06.21 Initial version
-#      2022.01.14 Updated according new template.
-#      2024.04.03 Fixed `portable-target` path.
+#       2021.06.21 Initial version
+#       2022.01.14 Updated according new template.
+#       2024.04.03 Fixed `portable-target` path.
+#       2024.12.07 Up to C++14 standard.
+#                  Min CMake version is 3.19 (CMakePresets).
 ################################################################################
-cmake_minimum_required (VERSION 3.11)
+cmake_minimum_required (VERSION 3.19)
 project(netty-ALL CXX C)
 
 option(NETTY__BUILD_STRICT "Build with strict policies: C++ standard required, C++ extension is OFF etc" ON)
 option(NETTY__BUILD_TESTS "Build tests" OFF)
 option(NETTY__BUILD_DEMO "Build examples/demo" OFF)
-option(NETTY__ENABLE_COVERAGE "Build tests with coverage support" OFF)
-option(NETTY__ENABLE_PROFILER "Build with profiling support" OFF)
-option(NETTY__BUILD_P2P "Build netty-p2p library" ON)
 
-if (NOT PORTABLE_TARGET__ENABLED)
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/2ndparty/portable-target/cmake/v2)
-    include(PortableTarget)
-    portable_target(SET ENABLE_TRACE ON)
-endif()
+# Netty library specific options
+option(NETTY__BUILD_SHARED "Enable build shared library" OFF)
+option(NETTY__ENABLE_P2P "Enabled P2P support" OFF) # FIXME set to ON
+option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
+option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
+option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
+option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
 
-message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS "C++ compiler version: ${CMAKE_CXX_COMPILER_VERSION}")
+# Netty-p2p library specific options
+option(NETTY_P2P__BUILD_SHARED "Enable build shared library" OFF)
 
-if (NETTY__BUILD_STRICT)
+if (DEBBY__BUILD_STRICT)
+    if (NOT CMAKE_CXX_STANDARD)
+        set(CMAKE_CXX_STANDARD 14)
+    endif()
+
     set(CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF) # use -std=c++XX rather than -std=gnu++XX
 endif()
 
-if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/3rdparty/enet/CMakeLists.txt)
-    set(NETTY__ENABLE_ENET ON CACHE BOOL "")
-    set(NETTY__ENABLE_UDT ON CACHE BOOL "")
+get_property(_runtime_output_directory GLOBAL PROPERTY RUNTIME_OUTPUT_DIRECTORY)
+get_property(_library_output_directory GLOBAL PROPERTY LIBRARY_OUTPUT_DIRECTORY)
+get_property(_archive_output_directory GLOBAL PROPERTY ARCHIVE_OUTPUT_DIRECTORY)
+
+if (NOT _runtime_output_directory)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 endif()
 
-portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library.cmake)
+if (NOT _library_output_directory)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
+endif()
+
+if (NOT _archive_output_directory)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
+endif()
+
+include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
 if (NETTY__BUILD_P2P)
-    portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
 endif()
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
@@ -49,23 +65,14 @@ if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
 endif()
 
 if (NETTY__BUILD_DEMO AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/demo)
-    if (NOT TARGET pfs::debby AND NOT TARGET pfs::debby::static)
-        set(DEBBY__BUILD_STATIC ON CACHE BOOL "Build `debby` static library")
-        set(DEBBY__BUILD_SHARED OFF CACHE BOOL "Build `debby` shared library")
-
-        portable_target(INCLUDE_PROJECT ${CMAKE_CURRENT_LIST_DIR}/2ndparty/debby/library.cmake)
-    endif()
-
     add_subdirectory(demo)
 endif()
 
-if (NETTY__ENABLE_PROFILER)
-    message(STATUS "Profiler feature enabled")
+include(GNUInstallDirs)
 
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-        set(CMAKE_CXX_FLAGS "-pg")
-        set(CMAKE_C_FLAGS "-pg")
-    else()
-        message(FATAL_ERROR "Profiler feature requires GCC")
-    endif()
-endif()
+install(TARGETS netty
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

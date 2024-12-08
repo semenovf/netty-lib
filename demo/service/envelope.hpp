@@ -83,3 +83,6 @@ public:
         return _out.take();
     }
 };
+
+constexpr char basic_envelope::start_flag;
+constexpr char basic_envelope::end_flag;

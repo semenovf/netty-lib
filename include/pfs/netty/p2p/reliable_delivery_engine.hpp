@@ -9,7 +9,8 @@
 #pragma once
 #include "peer_id.hpp"
 #include "simple_envelope.hpp"
-#include "pfs/i18n.hpp"
+#include <pfs/i18n.hpp>
+#include <pfs/utility.hpp>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -139,7 +140,7 @@ public:
         return enqueue(addressee, data.data(), data.size());
     }
 
-    bool enqueue (peer_id addressee, std::vector<char> const & data)
+    bool enqueue (peer_id addressee, std::vector<char> data)
     {
         return enqueue(addressee, data.data(), data.size());
     }
@@ -155,11 +156,6 @@ public:
     }
 
     bool enqueue_report (peer_id addressee, std::string const & data)
-    {
-        return enqueue_report(addressee, data.data(), data.size());
-    }
-
-    bool enqueue_report (peer_id addressee, std::vector<char> const & data)
     {
         return enqueue_report(addressee, data.data(), data.size());
     }
@@ -230,7 +226,7 @@ private:
         return DeliveryEngine::enqueue(addressee, out.take());
     }
 
-    bool enqueue_payload_again (peer_id addressee, envelope_id eid, std::vector<char> const & payload)
+    bool enqueue_payload_again (peer_id addressee, envelope_id eid, std::string const & payload)
     {
         typename serializer_type::ostream_type out;
 
@@ -309,7 +305,7 @@ private:
 
             case envelope_type_enum::again:
                 LOG_TRACE_3("{} -> AGAIN: {:06}", addresser, h.eid);
-                _storage->again(h.eid, addresser, [this, addresser] (envelope_id eid, std::vector<char> payload) {
+                _storage->again(h.eid, addresser, [this, addresser] (envelope_id eid, std::string payload) {
                     enqueue_payload_again(addresser, eid, std::move(payload));
                 });
                 break;
@@ -332,7 +328,7 @@ private:
         _storage->maintain(addressee);
         _storage->meet_peer(addressee);
 
-        _storage->again(addressee, [this, addressee] (envelope_id eid, std::vector<char> payload) {
+        _storage->again(addressee, [this, addressee] (envelope_id eid, std::string payload) {
             enqueue_payload_again(addressee, eid, std::move(payload));
         });
 

@@ -8,8 +8,8 @@
 //      2024.04.08 Moved to `utils` namespace.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "netty/error.hpp"
-#include "netty/exports.hpp"
+#include "pfs/netty/error.hpp"
+#include "pfs/netty/exports.hpp"
 
 #if NETTY__LIBMNL_ENABLED
 struct mnl_socket;
