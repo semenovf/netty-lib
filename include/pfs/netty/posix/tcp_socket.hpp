@@ -27,7 +27,7 @@ protected:
     /**
      * Constructs POSIX TCP accepted socket.
      */
-    tcp_socket (native_type sock, socket4_addr const & saddr);
+    tcp_socket (socket_id sock, socket4_addr const & saddr);
 
 public:
     tcp_socket (tcp_socket const & s) = delete;

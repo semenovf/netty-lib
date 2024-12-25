@@ -15,25 +15,25 @@ namespace netty {
 template <typename Backend>
 void connecting_poller<Backend>::init ()
 {
-    on_failure = [] (native_socket_type, error const & err) {
+    on_failure = [] (socket_id, error const & err) {
         fmt::println(stderr, tr::_("ERROR: connecting poller: {}"), err.what());
     };
 
-    connection_refused = [] (native_socket_type, bool) {};
-    connected = [] (native_socket_type) {};
+    connection_refused = [] (socket_id, bool) {};
+    connected = [] (socket_id) {};
 }
 
 template <typename Backend>
 connecting_poller<Backend>::~connecting_poller () = default;
 
 template <typename Backend>
-void connecting_poller<Backend>::add (native_socket_type sock, error * perr)
+void connecting_poller<Backend>::add (socket_id sock, error * perr)
 {
     _rep->add_socket(sock, perr);
 }
 
 template <typename Backend>
-void connecting_poller<Backend>::remove (native_socket_type sock, error * perr)
+void connecting_poller<Backend>::remove (socket_id sock, error * perr)
 {
     _rep->remove_socket(sock, perr);
 }

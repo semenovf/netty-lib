@@ -55,25 +55,25 @@ public:
         };
 
     public:
-        using native_socket_type = typename ServerPoller::native_socket_type;
+        using socket_id = typename ServerPoller::socket_id;
 
     private:
         ListenerSocket _listener;
-        std::map<native_socket_type, requester_account> _requesters;
+        std::map<socket_id, requester_account> _requesters;
 
     public:
         mutable std::function<void (error const &)> on_failure = [] (error const &) {};
         mutable std::function<void (std::string const & )> on_error = [] (std::string const & ) {};
-        mutable std::function<void (native_socket_type)> accepted = [] (native_socket_type) {};
-        mutable std::function<void (native_socket_type)> disconnected = [] (native_socket_type) {};
-        mutable std::function<void (native_socket_type)> released = [] (native_socket_type) {};
-        mutable std::function<void (native_socket_type, InputEnvelope const &)> on_message_received
-            = [] (native_socket_type, InputEnvelope const &) {};
+        mutable std::function<void (socket_id)> accepted = [] (socket_id) {};
+        mutable std::function<void (socket_id)> disconnected = [] (socket_id) {};
+        mutable std::function<void (socket_id)> released = [] (socket_id) {};
+        mutable std::function<void (socket_id, InputEnvelope const &)> on_message_received
+            = [] (socket_id, InputEnvelope const &) {};
 
     private:
-        std::function<native_socket_type(native_socket_type, bool &)> accept_proc ()
+        std::function<socket_id(socket_id, bool &)> accept_proc ()
         {
-            return [this] (native_socket_type listener_sock, bool & success) {
+            return [this] (socket_id listener_sock, bool & success) {
                 netty::error err;
                 auto accepted_sock = _listener.accept_nonblocking(listener_sock, & err);
 
@@ -87,11 +87,11 @@ public:
 
                 requester_account c;
                 c.sock = std::move(accepted_sock);
-                auto res = _requesters.emplace(c.sock.native(), std::move(c));
+                auto res = _requesters.emplace(c.sock.id(), std::move(c));
 
                 if (res.second) {
                     requester_account & c = res.first->second;
-                    return c.sock.native();
+                    return c.sock.id();
                 } else {
                     on_error(tr::_("socket already exists with the same identifier"));
                 }
@@ -102,27 +102,27 @@ public:
 
         void init_callbacks ()
         {
-            base_class::on_listener_failure = [this] (native_socket_type, error const & err) {
+            base_class::on_listener_failure = [this] (socket_id, error const & err) {
                 this->on_failure(err);
             };
 
-            base_class::on_failure = [this] (native_socket_type, error const & err) {
+            base_class::on_failure = [this] (socket_id, error const & err) {
                 this->on_failure(err);
             };
 
-            base_class::ready_read = [this] (native_socket_type sock) {
+            base_class::ready_read = [this] (socket_id sock) {
                 this->process_input(sock);
             };
 
-            base_class::accepted = [this] (native_socket_type sock) {
+            base_class::accepted = [this] (socket_id sock) {
                 this->accepted(sock);
             };
 
-            base_class::disconnected = [this] (native_socket_type sock) {
+            base_class::disconnected = [this] (socket_id sock) {
                 this->disconnected(sock);
             };
 
-            base_class::can_write = [this] (native_socket_type sock) {
+            base_class::can_write = [this] (socket_id sock) {
                 auto arequester = locate_account(sock);
 
                 if (arequester == nullptr)
@@ -131,9 +131,9 @@ public:
                 arequester->can_write = true;
             };
 
-            base_class::listener_removed = [] (native_socket_type) {};
+            base_class::listener_removed = [] (socket_id) {};
 
-            base_class::removed = [this] (native_socket_type sock) {
+            base_class::removed = [this] (socket_id sock) {
                 auto arequester = locate_account(sock);
 
                 if (arequester == nullptr)
@@ -178,7 +178,7 @@ public:
             this->poll(timeout);
         }
 
-        void enqueue (native_socket_type sock, char const * data, int len)
+        void enqueue (socket_id sock, char const * data, int len)
         {
             auto arequester = locate_account(sock);
 
@@ -188,22 +188,22 @@ public:
             arequester.outq.push(std::vector<char>(data, data + len));
         }
 
-        void enqueue (native_socket_type sock, std::string const & data)
+        void enqueue (socket_id sock, std::string const & data)
         {
             enqueue(sock, data.data(), data.size());
         }
 
-        void enqueue (native_socket_type sock, pfs::string_view data)
+        void enqueue (socket_id sock, pfs::string_view data)
         {
             enqueue(sock, data.data(), data.size());
         }
 
-        void enqueue (native_socket_type sock, std::vector<char> const & data)
+        void enqueue (socket_id sock, std::vector<char> const & data)
         {
             enqueue(sock, data.data(), data.size());
         }
 
-        void enqueue (native_socket_type sock, std::vector<char> && data)
+        void enqueue (socket_id sock, std::vector<char> && data)
         {
             auto arequester = locate_account(sock);
 
@@ -245,7 +245,7 @@ public:
         }
 
     private:
-        requester_account * locate_account (native_socket_type sock)
+        requester_account * locate_account (socket_id sock)
         {
             auto pos = _requesters.find(sock);
 
@@ -261,7 +261,7 @@ public:
             return & pos->second;
         }
 
-        void process_input (native_socket_type sock)
+        void process_input (socket_id sock)
         {
             auto arequester = locate_account(sock);
 
@@ -321,7 +321,7 @@ public:
                     auto & data = arequester->outq.front();
                     auto sendresult = arequester->sock.send(data.data(), data.size(), & err);
 
-                    switch (sendresult.state) {
+                    switch (sendresult.status) {
                         case netty::send_status::good:
                             if (sendresult.n > 0) {
                                 if (sendresult.n == data.size()) {
@@ -371,7 +371,7 @@ public:
 
     private:
         using base_class = ClientPoller;
-        using native_socket_type = typename ClientPoller::native_socket_type;
+        using socket_id = typename ClientPoller::socket_id;
 
     public:
         using output_envelope_type = OutputEnvelope;
@@ -406,36 +406,36 @@ public:
     private:
         void init_callbacks ()
         {
-            base_class::on_failure = [this] (native_socket_type, error const & err) {
+            base_class::on_failure = [this] (socket_id, error const & err) {
                 this->on_failure(err);
             };
 
-            base_class::connection_refused = [this] (native_socket_type, bool) {
+            base_class::connection_refused = [this] (socket_id, bool) {
                 this->connection_refused();
             };
 
-            base_class::connected = [this] (native_socket_type) {
+            base_class::connected = [this] (socket_id) {
                 base_class::wait_for_write(_sock);
                 _connected = true;
                 _connecting = false;
                 this->connected();
             };
 
-            base_class::disconnected = [this] (native_socket_type) {
+            base_class::disconnected = [this] (socket_id) {
                 _connected = false;
                 _connecting = false;
                 this->disconnected();
             };
 
-            base_class::ready_read = [this] (native_socket_type sock) {
+            base_class::ready_read = [this] (socket_id sock) {
                 this->process_input(sock);
             };
 
-            base_class::can_write = [this] (native_socket_type) {
+            base_class::can_write = [this] (socket_id) {
                 _can_write = true;
             };
 
-            base_class::removed = [this] (native_socket_type) {
+            base_class::removed = [this] (socket_id) {
                 _sock.disconnect();
                 _sock = Socket{};
                 _can_write = false;
@@ -523,7 +523,7 @@ public:
         }
 
     private:
-        void process_input (native_socket_type /*sock*/)
+        void process_input (socket_id /*sock*/)
         {
             constexpr std::size_t k_input_size_quant = 512;
 
@@ -536,7 +536,7 @@ public:
 
                 if (n < 0) {
                     on_error(tr::f_("receive data failure ({}) from: {}, disconnecting (socket={})"
-                        , err.what(), to_string(_sock.saddr()), _sock.native()));
+                        , err.what(), to_string(_sock.saddr()), _sock.id()));
                     _sock.disconnect();
                     return;
                 }
@@ -553,7 +553,7 @@ public:
                 //
                 // if (n < 0) {
                 //     on_error(tr::f_("receive data failure from: {}, disconnecting (socket={})"
-                //         , to_string(_sock.saddr()), _sock.native()));
+                //         , to_string(_sock.saddr()), _sock.id()));
                 //     _sock.disconnect();
                 //     return;
                 // }
@@ -592,7 +592,7 @@ public:
                 auto & data = _q.front();
                 auto sendresult = _sock.send(data.data(), data.size(), & err);
 
-                switch (sendresult.state) {
+                switch (sendresult.status) {
                     case netty::send_status::good:
                         if (sendresult.n > 0) {
                             if (sendresult.n == data.size()) {

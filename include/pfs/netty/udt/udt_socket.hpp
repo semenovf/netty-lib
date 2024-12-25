@@ -115,7 +115,7 @@ public:
      */
     NETTY__EXPORT operator bool () const noexcept;
 
-    NETTY__EXPORT native_type native () const noexcept;
+    NETTY__EXPORT socket_id id () const noexcept;
 
     /**
      * @return Bound address for the listener or listener address for connected socket.

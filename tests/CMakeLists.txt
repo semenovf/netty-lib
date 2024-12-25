@@ -8,11 +8,13 @@
 #       2022.01.14 Refactored for using portable_target `ADD_TEST`.
 #       2024.04.03 Added selection of proper dependencies.
 #       2024.12.08 Removed `portable_target` dependency.
+#       2024.12.25 Added `single_channel_connection` test.
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
 set(TESTS
-    inet4_addr)
+    inet4_addr
+    single_channel_connection)
 
 foreach (target ${TESTS})
     add_executable(${target} ${target}.cpp)

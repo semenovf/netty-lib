@@ -28,7 +28,7 @@ tcp_socket::tcp_socket () : inet_socket(type_enum::stream) {}
 tcp_socket::tcp_socket (uninitialized) : inet_socket() {}
 
 // Accepted socket
-tcp_socket::tcp_socket (native_type sock, socket4_addr const & saddr)
+tcp_socket::tcp_socket (socket_id sock, socket4_addr const & saddr)
     : inet_socket(sock, saddr)
 {}
 

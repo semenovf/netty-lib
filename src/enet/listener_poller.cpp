@@ -50,7 +50,7 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
             };
 
             LOG_TRACE_2("Accepted from: {}", to_string(saddr));
-            accept(reinterpret_cast<native_listener_type>(ev->peer)); // <= ENetPeer *
+            accept(reinterpret_cast<listener_id>(ev->peer)); // <= ENetPeer *
             _rep->pop_event();
             n++;
         } else {

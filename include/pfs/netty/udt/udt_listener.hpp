@@ -21,8 +21,8 @@ namespace udt {
 class udt_listener: public udt_socket
 {
 public:
-    using native_type = udt_socket::native_type;
-    using native_socket_type = udt_socket::native_type;
+    using listener_id = udt_socket::native_type;
+    using socket_id = udt_socket::native_type;
 
 private:
     void init (socket4_addr const & saddr, error * perr = nullptr);
@@ -75,7 +75,7 @@ public:
     NETTY__EXPORT ~udt_listener ();
 
 public:
-    NETTY__EXPORT native_type native () const noexcept;
+    NETTY__EXPORT listener_id id () const noexcept;
 
     /**
      * Listen for connections on a socket.
@@ -87,11 +87,11 @@ public:
 
 public: // static
     NETTY__EXPORT static udt_socket accept (
-          native_type listener_sock // really here not a listener socket, already accepted socket
+          listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 
     NETTY__EXPORT static udt_socket accept_nonblocking (
-          native_type listener_sock // really here not a listener socket, already accepted socket
+          listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 };
 

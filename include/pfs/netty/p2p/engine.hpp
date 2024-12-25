@@ -321,7 +321,7 @@ public:
         // Create and configure main server poller
         ////////////////////////////////////////////////////////////////////////
         {
-            auto accept_proc = [this] (typename server_poller_type::native_socket_type listener_sock, bool & ok) {
+            auto accept_proc = [this] (typename server_poller_type::socket_id listener_sock, bool & ok) {
                 auto * reader = acquire_reader(listener_sock);
 
                 if (!reader) {
@@ -330,16 +330,16 @@ public:
                 }
 
                 ok = true;
-                return reader->native();
+                return reader->id();
             };
 
             _reader_poller = pfs::make_unique<server_poller_type>(std::move(accept_proc));
 
-            _reader_poller->on_listener_failure = [this] (typename server_poller_type::native_socket_type, error const & err) {
+            _reader_poller->on_listener_failure = [this] (typename server_poller_type::socket_id, error const & err) {
                 this->on_failure(err);
             };
 
-            _reader_poller->on_failure = [this] (typename server_poller_type::native_socket_type sock, error const & err) {
+            _reader_poller->on_failure = [this] (typename server_poller_type::socket_id sock, error const & err) {
                 this->on_failure(err);
 
                 auto paccount = locate_reader_account(sock);
@@ -351,11 +351,11 @@ public:
                 }
             };
 
-            _reader_poller->ready_read = [this] (typename server_poller_type::native_socket_type sock) {
+            _reader_poller->ready_read = [this] (typename server_poller_type::socket_id sock) {
                 process_reader_input(sock);
             };
 
-            _reader_poller->disconnected = [this] (typename server_poller_type::native_socket_type sock) {
+            _reader_poller->disconnected = [this] (typename server_poller_type::socket_id sock) {
                 auto paccount = locate_reader_account(sock);
 
                 if (paccount && paccount->uuid != universal_id{}) {
@@ -373,7 +373,7 @@ public:
         {
             _writer_poller = pfs::make_unique<client_poller_type>();
 
-            _writer_poller->on_failure = [this] (typename client_poller_type::native_socket_type sock, error const & err) {
+            _writer_poller->on_failure = [this] (typename client_poller_type::socket_id sock, error const & err) {
                 this->on_failure(err);
 
                 auto paccount = locate_writer_account(sock);
@@ -386,7 +386,7 @@ public:
                 }
             };
 
-            _writer_poller->connection_refused = [this] (typename client_poller_type::native_socket_type sock, bool timedout) {
+            _writer_poller->connection_refused = [this] (typename client_poller_type::socket_id sock, bool timedout) {
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount) {
@@ -397,12 +397,12 @@ public:
                 }
             };
 
-            _writer_poller->connected = [this] (typename client_poller_type::native_socket_type sock) {
+            _writer_poller->connected = [this] (typename client_poller_type::socket_id sock) {
                 LOG_TRACE_3("Connection established for: socket={}", sock);
                 process_socket_connected(sock);
             };
 
-            _writer_poller->disconnected = [this] (typename client_poller_type::native_socket_type sock) {
+            _writer_poller->disconnected = [this] (typename client_poller_type::socket_id sock) {
                 auto paccount = locate_writer_account(sock);
 
                 if (paccount) {
@@ -414,9 +414,9 @@ public:
             };
 
             // Not need, writer sockets for write only
-            _writer_poller->ready_read = [] (typename client_poller_type::native_socket_type) {};
+            _writer_poller->ready_read = [] (typename client_poller_type::socket_id) {};
 
-            _writer_poller->can_write = [this] (typename client_poller_type::native_socket_type sock) {
+            _writer_poller->can_write = [this] (typename client_poller_type::socket_id sock) {
                 auto pos = _writer_ids.find(sock);
 
                 if (pos != _writer_ids.end()) {
@@ -812,7 +812,7 @@ private:
             _readers[index].second.raw.clear();
         }
 
-        reader_id id = _readers[index].second.reader.native();
+        reader_id id = _readers[index].second.reader.id();
 
         _reader_ids[id] = index;
 
@@ -854,9 +854,9 @@ private:
         auto index = pos1->second;
         auto & item = _readers[index].second;
 
-        check_reader_consistency(item.reader.native());
+        check_reader_consistency(item.reader.id());
 
-        auto pos2 = _reader_ids.find(item.reader.native());
+        auto pos2 = _reader_ids.find(item.reader.id());
 
         // Release reader indices
         _reader_uuids.erase(pos1);
@@ -973,7 +973,7 @@ private:
 
         auto & item = _writers[index].second;
 
-        auto pos1 = _writer_ids.find(item.writer.native());
+        auto pos1 = _writer_ids.find(item.writer.id());
 
         if (pos1 == _writer_ids.end()) {
             throw error {
@@ -1026,7 +1026,7 @@ private:
             wref.second.raw.clear();
         }
 
-        writer_id id = _writers[index].second.writer.native();
+        writer_id id = _writers[index].second.writer.id();
 
         _writer_ids[id] = index;
         _writer_uuids[uuid] = index;
@@ -1092,7 +1092,7 @@ private:
         auto index = pos->second;
         auto & item = _writers[index].second;
 
-        release_writer(item.writer.native());
+        release_writer(item.writer.id());
     }
 
     // Release writer by native identifier

@@ -28,11 +28,11 @@
 namespace netty {
 namespace posix {
 
-inet_socket::native_type const inet_socket::kINVALID_SOCKET;
+inet_socket::socket_id const inet_socket::kINVALID_SOCKET;
 
 inet_socket::inet_socket () = default;
 
-inet_socket::inet_socket (native_type sock, socket4_addr const & saddr, error * /*perr*/)
+inet_socket::inet_socket (socket_id sock, socket4_addr const & saddr, error * /*perr*/)
     : _socket(sock)
     , _saddr(saddr)
 {}
@@ -174,7 +174,7 @@ inet_socket::operator bool () const noexcept
     return _socket != kINVALID_SOCKET;
 }
 
-inet_socket::native_type inet_socket::native () const noexcept
+inet_socket::socket_id inet_socket::id () const noexcept
 {
     return _socket;
 }
@@ -184,7 +184,7 @@ socket4_addr inet_socket::saddr () const noexcept
     return _saddr;
 }
 
-inline bool inet_socket::check_socket_descriptor (native_type sock, error * perr)
+inline bool inet_socket::check_socket_descriptor (socket_id sock, error * perr)
 {
     if (sock == inet_socket::kINVALID_SOCKET) {
         pfs::throw_or(perr, error { 
@@ -198,7 +198,7 @@ inline bool inet_socket::check_socket_descriptor (native_type sock, error * perr
     return true;
 }
 
-bool inet_socket::bind (native_type sock, socket4_addr const & saddr, error * perr)
+bool inet_socket::bind (socket_id sock, socket4_addr const & saddr, error * perr)
 {
     if (!check_socket_descriptor(sock, perr))
         return false;
@@ -233,7 +233,7 @@ bool inet_socket::set_nonblocking (bool enable, error * perr)
     return set_nonblocking(_socket, enable, perr);
 }
 
-bool inet_socket::set_nonblocking (native_type sock, bool enable, error * perr)
+bool inet_socket::set_nonblocking (socket_id sock, bool enable, error * perr)
 {
     if (!check_socket_descriptor(sock, perr))
         return false;
@@ -266,7 +266,7 @@ bool inet_socket::set_nonblocking (native_type sock, bool enable, error * perr)
     return true;
 }
 
-bool inet_socket::is_nonblocking (native_type sock, error * perr)
+bool inet_socket::is_nonblocking (socket_id sock, error * perr)
 {
     if (!check_socket_descriptor(sock, perr))
         return false;
@@ -298,79 +298,80 @@ bool inet_socket::is_nonblocking (native_type sock, error * perr)
 #endif
 }
 
-int inet_socket::available (error * perr) const
-{
-#if _MSC_VER
-    char peek_buffer[1500];
-    std::vector<WSABUF> buf;
-    DWORD n = 0;
-
-    for (;;) {
-        buf.resize(buf.size() + 5, {sizeof(peek_buffer), peek_buffer});
-
-        DWORD flags = MSG_PEEK;
-        DWORD bytes_read = 0;
-        auto rc = ::WSARecv(_socket, buf.data(), DWORD(buf.size()), & bytes_read, & flags, nullptr, nullptr);
-
-        if (rc != SOCKET_ERROR) {
-            n = bytes_read;
-            break;
-        } else {
-            auto lastWsaError = WSAGetLastError();
-
-            switch (lastWsaError) {
-                case WSAEMSGSIZE:
-                    continue;
-                case WSAECONNRESET:
-                case WSAENETRESET:
-                    n = 0;
-                    break;
-                default: {
-                    pfs::throw_or(perr, error {
-                          errc::socket_error
-                        , tr::_("read available data size from socket failure")
-                        , pfs::system_error_text()
-                    });
-
-                    return -1;
-                }
-            }
-
-            break;
-        }
-    }
-
-    return n;
-#else
-    // Check if any data available on socket
-    std::uint8_t c;
-    auto rc = ::recv(_socket, & c, 1, MSG_PEEK);
-
-    if (rc < 0
-        && errno == EAGAIN
-            || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
-        return 0;
-    }
-
-    if (rc <= 0)
-        return rc;
-
-    int n = 0;
-    auto rc1 = ::ioctl(_socket, FIONREAD, & n);
-
-    if (rc1 != 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("read available data size from socket failure")
-            , pfs::system_error_text()
-        });
-
-        return -1;
-    }
-
-    return n;
-#endif
-}
+// DEPRECATED
+// int inet_socket::available (error * perr) const
+// {
+// #if _MSC_VER
+//     char peek_buffer[1500];
+//     std::vector<WSABUF> buf;
+//     DWORD n = 0;
+//
+//     for (;;) {
+//         buf.resize(buf.size() + 5, {sizeof(peek_buffer), peek_buffer});
+//
+//         DWORD flags = MSG_PEEK;
+//         DWORD bytes_read = 0;
+//         auto rc = ::WSARecv(_socket, buf.data(), DWORD(buf.size()), & bytes_read, & flags, nullptr, nullptr);
+//
+//         if (rc != SOCKET_ERROR) {
+//             n = bytes_read;
+//             break;
+//         } else {
+//             auto lastWsaError = WSAGetLastError();
+//
+//             switch (lastWsaError) {
+//                 case WSAEMSGSIZE:
+//                     continue;
+//                 case WSAECONNRESET:
+//                 case WSAENETRESET:
+//                     n = 0;
+//                     break;
+//                 default: {
+//                     pfs::throw_or(perr, error {
+//                           errc::socket_error
+//                         , tr::_("read available data size from socket failure")
+//                         , pfs::system_error_text()
+//                     });
+//
+//                     return -1;
+//                 }
+//             }
+//
+//             break;
+//         }
+//     }
+//
+//     return n;
+// #else
+//     // Check if any data available on socket
+//     std::uint8_t c;
+//     auto rc = ::recv(_socket, & c, 1, MSG_PEEK);
+//
+//     if (rc < 0
+//         && errno == EAGAIN
+//             || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+//         return 0;
+//     }
+//
+//     if (rc <= 0)
+//         return rc;
+//
+//     int n = 0;
+//     auto rc1 = ::ioctl(_socket, FIONREAD, & n);
+//
+//     if (rc1 != 0) {
+//         pfs::throw_or(perr, error {
+//               errc::socket_error
+//             , tr::_("read available data size from socket failure")
+//             , pfs::system_error_text()
+//         });
+//
+//         return -1;
+//     }
+//
+//     return n;
+// #endif
+// }
 
 int inet_socket::recv (char * data, int len, error * perr)
 {

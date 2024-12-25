@@ -15,24 +15,24 @@ namespace netty {
 template <typename Backend>
 void listener_poller<Backend>::init ()
 {
-    on_failure = [] (native_listener_type, error const & err) {
+    on_failure = [] (listener_id, error const & err) {
         fmt::println(stderr, tr::_("ERROR: listener poller: {}"), err.what());
     };
 
-    accept = [] (native_listener_type) {};
+    accept = [] (listener_id) {};
 }
 
 template <typename Backend>
 listener_poller<Backend>::~listener_poller () = default;
 
 template <typename Backend>
-void listener_poller<Backend>::add (native_listener_type sock, error * perr)
+void listener_poller<Backend>::add (listener_id sock, error * perr)
 {
     _rep->add_listener(sock, perr);
 }
 
 template <typename Backend>
-void listener_poller<Backend>::remove (native_listener_type sock, error * perr)
+void listener_poller<Backend>::remove (listener_id sock, error * perr)
 {
     _rep->remove_listener(sock, perr);
 }

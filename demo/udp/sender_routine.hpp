@@ -13,42 +13,66 @@
 #include <map>
 #include <thread>
 
+using namespace std::chrono_literals;
+
 template <typename Sender>
-void run_sender (netty::socket4_addr const & dest_saddr, netty::inet4_addr local_addr)
+void run_sender (netty::socket4_addr const & destSaddr, netty::inet4_addr localAddr
+    , std::chrono::milliseconds interval, std::uint32_t maxCount, bool quitOnlyPacket)
 {
     LOGD(TAG, "Run {} sender to: {}"
-        , (netty::is_multicast(dest_saddr.addr)
+        , (netty::is_multicast(destSaddr.addr)
             ? "MULTICAST"
-                : netty::is_broadcast(dest_saddr.addr)
+                : netty::is_broadcast(destSaddr.addr)
                 ? "BROADCAST"
                 : "UNICAST")
-        , to_string(dest_saddr));
+        , to_string(destSaddr));
 
     try {
         Sender sender;
 
-        if (netty::is_multicast(dest_saddr.addr)) {
-            sender.set_multicast_interface(local_addr);
-            LOGD(TAG, "Multicast interface: {}", to_string(local_addr));
-        } else if (netty::is_broadcast(dest_saddr.addr)) {
+        if (netty::is_multicast(destSaddr.addr)) {
+            sender.set_multicast_interface(localAddr);
+            LOGD(TAG, "Multicast interface: {}", to_string(localAddr));
+        } else if (netty::is_broadcast(destSaddr.addr)) {
             sender.enable_broadcast(true);
             LOGD(TAG, "Broadcast enabled");
         }
 
-        int counter = 10;
-
-        while (counter--) {
-            char helo[] = {'H', 'e', 'l', 'o'};
-            auto send_result = sender.send_to(dest_saddr, helo, sizeof(helo));
-
-            LOGD(TAG, "Send data (counter={}) to: {}, size={}"
-                , counter, to_string(dest_saddr), send_result.n);
-
-            std::this_thread::sleep_for(std::chrono::seconds{1});
-        }
-
+        auto counter = maxCount;
+        counter = 0;
+        auto packetsSent = 0;
+        bool outputLog = maxCount <= 20 && interval >= 500ms;
         char quit[] = {'Q', 'U', 'I', 'T'};
-        sender.send_to(dest_saddr, quit, sizeof(quit));
+
+        if (!quitOnlyPacket) {
+            while (++counter <= maxCount) {
+                char helo[] = {'H', 'e', 'l', 'o'};
+                auto send_result = sender.send_to(destSaddr, helo, sizeof(helo));
+
+                if (send_result.status == netty::send_status::good) {
+                    packetsSent++;
+                } else if (send_result.status == netty::send_status::again) {
+                    counter--;
+                    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+                    continue;
+                } else {
+                    LOGW(TAG, "Send data status: {}", static_cast<int>(send_result.status));
+                }
+
+                if (outputLog) {
+                    LOGD(TAG, "Send data (counter={}) to: {}, size={}", counter, to_string(destSaddr)
+                        , send_result.n);
+                }
+
+                if (interval > std::chrono::milliseconds{0})
+                    std::this_thread::sleep_for(interval);
+            }
+
+            sender.send_to(destSaddr, quit, sizeof(quit));
+            LOGD(TAG, "Sent {} packets from {}", packetsSent, maxCount);
+        } else {
+            sender.send_to(destSaddr, quit, sizeof(quit));
+        }
     } catch (netty::error const & ex) {
         LOGE(TAG, "ERROR: {}", ex.what());
     }

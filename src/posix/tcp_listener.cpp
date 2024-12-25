@@ -59,7 +59,7 @@ bool tcp_listener::listen (int backlog, error * perr)
     return true;
 }
 
-tcp_socket tcp_listener::accept (native_type listener_sock, error * perr)
+tcp_socket tcp_listener::accept (listener_id listener_sock, error * perr)
 {
     sockaddr_in sa;
 
@@ -100,7 +100,7 @@ tcp_socket tcp_listener::accept (native_type listener_sock, error * perr)
     return tcp_socket{uninitialized{}};
 }
 
-tcp_socket tcp_listener::accept_nonblocking (native_type listener_sock, error * perr)
+tcp_socket tcp_listener::accept_nonblocking (listener_id listener_sock, error * perr)
 {
     auto s = accept(listener_sock, perr);
 

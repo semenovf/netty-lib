@@ -28,11 +28,11 @@ class inet_socket
 {
 public:
 #if _MSC_VER
-    using native_type = SOCKET;
-    static native_type const kINVALID_SOCKET = INVALID_SOCKET;
+    using socket_id = SOCKET;
+    static socket_id const kINVALID_SOCKET = INVALID_SOCKET;
 #else
-    using native_type = int;
-    static native_type constexpr kINVALID_SOCKET = -1;
+    using socket_id = int;
+    static socket_id constexpr kINVALID_SOCKET = -1;
 #endif
 
 protected:
@@ -43,7 +43,7 @@ protected:
     };
 
 protected:
-    native_type _socket { kINVALID_SOCKET };
+    socket_id _socket { kINVALID_SOCKET };
 
     // Bound address for server.
     // Server address for connected socket.
@@ -63,7 +63,7 @@ protected:
     /**
      * Constructs POSIX socket from native socket.
      */
-    inet_socket (native_type sock, socket4_addr const & saddr, error * perr = nullptr);
+    inet_socket (socket_id sock, socket4_addr const & saddr, error * perr = nullptr);
 
     inet_socket (inet_socket const &) = delete;
     inet_socket & operator = (inet_socket const &) = delete;
@@ -77,10 +77,10 @@ protected:
     NETTY__EXPORT bool set_nonblocking (bool enable, error * perr);
 
 protected:
-    static bool check_socket_descriptor (native_type sock, error * perr);
-    static bool bind (native_type sock, socket4_addr const & saddr, error * perr);
-    static bool set_nonblocking (native_type sock, bool enable, error * perr);
-    static bool is_nonblocking (native_type sock, error * perr);
+    static bool check_socket_descriptor (socket_id sock, error * perr);
+    static bool bind (socket_id sock, socket4_addr const & saddr, error * perr);
+    static bool set_nonblocking (socket_id sock, bool enable, error * perr);
+    static bool is_nonblocking (socket_id sock, error * perr);
 
 public:
     /**
@@ -88,12 +88,9 @@ public:
      */
     NETTY__EXPORT operator bool () const noexcept;
 
-    NETTY__EXPORT native_type native () const noexcept;
+    NETTY__EXPORT socket_id id () const noexcept;
 
     NETTY__EXPORT socket4_addr saddr () const noexcept;
-
-    // TODO DEPRECATED
-    NETTY__EXPORT int available (error * perr = nullptr) const;
 
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
 

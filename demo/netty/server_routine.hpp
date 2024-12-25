@@ -50,25 +50,25 @@ std::string stringify_bytes (char const * buf, int len, int nbytes)
 template <typename ServerTraits>
 void start_server (netty::socket4_addr const & saddr)
 {
-    using native_socket_type = typename ServerTraits::native_socket_type;
+    using socket_id = typename ServerTraits::socket_id;
 
     LOGD(TAG, "Starting listener on: {}", to_string(saddr));
 
-    std::map<native_socket_type, typename ServerTraits::socket_type> sockets;
+    std::map<socket_id, typename ServerTraits::socket_type> sockets;
 
     try {
         netty::property_map_t props;
         typename ServerTraits::listener_type listener {saddr, 10, props};
 
-        auto accept_proc = [& listener, & sockets] (native_socket_type listener_sock, bool & ok) {
+        auto accept_proc = [& listener, & sockets] (socket_id listener_sock, bool & ok) {
             LOGD(TAG, "Accept client: server socket={}", listener_sock);
 
             auto client = listener.accept_nonblocking(listener_sock);
 
             if (client) {
-                LOGD(TAG, "Client accepted: socket={}", client.native());
+                LOGD(TAG, "Client accepted: socket={}", client.id());
 
-                auto fd = client.native();
+                auto fd = client.id();
                 sockets[fd] = std::move(client);
                 ok = true;
                 return fd;
@@ -80,15 +80,15 @@ void start_server (netty::socket4_addr const & saddr)
 
         typename ServerTraits::poller_type poller {std::move(accept_proc)};
 
-        poller.on_listener_failure = [] (native_socket_type, netty::error const & err) {
+        poller.on_listener_failure = [] (socket_id, netty::error const & err) {
             LOGE(TAG, "Error on server: {}", err.what());
         };
 
-        poller.on_failure = [] (native_socket_type, netty::error const & err) {
+        poller.on_failure = [] (socket_id, netty::error const & err) {
             LOGE(TAG, "Error on peer socket (reader): {}", err.what());
         };
 
-        poller.ready_read = [& sockets] (native_socket_type sock) {
+        poller.ready_read = [& sockets] (socket_id sock) {
             auto pos = sockets.find(sock);
 
             // Release entry erroneously!!!
@@ -110,7 +110,7 @@ void start_server (netty::socket4_addr const & saddr)
             }
         };
 
-        poller.disconnected = [] (native_socket_type sock)
+        poller.disconnected = [] (socket_id sock)
         {
             LOGD(TAG, "Disconnected: socket={}", sock);
         };

@@ -75,7 +75,7 @@ struct service_traits;
     {                                                           \
         using traits_type = service_traits;                     \
         typename service_type::respondent * respondent;         \
-        typename service_type::respondent::native_socket_type sock; \
+        typename service_type::respondent::socket_id sock;      \
     };                                                          \
                                                                 \
     using client_message_processor_type = message_processor<client_connection_context, deserializer_t>; \
@@ -87,8 +87,8 @@ template <>
 struct service_traits<PollerEnum::Select>
 {
     using service_type = netty::service<
-          netty::server_select_poller_type
-        , netty::client_select_poller_type
+          netty::server_select_poller_t
+        , netty::client_select_poller_t
         , netty::posix::tcp_listener, netty::posix::tcp_socket
         , input_envelope_t
         , output_envelope_t>;
@@ -102,8 +102,8 @@ template <>
 struct service_traits<PollerEnum::Poll>
 {
     using service_type = netty::service<
-          netty::server_poll_poller_type
-        , netty::client_poll_poller_type
+          netty::server_poll_poller_t
+        , netty::client_poll_poller_t
         , netty::posix::tcp_listener, netty::posix::tcp_socket
         , input_envelope_t
         , output_envelope_t>;
@@ -117,8 +117,8 @@ template <>
 struct service_traits<PollerEnum::EPoll>
 {
     using service_type = netty::service<
-          netty::server_epoll_poller_type
-        , netty::client_epoll_poller_type
+          netty::server_epoll_poller_t
+        , netty::client_epoll_poller_t
         , netty::posix::tcp_listener, netty::posix::tcp_socket
         , input_envelope_t
         , output_envelope_t>;
@@ -132,8 +132,8 @@ template <>
 struct service_traits<PollerEnum::UDT>
 {
     using service_type = netty::service<
-          netty::server_udt_poller_type
-        , netty::client_udt_poller_type
+          netty::server_udt_poller_t
+        , netty::client_udt_poller_t
         , netty::udt::udt_listener, netty::udt::udt_socket
         , input_envelope_t
         , output_envelope_t>;
@@ -147,8 +147,8 @@ template <>
 struct service_traits<PollerEnum::ENet>
 {
     using service_type = netty::service<
-          netty::server_enet_poller_type
-        , netty::client_enet_poller_type
+          netty::server_enet_poller_t
+        , netty::client_enet_poller_t
         , netty::enet::enet_listener, netty::enet::enet_socket
         , input_envelope_t
         , output_envelope_t>;

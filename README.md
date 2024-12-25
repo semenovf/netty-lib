@@ -17,22 +17,11 @@ FIXME
 
 ## Dependecies
 
-### portable-target (mandatory, build scripts)
+`netty-lib` dependes on second-party libraries:
+- common-lib (mandatory);
+- debby-lib (optional, need to reliable delivery);
+- ionik (),
 
-```sh
-$ git submodule add https://github.com/semenovf/portable-target.git 3rdparty/portable-target
-```
+and third-party libraries:
+- ENet (optional, for support ENet-sockets).
 
-### common-lib (mandatory)
-
-```sh
-$ git submodule add https://github.com/semenovf/common-lib.git 3rdparty/pfs/common
-```
-
-### cereal - A C++11 library for serialization (v 1.3.0) (mandatory, serialization backend)
-
-```sh
-$ git submodule add https://github.com/USCiLab/cereal.git 3rdparty/cereal
-$ cd 3rdparty/cereal
-$ git checkout v1.3.0
-```

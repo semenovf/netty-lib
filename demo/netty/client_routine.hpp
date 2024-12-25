@@ -13,7 +13,7 @@
 template <typename ClientTraits>
 void start_client (netty::socket4_addr const & saddr)
 {
-    using native_socket_type = typename ClientTraits::native_socket_type;
+    using socket_id = typename ClientTraits::socket_id;
 
     bool finish = false;
     bool can_write = false;
@@ -23,32 +23,32 @@ void start_client (netty::socket4_addr const & saddr)
     typename ClientTraits::socket_type socket {props};
     typename ClientTraits::poller_type poller;
 
-    poller.on_failure = [& finish] (native_socket_type, netty::error const & err) {
+    poller.on_failure = [& finish] (socket_id, netty::error const & err) {
         LOGE(TAG, "Error on client: {}", err.what());
         finish = true;
     };
 
-    poller.connection_refused = [& finish] (native_socket_type sock, bool /*timedout*/) {
+    poller.connection_refused = [& finish] (socket_id sock, bool /*timedout*/) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
     };
 
-    poller.connected = [& can_write] (native_socket_type sock) {
+    poller.connected = [& can_write] (socket_id sock) {
         LOGD(TAG, "Connected: {}", sock);
         can_write = true;
     };
 
-    poller.disconnected = [& finish, & can_write] (native_socket_type sock) {
+    poller.disconnected = [& finish, & can_write] (socket_id sock) {
         LOGD(TAG, "Disconnected: socket={}", sock);
         finish = true;
         can_write = false;
     };
 
-    poller.ready_read = [] (native_socket_type sock) {
+    poller.ready_read = [] (socket_id sock) {
         LOGD(TAG, "Ready read");
     };
 
-    poller.can_write = [& can_write] (native_socket_type sock) {
+    poller.can_write = [& can_write] (socket_id sock) {
         can_write = true;
     };
 
@@ -71,7 +71,7 @@ void start_client (netty::socket4_addr const & saddr)
 
                 auto send_result = socket.send(data, sizeof(data));
 
-                switch (send_result.state) {
+                switch (send_result.status) {
                     case netty::send_status::failure:
                         LOGE(TAG, "Send failure: n={}, errno={}", send_result.n, errno);
                         finish = true;

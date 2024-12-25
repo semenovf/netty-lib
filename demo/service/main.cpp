@@ -123,7 +123,7 @@ void service_process (netty::socket4_addr listener_saddr, std::condition_variabl
 {
     using service_type        = typename service_traits<P>::service_type;
     using respondent_type     = typename service_type::respondent;
-    using native_socket_type  = typename respondent_type::native_socket_type;
+    using socket_id           = typename respondent_type::socket_id;
     using input_envelope_type = typename service_type::input_envelope_type;
 
     respondent_type respondent {listener_saddr, netty::property_map_t{}};
@@ -137,7 +137,7 @@ void service_process (netty::socket4_addr listener_saddr, std::condition_variabl
         LOGE("", "{}", errstr);
     };
 
-    respondent.on_message_received = [& respondent] (native_socket_type sock, input_envelope_type const & env) {
+    respondent.on_message_received = [& respondent] (socket_id sock, input_envelope_type const & env) {
         typename service_traits<P>::server_connection_context conn {& respondent, sock};
         typename service_traits<P>::server_message_processor_type mp;
         auto const & payload = env.payload();

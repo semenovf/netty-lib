@@ -18,10 +18,10 @@
 namespace netty {
 namespace enet {
 
-static_assert(sizeof(ENetPeer *) == sizeof(enet_socket::native_type)
+static_assert(sizeof(ENetPeer *) == sizeof(enet_socket::socket_id)
     , "Size of `ENetPeer *` and `enet_socket::native_type` types must be equal");
 
-const enet_socket::native_type enet_socket::kINVALID_SOCKET {0};
+const enet_socket::socket_id enet_socket::kINVALID_SOCKET {0};
 
 struct {
     std::uint32_t timeout_limit;
@@ -144,9 +144,9 @@ enet_socket::operator bool () const noexcept
     return _peer != nullptr;
 }
 
-enet_socket::native_type enet_socket::native () const noexcept
+enet_socket::socket_id enet_socket::id () const noexcept
 {
-    return _peer == nullptr ? kINVALID_SOCKET : reinterpret_cast<native_type>(_peer);
+    return _peer == nullptr ? kINVALID_SOCKET : reinterpret_cast<socket_id>(_peer);
 }
 
 socket4_addr enet_socket::saddr () const noexcept

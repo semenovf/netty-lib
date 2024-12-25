@@ -43,10 +43,10 @@ public:
     };
 
     // _ENetPeer *
-    using native_type = std::uintptr_t;
+    using socket_id = std::uintptr_t;
 
 public:
-    static NETTY__EXPORT const native_type kINVALID_SOCKET;
+    static NETTY__EXPORT const socket_id kINVALID_SOCKET;
 
 private:
     _ENetHost * _host {nullptr};
@@ -109,7 +109,7 @@ public:
      */
     NETTY__EXPORT operator bool () const noexcept;
 
-    NETTY__EXPORT native_type native () const noexcept;
+    NETTY__EXPORT socket_id id () const noexcept;
 
     /**
      * @return Listener address for connected socket.

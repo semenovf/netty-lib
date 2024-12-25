@@ -13,7 +13,7 @@
 namespace netty {
 namespace posix {
 
-select_poller::native_socket_type const select_poller::kINVALID_SOCKET;
+select_poller::socket_id const select_poller::kINVALID_SOCKET;
 
 select_poller::select_poller (bool oread, bool owrite)
     : observe_read(oread)
@@ -29,7 +29,7 @@ select_poller::~select_poller ()
     FD_ZERO(& writefds);
 }
 
-void select_poller::add_socket (native_socket_type sock, error * perr)
+void select_poller::add_socket (socket_id sock, error * perr)
 {
     auto pos = std::find(sockets.begin(), sockets.end(), sock);
 
@@ -66,17 +66,17 @@ void select_poller::add_socket (native_socket_type sock, error * perr)
 #endif
 }
 
-void select_poller::add_listener (native_listener_type sock, error * perr)
+void select_poller::add_listener (listener_id sock, error * perr)
 {
     add_socket(sock);
 }
 
-void select_poller::wait_for_write (native_socket_type sock, error * perr)
+void select_poller::wait_for_write (socket_id sock, error * perr)
 {
     add_socket(sock, perr);
 }
 
-void select_poller::remove_socket (native_socket_type sock, error * /*perr*/)
+void select_poller::remove_socket (socket_id sock, error * /*perr*/)
 {
     if (observe_read) {
         FD_CLR(sock, & readfds);
@@ -100,7 +100,7 @@ void select_poller::remove_socket (native_socket_type sock, error * /*perr*/)
 #endif
 }
 
-void select_poller::remove_listener (native_listener_type sock, error * perr)
+void select_poller::remove_listener (listener_id sock, error * perr)
 {
     remove_socket(sock);
 }

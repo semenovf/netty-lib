@@ -27,7 +27,7 @@ enum class send_status {
 
 struct send_result
 {
-    send_status state;
+    send_status status;
     std::int64_t n;
 };
 

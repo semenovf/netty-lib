@@ -23,7 +23,7 @@ static_assert(sizeof(enet_poller::event_item::ev) >= sizeof(ENetEvent)
 enet_poller::enet_poller () = default;
 enet_poller::~enet_poller () = default;
 
-void enet_poller::add_socket (native_socket_type sock, error * /*perr*/)
+void enet_poller::add_socket (socket_id sock, error * /*perr*/)
 {
     auto pos = std::find(_sockets.begin(), _sockets.end(), sock);
 
@@ -31,7 +31,7 @@ void enet_poller::add_socket (native_socket_type sock, error * /*perr*/)
         _sockets.push_back(sock);
 }
 
-void enet_poller::add_listener (native_listener_type sock, error * /*perr*/)
+void enet_poller::add_listener (listener_id sock, error * /*perr*/)
 {
     auto pos = std::find(_listeners.begin(), _listeners.end(), sock);
 
@@ -39,13 +39,13 @@ void enet_poller::add_listener (native_listener_type sock, error * /*perr*/)
         _listeners.push_back(sock);
 }
 
-void enet_poller::wait_for_write (native_socket_type sock, error * perr)
+void enet_poller::wait_for_write (socket_id sock, error * perr)
 {
     this->add_socket(sock, perr);
     _wait_for_write_sockets.insert(sock);
 }
 
-void enet_poller::remove_socket (native_socket_type sock, error * /*perr*/)
+void enet_poller::remove_socket (socket_id sock, error * /*perr*/)
 {
     auto pos = std::find(_sockets.begin(), _sockets.end(), sock);
 
@@ -53,7 +53,7 @@ void enet_poller::remove_socket (native_socket_type sock, error * /*perr*/)
         _sockets.erase(pos);
 }
 
-void enet_poller::remove_listener (native_listener_type sock, error * perr)
+void enet_poller::remove_listener (listener_id sock, error * perr)
 {
     auto pos = std::find(_listeners.begin(), _listeners.end(), sock);
 
@@ -92,7 +92,7 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
         case ENET_EVENT_TYPE_RECEIVE:
         case ENET_EVENT_TYPE_DISCONNECT:
             _events.emplace();
-            _events.back().sock = reinterpret_cast<native_socket_type>(event.peer);
+            _events.back().sock = reinterpret_cast<socket_id>(event.peer);
             new (_events.back().ev) ENetEvent(std::move(event));
             break;
 
@@ -176,7 +176,7 @@ int enet_poller::poll (std::chrono::milliseconds millis, error * perr)
     return success ? total_events : -1;
 }
 
-int enet_poller::check_and_notify_can_write (std::function<void (native_socket_type)> && can_write)
+int enet_poller::check_and_notify_can_write (std::function<void (socket_id)> && can_write)
 {
     int n = 0;
 

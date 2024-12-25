@@ -28,18 +28,18 @@ class select_poller
 {
 public:
 #if _MSC_VER
-    using native_socket_type = SOCKET;
-    static native_socket_type const kINVALID_SOCKET = INVALID_SOCKET;
+    using socket_id = SOCKET;
+    static socket_id const kINVALID_SOCKET = INVALID_SOCKET;
 #else
-    using native_socket_type = int;
-    static native_socket_type constexpr kINVALID_SOCKET = -1;
+    using socket_id = int;
+    static socket_id constexpr kINVALID_SOCKET = -1;
 
-    native_socket_type max_fd {0};
+    socket_id max_fd {0};
 #endif
 
-    using native_listener_type = native_socket_type;
+    using listener_id = socket_id;
 
-    std::vector<native_socket_type> sockets;
+    std::vector<socket_id> sockets;
     int count = 0;
 
     fd_set readfds;
@@ -52,11 +52,11 @@ public:
     select_poller (bool observe_read, bool observe_write);
     ~select_poller ();
 
-    void add_socket (native_socket_type sock, error * perr = nullptr);
-    void add_listener (native_listener_type sock, error * perr = nullptr);
-    void wait_for_write (native_socket_type sock, error * perr = nullptr);
-    void remove_socket (native_socket_type sock, error * perr = nullptr);
-    void remove_listener (native_listener_type sock, error * perr = nullptr);
+    void add_socket (socket_id sock, error * perr = nullptr);
+    void add_listener (listener_id sock, error * perr = nullptr);
+    void wait_for_write (socket_id sock, error * perr = nullptr);
+    void remove_socket (socket_id sock, error * perr = nullptr);
+    void remove_listener (listener_id sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds millis, error * perr = nullptr);
 };

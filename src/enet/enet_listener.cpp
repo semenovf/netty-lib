@@ -14,7 +14,7 @@
 namespace netty {
 namespace enet {
 
-static_assert(sizeof(ENetHost *) == sizeof(enet_listener::native_type)
+static_assert(sizeof(ENetHost *) == sizeof(enet_listener::listener_id)
     , "Size of `ENetHost *` and `enet_socket::native_type` types must be equal");
 
 enet_listener::enet_listener ()
@@ -63,22 +63,22 @@ enet_listener::~enet_listener ()
     _host = nullptr;
 }
 
-enet_listener::native_type enet_listener::native () const noexcept
+enet_listener::listener_id enet_listener::id () const noexcept
 {
     if (_host == nullptr)
         return enet_socket::kINVALID_SOCKET;
 
-    return reinterpret_cast<native_type>(_host);
+    return reinterpret_cast<listener_id>(_host);
 }
 
 // [static]
-enet_socket enet_listener::accept (native_type listener_sock , error * perr)
+enet_socket enet_listener::accept (listener_id listener_sock , error * perr)
 {
     return accept_nonblocking(listener_sock, perr);
 }
 
 // [static]
-enet_socket enet_listener::accept_nonblocking (native_type listener_sock, error * /*perr*/)
+enet_socket enet_listener::accept_nonblocking (listener_id listener_sock, error * /*perr*/)
 {
     auto peer = reinterpret_cast<ENetPeer *>(listener_sock);
     auto host = peer->host;

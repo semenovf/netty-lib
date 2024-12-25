@@ -15,25 +15,25 @@ namespace netty {
 template <typename Backend>
 void reader_poller<Backend>::init ()
 {
-    on_failure = [] (native_socket_type, error const & err) {
+    on_failure = [] (socket_id, error const & err) {
         fmt::println(stderr, tr::_("ERROR: reader poller: {}"), err.what());
     };
 
-    disconnected = [] (native_socket_type) {};
-    ready_read = [] (native_socket_type) {};
+    disconnected = [] (socket_id) {};
+    ready_read = [] (socket_id) {};
 }
 
 template <typename Backend>
 reader_poller<Backend>::~reader_poller () = default;
 
 template <typename Backend>
-void reader_poller<Backend>::add (native_socket_type sock, error * perr)
+void reader_poller<Backend>::add (socket_id sock, error * perr)
 {
     _rep->add_socket(sock, perr);
 }
 
 template <typename Backend>
-void reader_poller<Backend>::remove (native_socket_type sock, error * perr)
+void reader_poller<Backend>::remove (socket_id sock, error * perr)
 {
     _rep->remove_socket(sock, perr);
 }

@@ -28,73 +28,73 @@ template <typename Backend>
 class client_poller
 {
 public:
-    using native_socket_type = typename Backend::native_socket_type;
     using backend_type = Backend;
+    using socket_id = typename Backend::socket_id;
 
 private:
     connecting_poller<Backend> _connecting_poller;
-    reader_poller<Backend>     _reader_poller;
-    writer_poller<Backend>     _writer_poller;
-    std::vector<native_socket_type> _addable_connecting_sockets;
-    std::vector<native_socket_type> _addable_readers;
-    std::vector<native_socket_type> _removable_connecting_sockets;
-    std::vector<native_socket_type> _removable_readers;
-    std::vector<native_socket_type> _removable_writers;
-    std::set<native_socket_type> _removable;
+    reader_poller<Backend> _reader_poller;
+    writer_poller<Backend> _writer_poller;
+    std::vector<socket_id> _addable_connecting_sockets;
+    std::vector<socket_id> _addable_readers;
+    std::vector<socket_id> _removable_connecting_sockets;
+    std::vector<socket_id> _removable_readers;
+    std::vector<socket_id> _removable_writers;
+    std::set<socket_id>    _removable;
 
     // Reader and writer pollers backends are shared or not
     bool _is_pollers_shared {false};
 
 public:
-    mutable std::function<void(native_socket_type, error const &)> on_failure = [] (native_socket_type, error const &) {};
-    mutable std::function<void(native_socket_type, bool)> connection_refused = [] (native_socket_type, bool) {};
-    mutable std::function<void(native_socket_type)> connected = [] (native_socket_type) {};
+    mutable std::function<void(socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
+    mutable std::function<void(socket_id, bool)> connection_refused = [] (socket_id, bool) {};
+    mutable std::function<void(socket_id)> connected = [] (socket_id) {};
 
     /**
      * Socket has been disconnected by the peer. No disconnection required.
      */
-    mutable std::function<void(native_socket_type)> disconnected = [] (native_socket_type) {};
+    mutable std::function<void(socket_id)> disconnected = [] (socket_id) {};
 
-    mutable std::function<void(native_socket_type)> ready_read = [] (native_socket_type) {};
-    mutable std::function<void(native_socket_type)> can_write = [] (native_socket_type) {};
+    mutable std::function<void(socket_id)> ready_read = [] (socket_id) {};
+    mutable std::function<void(socket_id)> can_write = [] (socket_id) {};
 
     /**
      * Socket has been removed from client poller. It can be disconnected and/or released safely.
      */
-    mutable std::function<void(native_socket_type)> removed = [] (native_socket_type) {};
+    mutable std::function<void(socket_id)> removed = [] (socket_id) {};
 
 private:
     void init_callbacks ()
     {
-        _connecting_poller.on_failure = [this] (native_socket_type sock, error const & err) {
+        _connecting_poller.on_failure = [this] (socket_id sock, error const & err) {
             // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
-        _reader_poller.on_failure = [this] (native_socket_type sock, error const & err) {
+        _reader_poller.on_failure = [this] (socket_id sock, error const & err) {
             // The socket must later be removed from monitoring
             _removable_readers.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
-        _writer_poller.on_failure = [this] (native_socket_type sock, error const & err) {
+        _writer_poller.on_failure = [this] (socket_id sock, error const & err) {
             // The socket must later be removed from monitoring
             _removable_writers.push_back(sock);
             _removable.insert(sock);
             on_failure(sock, err);
         };
 
-        _connecting_poller.connection_refused = [this] (native_socket_type sock, bool timedout) {
+        _connecting_poller.connection_refused = [this] (socket_id sock, bool timedout) {
             // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);
             connection_refused(sock, timedout);
         };
 
-        _connecting_poller.connected = [this] (native_socket_type sock) {
+        _connecting_poller.connected = [this] (socket_id sock) {
             // The socket must later be removed from monitoring
             if (!_is_pollers_shared) {
                 _removable_connecting_sockets.push_back(sock);
@@ -104,18 +104,18 @@ private:
             connected(sock);
         };
 
-        _reader_poller.disconnected = [this] (native_socket_type sock) {
+        _reader_poller.disconnected = [this] (socket_id sock) {
             // The socket must later be removed from monitoring
             _removable_readers.push_back(sock);
             _removable.insert(sock);
             disconnected(sock);
         };
 
-        _reader_poller.ready_read = [this] (native_socket_type sock) {
+        _reader_poller.ready_read = [this] (socket_id sock) {
             ready_read(sock);
         };
 
-        _writer_poller.can_write = [this] (native_socket_type sock) {
+        _writer_poller.can_write = [this] (socket_id sock) {
             // If writer poller is shared, so no need to remove socket from it
             if (!_is_pollers_shared)
                 _removable_writers.push_back(sock);
@@ -150,9 +150,9 @@ public:
     void add (Socket const & sock, conn_status state, error * perr = nullptr)
     {
         if (state == conn_status::connecting) {
-            _addable_connecting_sockets.push_back(sock.native());
+            _addable_connecting_sockets.push_back(sock.id());
         } else if (state == conn_status::connected) {
-            _addable_readers.push_back(sock.native());
+            _addable_readers.push_back(sock.id());
         } else {
             pfs::throw_or(perr, error {
                   errc::poller_error
@@ -170,10 +170,10 @@ public:
     template <typename Socket>
     void remove (Socket const & sock, error * /*perr*/ = nullptr)
     {
-        _removable_connecting_sockets.push_back(sock.native());
-        _removable_readers.push_back(sock.native());
-        _removable_writers.push_back(sock.native());
-        _removable.insert(sock.native());
+        _removable_connecting_sockets.push_back(sock.id());
+        _removable_readers.push_back(sock.id());
+        _removable_writers.push_back(sock.id());
+        _removable.insert(sock.id());
 
         LOG_TRACE_3("Client socket ({}) removed from `client_poller`", to_string(sock.saddr()));
     }
@@ -185,7 +185,7 @@ public:
     template <typename Socket>
     void wait_for_write (Socket const & sock, error * perr = nullptr)
     {
-        _writer_poller.wait_for_write(sock.native(), perr);
+        _writer_poller.wait_for_write(sock.id(), perr);
     }
 
     /**

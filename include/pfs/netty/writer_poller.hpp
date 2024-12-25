@@ -19,14 +19,14 @@ template <typename Backend>
 class writer_poller
 {
 public:
-    using native_socket_type = typename Backend::native_socket_type;
+    using socket_id = typename Backend::socket_id;
 
 private:
     std::shared_ptr<Backend> _rep;
 
 public:
-    mutable std::function<void(native_socket_type, error const &)> on_failure;
-    mutable std::function<void(native_socket_type)> can_write;
+    mutable std::function<void(socket_id, error const &)> on_failure;
+    mutable std::function<void(socket_id)> can_write;
 
 protected:
     void init ();
@@ -40,8 +40,8 @@ public:
     writer_poller (writer_poller &&) = delete;
     writer_poller & operator = (writer_poller &&) = delete;
 
-    NETTY__EXPORT void wait_for_write (native_socket_type sock, error * perr = nullptr);
-    NETTY__EXPORT void remove (native_socket_type sock, error * perr = nullptr);
+    NETTY__EXPORT void wait_for_write (socket_id sock, error * perr = nullptr);
+    NETTY__EXPORT void remove (socket_id sock, error * perr = nullptr);
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
     NETTY__EXPORT bool empty () const noexcept;
 };

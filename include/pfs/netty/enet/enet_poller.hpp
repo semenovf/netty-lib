@@ -25,20 +25,20 @@ namespace enet {
 class enet_poller
 {
 public:
-    using native_socket_type   = enet_socket::native_type;
-    using native_listener_type = enet_listener::native_type;
+    using socket_id   = enet_socket::native_type;
+    using listener_id = enet_listener::native_type;
 
     struct event_item
     {
-        native_socket_type sock;
+        socket_id sock;
         char ev[32]; // Must be enough to store ENetEvent;
     };
 
 private:
     std::queue<event_item> _events;
-    std::vector<native_socket_type> _sockets;
-    std::vector<native_listener_type> _listeners;
-    std::set<native_socket_type> _wait_for_write_sockets;
+    std::vector<socket_id> _sockets;
+    std::vector<listener_id> _listeners;
+    std::set<socket_id> _wait_for_write_sockets;
 
 private:
     int poll_helper (_ENetHost * host, std::chrono::milliseconds millis, error * perr);
@@ -47,11 +47,11 @@ public:
     enet_poller ();
     ~enet_poller ();
 
-    void add_socket (native_socket_type sock, error * perr = nullptr);
-    void add_listener (native_listener_type sock, error * perr = nullptr);
-    void wait_for_write (native_socket_type sock, error * perr = nullptr);
-    void remove_socket (native_socket_type sock, error * perr = nullptr);
-    void remove_listener (native_listener_type sock, error * perr = nullptr);
+    void add_socket (socket_id sock, error * perr = nullptr);
+    void add_listener (listener_id sock, error * perr = nullptr);
+    void wait_for_write (socket_id sock, error * perr = nullptr);
+    void remove_socket (socket_id sock, error * perr = nullptr);
+    void remove_listener (listener_id sock, error * perr = nullptr);
     bool empty () const noexcept;
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 
@@ -95,7 +95,7 @@ public:
     /**
      * @return number of sockets can write.
      */
-    int check_and_notify_can_write (std::function<void (native_socket_type)> && can_write);
+    int check_and_notify_can_write (std::function<void (socket_id)> && can_write);
 };
 
 }} // namespace netty::enet

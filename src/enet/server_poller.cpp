@@ -12,7 +12,7 @@
 namespace netty {
 
 template <>
-server_poller<enet::enet_poller>::server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+server_poller<enet::enet_poller>::server_poller (std::function<socket_id(socket_id, bool &)> && accept_proc)
     : server_poller(std::make_shared<enet::enet_poller>(), std::move(accept_proc))
 {}
 

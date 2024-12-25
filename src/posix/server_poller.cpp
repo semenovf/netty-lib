@@ -14,7 +14,7 @@ namespace netty {
 
 #if NETTY__POLL_ENABLED
 template <>
-server_poller<posix::poll_poller>::server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+server_poller<posix::poll_poller>::server_poller (std::function<socket_id(socket_id, bool &)> && accept_proc)
 {
     init_callbacks(std::move(accept_proc));
 }
@@ -22,7 +22,7 @@ server_poller<posix::poll_poller>::server_poller (std::function<native_socket_ty
 
 #if NETTY__SELECT_ENABLED
 template <>
-server_poller<posix::select_poller>::server_poller (std::function<native_socket_type(native_socket_type, bool &)> && accept_proc)
+server_poller<posix::select_poller>::server_poller (std::function<socket_id(socket_id, bool &)> && accept_proc)
 {
     init_callbacks(std::move(accept_proc));
 }

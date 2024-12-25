@@ -22,6 +22,9 @@ namespace posix {
 class tcp_listener: public inet_socket
 {
 public:
+    using listener_id = inet_socket::socket_id;
+
+public:
     /**
      * Constructs invalid (uninitialized) TCP server.
      */
@@ -33,8 +36,7 @@ public:
     NETTY__EXPORT tcp_listener (socket4_addr const & saddr, error * perr = nullptr);
 
     /**
-     * Constructs POSIX TCP server, bind to the specified address and start
-     * listening
+     * Constructs POSIX TCP server, bind to the specified address and start listening
      */
     NETTY__EXPORT tcp_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
 
@@ -62,9 +64,9 @@ public:
     NETTY__EXPORT tcp_socket accept_nonblocking (error * perr = nullptr);
 
 public:
-    NETTY__EXPORT static tcp_socket accept (native_type listener_sock
+    NETTY__EXPORT static tcp_socket accept (listener_id listener_sock
         , error * perr = nullptr);
-    NETTY__EXPORT static tcp_socket accept_nonblocking (native_type listener_sock
+    NETTY__EXPORT static tcp_socket accept_nonblocking (listener_id listener_sock
         , error * perr = nullptr);
 };
 

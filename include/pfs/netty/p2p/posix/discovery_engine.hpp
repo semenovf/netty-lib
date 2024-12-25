@@ -54,7 +54,7 @@ private:
 
 private:
     poller_type _poller;
-    std::map<poller_type::native_socket_type, netty::posix::udp_receiver> _receivers;
+    std::map<poller_type::socket_id, netty::posix::udp_receiver> _receivers;
     std::vector<std::pair<socket4_addr, netty::posix::udp_sender>> _targets;
 
 public:

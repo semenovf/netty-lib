@@ -26,7 +26,8 @@
 
 // `local_addr` for multicast only
 template <typename Receiver>
-void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr local_addr)
+void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr local_addr
+    , bool outputLog = false)
 {
     LOGD(TAG, "Run {} receiver on: {}"
         , (netty::is_multicast(src_saddr.addr)
@@ -36,9 +37,9 @@ void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr loca
                 : "UNICAST")
         , to_string(src_saddr));
 
-
     receiver_poller_type poller;
 
+    std::uint32_t packetsReceived = 0;
     bool finish = false;
     Receiver receiver;
 
@@ -48,31 +49,33 @@ void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr loca
         else
             receiver = Receiver{src_saddr};
 
-        poller.ready_read = [& receiver, & finish] (receiver_poller_type::native_socket_type /*sock*/) {
+        poller.ready_read = [& receiver, & finish, & packetsReceived, outputLog] (receiver_poller_type::socket_id /*sock*/) {
             char buffer[5];
-            ::memset(buffer, 0, sizeof(buffer));
-
+            std::memset(buffer, 0, sizeof(buffer));
 
             netty::socket4_addr sender_addr;
             auto n = receiver.recv_from(buffer, sizeof(buffer), & sender_addr);
 
             if (n > 0) {
-                LOGD(TAG, "Received data from: {}: {}", to_string(sender_addr), buffer);
+                if (outputLog)
+                    LOGD(TAG, "Received data from: {}: {}", to_string(sender_addr), buffer);
 
-                if (buffer[0] == 'Q' && buffer[1] == 'U'
-                        && buffer[2] == 'I' && buffer[3] == 'T') {
+                if (buffer[0] == 'Q' && buffer[1] == 'U' && buffer[2] == 'I' && buffer[3] == 'T')
                     finish = true;
-                }
+                else
+                    packetsReceived++;
             }
         };
 
         std::chrono::seconds poller_timeout {1};
 
-        poller.add(receiver.native());
+        poller.add(receiver.id());
 
         while (!finish) {
             poller.poll(poller_timeout);
         }
+
+        LOGD(TAG, "Received {} packets successfully", packetsReceived);
     } catch (netty::error const & ex) {
         LOGE(TAG, "ERROR: {}", ex.what());
     }

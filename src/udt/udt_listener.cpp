@@ -81,9 +81,9 @@ udt_listener::udt_listener (socket4_addr const & addr, int backlog, property_map
 
 udt_listener::~udt_listener () = default;
 
-udt_listener::native_type udt_listener::native () const noexcept
+udt_listener::listener_id udt_listener::id () const noexcept
 {
-    return udt_socket::native();
+    return udt_socket::id();
 }
 
 bool udt_listener::listen (int backlog, error * perr)

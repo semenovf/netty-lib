@@ -38,7 +38,7 @@ int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
     n = 0;
 
     if (_rep->has_wait_for_write_sockets()) {
-        n = _rep->check_and_notify_can_write([this] (native_socket_type sock) {
+        n = _rep->check_and_notify_can_write([this] (socket_id sock) {
             can_write(sock);
         });
     }

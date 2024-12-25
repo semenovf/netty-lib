@@ -23,7 +23,7 @@ poll_poller::poll_poller (short int observable_events)
 poll_poller::~poll_poller ()
 {}
 
-void poll_poller::add_socket (native_socket_type sock, error * /*perr*/)
+void poll_poller::add_socket (socket_id sock, error * /*perr*/)
 {
     auto pos = std::find_if(events.begin(), events.end()
         , [& sock] (pollfd const & p) { return sock == p.fd;});
@@ -39,17 +39,17 @@ void poll_poller::add_socket (native_socket_type sock, error * /*perr*/)
     ev.events = oevents;
 }
 
-void poll_poller::add_listener (native_listener_type sock, error * perr)
+void poll_poller::add_listener (listener_id sock, error * perr)
 {
     add_socket(sock);
 }
 
-void poll_poller::wait_for_write (native_socket_type sock, error * perr)
+void poll_poller::wait_for_write (socket_id sock, error * perr)
 {
     add_socket(sock, perr);
 }
 
-void poll_poller::remove_socket (native_socket_type sock, error * perr)
+void poll_poller::remove_socket (socket_id sock, error * perr)
 {
     (void)perr;
 
@@ -69,7 +69,7 @@ void poll_poller::remove_socket (native_socket_type sock, error * perr)
     }
 }
 
-void poll_poller::remove_listener (native_listener_type sock, error * perr)
+void poll_poller::remove_listener (listener_id sock, error * perr)
 {
     remove_socket(sock, perr);
 }

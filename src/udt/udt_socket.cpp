@@ -205,7 +205,7 @@ udt_socket::operator bool () const noexcept
     return _socket != kINVALID_SOCKET;
 }
 
-udt_socket::native_type udt_socket::native () const noexcept
+udt_socket::native_type udt_socket::id () const noexcept
 {
     return _socket;
 }

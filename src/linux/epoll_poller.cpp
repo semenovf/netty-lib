@@ -42,7 +42,7 @@ epoll_poller::~epoll_poller ()
     }
 }
 
-void epoll_poller::add_socket (native_socket_type sock, error * perr)
+void epoll_poller::add_socket (socket_id sock, error * perr)
 {
     struct epoll_event ev;
     ev.events = oevents;
@@ -70,17 +70,17 @@ void epoll_poller::add_socket (native_socket_type sock, error * perr)
     events.resize(events.size() + 1);
 }
 
-void epoll_poller::add_listener (native_listener_type sock, error * perr)
+void epoll_poller::add_listener (listener_id sock, error * perr)
 {
     add_socket(sock);
 }
 
-void epoll_poller::wait_for_write (native_socket_type sock, error * perr)
+void epoll_poller::wait_for_write (socket_id sock, error * perr)
 {
     add_socket(sock, perr);
 }
 
-void epoll_poller::remove_socket (native_socket_type sock, error * perr)
+void epoll_poller::remove_socket (socket_id sock, error * perr)
 {
     auto rc = epoll_ctl(eid, EPOLL_CTL_DEL, sock, nullptr);
 
@@ -98,7 +98,7 @@ void epoll_poller::remove_socket (native_socket_type sock, error * perr)
     }
 }
 
-void epoll_poller::remove_listener (native_listener_type sock, error * perr)
+void epoll_poller::remove_listener (listener_id sock, error * perr)
 {
     remove_socket(sock);
 }

@@ -36,8 +36,8 @@ struct select_engine_traits
     using listener_type = netty::posix::tcp_listener;
 
     // DEPRECATED
-    using writer_id_type = typename client_poller_type::native_socket_type;
-    using reader_id_type = typename server_poller_type::native_socket_type;
+    using writer_id_type = typename client_poller_type::socket_id;
+    using reader_id_type = typename server_poller_type::socket_id;
 };
 #endif
 
@@ -51,8 +51,8 @@ struct poll_engine_traits
     using listener_type = netty::posix::tcp_listener;
 
     // DEPRECATED
-    using writer_id_type = typename client_poller_type::native_socket_type;
-    using reader_id_type = typename server_poller_type::native_socket_type;
+    using writer_id_type = typename client_poller_type::socket_id;
+    using reader_id_type = typename server_poller_type::socket_id;
 };
 #endif
 
@@ -66,8 +66,8 @@ struct epoll_engine_traits
     using listener_type = netty::posix::tcp_listener;
 
     // DEPRECATED
-    using writer_id_type = typename client_poller_type::native_socket_type;
-    using reader_id_type = typename server_poller_type::native_socket_type;
+    using writer_id_type = typename client_poller_type::socket_id;
+    using reader_id_type = typename server_poller_type::socket_id;
 };
 #endif
 

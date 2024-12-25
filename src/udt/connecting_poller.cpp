@@ -31,7 +31,7 @@ connecting_poller<udt::epoll_poller>::connecting_poller (std::shared_ptr<udt::ep
 }
 
 template<>
-void connecting_poller<udt::epoll_poller>::add (native_socket_type sock, error * perr)
+void connecting_poller<udt::epoll_poller>::add (socket_id sock, error * perr)
 {
     error err;
 
