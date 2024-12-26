@@ -78,11 +78,11 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(fd, false);
+                            connection_refused(fd, connection_refused_reason::other);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(fd, true);
+                            connection_refused(fd, connection_refused_reason::timeout);
                             break;
 
                         default:
@@ -185,11 +185,11 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(ev.fd, false);
+                            connection_refused(ev.fd, connection_refused_reason::other);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(ev.fd, true);
+                            connection_refused(ev.fd, connection_refused_reason::timeout);
                             break;
 
                         default:
@@ -215,7 +215,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 | POLLRDHUP
 #endif
             )) {
-                connection_refused(ev.fd, false);
+                connection_refused(ev.fd, connection_refused_reason::other);
                 continue;
             }
 

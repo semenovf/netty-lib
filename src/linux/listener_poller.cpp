@@ -1,31 +1,24 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../listener_poller.hpp"
-
 #if NETTY__EPOLL_ENABLED
-#   include "pfs/netty/linux/epoll_poller.hpp"
-#endif
 
+#include "../listener_poller.hpp"
+#include "netty/linux/epoll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <sys/socket.h>
 
 namespace netty {
 
-#if NETTY__EPOLL_ENABLED
-
 template <>
-listener_poller<linux_os::epoll_poller>::listener_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)
-        : std::move(ptr))
-{
-    init();
-}
+listener_poller<linux_os::epoll_poller>::listener_poller ()
+    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND))
+{}
 
 template <>
 int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -81,10 +74,8 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
     return res;
 }
 
-#endif // NETTY__EPOLL_ENABLED
-
-#if NETTY__EPOLL_ENABLED
 template class listener_poller<linux_os::epoll_poller>;
-#endif // NETTY__EPOLL_ENABLED
 
 } // namespace netty
+
+#endif // NETTY__EPOLL_ENABLED

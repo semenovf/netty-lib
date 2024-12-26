@@ -10,7 +10,6 @@
 #pragma once
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/error.hpp"
-#include "pfs/netty/property.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 
 namespace netty {
@@ -23,6 +22,7 @@ class tcp_listener: public inet_socket
 {
 public:
     using listener_id = inet_socket::socket_id;
+    using socket_type = tcp_socket;
 
 public:
     /**
@@ -35,20 +35,6 @@ public:
      */
     NETTY__EXPORT tcp_listener (socket4_addr const & saddr, error * perr = nullptr);
 
-    /**
-     * Constructs POSIX TCP server, bind to the specified address and start listening
-     */
-    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
-
-    tcp_listener (socket4_addr const & saddr, property_map_t const & /*props*/, error * perr = nullptr)
-        : tcp_listener(saddr, perr)
-    {}
-
-    tcp_listener (socket4_addr const & saddr, int backlog, property_map_t const & /*props*/
-        , error * perr = nullptr)
-        : tcp_listener(saddr, backlog, perr)
-    {}
-
 public:
     /**
      * Bind the socket to address and listen for connections on a socket.
@@ -60,14 +46,8 @@ public:
     /**
      * Accept a connection on a server socket.
      */
-    NETTY__EXPORT tcp_socket accept (error * perr = nullptr);
-    NETTY__EXPORT tcp_socket accept_nonblocking (error * perr = nullptr);
-
-public:
-    NETTY__EXPORT static tcp_socket accept (listener_id listener_sock
-        , error * perr = nullptr);
-    NETTY__EXPORT static tcp_socket accept_nonblocking (listener_id listener_sock
-        , error * perr = nullptr);
+    NETTY__EXPORT socket_type accept (error * perr = nullptr);
+    NETTY__EXPORT socket_type accept_nonblocking (error * perr = nullptr);
 };
 
 }} // namespace netty::posix

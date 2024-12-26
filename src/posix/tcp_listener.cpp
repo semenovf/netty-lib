@@ -30,15 +30,6 @@ tcp_listener::tcp_listener (socket4_addr const & saddr, netty::error * perr)
     _saddr = saddr;
 }
 
-tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog, netty::error * perr)
-    : tcp_listener(saddr, perr)
-{
-    if (perr && *perr)
-        return;
-
-    listen(backlog, perr);
-}
-
 bool tcp_listener::listen (int backlog, error * perr)
 {
     if (!bind(_socket, _saddr, perr))
@@ -59,16 +50,16 @@ bool tcp_listener::listen (int backlog, error * perr)
     return true;
 }
 
-tcp_socket tcp_listener::accept (listener_id listener_sock, error * perr)
+tcp_socket tcp_listener::accept (error * perr)
 {
     sockaddr_in sa;
 
 #if _MSC_VER
     int addrlen = sizeof(sa);
-    auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
+    auto sock = ::accept(_socket, reinterpret_cast<sockaddr *>(& sa), & addrlen);
 #else
     socklen_t addrlen = sizeof(sa);
-    auto sock = ::accept(listener_sock, reinterpret_cast<sockaddr *>(& sa), & addrlen);
+    auto sock = ::accept(_socket, reinterpret_cast<sockaddr *>(& sa), & addrlen);
 #endif
 
     if (sock > 0) {
@@ -100,24 +91,14 @@ tcp_socket tcp_listener::accept (listener_id listener_sock, error * perr)
     return tcp_socket{uninitialized{}};
 }
 
-tcp_socket tcp_listener::accept_nonblocking (listener_id listener_sock, error * perr)
+tcp_socket tcp_listener::accept_nonblocking (error * perr)
 {
-    auto s = accept(listener_sock, perr);
+    auto s = accept(perr);
 
     if (!s.set_nonblocking(true, perr))
         return tcp_socket{uninitialized{}};
 
     return s;
-}
-
-tcp_socket tcp_listener::accept (error * perr)
-{
-    return accept(_socket, perr);
-}
-
-tcp_socket tcp_listener::accept_nonblocking (error * perr)
-{
-    return accept_nonblocking(_socket, perr);
 }
 
 }} // namespace netty::posix

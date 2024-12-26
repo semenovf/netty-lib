@@ -1,31 +1,23 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../connecting_poller.hpp"
-
 #if NETTY__EPOLL_ENABLED
-#   include "pfs/netty/linux/epoll_poller.hpp"
-#endif
-
+#include "netty/namespace.hpp"
+#include "../connecting_poller.hpp"
+#include "pfs/netty/linux/epoll_poller.hpp"
 #include <sys/socket.h>
 
-namespace netty {
-
-#if NETTY__EPOLL_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-connecting_poller<linux_os::epoll_poller>::connecting_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)
-        : std::move(ptr))
-{
-    init();
-}
+connecting_poller<linux_os::epoll_poller>::connecting_poller ()
+    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND))
+{}
 
 template <>
 int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -80,11 +72,16 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(ev.data.fd, false);
+                            connection_refused(ev.data.fd, connection_refused_reason::other);
+                            break;
+
+                        // Connection reset by peer
+                        case ECONNRESET:
+                            connection_refused(ev.data.fd, connection_refused_reason::reset);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(ev.data.fd, true);
+                            connection_refused(ev.data.fd, connection_refused_reason::timeout);
                             break;
 
                         default:
@@ -106,7 +103,7 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
             // a. Attempt to connect to defunct server address/port
             // b. ...
             if (ev.events & (EPOLLHUP | EPOLLRDHUP)) {
-                connection_refused(ev.data.fd, false);
+                connection_refused(ev.data.fd, connection_refused_reason::other);
                 continue;
             }
 
@@ -122,10 +119,8 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
     return res;
 }
 
-#endif // #NETTY__EPOLL_ENABLED
-
-#if NETTY__EPOLL_ENABLED
 template class connecting_poller<linux_os::epoll_poller>;
-#endif // NETTY__EPOLL_ENABLED
 
-} // namespace netty
+NETTY__NAMESPACE_END
+
+#endif // NETTY__EPOLL_ENABLED

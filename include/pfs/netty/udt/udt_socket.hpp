@@ -32,14 +32,14 @@ class udt_socket
 public:
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
-    using native_type = UDTSOCKET;
+    using socket_id = UDTSOCKET;
 
     static UDTSOCKET const kINVALID_SOCKET = -1;
 
     using input_buffer_type = std::vector<char>;
 
 private:
-    native_type _socket {kINVALID_SOCKET};
+    socket_id _socket {kINVALID_SOCKET};
 
     // Bound address for listener.
     // Listener address for connected socket.
@@ -51,7 +51,7 @@ protected:
     /**
      * Constructs UDT accepted socket.
      */
-    udt_socket (native_type sock, socket4_addr const & saddr);
+    udt_socket (socket_id sock, socket4_addr const & saddr);
 
     void init (int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr = nullptr);
 

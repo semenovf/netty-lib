@@ -23,6 +23,7 @@ class udt_listener: public udt_socket
 public:
     using listener_id = udt_socket::native_type;
     using socket_id = udt_socket::native_type;
+    using peer_socket_type = udt_socket;
 
 private:
     void init (socket4_addr const & saddr, error * perr = nullptr);
@@ -86,11 +87,11 @@ public:
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
 public: // static
-    NETTY__EXPORT static udt_socket accept (
+    NETTY__EXPORT static peer_socket_type accept (
           listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 
-    NETTY__EXPORT static udt_socket accept_nonblocking (
+    NETTY__EXPORT static peer_socket_type accept_nonblocking (
           listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 };

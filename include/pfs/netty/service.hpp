@@ -7,10 +7,11 @@
 //      2024.05.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/error.hpp>
-#include <pfs/netty/property.hpp>
-#include <pfs/netty/send_result.hpp>
-#include <pfs/netty/socket4_addr.hpp>
+#include "connection_refused_reason.hpp"
+#include "error.hpp"
+#include "property.hpp"
+#include "send_result.hpp"
+#include "socket4_addr.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/ring_buffer.hpp>
 #include <pfs/string_view.hpp>
@@ -410,7 +411,7 @@ public:
                 this->on_failure(err);
             };
 
-            base_class::connection_refused = [this] (socket_id, bool) {
+            base_class::connection_refused = [this] (socket_id, connection_refused_reason) {
                 this->connection_refused();
             };
 

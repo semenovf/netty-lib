@@ -112,7 +112,7 @@ public:
     NETTY__EXPORT socket_id id () const noexcept;
 
     /**
-     * @return Listener address for connected socket.
+     * @return Peer address for connected socket.
      */
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 

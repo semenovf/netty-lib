@@ -10,10 +10,11 @@
 #include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
+#include "namespace.hpp"
 #include <functional>
 #include <memory>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 template <typename Backend>
 class listener_poller
@@ -23,17 +24,18 @@ public:
     using listener_id = typename Backend::listener_id;
 
 private:
-    std::shared_ptr<Backend> _rep;
+    std::unique_ptr<Backend> _rep;
 
 public:
     mutable std::function<void(listener_id, error const &)> on_failure;
+
+    /**
+     * This callback must implement the accept procedure.
+     */
     mutable std::function<void(listener_id)> accept;
 
-protected:
-    void init ();
-
 public:
-    NETTY__EXPORT listener_poller (std::shared_ptr<Backend> backend = nullptr);
+    NETTY__EXPORT listener_poller ();
     NETTY__EXPORT ~listener_poller ();
 
     listener_poller (listener_poller const &) = delete;
@@ -47,9 +49,10 @@ public:
     /**
      * @resturn Number of pending connections, or negative value on error.
      */
-    NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
+    NETTY__EXPORT int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
+        , error * perr = nullptr);
 
     NETTY__EXPORT bool empty () const noexcept;
 };
 
-} // namespace netty
+NETTY__NAMESPACE_END

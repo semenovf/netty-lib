@@ -24,6 +24,7 @@ class enet_listener
 public:
     using listener_id = std::uintptr_t; // _ENetHost *
     using socket_id = std::uintptr_t; // _ENetPeer *
+    using peer_socket_type = enet_socket;
 
 private:
     socket4_addr _saddr;
@@ -72,11 +73,11 @@ public:
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
 public:
-    NETTY__EXPORT static enet_socket accept (
+    NETTY__EXPORT static peer_socket_type accept (
           listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 
-    NETTY__EXPORT static enet_socket accept_nonblocking (
+    NETTY__EXPORT static peer_socket_type accept_nonblocking (
           listener_id listener_sock // really here not a listener socket, already accepted socket
         , error * perr = nullptr);
 };

@@ -110,8 +110,8 @@ public:
     /**
      * See send description.
      */
-    NETTY__EXPORT send_result send_to (socket4_addr const & dest
-        , char const * data, int len, error * perr = nullptr);
+    NETTY__EXPORT send_result send_to (socket4_addr const & dest, char const * data, int len
+        , error * perr = nullptr);
 };
 
 }} // namespace netty::posix

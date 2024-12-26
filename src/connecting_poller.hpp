@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2023-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,21 +7,10 @@
 //      2023.01.11 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/i18n.hpp"
-#include "pfs/netty/connecting_poller.hpp"
+#include "netty/connecting_poller.hpp"
+#include <pfs/i18n.hpp>
 
-namespace netty {
-
-template <typename Backend>
-void connecting_poller<Backend>::init ()
-{
-    on_failure = [] (socket_id, error const & err) {
-        fmt::println(stderr, tr::_("ERROR: connecting poller: {}"), err.what());
-    };
-
-    connection_refused = [] (socket_id, bool) {};
-    connected = [] (socket_id) {};
-}
+NETTY__NAMESPACE_BEGIN
 
 template <typename Backend>
 connecting_poller<Backend>::~connecting_poller () = default;
@@ -44,4 +33,4 @@ bool connecting_poller<Backend>::empty () const noexcept
     return _rep->empty();
 }
 
-} // namespace netty
+NETTY__NAMESPACE_END
