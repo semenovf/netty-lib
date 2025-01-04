@@ -7,11 +7,13 @@
 //      2021.09.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "pfs/netty/namespace.hpp"
 #include "universal_id.hpp"
 #include "pfs/crc16.hpp"
 #include "pfs/universal_id_crc.hpp"
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace p2p {
 
 struct hello_packet
@@ -57,4 +59,6 @@ inline bool is_valid (hello_packet const & pkt)
     return true;
 }
 
-}} // namespace netty::p2p
+} // namespace p2p
+
+NETTY__NAMESPACE_END

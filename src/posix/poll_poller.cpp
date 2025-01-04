@@ -76,6 +76,9 @@ void poll_poller::remove_listener (listener_id sock, error * perr)
 
 int poll_poller::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (millis < std::chrono::milliseconds{0})
+        millis = std::chrono::milliseconds{0};
+
     auto n = ::poll(events.data(), events.size(), millis.count());
 
     if (n < 0) {

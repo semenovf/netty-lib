@@ -112,6 +112,10 @@ public:
      */
     NETTY__EXPORT send_result send_to (socket4_addr const & dest, char const * data, int len
         , error * perr = nullptr);
+
+public: // static
+    static NETTY__EXPORT int recv (socket_id id, char * data, int len, error * perr = nullptr);
+    static NETTY__EXPORT send_result send (socket_id id, char const * data, int len, error * perr = nullptr);
 };
 
 }} // namespace netty::posix

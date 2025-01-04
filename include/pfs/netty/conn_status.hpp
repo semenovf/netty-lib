@@ -14,6 +14,7 @@ enum class conn_status {
       failure     = -1
     , connected   =  0
     , connecting  =  1
+    , deferred    =  2
 };
 
 } // namespace netty

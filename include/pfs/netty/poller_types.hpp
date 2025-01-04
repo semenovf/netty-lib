@@ -9,8 +9,10 @@
 #pragma once
 #include "connecting_poller.hpp"
 #include "listener_poller.hpp"
-#include "server_poller.hpp"
-#include "client_poller.hpp"
+#include "reader_poller.hpp"
+#include "writer_poller.hpp"
+// #include "server_poller.hpp"
+// #include "client_poller.hpp"
 
 #if NETTY__SELECT_ENABLED
 #   include "posix/select_poller.hpp"
@@ -37,6 +39,8 @@ using listener_poll_poller_t = listener_poller<posix::poll_poller>;
 namespace netty {
 using connecting_epoll_poller_t = connecting_poller<linux_os::epoll_poller>;
 using listener_epoll_poller_t = listener_poller<linux_os::epoll_poller>;
+using reader_epoll_poller_t = reader_poller<linux_os::epoll_poller>;
+using writer_epoll_poller_t = writer_poller<linux_os::epoll_poller>;
 // using client_epoll_poller_t = client_poller<linux_os::epoll_poller>;
 // using server_epoll_poller_t = server_poller<linux_os::epoll_poller>;
 } // namespace netty

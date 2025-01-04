@@ -15,8 +15,10 @@
 #include "pfs/binary_ostream.hpp"
 #include "pfs/string_view.hpp"
 #include "pfs/universal_id_pack.hpp"
+#include "pfs/netty/namespace.hpp"
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace p2p {
 
 template <pfs::endian Endianess = pfs::endian::network>
@@ -212,4 +214,6 @@ inline void unpack (pfs::binary_istream<Endianess> & in, Packet & pkt)
     primal_serializer<Endianess>::unpack(in, pkt);
 }
 
-}} // namespace netty::p2p
+} // namespace p2p
+
+NETTY__NAMESPACE_END

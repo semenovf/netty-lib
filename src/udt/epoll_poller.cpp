@@ -118,6 +118,9 @@ int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
     if (!observe_write)
         writefds = nullptr;
 
+    if (millis < std::chrono::milliseconds{0})
+        millis = std::chrono::milliseconds{0};
+
     auto n = UDT::epoll_wait(eid, readfds, writefds, millis.count(), nullptr, nullptr);
 
     if (n < 0) {

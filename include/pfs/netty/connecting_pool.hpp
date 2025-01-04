@@ -14,6 +14,8 @@
 #include <chrono>
 #include <functional>
 #include <map>
+#include <set>
+#include <utility>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -26,11 +28,21 @@ public:
     using socket_id = typename Socket::socket_id;
 
 private:
+    using time_point_type = std::chrono::steady_clock::time_point;
+    struct deferred_connection_item {time_point_type t; std::function<void()> f;};
+
+    friend constexpr bool operator < (deferred_connection_item const & lhs, deferred_connection_item const & rhs)
+    {
+        return lhs.t < rhs.t;
+    }
+
+private:
     std::map<socket_id, socket_type> _connecting_sockets;
     std::vector<socket_id> _removable;
+    std::set<deferred_connection_item> _deferred_connections;
     mutable std::function<void(error const &)> _on_failure;
     mutable std::function<void(socket_type &&)> _on_connected;
-    mutable std::function<void(socket_type &&, connection_refused_reason)> _on_connection_refused;
+    mutable std::function<void(connecting_pool *, socket_type &&, connection_refused_reason)> _on_connection_refused;
 
 private:
     void remove_later (socket_id id)
@@ -103,13 +115,11 @@ public:
 
             if (pos != _connecting_sockets.end()) {
                 remove_later(id);
-                _on_connection_refused(std::move(pos->second), reason);
+                _on_connection_refused(this, std::move(pos->second), reason);
             } else {
-                err = error {errc::device_not_found, tr::f_("on_connection_refused: socket not found by id: {}", id)};
+                _on_failure(error {errc::device_not_found, tr::f_("on_connection_refused: socket"
+                    " not found by id: {}", id)});
             }
-
-            if (err)
-                _on_failure(err);
         };
 
         return *this;
@@ -141,17 +151,49 @@ public:
             case netty::conn_status::failure:
                 _on_failure(err);
                 break;
+
+            case netty::conn_status::deferred:
+            default:
+                break;
         }
 
         return status;
     }
 
+    template <typename ...Args>
+    netty::conn_status connect_timeout (std::chrono::milliseconds timeout, Args &&... args)
+    {
+        if (timeout <= std::chrono::milliseconds{0})
+            return connect(std::forward<Args>(args)...);
+
+        auto func = [this, args...] () {
+            this->connect(args...);
+        };
+
+        _deferred_connections.insert(deferred_connection_item{std::chrono::steady_clock::now() + timeout, std::move(func)});
+
+        return netty::conn_status::deferred;
+    }
+
     /**
      * @resturn Number of pending connections, or negative value on error.
      */
-    int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
-        apply_remove();
+        if (!_removable.empty())
+            apply_remove();
+
+        // Reconnect
+        if (!_deferred_connections.empty()) {
+            auto now = std::chrono::steady_clock::now();
+            auto pos = _deferred_connections.begin();
+
+            while (!_deferred_connections.empty() && pos->t <= now) {
+                pos->f();
+                pos = _deferred_connections.erase(pos);
+            }
+        }
+
         return ConnectingPoller::poll(millis, perr);
     }
 

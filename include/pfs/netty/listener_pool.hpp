@@ -26,8 +26,24 @@ public:
 
 private:
     std::map<listener_id, listener_socket_type> _listeners;
+    std::vector<listener_id> _removable;
     mutable std::function<void(error const &)> _on_failure;
     mutable std::function<void(socket_type &&)> _on_accepted;
+
+    void remove_later (socket_id id)
+    {
+        _removable.push_back(id);
+    }
+
+    void apply_remove ()
+    {
+        for (auto id: _removable) {
+            ListenerPoller::remove(id);
+            _listeners.erase(id);
+        }
+
+        _removable.clear();
+    }
 
 public:
     /**
@@ -39,8 +55,7 @@ public:
         _on_failure = std::forward<F>(f);
 
         ListenerPoller::on_failure = [this] (listener_id id, error const & err) {
-            ListenerPoller::remove(id);
-            _listeners.erase(id);
+            remove_later(id);
             _on_failure(err);
         };
 
@@ -103,9 +118,12 @@ public:
     /**
      * @return Number of pending connections, or negative value on error.
      */
-    int poll (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
+    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
         , error * perr = nullptr)
     {
+        if (!_removable.empty())
+            apply_remove();
+
         return ListenerPoller::poll(millis, perr);
     }
 

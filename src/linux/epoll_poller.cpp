@@ -110,6 +110,9 @@ int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)
     if (maxevents == 0)
         return 0;
 
+    if (millis < std::chrono::milliseconds{0})
+        millis = std::chrono::milliseconds{0};
+
     auto n = epoll_wait(eid, events.data(), maxevents, millis.count());
 
     if (n < 0) {

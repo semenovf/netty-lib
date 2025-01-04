@@ -375,29 +375,7 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
 
 int inet_socket::recv (char * data, int len, error * perr)
 {
-    auto n = ::recv(_socket, data, static_cast<int>(len), 0);
-
-    if (n < 0) {
-#if _MSC_VER
-        auto lastWsaError = WSAGetLastError();
-
-        if (lastWsaError == WSAEWOULDBLOCK) {
-#else
-        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
-#endif
-            n = 0;
-        } else {
-            pfs::throw_or(perr, error {
-                  errc::socket_error
-                , tr::_("receive data failure")
-                , pfs::system_error_text()
-            });
-
-            return n;
-        }
-    }
-
-    return n;
+    return recv(_socket, data, len, perr);
 }
 
 int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * perr)
@@ -451,68 +429,11 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 
 send_result inet_socket::send (char const * data, int len, error * perr)
 {
-    // MSG_NOSIGNAL flag means:
-    // requests not to send SIGPIPE on errors on stream oriented sockets
-    // when the other end breaks the connection.
-    // The EPIPE error is still returned.
-    //
-
-#if _MSC_VER
-    auto n = ::send(_socket, data, len, 0);
-#else
-    auto n = ::send(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT);
-#endif
-
-    if (n < 0) {
-#if _MSC_VER
-        auto lastWsaError = WSAGetLastError();
-
-        if (lastWsaError == WSAENOBUFS)
-            return send_result{send_status::overflow, n};
-
-        if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
-                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
-            return send_result{send_status::network, n};
-
-        if (lastWsaError == WSAEWOULDBLOCK)
-            return send_result{send_status::again, n};
-#else
-        // man send:
-        // The output queue for a network interface was full. This generally
-        // indicates that the interface has stopped sending, but may be
-        // caused by transient congestion.(Normally, this does not occur in
-        // Linux. Packets are just silently dropped when a device queue
-        // overflows.)
-        if (errno == ENOBUFS)
-            return send_result{send_status::overflow, n};
-
-        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
-                || errno == ENETUNREACH)
-            return send_result{send_status::network, n};
-
-        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-            return send_result{send_status::again, n};
-#endif
-        error err {
-              errc::socket_error
-            , tr::_("send failure")
-            , pfs::system_error_text()
-        };
-
-        if (perr) {
-            *perr = std::move(err);
-            return send_result{send_status::failure, n};
-        } else {
-            throw err;
-        }
-    }
-
-    return send_result{send_status::good, n};
+    return send(_socket, data, len, perr);
 }
 
 // See inet_socket::send
-send_result inet_socket::send_to (socket4_addr const & saddr
-    , char const * data, int len, error * perr)
+send_result inet_socket::send_to (socket4_addr const & saddr, char const * data, int len, error * perr)
 {
     sockaddr_in addr_in4;
 
@@ -535,41 +456,119 @@ send_result inet_socket::send_to (socket4_addr const & saddr
         auto lastWsaError = WSAGetLastError();
 
         if (lastWsaError == WSAENOBUFS)
-            return send_result{send_status::overflow, n};
+            return send_result{send_status::overflow, 0};
 
         if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
             || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
-            return send_result{send_status::network, n};
+            return send_result{send_status::network, 0};
 
         if (lastWsaError == WSAEWOULDBLOCK)
-            return send_result{send_status::again, n};
+            return send_result{send_status::again, 0};
 
 #else
         if (errno == ENOBUFS)
-            return send_result{send_status::overflow, n};
+            return send_result{send_status::overflow, 0};
 
         if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
                 || errno == ENETUNREACH)
-            return send_result{send_status::network, n};
+            return send_result{send_status::network, 0};
 
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
-            return send_result{send_status::again, n};
+            return send_result{send_status::again, 0};
 #endif
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::f_("send to socket failure: {}", to_string(saddr))
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return send_result{send_status::failure, n};
+        return send_result{send_status::failure, 0};
+    }
+
+    return send_result{send_status::good, static_cast<std::uint64_t>(n)};
+}
+
+int inet_socket::recv (socket_id id, char * data, int len, error * perr)
+{
+    auto n = ::recv(id, data, static_cast<int>(len), 0);
+
+    if (n < 0) {
+#if _MSC_VER
+        auto lastWsaError = WSAGetLastError();
+
+        if (lastWsaError == WSAEWOULDBLOCK) {
+#else
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK)) {
+#endif
+            n = 0;
         } else {
-            throw err;
+            pfs::throw_or(perr, error {
+                  errc::socket_error
+                , tr::_("receive data failure")
+                , pfs::system_error_text()
+            });
+
+            return n;
         }
     }
 
-    return send_result{send_status::good, n};
+    return n;
+}
+
+send_result inet_socket::send (socket_id id, char const * data, int len, error * perr)
+{
+    // MSG_NOSIGNAL flag means:
+    // requests not to send SIGPIPE on errors on stream oriented sockets
+    // when the other end breaks the connection.
+    // The EPIPE error is still returned.
+    //
+
+#if _MSC_VER
+    auto n = ::send(id, data, len, 0);
+#else
+    auto n = ::send(id, data, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+#endif
+
+    if (n < 0) {
+#if _MSC_VER
+        auto lastWsaError = WSAGetLastError();
+
+        if (lastWsaError == WSAENOBUFS)
+            return send_result{send_status::overflow, 0};
+
+        if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
+                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+            return send_result{send_status::network, 0};
+
+        if (lastWsaError == WSAEWOULDBLOCK)
+            return send_result{send_status::again, 0};
+#else
+        // man send:
+        // The output queue for a network interface was full. This generally
+        // indicates that the interface has stopped sending, but may be
+        // caused by transient congestion.(Normally, this does not occur in
+        // Linux. Packets are just silently dropped when a device queue
+        // overflows.)
+        if (errno == ENOBUFS)
+            return send_result{send_status::overflow, 0};
+
+        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
+                || errno == ENETUNREACH)
+            return send_result{send_status::network, 0};
+
+        if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
+            return send_result{send_status::again, 0};
+#endif
+        pfs::throw_or(perr, error {
+              errc::socket_error
+            , tr::_("send failure")
+            , pfs::system_error_text()
+        });
+
+        return send_result{send_status::failure, 0};
+    }
+
+    return send_result{send_status::good, static_cast<std::uint64_t>(n)};
 }
 
 }} // namespace netty::posix

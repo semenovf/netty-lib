@@ -70,6 +70,9 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
 {
     ENetEvent event;
 
+    if (millis < std::chrono::milliseconds{0})
+        millis = std::chrono::milliseconds{0};
+
     auto rc = enet_host_service(host, & event, millis.count());
 
     if (rc == 0)

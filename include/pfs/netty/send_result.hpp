@@ -28,7 +28,7 @@ enum class send_status {
 struct send_result
 {
     send_status status;
-    std::int64_t n;
+    std::uint64_t n;
 };
 
 } // namespace netty

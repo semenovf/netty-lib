@@ -105,11 +105,13 @@ void select_poller::remove_listener (listener_id sock, error * perr)
     remove_socket(sock);
 }
 
-int select_poller::poll (fd_set * rfds, fd_set * wfds
-    , std::chrono::milliseconds millis, error * perr)
+int select_poller::poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds millis, error * perr)
 {
     if (sockets.empty())
         return 0;
+
+    if (millis < std::chrono::milliseconds{0})
+        millis = std::chrono::milliseconds{0};
 
     timeval timeout;
 

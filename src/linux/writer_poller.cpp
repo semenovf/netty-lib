@@ -1,22 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2024 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../writer_poller.hpp"
-
 #if NETTY__EPOLL_ENABLED
-#   include "pfs/netty/linux/epoll_poller.hpp"
-#endif
-
+#include "../writer_poller.hpp"
+#include "netty/namespace.hpp"
+#include "pfs/netty/linux/epoll_poller.hpp"
 #include <sys/socket.h>
 
-namespace netty {
-
-#if NETTY__EPOLL_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
 writer_poller<linux_os::epoll_poller>::writer_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
@@ -84,10 +80,8 @@ int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
     return res;
 }
 
-#endif // NETTY__EPOLL_ENABLED
-
-#if NETTY__EPOLL_ENABLED
 template class writer_poller<linux_os::epoll_poller>;
-#endif // NETTY__EPOLL_ENABLED
 
-} // namespace netty
+NETTY__NAMESPACE_END
+
+#endif // NETTY__EPOLL_ENABLED
