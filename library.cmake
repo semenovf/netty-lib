@@ -78,7 +78,6 @@ if (MSVC)
     target_link_libraries(netty PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
 
-# FIXME UNCOMMENT
 # check_include_file("poll.h" __has_poll)
 #
 # if (__has_poll)
@@ -93,8 +92,7 @@ endif(MSVC)
 #     target_compile_definitions(netty PUBLIC "NETTY__POLL_ENABLED=1")
 #     set_target_properties(netty PROPERTIES NETTY__POLL_ENABLED ON)
 # endif()
-
-# FIXME UNCOMMENT
+#
 # check_include_file("sys/select.h" __has_sys_select) # Linux
 #
 # if (MSVC OR __has_sys_select)

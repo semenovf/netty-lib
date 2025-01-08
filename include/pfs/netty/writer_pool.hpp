@@ -9,8 +9,10 @@
 #pragma once
 #include "error.hpp"
 #include "namespace.hpp"
+#include "writer_queue.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/stopwatch.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -34,8 +36,9 @@ private:
         socket_id id;
         bool writable {false};   // Socket is writable
         std::uint16_t chunk_size {1500}; // Initial value is default MTU size
-        std::vector<char> b;     // Output buffer
-        std::size_t cursor {0};  // Index of the first byte to send
+        //std::vector<char> b;     // Output buffer
+        writer_queue q; // Output queue
+        //std::size_t cursor {0};  // Index of the first byte to send
     };
 
     struct item
@@ -131,15 +134,18 @@ public:
             return;
 
         auto acc = ensure_account(id);
-        auto offset = acc->b.size();
-        acc->b.resize(offset + len);
-        std::memcpy(acc->b.data() + offset, data, len);
+        acc->q.enqueue(data, len);
         _remain_bytes += len;
     }
 
-    void enqueue (socket_id id, std::vector<char> const & data)
+    void enqueue (socket_id id, std::vector<char> && data)
     {
-        enqueue(id, data.data(), data.size());
+        if (data.empty())
+            return;
+
+        auto acc = ensure_account(id);
+        _remain_bytes += data.size();
+        acc->q.enqueue(std::move(data));
     }
 
     void send (std::chrono::milliseconds limit = std::chrono::milliseconds{0}, error * perr = nullptr)
@@ -153,20 +159,11 @@ public:
                 if (!acc.writable)
                     continue;
 
-                if (acc.cursor == acc.b.size()) {
-                    acc.b.clear();
-                    acc.cursor = 0;
-                    continue;
-                }
-
-                if (acc.b.empty())
+                if (acc.q.empty())
                     continue;
 
-                char const * chunk = acc.b.data() + acc.cursor;
-                std::size_t chunk_size = acc.b.size() - acc.cursor;
-
-                if (chunk_size >= acc.chunk_size)
-                    chunk_size = acc.chunk_size;
+                char const * chunk = acc.q.data();
+                std::size_t chunk_size = (std::min)(std::size_t{acc.chunk_size}, acc.q.size());
 
                 netty::error err;
                 auto res = Socket::send(acc.id, chunk, chunk_size, & err);
@@ -189,7 +186,7 @@ public:
                     case netty::send_status::good:
                         if (res.n > 0) {
                             _remain_bytes -= res.n;
-                            acc.cursor += res.n;
+                            acc.q.shift(res.n);
 
                             if (_on_bytes_written)
                                 _on_bytes_written(acc.id, res.n);
