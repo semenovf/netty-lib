@@ -7,17 +7,15 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/namespace.hpp>
+#include <chrono>
 #include <vector>
+#include <poll.h>
 
-#if NETTY__POLL_ENABLED
-#   include <poll.h>
-#endif
+NETTY__NAMESPACE_BEGIN
 
-namespace netty {
 namespace posix {
-
-#if NETTY__POLL_ENABLED
 
 class poll_poller
 {
@@ -41,7 +39,7 @@ public:
     bool empty () const noexcept;
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
-#endif
 
-}} // namespace netty::posix
+} // namespace posix
 
+NETTY__NAMESPACE_END

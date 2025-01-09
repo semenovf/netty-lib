@@ -9,19 +9,16 @@
 #if NETTY__EPOLL_ENABLED
 #include "../writer_poller.hpp"
 #include "netty/namespace.hpp"
-#include "pfs/netty/linux/epoll_poller.hpp"
+#include "netty/linux/epoll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <sys/socket.h>
 
 NETTY__NAMESPACE_BEGIN
 
 template <>
-writer_poller<linux_os::epoll_poller>::writer_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)
-        : std::move(ptr))
-{
-    init();
-}
+writer_poller<linux_os::epoll_poller>::writer_poller ()
+    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND))
+{}
 
 template <>
 int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)

@@ -7,7 +7,9 @@
 //      2023.01.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/namespace.hpp>
+#include <chrono>
 #include <limits>
 #include <vector>
 
@@ -21,7 +23,8 @@
 #   include <sys/select.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 class select_poller
@@ -61,4 +64,6 @@ public:
     int poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

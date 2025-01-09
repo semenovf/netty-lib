@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,11 +7,14 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/error.hpp"
+#include <pfs/netty/error.hpp>
+#include <pfs/netty/namespace.hpp>
+#include <chrono>
 #include <vector>
 #include <sys/epoll.h>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace linux_os {
 
 class epoll_poller
@@ -38,4 +41,6 @@ public:
     int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
-}} // namespace netty::linux_os
+} // namespace linux_os
+
+NETTY__NAMESPACE_END

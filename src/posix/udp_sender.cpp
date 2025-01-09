@@ -6,10 +6,11 @@
 // Changelog:
 //      2023.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/endian.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/udp_sender.hpp"
+#include "netty/error.hpp"
+#include "netty/namespace.hpp"
+#include "netty/posix/udp_sender.hpp"
+#include <pfs/endian.hpp>
+#include <pfs/i18n.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -20,7 +21,8 @@
 #   include <netinet/in.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 udp_sender::udp_sender () : udp_socket() {}
@@ -81,5 +83,6 @@ bool udp_sender::enable_broadcast (bool enable, error * perr)
     return udp_socket::enable_broadcast(enable, perr);
 }
 
-}} // namespace netty::posix
+} // namespace posix
 
+NETTY__NAMESPACE_END

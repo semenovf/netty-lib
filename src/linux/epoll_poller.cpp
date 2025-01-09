@@ -6,14 +6,16 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/linux/epoll_poller.hpp"
+#include "netty/namespace.hpp"
+#include "netty/error.hpp"
+#include "netty/linux/epoll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace linux_os {
 
 static constexpr std::size_t const DEFAULT_INCREMENT = 32;
@@ -142,4 +144,6 @@ bool epoll_poller::empty () const noexcept
     return events.size() == 0;
 }
 
-}} // namespace netty::linux_os
+} // namespace linux_os
+
+NETTY__NAMESPACE_END

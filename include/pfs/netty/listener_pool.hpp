@@ -27,9 +27,37 @@ public:
 private:
     std::map<listener_id, listener_socket_type> _listeners;
     std::vector<listener_id> _removable;
-    mutable std::function<void(error const &)> _on_failure;
+
+    mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
     mutable std::function<void(socket_type &&)> _on_accepted;
 
+public:
+    listener_pool ()
+    {
+        ListenerPoller::on_failure = [this] (listener_id id, error const & err) {
+            remove_later(id);
+            _on_failure(err);
+        };
+
+        ListenerPoller::accept = [this] (listener_id id) {
+            error err;
+            auto pos = _listeners.find(id);
+
+            if (pos != _listeners.end()) {
+                auto peer_socket = pos->second.accept_nonblocking(& err);
+
+                if (!err)
+                    _on_accepted(std::move(peer_socket));
+            } else {
+                err = error {errc::device_not_found, tr::f_("listener not found by id: {}", id)};
+            }
+
+            if (err)
+                _on_failure(err);
+        };
+    }
+
+private:
     void remove_later (socket_id id)
     {
         _removable.push_back(id);
@@ -53,12 +81,6 @@ public:
     listener_pool & on_failure (F && f)
     {
         _on_failure = std::forward<F>(f);
-
-        ListenerPoller::on_failure = [this] (listener_id id, error const & err) {
-            remove_later(id);
-            _on_failure(err);
-        };
-
         return *this;
     }
 
@@ -70,24 +92,6 @@ public:
     listener_pool & on_accepted (F && f)
     {
         _on_accepted = std::forward<F>(f);
-
-        ListenerPoller::accept = [this] (listener_id id) {
-            error err;
-            auto pos = _listeners.find(id);
-
-            if (pos != _listeners.end()) {
-                auto peer_socket = pos->second.accept_nonblocking(& err);
-
-                if (!err)
-                    _on_accepted(std::move(peer_socket));
-            } else {
-                err = error {errc::device_not_found, tr::f_("listener not found by id: {}", id)};
-            }
-
-            if (err)
-                _on_failure(err);
-        };
-
         return *this;
     }
 

@@ -7,7 +7,6 @@
 //      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller.hpp"
-#include "pfs/log.hpp"
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -25,20 +24,14 @@
 #   include <sys/socket.h>
 #endif
 
-static char const * TAG = "POSIX";
-
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 #if NETTY__SELECT_ENABLED
 
 template <>
-reader_poller<posix::select_poller>::reader_poller (std::shared_ptr<posix::select_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<posix::select_poller>(true, false)
-        : std::move(ptr))
-{
-    init();
-}
+reader_poller<posix::select_poller>::reader_poller ()
+    : _rep(new posix::select_poller(true, false))
+{}
 
 template <>
 int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -60,6 +53,9 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
         for (; pos != last && rcounter > 0; ++pos) {
             auto fd = *pos;
+
+            if (fd == posix::select_poller::kINVALID_SOCKET)
+                continue;
 
             if (FD_ISSET(fd, & rfds)) {
                 res++;
@@ -112,8 +108,8 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #if NETTY__POLL_ENABLED
 
 template <>
-reader_poller<posix::poll_poller>::reader_poller (std::shared_ptr<posix::poll_poller> ptr)
-    : _rep(ptr == nullptr ? std::make_shared<posix::poll_poller>(POLLERR | POLLIN | POLLNVAL
+reader_poller<posix::poll_poller>::reader_poller ()
+    : _rep(new posix::poll_poller(POLLERR | POLLIN | POLLNVAL
 
 #ifdef POLLRDNORM
         | POLLRDNORM
@@ -122,10 +118,8 @@ reader_poller<posix::poll_poller>::reader_poller (std::shared_ptr<posix::poll_po
 #ifdef POLLRDBAND
         | POLLRDBAND
 #endif
-    ) : std::move(ptr))
-{
-    init();
-}
+    ))
+{}
 
 template <>
 int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -219,4 +213,4 @@ template class reader_poller<posix::select_poller>;
 template class reader_poller<posix::poll_poller>;
 #endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

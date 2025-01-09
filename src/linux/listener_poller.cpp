@@ -7,13 +7,13 @@
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #if NETTY__EPOLL_ENABLED
-
 #include "../listener_poller.hpp"
+#include "netty/namespace.hpp"
 #include "netty/linux/epoll_poller.hpp"
 #include <pfs/i18n.hpp>
 #include <sys/socket.h>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 template <>
 listener_poller<linux_os::epoll_poller>::listener_poller ()
@@ -76,6 +76,6 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
 
 template class listener_poller<linux_os::epoll_poller>;
 
-} // namespace netty
+NETTY__NAMESPACE_END
 
 #endif // NETTY__EPOLL_ENABLED

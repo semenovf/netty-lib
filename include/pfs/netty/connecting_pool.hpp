@@ -40,9 +40,48 @@ private:
     std::map<socket_id, socket_type> _connecting_sockets;
     std::vector<socket_id> _removable;
     std::set<deferred_connection_item> _deferred_connections;
-    mutable std::function<void(error const &)> _on_failure;
+    mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
     mutable std::function<void(socket_type &&)> _on_connected;
     mutable std::function<void(connecting_pool *, socket_type &&, connection_refused_reason)> _on_connection_refused;
+
+public:
+    connecting_pool ()
+    {
+        ConnectingPoller::on_failure = [this] (socket_id id, error const & err) {
+            remove_later(id);
+            _on_failure(err);
+        };
+
+        ConnectingPoller::connected = [this] (socket_id id) {
+            error err;
+            auto pos = _connecting_sockets.find(id);
+            remove_later(id);
+
+            if (pos != _connecting_sockets.end()) {
+                if (_on_connected)
+                    _on_connected(std::move(pos->second));
+            } else {
+                err = error {errc::device_not_found, tr::f_("on socket connected failure: id={}", id)};
+            }
+
+            if (err)
+                _on_failure(err);
+        };
+
+        ConnectingPoller::connection_refused = [this] (socket_id id, connection_refused_reason reason) {
+            error err;
+            auto pos = _connecting_sockets.find(id);
+            remove_later(id);
+
+            if (pos != _connecting_sockets.end()) {
+                if (_on_connection_refused)
+                    _on_connection_refused(this, std::move(pos->second), reason);
+            } else {
+                _on_failure(error {errc::device_not_found
+                    , tr::f_("on connection refused on socket failure: id={}", id)});
+            }
+        };
+    }
 
 private:
     void remove_later (socket_id id)
@@ -68,12 +107,6 @@ public:
     connecting_pool & on_failure (F && f)
     {
         _on_failure = std::forward<F>(f);
-
-        ConnectingPoller::on_failure = [this] (socket_id id, error const & err) {
-            remove_later(id);
-            _on_failure(err);
-        };
-
         return *this;
     }
 
@@ -85,22 +118,6 @@ public:
     connecting_pool & on_connected (F && f)
     {
         _on_connected = std::forward<F>(f);
-
-        ConnectingPoller::connected = [this] (socket_id id) {
-            error err;
-            auto pos = _connecting_sockets.find(id);
-
-            if (pos != _connecting_sockets.end()) {
-                remove_later(id);
-                _on_connected(std::move(pos->second));
-            } else {
-                err = error {errc::device_not_found, tr::f_("on_connected: socket not found by id: {}", id)};
-            }
-
-            if (err)
-                _on_failure(err);
-        };
-
         return *this;
     }
 
@@ -108,20 +125,6 @@ public:
     connecting_pool & on_connection_refused (F && f)
     {
         _on_connection_refused = std::forward<F>(f);
-
-        ConnectingPoller::connection_refused = [this] (socket_id id, connection_refused_reason reason) {
-            error err;
-            auto pos = _connecting_sockets.find(id);
-
-            if (pos != _connecting_sockets.end()) {
-                remove_later(id);
-                _on_connection_refused(this, std::move(pos->second), reason);
-            } else {
-                _on_failure(error {errc::device_not_found, tr::f_("on_connection_refused: socket"
-                    " not found by id: {}", id)});
-            }
-        };
-
         return *this;
     }
 

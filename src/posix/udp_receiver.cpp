@@ -6,10 +6,11 @@
 // Changelog:
 //      2023.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/endian.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/udp_receiver.hpp"
+#include "netty/error.hpp"
+#include "netty/namespace.hpp"
+#include "netty/posix/udp_receiver.hpp"
+#include <pfs/endian.hpp>
+#include <pfs/i18n.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -19,7 +20,8 @@
 #   include <netinet/in.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 udp_receiver::udp_receiver () : udp_socket(uninitialized{}) {}
@@ -85,4 +87,6 @@ udp_receiver::~udp_receiver ()
         _dtor(this);
 }
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

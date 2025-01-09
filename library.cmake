@@ -78,35 +78,35 @@ if (MSVC)
     target_link_libraries(netty PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
 
-# check_include_file("poll.h" __has_poll)
-#
-# if (__has_poll)
-#     target_sources(netty PRIVATE
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
-#     target_compile_definitions(netty PUBLIC "NETTY__POLL_ENABLED=1")
-#     set_target_properties(netty PROPERTIES NETTY__POLL_ENABLED ON)
-# endif()
-#
-# check_include_file("sys/select.h" __has_sys_select) # Linux
-#
-# if (MSVC OR __has_sys_select)
-#     target_sources(netty PRIVATE
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
-#         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
-#     target_compile_definitions(netty PUBLIC "NETTY__SELECT_ENABLED=1")
-#     set_target_properties(netty PROPERTIES NETTY__SELECT_ENABLED ON)
-# endif()
+check_include_file("poll.h" __has_poll)
+
+if (__has_poll)
+    target_sources(netty PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
+    target_compile_definitions(netty PUBLIC "NETTY__POLL_ENABLED=1")
+    set_target_properties(netty PROPERTIES NETTY__POLL_ENABLED ON)
+endif()
+
+check_include_file("sys/select.h" __has_sys_select) # Linux
+
+if (MSVC OR __has_sys_select)
+    target_sources(netty PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
+    target_compile_definitions(netty PUBLIC "NETTY__SELECT_ENABLED=1")
+    set_target_properties(netty PROPERTIES NETTY__SELECT_ENABLED ON)
+endif()
 
 if (UNIX OR ANDROID)
     check_include_file("sys/epoll.h" __has_sys_epoll)

@@ -13,16 +13,6 @@
 namespace netty {
 
 template <typename Backend>
-void writer_poller<Backend>::init ()
-{
-    on_failure = [] (socket_id, error const & err) {
-        fmt::println(stderr, tr::_("ERROR: writer poller: {}"), err.what());
-    };
-
-    can_write = [] (socket_id) {};
-}
-
-template <typename Backend>
 writer_poller<Backend>::~writer_poller () = default;
 
 template <typename Backend>

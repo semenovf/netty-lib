@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,25 +7,16 @@
 //      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller.hpp"
-
-#if NETTY__EPOLL_ENABLED
-#   include "pfs/netty/linux/epoll_poller.hpp"
-#endif
-
+#include "netty/linux/epoll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <sys/socket.h>
 
-namespace netty {
-
-#if NETTY__EPOLL_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-reader_poller<linux_os::epoll_poller>::reader_poller (std::shared_ptr<linux_os::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<linux_os::epoll_poller>(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)
-        : std::move(ptr))
-{
-    init();
-}
+reader_poller<linux_os::epoll_poller>::reader_poller ()
+    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND))
+{}
 
 template <>
 int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -100,11 +91,6 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
     return res;
 }
 
-#endif // #NETTY__EPOLL_ENABLED
-
-#if NETTY__EPOLL_ENABLED
 template class reader_poller<linux_os::epoll_poller>;
-#endif // NETTY__EPOLL_ENABLED
 
-} // namespace netty
-
+NETTY__NAMESPACE_END

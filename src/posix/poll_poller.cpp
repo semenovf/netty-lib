@@ -6,14 +6,14 @@
 // Changelog:
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/poll_poller.hpp"
+#include "netty/posix/poll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <algorithm>
 #include <string.h>
 #include <sys/socket.h>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 poll_poller::poll_poller (short int observable_events)
@@ -64,7 +64,7 @@ void poll_poller::remove_socket (socket_id sock, error * perr)
         auto sz = events.size();
         auto n = sz - 1 - index;
 
-        memcpy(ptr + index, ptr + index + 1, n);
+        std::memcpy(ptr + index, ptr + index + 1, n * sizeof(pollfd));
         events.resize(sz - 1);
     }
 }
@@ -108,4 +108,6 @@ bool poll_poller::empty () const noexcept
     return events.size() == 0;
 }
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

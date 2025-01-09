@@ -6,10 +6,9 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/endian.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/inet_socket.hpp"
+#include "netty/posix/inet_socket.hpp"
+#include <pfs/endian.hpp>
+#include <pfs/i18n.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>

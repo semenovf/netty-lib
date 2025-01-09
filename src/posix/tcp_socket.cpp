@@ -6,10 +6,11 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/posix/tcp_socket.hpp"
-#include "pfs/endian.hpp"
-#include "pfs/i18n.hpp"
-#include "pfs/netty/error.hpp"
+#include "netty/error.hpp"
+#include "netty/namespace.hpp"
+#include "netty/posix/tcp_socket.hpp"
+#include <pfs/endian.hpp>
+#include <pfs/i18n.hpp>
 #include <memory>
 
 #if _MSC_VER
@@ -20,7 +21,8 @@
 #   include <netinet/in.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 tcp_socket::tcp_socket () : inet_socket(type_enum::stream) {}
@@ -122,4 +124,6 @@ void tcp_socket::disconnect (error * perr)
     }
 }
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

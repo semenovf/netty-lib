@@ -1,27 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.23 Initial version.
+//      2025.01.09 Removed init() method.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/i18n.hpp"
-#include "pfs/netty/reader_poller.hpp"
+#include "netty/namespace.hpp"
+#include "netty/reader_poller.hpp"
+#include <pfs/i18n.hpp>
 
-namespace netty {
-
-template <typename Backend>
-void reader_poller<Backend>::init ()
-{
-    on_failure = [] (socket_id, error const & err) {
-        fmt::println(stderr, tr::_("ERROR: reader poller: {}"), err.what());
-    };
-
-    disconnected = [] (socket_id) {};
-    ready_read = [] (socket_id) {};
-}
+NETTY__NAMESPACE_BEGIN
 
 template <typename Backend>
 reader_poller<Backend>::~reader_poller () = default;
@@ -44,4 +35,4 @@ bool reader_poller<Backend>::empty () const noexcept
     return _rep->empty();
 }
 
-} // namespace netty
+NETTY__NAMESPACE_END

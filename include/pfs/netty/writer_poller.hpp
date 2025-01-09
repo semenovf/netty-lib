@@ -9,11 +9,12 @@
 #pragma once
 #include "error.hpp"
 #include "exports.hpp"
+#include "namespace.hpp"
 #include <chrono>
 #include <functional>
 #include <memory>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 template <typename Backend>
 class writer_poller
@@ -22,17 +23,14 @@ public:
     using socket_id = typename Backend::socket_id;
 
 private:
-    std::shared_ptr<Backend> _rep;
+    std::unique_ptr<Backend> _rep;
 
 public:
     mutable std::function<void(socket_id, error const &)> on_failure;
     mutable std::function<void(socket_id)> can_write;
 
-protected:
-    void init ();
-
 public:
-    NETTY__EXPORT writer_poller (std::shared_ptr<Backend> backend = nullptr);
+    NETTY__EXPORT writer_poller ();
     NETTY__EXPORT ~writer_poller ();
 
     writer_poller (writer_poller const &) = delete;
@@ -46,4 +44,4 @@ public:
     NETTY__EXPORT bool empty () const noexcept;
 };
 
-} // namespace netty
+NETTY__NAMESPACE_END

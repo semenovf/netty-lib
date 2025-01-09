@@ -6,10 +6,9 @@
 // Changelog:
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#if NETTY__EPOLL_ENABLED
-#include "netty/namespace.hpp"
 #include "../connecting_poller.hpp"
-#include "pfs/netty/linux/epoll_poller.hpp"
+#include "netty/linux/epoll_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <sys/socket.h>
 
 NETTY__NAMESPACE_BEGIN
@@ -122,5 +121,3 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
 template class connecting_poller<linux_os::epoll_poller>;
 
 NETTY__NAMESPACE_END
-
-#endif // NETTY__EPOLL_ENABLED

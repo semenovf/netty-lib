@@ -6,6 +6,7 @@
 // Changelog:
 //      2024.07.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
+// FIXME DEPRECATED
 #include "netty/client_poller.hpp"
 #include "pfs/netty/posix/select_poller.hpp"
 

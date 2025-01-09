@@ -51,12 +51,17 @@ private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
 
-    mutable std::function<void(socket_id, error const &)> _on_failure;
+    mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
     mutable std::function<void(socket_id, std::uint64_t)> _on_bytes_written;
 
 public:
     writer_pool (): WriterPoller()
     {
+        WriterPoller::on_failure = [this] (socket_id id, error const & err) {
+            remove_later(id);
+            _on_failure(id, err);
+        };
+
         WriterPoller::can_write = [this] (socket_id id) {
             auto acc = locate_account(id);
 
@@ -205,12 +210,6 @@ public:
     writer_pool & on_failure (F && f)
     {
         _on_failure = std::forward<F>(f);
-
-        WriterPoller::on_failure = [this] (socket_id id, error const & err) {
-            remove_later(id);
-            _on_failure(id, err);
-        };
-
         return *this;
     }
 
@@ -246,4 +245,3 @@ public:
 };
 
 NETTY__NAMESPACE_END
-

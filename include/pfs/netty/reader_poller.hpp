@@ -10,10 +10,11 @@
 #include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
+#include "namespace.hpp"
 #include <functional>
 #include <memory>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 template <typename Backend>
 class reader_poller
@@ -22,18 +23,15 @@ public:
     using socket_id = typename Backend::socket_id;
 
 private:
-    std::shared_ptr<Backend> _rep;
+    std::unique_ptr<Backend> _rep;
 
 public:
     mutable std::function<void(socket_id, error const &)> on_failure;
     mutable std::function<void(socket_id)> disconnected;
     mutable std::function<void(socket_id)> ready_read;
 
-protected:
-    void init ();
-
 public:
-    NETTY__EXPORT reader_poller (std::shared_ptr<Backend> backend = nullptr);
+    NETTY__EXPORT reader_poller ();
     NETTY__EXPORT ~reader_poller ();
 
     reader_poller (reader_poller const &) = delete;
@@ -47,5 +45,4 @@ public:
     NETTY__EXPORT bool empty () const noexcept;
 };
 
-} // namespace netty
-
+NETTY__NAMESPACE_END

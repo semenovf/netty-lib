@@ -8,18 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
 #include "netty/socket4_addr.hpp"
+#include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/endian.hpp>
 #include <pfs/log.hpp>
 #include <enet/enet.h>
 
-#if NETTY__ENET_ENABLED
-#   include "pfs/netty/enet/enet_poller.hpp"
-#endif
-
-namespace netty {
-
-#if NETTY__ENET_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
 connecting_poller<enet::enet_poller>::connecting_poller (std::shared_ptr<enet::enet_poller> ptr)
@@ -78,10 +73,6 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
     return n;
 }
 
-#endif // NETTY__ENET_ENABLED
-
-#if NETTY__ENET_ENABLED
 template class connecting_poller<enet::enet_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

@@ -19,6 +19,8 @@
 namespace netty {
 using connecting_select_poller_t = connecting_poller<posix::select_poller>;
 using listener_select_poller_t = listener_poller<posix::select_poller>;
+using reader_select_poller_t = reader_poller<posix::select_poller>;
+using writer_select_poller_t = writer_poller<posix::select_poller>;
 // using client_select_poller_t = client_poller<posix::select_poller>;
 // using server_select_poller_t = server_poller<posix::select_poller>;
 } // namespace netty
@@ -29,6 +31,8 @@ using listener_select_poller_t = listener_poller<posix::select_poller>;
 namespace netty {
 using connecting_poll_poller_t = connecting_poller<posix::poll_poller>;
 using listener_poll_poller_t = listener_poller<posix::poll_poller>;
+using reader_poll_poller_t = reader_poller<posix::poll_poller>;
+using writer_poll_poller_t = writer_poller<posix::poll_poller>;
 // using client_poll_poller_t = client_poller<posix::poll_poller>;
 // using server_poll_poller_t = server_poller<posix::poll_poller>;
 } // namespace netty

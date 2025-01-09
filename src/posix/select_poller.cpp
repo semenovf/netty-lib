@@ -6,11 +6,13 @@
 // Changelog:
 //      2023.01.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/i18n.hpp"
-#include "pfs/netty/posix/select_poller.hpp"
+#include "netty/namespace.hpp"
+#include "netty/posix/select_poller.hpp"
+#include <pfs/i18n.hpp>
 #include <algorithm>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 select_poller::socket_id const select_poller::kINVALID_SOCKET;
@@ -193,4 +195,6 @@ bool select_poller::empty () const noexcept
     return count == 0;
 }
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

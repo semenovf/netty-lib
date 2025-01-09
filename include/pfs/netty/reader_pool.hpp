@@ -38,16 +38,57 @@ private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
 
-    mutable std::function<void(socket_id, error const &)> _on_failure
-        = [] (socket_id, error const &) {};
-    mutable std::function<void(socket_id, std::vector<char> &&)> _on_ready
-        = [] (socket_id, std::vector<char> &&) {};
-    mutable std::function<void(socket_id)> _on_disconnected
-        = [] (socket_id) {};
+    mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
+    mutable std::function<void(socket_id, std::vector<char> &&)> _on_ready;
+    mutable std::function<void(socket_id)> _on_disconnected;
 
 public:
     reader_pool (): ReaderPoller()
-    {}
+    {
+        ReaderPoller::on_failure = [this] (socket_id id, error const & err) {
+            remove_later(id);
+            _on_failure(id, err);
+        };
+
+        ReaderPoller::disconnected = [this] (socket_id id) {
+            if (_on_disconnected)
+                _on_disconnected(id);
+            remove_later(id);
+        };
+
+        ReaderPoller::ready_read = [this] (socket_id id) {
+            auto acc = locate_account(id);
+
+            // Inconsistent data: requested socket ID is not equal to account's ID
+            PFS__TERMINATE(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
+                " reader account not found by id");
+
+            std::vector<char> inpb;
+
+            // Read all received data and put it into input buffer.
+            for (;;) {
+                error err;
+                auto offset = inpb.size();
+                inpb.resize(offset + acc->chunk_size);
+
+                auto n = Socket::recv(id, inpb.data() + offset, acc->chunk_size, & err);
+
+                if (n < 0) {
+                    _on_failure(id, err);
+                    remove_later(id);
+                    return;
+                }
+
+                inpb.resize(offset + n);
+
+                if (n == 0)
+                    break;
+            }
+
+            if (_on_ready)
+                _on_ready(id, std::move(inpb));
+        };
+    }
 
 private:
     account * locate_account (socket_id id)
@@ -119,12 +160,6 @@ public:
     reader_pool & on_failure (F && f)
     {
         _on_failure = std::forward<F>(f);
-
-        ReaderPoller::on_failure = [this] (socket_id id, error const & err) {
-            remove_later(id);
-            _on_failure(id, err);
-        };
-
         return *this;
     }
 
@@ -135,39 +170,6 @@ public:
     reader_pool & on_ready (F && f)
     {
         _on_ready = std::forward<F>(f);
-
-        ReaderPoller::ready_read = [this] (socket_id id) {
-            auto acc = locate_account(id);
-
-            // Inconsistent data: requested socket ID is not equal to account's ID
-            PFS__TERMINATE(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
-                " reader account not found by id");
-
-            std::vector<char> inpb;
-
-            // Read all received data and put it into input buffer.
-            for (;;) {
-                error err;
-                auto offset = inpb.size();
-                inpb.resize(offset + acc->chunk_size);
-
-                auto n = Socket::recv(id, inpb.data() + offset, acc->chunk_size, & err);
-
-                if (n < 0) {
-                    _on_failure(id, err);
-                    remove_later(id);
-                    return;
-                }
-
-                inpb.resize(offset + n);
-
-                if (n == 0)
-                    break;
-            }
-
-            _on_ready(id, std::move(inpb));
-        };
-
         return *this;
     }
 
@@ -175,10 +177,6 @@ public:
     reader_pool & on_disconnected (F && f)
     {
         _on_disconnected = std::forward<F>(f);
-        ReaderPoller::disconnected = [this] (socket_id id) {
-            _on_disconnected(id);
-            remove_later(id);
-        };
         return *this;
     }
 

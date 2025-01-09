@@ -7,6 +7,7 @@
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
+#include <pfs/i18n.hpp>
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -22,18 +23,14 @@
 #   include <sys/socket.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 #if NETTY__SELECT_ENABLED
 
 template <>
-connecting_poller<posix::select_poller>::connecting_poller (std::shared_ptr<posix::select_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<posix::select_poller>(true, true)
-        : std::move(ptr))
-{
-    init();
-}
+connecting_poller<posix::select_poller>::connecting_poller ()
+    : _rep(new posix::select_poller(true, true))
+{}
 
 template <>
 int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -54,6 +51,9 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 
         for (; pos != last && rcounter > 0; ++pos) {
             auto fd = *pos;
+
+            if (fd == posix::select_poller::kINVALID_SOCKET)
+                continue;
 
             if (FD_ISSET(fd, & rfds)) {
                 int error_val = 0;
@@ -113,9 +113,8 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
 #if NETTY__POLL_ENABLED
 
 template <>
-connecting_poller<posix::poll_poller>::connecting_poller (std::shared_ptr<posix::poll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<posix::poll_poller>(POLLERR | POLLHUP | POLLOUT
+connecting_poller<posix::poll_poller>::connecting_poller ()
+    : _rep(new posix::poll_poller(POLLERR | POLLHUP | POLLOUT
 
 #ifdef POLLRDHUP
         | POLLRDHUP
@@ -128,10 +127,8 @@ connecting_poller<posix::poll_poller>::connecting_poller (std::shared_ptr<posix:
 #ifdef POLLWRBAND
         | POLLWRBAND
 #endif
-    ) : std::move(ptr))
-{
-    init();
-}
+    ))
+{}
 
 template <>
 int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -249,4 +246,4 @@ template class connecting_poller<posix::select_poller>;
 template class connecting_poller<posix::poll_poller>;
 #endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

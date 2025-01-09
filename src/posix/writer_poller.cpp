@@ -7,6 +7,8 @@
 //      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../writer_poller.hpp"
+#include "netty/namespace.hpp"
+#include <pfs/i18n.hpp>
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -22,20 +24,14 @@
 #   include <sys/socket.h>
 #endif
 
-static char const * TAG = "POSIX";
-
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 #if NETTY__SELECT_ENABLED
 
 template <>
-writer_poller<posix::select_poller>::writer_poller (std::shared_ptr<posix::select_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<posix::select_poller>(false, true)
-        : std::move(ptr))
-{
-    init();
-}
+writer_poller<posix::select_poller>::writer_poller ()
+    : _rep(new posix::select_poller(false, true))
+{}
 
 template <>
 int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -58,6 +54,9 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
         for (; pos != last && rcounter > 0; ++pos) {
             auto fd = *pos;
 
+            if (fd == posix::select_poller::kINVALID_SOCKET)
+                continue;
+
             if (FD_ISSET(fd, & wfds)) {
                 res++;
                 can_write(fd);
@@ -74,8 +73,8 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #if NETTY__POLL_ENABLED
 
 template <>
-writer_poller<posix::poll_poller>::writer_poller (std::shared_ptr<posix::poll_poller> ptr)
-    : _rep(ptr == nullptr ? std::make_shared<posix::poll_poller>(POLLERR | POLLOUT
+writer_poller<posix::poll_poller>::writer_poller ()
+    : _rep(new posix::poll_poller(POLLERR | POLLOUT
 
 #ifdef POLLWRNORM
         | POLLWRNORM
@@ -84,10 +83,8 @@ writer_poller<posix::poll_poller>::writer_poller (std::shared_ptr<posix::poll_po
 #ifdef POLLWRBAND
         | POLLWRBAND
 #endif
-    ) : std::move(ptr))
-{
-    init();
-}
+    ))
+{}
 
 template <>
 int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -164,4 +161,4 @@ template class writer_poller<posix::select_poller>;
 template class writer_poller<posix::poll_poller>;
 #endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

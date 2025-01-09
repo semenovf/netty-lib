@@ -6,10 +6,11 @@
 // Changelog:
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/netty/error.hpp"
-#include "pfs/netty/posix/tcp_listener.hpp"
-#include "pfs/endian.hpp"
-#include "pfs/i18n.hpp"
+#include "netty/error.hpp"
+#include "netty/namespace.hpp"
+#include "netty/posix/tcp_listener.hpp"
+#include <pfs/endian.hpp>
+#include <pfs/i18n.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -19,7 +20,8 @@
 #   include <netinet/in.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 tcp_listener::tcp_listener () : inet_socket() {}
@@ -101,4 +103,6 @@ tcp_socket tcp_listener::accept_nonblocking (error * perr)
     return s;
 }
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

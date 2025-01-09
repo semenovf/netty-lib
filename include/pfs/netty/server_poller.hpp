@@ -6,6 +6,7 @@
 // Changelog:
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
+// FIXME DEPRECATED
 #pragma once
 #include "chrono.hpp"
 #include "error.hpp"

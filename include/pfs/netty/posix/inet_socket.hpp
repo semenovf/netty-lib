@@ -10,6 +10,7 @@
 #include <pfs/netty/error.hpp>
 #include <pfs/netty/exports.hpp>
 #include <pfs/netty/inet4_addr.hpp>
+#include <pfs/netty/namespace.hpp>
 #include <pfs/netty/send_result.hpp>
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/uninitialized.hpp>
@@ -18,7 +19,8 @@
 #   include <winsock2.h>
 #endif
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 /**
@@ -118,4 +120,6 @@ public: // static
     static NETTY__EXPORT send_result send (socket_id id, char const * data, int len, error * perr = nullptr);
 };
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END
