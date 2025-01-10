@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,25 +7,19 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller.hpp"
+#include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/log.hpp>
 #include <enet/enet.h>
 
-#if NETTY__ENET_ENABLED
-#   include "pfs/netty/enet/enet_poller.hpp"
-#endif
+#include "netty/trace.hpp"
+#include <pfs/log.hpp>
 
-namespace netty {
-
-#if NETTY__ENET_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-reader_poller<enet::enet_poller>::reader_poller (std::shared_ptr<enet::enet_poller> ptr)
-    : _rep(std::move(ptr))
-{
-    PFS__TERMINATE(_rep != nullptr, "ENet reader poller backend is null");
-    init();
-}
+reader_poller<enet::enet_poller>::reader_poller ()
+    : _rep(new enet::enet_poller)
+{}
 
 template <>
 int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -74,10 +68,6 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
     return n;
 }
 
-#endif // NETTY__ENET_ENABLED
-
-#if NETTY__ENET_ENABLED
 template class reader_poller<enet::enet_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

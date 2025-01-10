@@ -34,7 +34,7 @@
 #include <vector>
 
 static constexpr char const * TAG = "SCC";
-static constexpr int MAX_NODES_COUNT = 20;
+static constexpr int MAX_NODES_COUNT = 2; //20;
 static constexpr std::uint16_t BASE_PORT = 3101;
 static std::atomic<int> s_listener_counter {0};
 static std::atomic<int> s_node_counter {0};
@@ -46,7 +46,7 @@ using listener_t = netty::posix::tcp_listener;
 using socket_id = socket_t::socket_id;
 using listener_id = listener_t::listener_id;
 
-#if 1
+#if 0
 using connecting_pool_t = netty::connecting_pool<netty::connecting_epoll_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_epoll_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_epoll_poller_t, socket_t>;
@@ -65,6 +65,20 @@ using connecting_pool_t = netty::connecting_pool<netty::connecting_select_poller
 using listener_pool_t = netty::listener_pool<netty::listener_select_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_select_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_select_poller_t, socket_t>;
+#endif
+
+#if 0 // FIXME
+using connecting_pool_t = netty::connecting_pool<netty::connecting_udt_poller_t, socket_t>;
+using listener_pool_t = netty::listener_pool<netty::listener_udt_poller_t, listener_t, socket_t>;
+using reader_pool_t = netty::reader_pool<netty::reader_udt_poller_t, socket_t>;
+using writer_pool_t = netty::writer_pool<netty::writer_udt_poller_t, socket_t>;
+#endif
+
+#if 1
+using connecting_pool_t = netty::connecting_pool<netty::connecting_enet_poller_t, socket_t>;
+using listener_pool_t = netty::listener_pool<netty::listener_enet_poller_t, listener_t, socket_t>;
+using reader_pool_t = netty::reader_pool<netty::reader_enet_poller_t, socket_t>;
+using writer_pool_t = netty::writer_pool<netty::writer_enet_poller_t, socket_t>;
 #endif
 
 using serializer_t = netty::p2p::primal_serializer<pfs::endian::native>;

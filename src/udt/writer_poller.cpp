@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,24 +7,15 @@
 //      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../writer_poller.hpp"
+#include "newlib/udt.hpp"
+#include "netty/udt/epoll_poller.hpp"
 
-#if NETTY__UDT_ENABLED
-#   include "newlib/udt.hpp"
-#   include "pfs/netty/udt/epoll_poller.hpp"
-#endif
-
-namespace netty {
-
-#if NETTY__UDT_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-writer_poller<udt::epoll_poller>::writer_poller (std::shared_ptr<udt::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<udt::epoll_poller>(false, true)
-        : std::move(ptr))
-{
-    init();
-}
+writer_poller<udt::epoll_poller>::writer_poller ()
+    : _rep(new udt::epoll_poller(false, true))
+{}
 
 template <>
 int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -52,10 +43,6 @@ int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
     return rc;
 }
 
-#endif // NETTY__UDT_ENABLED
-
-#if NETTY__UDT_ENABLED
 template class writer_poller<udt::epoll_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

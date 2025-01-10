@@ -1,11 +1,12 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2023-2024 Vladislav Trifochkin
+// Copyright (c) 2023-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.06 Initial version.
 //      2024.07.29 `basic_udt_listener` renamed to `basic_udt_listener`.
+//      2025.01.10 Removed deprecated constructors.
 ////////////////////////////////////////////////////////////////////////////////
 #include "newlib/udt.hpp"
 #include "pfs/netty/udt/udt_listener.hpp"
@@ -15,7 +16,14 @@
 namespace netty {
 namespace udt {
 
-void udt_listener::init (socket4_addr const & saddr, error * perr)
+udt_listener::udt_listener ()
+    : udt_socket(uninitialized{})
+{}
+
+udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_counter
+    , std::chrono::milliseconds exp_threshold
+    , error * perr)
+    : udt_socket(mtu, exp_max_counter, exp_threshold, perr)
 {
     sockaddr_in addr_in4;
 
@@ -40,43 +48,6 @@ void udt_listener::init (socket4_addr const & saddr, error * perr)
     }
 
     _saddr = saddr;
-}
-
-udt_listener::udt_listener ()
-    : udt_socket(uninitialized{})
-{}
-
-udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_counter
-    , std::chrono::milliseconds exp_threshold
-    , error * perr)
-    : udt_socket(mtu, exp_max_counter, exp_threshold, perr)
-{
-    init(saddr);
-}
-
-udt_listener::udt_listener (socket4_addr const & saddr, int backlog
-    , int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold, error * perr)
-    : udt_listener(saddr, mtu, exp_max_counter, exp_threshold, perr)
-{
-    if (perr && *perr)
-        return;
-
-    listen(backlog, perr);
-}
-
-udt_listener::udt_listener (socket4_addr const & saddr, property_map_t const & props, error * perr)
-    : udt_socket(props, perr)
-{
-    init(saddr);
-}
-
-udt_listener::udt_listener (socket4_addr const & addr, int backlog, property_map_t const & props, error * perr)
-    : udt_listener(addr, props, perr)
-{
-    if (perr && *perr)
-        return;
-
-    listen(backlog, perr);
 }
 
 udt_listener::~udt_listener () = default;
@@ -104,13 +75,13 @@ bool udt_listener::listen (int backlog, error * perr)
 }
 
 // [static]
-udt_socket udt_listener::accept (native_type listener_sock , error * perr)
+udt_socket udt_listener::accept (listener_id listener_sock , error * perr)
 {
     return accept_nonblocking(listener_sock, perr);
 }
 
 // [static]
-udt_socket udt_listener::accept_nonblocking (native_type listener_sock, error * perr)
+udt_socket udt_listener::accept_nonblocking (listener_id listener_sock, error * perr)
 {
     sockaddr sa;
     int addrlen;

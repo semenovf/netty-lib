@@ -199,11 +199,11 @@ if (NETTY__ENABLE_ENET)
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_listener.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_socket.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/enet/client_poller.cpp
+        # ${CMAKE_CURRENT_LIST_DIR}/src/enet/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/reader_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/enet/server_poller.cpp
+        # ${CMAKE_CURRENT_LIST_DIR}/src/enet/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/writer_poller.cpp)
     target_compile_definitions(netty PUBLIC "NETTY__ENET_ENABLED=1")
     target_link_libraries(netty PRIVATE enet)

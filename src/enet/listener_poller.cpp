@@ -8,26 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "../listener_poller.hpp"
 #include "netty/socket4_addr.hpp"
-#include <pfs/assert.hpp>
+#include "netty/enet/enet_poller.hpp"
 #include <pfs/endian.hpp>
-#include <pfs/log.hpp>
 #include <enet/enet.h>
 
-#if NETTY__ENET_ENABLED
-#   include "pfs/netty/enet/enet_poller.hpp"
-#endif
+#include <pfs/log.hpp>
+#include "netty/trace.hpp"
 
-namespace netty {
-
-#if NETTY__ENET_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-listener_poller<enet::enet_poller>::listener_poller (std::shared_ptr<enet::enet_poller> ptr)
-    : _rep(std::move(ptr))
-{
-    PFS__TERMINATE(_rep != nullptr, "ENet listener poller backend is null");
-    init();
-}
+listener_poller<enet::enet_poller>::listener_poller ()
+    : _rep(new enet::enet_poller)
+{}
 
 template <>
 int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -49,7 +42,8 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
                 , ev->peer->address.port
             };
 
-            LOG_TRACE_2("Accepted from: {}", to_string(saddr));
+            NETTY__TRACE(LOGD("ENet", "Accepted from: {}", to_string(saddr)));
+
             accept(reinterpret_cast<listener_id>(ev->peer)); // <= ENetPeer *
             _rep->pop_event();
             n++;
@@ -61,10 +55,6 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
     return n;
 }
 
-#endif // NETTY__ENET_ENABLED
-
-#if NETTY__ENET_ENABLED
 template class listener_poller<enet::enet_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

@@ -8,27 +8,17 @@
 //      2024.07.29 Fixed `connecting_poller` specialization.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller.hpp"
-#include "pfs/i18n.hpp"
+#include "newlib/udt.hpp"
+#include "netty/trace.hpp"
+#include "netty/udt/epoll_poller.hpp"
+#include <pfs/log.hpp>
 
-#if NETTY__UDT_ENABLED
-#   include "newlib/udt.hpp"
-#   include "pfs/netty/udt/epoll_poller.hpp"
-#endif
-
-#include "pfs/log.hpp"
-
-namespace netty {
-
-#if NETTY__UDT_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-connecting_poller<udt::epoll_poller>::connecting_poller (std::shared_ptr<udt::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<udt::epoll_poller>(false, true)
-        : std::move(ptr))
-{
-    init();
-}
+connecting_poller<udt::epoll_poller>::connecting_poller ()
+    : _rep(new udt::epoll_poller(false, true))
+{}
 
 template<>
 void connecting_poller<udt::epoll_poller>::add (socket_id sock, error * perr)
@@ -80,10 +70,11 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
         if (!_rep->writefds.empty()) {
             for (UDTSOCKET u: _rep->writefds) {
                 auto state = UDT::getsockstate(u);
-                LOG_TRACE_1("Socket CONNECTED: sock={}; state={} ({})"
+
+                NETTY__TRACE(LOGD("UDT", "Socket CONNECTED: sock={}; state={} ({})"
                     , u
                     , static_cast<int>(state)
-                    , state == CONNECTED ? tr::_("CONNECTED") : "?");
+                    , state == CONNECTED ? tr::_("CONNECTED") : "?"));
 
                 _rep->_connecting_sockets.erase(u);
 
@@ -107,7 +98,7 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
                 pos = _rep->_connecting_sockets.erase(pos);
 
                 if (connection_refused)
-                    connection_refused(u, false);
+                    connection_refused(u, connection_refused_reason::other);
             } else {
                 ++pos;
             }
@@ -117,10 +108,6 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
     return res;
 }
 
-#endif // NETTY__UDT_ENABLED
-
-#if NETTY__UDT_ENABLED
 template class connecting_poller<udt::epoll_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END

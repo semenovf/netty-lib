@@ -1,12 +1,13 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2023-2024 Vladislav Trifochkin
+// Copyright (c) 2023-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.06 Initial version.
 //      2024.07.29 `basic_udt_server` renamed to `basic_udt_listener`,
-//                 `udt_listener` renamed to `udt_listener`
+//                 `udt_listener` renamed to `udt_listener`.
+//      2025.01.10 Removed deprecated constructors.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/exports.hpp"
@@ -21,12 +22,9 @@ namespace udt {
 class udt_listener: public udt_socket
 {
 public:
-    using listener_id = udt_socket::native_type;
-    using socket_id = udt_socket::native_type;
+    using listener_id = udt_socket::listener_id;
+    using socket_id = udt_socket::socket_id;
     using peer_socket_type = udt_socket;
-
-private:
-    void init (socket4_addr const & saddr, error * perr = nullptr);
 
 public:
     /**
@@ -48,30 +46,6 @@ public:
     NETTY__EXPORT udt_listener (socket4_addr const & saddr, int mtu
         , int exp_max_counter, std::chrono::milliseconds exp_threshold
         , error * perr = nullptr);
-
-    /**
-     * Constructs UDT listener, bind to the specified address and start
-     * listening
-     */
-    NETTY__EXPORT udt_listener (socket4_addr const & addr, int backlog
-        , int mtu, int exp_max_counter, std::chrono::milliseconds exp_threshold
-        , error * perr = nullptr);
-
-    /**
-     * Constructs UDT listener with specified properties. Accepts the following parameters:
-     *      - "mtu" (std::intmax_t)  - MTU;
-     *      - "exp_max_counter" (std::intmax_t) - max socket expiration counter;
-     *      - "exp_threshold" (std::intmax_t) - socket (peer, accepted) expiration threshold in milliseconds.
-     */
-    NETTY__EXPORT udt_listener (socket4_addr const & addr
-        , property_map_t const & props = property_map_t{}, error * perr = nullptr);
-
-    /**
-     * Constructs UDT listener with specified properties, bind to the specified address and start
-     * listening.
-     */
-    NETTY__EXPORT udt_listener (socket4_addr const & addr, int backlog
-        , property_map_t const & props = property_map_t{}, error * perr = nullptr);
 
     NETTY__EXPORT ~udt_listener ();
 

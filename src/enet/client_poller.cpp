@@ -13,7 +13,7 @@ namespace netty {
 
 template <>
 client_poller<enet::enet_poller>::client_poller ()
-    : client_poller(std::make_shared<enet::enet_poller>())
+    : client_poller(new enet::enet_poller)
 {}
 
 } // namespace netty

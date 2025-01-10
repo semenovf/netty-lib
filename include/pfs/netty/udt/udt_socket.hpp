@@ -32,6 +32,7 @@ class udt_socket
 public:
     // Typedef UDTSOCKET as defined in `udt.h`
     using UDTSOCKET = int;
+    using listener_id = UDTSOCKET;
     using socket_id = UDTSOCKET;
 
     static UDTSOCKET const kINVALID_SOCKET = -1;

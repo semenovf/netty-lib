@@ -25,8 +25,8 @@ namespace enet {
 class enet_poller
 {
 public:
-    using socket_id   = enet_socket::native_type;
-    using listener_id = enet_listener::native_type;
+    using socket_id   = enet_socket::socket_id;
+    using listener_id = enet_listener::listener_id;
 
     struct event_item
     {

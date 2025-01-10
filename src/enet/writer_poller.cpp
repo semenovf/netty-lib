@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,25 +7,18 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../writer_poller.hpp"
-#include <pfs/assert.hpp>
-#include <pfs/log.hpp>
+#include "netty/enet/enet_poller.hpp"
 #include <enet/enet.h>
 
-#if NETTY__ENET_ENABLED
-#   include "pfs/netty/enet/enet_poller.hpp"
-#endif
+#include "netty/trace.hpp"
+#include <pfs/log.hpp>
 
-namespace netty {
-
-#if NETTY__ENET_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-writer_poller<enet::enet_poller>::writer_poller (std::shared_ptr<enet::enet_poller> ptr)
-    : _rep(std::move(ptr))
-{
-    PFS__TERMINATE(_rep != nullptr, "ENet writer poller backend is null");
-    init();
-}
+writer_poller<enet::enet_poller>::writer_poller ()
+    : _rep(new enet::enet_poller)
+{}
 
 template <>
 int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -46,11 +39,6 @@ int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
     return n;
 }
 
-#endif // NETTY__ENET_ENABLED
-
-#if NETTY__ENET_ENABLED
 template class writer_poller<enet::enet_poller>;
-#endif // NETTY__ENET_ENABLED
 
-} // namespace netty
-
+NETTY__NAMESPACE_END

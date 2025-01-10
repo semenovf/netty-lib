@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -11,18 +11,17 @@
 #include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/endian.hpp>
-#include <pfs/log.hpp>
 #include <enet/enet.h>
+
+#include <pfs/log.hpp>
+#include "netty/trace.hpp"
 
 NETTY__NAMESPACE_BEGIN
 
 template <>
-connecting_poller<enet::enet_poller>::connecting_poller (std::shared_ptr<enet::enet_poller> ptr)
-    : _rep(std::move(ptr))
-{
-    PFS__TERMINATE(_rep != nullptr, "ENet connecting poller backend is null");
-    init();
-}
+connecting_poller<enet::enet_poller>::connecting_poller ()
+    : _rep(new enet::enet_poller)
+{}
 
 template <>
 int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -44,7 +43,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
                 , ev->peer->address.port
             };
 
-            LOG_TRACE_1("Connected to: {}", to_string(saddr));
+            NETTY__TRACE(LOGD("ENet", "Connected to: {}", to_string(saddr)));
 
             connected(event.sock);
             _rep->pop_event();
@@ -55,15 +54,15 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
                 , ev->peer->address.port
             };
 
-            LOG_TRACE_1("Disconnected from: {}", to_string(saddr));
+            NETTY__TRACE(LOGD("ENet", "Disconnected from: {}", to_string(saddr)));
 
             // Reset the peer's client information
             ev->peer->data = nullptr;
-            connection_refused(event.sock, false);
+            connection_refused(event.sock, connection_refused_reason::other);
             _rep->pop_event();
             n++;
         } else if (ev->type == ENET_EVENT_TYPE_RECEIVE) {
-            LOG_TRACE_1("FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE: unexpected event");
+            LOGE("ENet", "FIXME: connecting_poller: ENET_EVENT_TYPE_RECEIVE: unexpected event");
             break;
         } else {
             break;

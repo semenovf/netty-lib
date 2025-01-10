@@ -7,7 +7,8 @@
 //      2021.11.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "debug_CCC.hpp"
-#include "pfs/log.hpp"
+#include "netty/trace.hpp"
+#include <pfs/log.hpp>
 
 namespace netty {
 namespace udt {
@@ -21,7 +22,7 @@ namespace udt {
 //    None.
 void debug_CCC::init ()
 {
-    LOG_TRACE_3("debug_CCC::init()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::init()", 0));
 }
 
 // Functionality:
@@ -32,7 +33,7 @@ void debug_CCC::init ()
 //    None.
 void debug_CCC::close ()
 {
-    LOG_TRACE_3("debug_CCC::close()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::close()", 0));
 }
 
 // Functionality:
@@ -43,7 +44,7 @@ void debug_CCC::close ()
 //    None.
 void debug_CCC::onACK (int32_t ackno)
 {
-    LOG_TRACE_3("debug_CCC::onACK(ackno={})", ackno);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::onACK(ackno={})", ackno));
 }
 
 // Functionality:
@@ -55,7 +56,7 @@ void debug_CCC::onACK (int32_t ackno)
 //    None.
 void debug_CCC::onLoss (int32_t const *, int)
 {
-    LOG_TRACE_3("debug_CCC::onLoss()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::onLoss()", 0));
 }
 
 // Functionality:
@@ -66,7 +67,7 @@ void debug_CCC::onLoss (int32_t const *, int)
 //    None.
 void debug_CCC::onTimeout ()
 {
-    LOG_TRACE_3("debug_CCC::onTimeout()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::onTimeout()", 0));
 }
 
 // Functionality:
@@ -78,7 +79,7 @@ void debug_CCC::onTimeout ()
 //    None.
 void debug_CCC::onPktSent (CPacket const *)
 {
-    LOG_TRACE_3("debug_CCC::onPktSent()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::onPktSent()", 0));
 }
 
 // Functionality:
@@ -90,7 +91,7 @@ void debug_CCC::onPktSent (CPacket const *)
 //    None.
 void debug_CCC::onPktReceived (CPacket const *)
 {
-    LOG_TRACE_3("debug_CCC::onPktReceived()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::onPktReceived()", 0));
 }
 
 // Functionality:
@@ -101,7 +102,7 @@ void debug_CCC::onPktReceived (CPacket const *)
 //    None.
 void debug_CCC::processCustomMsg (CPacket const *)
 {
-    LOG_TRACE_3("debug_CCC::processCustomMsg()", 0);
+    NETTY__TRACE(LOGD("UDT", "debug_CCC::processCustomMsg()", 0));
 }
 
 }} // namespace netty::p2p::udt

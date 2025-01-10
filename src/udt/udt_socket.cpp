@@ -56,7 +56,7 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
     int ai_socktype = SOCK_STREAM; // SOCK_DGRAM | SOCK_STREAM
     int ai_protocol = 0;
 
-    native_type sock = UDT::socket(ai_family, ai_socktype, ai_protocol);
+    socket_id sock = UDT::socket(ai_family, ai_socktype, ai_protocol);
 
     if (sock == UDT::INVALID_SOCK) {
         pfs::throw_or(perr, error {
@@ -155,7 +155,7 @@ udt_socket::udt_socket ()
     init(1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
 }
 
-udt_socket::udt_socket (native_type sock, socket4_addr const & saddr)
+udt_socket::udt_socket (socket_id sock, socket4_addr const & saddr)
     : _socket(sock)
     , _saddr(saddr)
 {}
@@ -205,7 +205,7 @@ udt_socket::operator bool () const noexcept
     return _socket != kINVALID_SOCKET;
 }
 
-udt_socket::native_type udt_socket::id () const noexcept
+udt_socket::socket_id udt_socket::id () const noexcept
 {
     return _socket;
 }

@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -7,28 +7,17 @@
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../listener_poller.hpp"
+#include "newlib/udt.hpp"
+#include "netty/udt/epoll_poller.hpp"
+#include "netty/trace.hpp"
+#include <pfs/log.hpp>
 
-#if NETTY__UDT_ENABLED
-#   include "newlib/udt.hpp"
-#   include "pfs/netty/udt/epoll_poller.hpp"
-#endif
-
-#include "pfs/log.hpp"
-
-static char const * TAG = "UDT";
-
-namespace netty {
-
-#if NETTY__UDT_ENABLED
+NETTY__NAMESPACE_BEGIN
 
 template <>
-listener_poller<udt::epoll_poller>::listener_poller (std::shared_ptr<udt::epoll_poller> ptr)
-    : _rep(ptr == nullptr
-        ? std::make_shared<udt::epoll_poller>(true, false)
-        : std::move(ptr))
-{
-    init();
-}
+listener_poller<udt::epoll_poller>::listener_poller ()
+    : _rep(new udt::epoll_poller(true, false))
+{}
 
 template <>
 int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
@@ -43,7 +32,9 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
     if (n > 0) {
         for (UDTSOCKET u: _rep->readfds) {
             auto status = UDT::getsockstate(u);
-            LOGD(TAG, "Socket ACCEPTED: listener sock={}; state={}", u, static_cast<int>(status));
+
+            NETTY__TRACE(LOGD("UDT", "Socket ACCEPTED: listener sock={}; state={}", u
+                , static_cast<int>(status)));
 
             res++;
 
@@ -55,10 +46,6 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
     return n;
 }
 
-#endif // NETTY__UDT_ENABLED
-
-#if NETTY__UDT_ENABLED
 template class listener_poller<udt::epoll_poller>;
-#endif
 
-} // namespace netty
+NETTY__NAMESPACE_END
