@@ -12,7 +12,6 @@
 #pragma once
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/error.hpp"
-#include "pfs/netty/property.hpp"
 #include "pfs/netty/socket4_addr.hpp"
 #include "pfs/netty/udt/udt_socket.hpp"
 

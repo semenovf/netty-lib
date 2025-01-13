@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "pfs/netty/conn_status.hpp"
-#include "pfs/netty/property.hpp"
 #include "pfs/netty/posix/inet_socket.hpp"
 
 namespace netty {
@@ -37,10 +36,6 @@ public:
      * Constructs uninitialized (invalid) TCP socket.
      */
     NETTY__EXPORT tcp_socket (uninitialized);
-
-    tcp_socket (property_map_t const & /*props*/, error * perr = nullptr)
-        : tcp_socket()
-    {}
 
     NETTY__EXPORT tcp_socket ();
     NETTY__EXPORT tcp_socket (tcp_socket && s);
