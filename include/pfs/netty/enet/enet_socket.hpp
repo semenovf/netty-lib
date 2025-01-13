@@ -65,8 +65,23 @@ protected:
     /**
      * Constructs ENet accepted socket.
      */
-    enet_socket (_ENetHost * host, _ENetPeer * peer);
+    enet_socket (_ENetHost * host, _ENetPeer * peer) noexcept;
 
+    /**
+     * Constructs ENet socket with specified properties. Accepts the following parameters:
+     *      - @a timeout_limit - the timeout limit in milliseconds;
+     *      - @a timeout_min - the timeout minimum in milliseconds;
+     *      - @a timeout_max - the timeout maximum in milliseconds.
+     *
+     * The timeout parameter control how and when a peer will timeout from a failure to acknowledge
+     * reliable traffic. Timeout values use an exponential backoff mechanism, where if a reliable
+     * packet is not acknowledge within some multiple of the average RTT plus a variance tolerance,
+     * the timeout will be doubled until it reaches a set limit. If the timeout is thus at this
+     * limit and reliable packets have been sent but not acknowledged within a certain minimum time
+     * period, the peer will be disconnected. Alternatively, if reliable packets have been sent
+     * but not acknowledged for a certain maximum time period, the peer will be disconnected regardless
+     * of the current timeout limit value.
+     */
     void init (int timeout_limit, int timeout_min, int timeout_max, error * perr = nullptr);
 
 public:
@@ -80,27 +95,8 @@ public:
 
     NETTY__EXPORT enet_socket (net_quality nq = net_quality::normal, error * perr = nullptr);
 
-    /**
-     * Constructs ENet socket with specified properties. Accepts the following parameters:
-     *      - "timeout_limit" (int) - the timeout limit in milliseconds;
-     *      - "timeout_min" (int) - the timeout minimum in milliseconds;
-     *      - "timeout_max" (int) - the timeout maximum in milliseconds.
-     *
-     * The timeout parameter control how and when a peer will timeout from a failure to acknowledge
-     * reliable traffic. Timeout values use an exponential backoff mechanism, where if a reliable
-     * packet is not acknowledge within some multiple of the average RTT plus a variance tolerance,
-     * the timeout will be doubled until it reaches a set limit. If the timeout is thus at this
-     * limit and reliable packets have been sent but not acknowledged within a certain minimum time
-     * period, the peer will be disconnected. Alternatively, if reliable packets have been sent
-     * but not acknowledged for a certain maximum time period, the peer will be disconnected regardless
-     * of the current timeout limit value.
-     *
-     * Default values set according to values associated with @c net_quality::normal.
-     */
-    NETTY__EXPORT enet_socket (property_map_t const & props, error * perr = nullptr);
-
-    NETTY__EXPORT enet_socket (enet_socket && other);
-    NETTY__EXPORT enet_socket & operator = (enet_socket && other);
+    NETTY__EXPORT enet_socket (enet_socket && other) noexcept;
+    NETTY__EXPORT enet_socket & operator = (enet_socket && other) noexcept;
     NETTY__EXPORT ~enet_socket ();
 
 public:

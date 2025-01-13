@@ -41,25 +41,14 @@ public:
      */
     NETTY__EXPORT enet_listener (socket4_addr const & saddr, netty::error * perr = nullptr);
 
-    /**
-     * Constructs POSIX TCP server, bind to the specified address and start
-     * listening
-     */
-    NETTY__EXPORT enet_listener (socket4_addr const & saddr, int backlog, error * perr = nullptr);
-
-    enet_listener (socket4_addr const & saddr, property_map_t const & /*props*/
-        , netty::error * perr = nullptr)
-        : enet_listener(saddr, perr)
-        {}
-
-    enet_listener (socket4_addr const & saddr, int backlog, property_map_t const & /*props*/
-        , error * perr = nullptr)
-        : enet_listener(saddr, backlog, perr)
-        {}
-
     NETTY__EXPORT ~enet_listener ();
 
 public:
+    /**
+     *  Checks if the listener is initialized and already listening
+     */
+    NETTY__EXPORT operator bool () const noexcept;
+
     NETTY__EXPORT listener_id id () const noexcept;
 
     /**
@@ -72,13 +61,10 @@ public:
      */
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
-public:
-    NETTY__EXPORT static peer_socket_type accept (
-          listener_id listener_sock // really here not a listener socket, already accepted socket
-        , error * perr = nullptr);
+    //NETTY__EXPORT peer_socket_type accept (socket_id peer_id, error * perr = nullptr);
 
-    NETTY__EXPORT static peer_socket_type accept_nonblocking (
-          listener_id listener_sock // really here not a listener socket, already accepted socket
+    NETTY__EXPORT peer_socket_type accept_nonblocking (
+          listener_id listener_sock // really there is not a listener socket, already accepted socket
         , error * perr = nullptr);
 };
 

@@ -47,6 +47,11 @@ public:
         , int exp_max_counter, std::chrono::milliseconds exp_threshold
         , error * perr = nullptr);
 
+    NETTY__EXPORT udt_listener (socket4_addr const & saddr, error * perr = nullptr);
+
+    udt_listener (udt_listener &&) noexcept = default;
+    udt_listener & operator = (udt_listener &&) noexcept = default;
+
     NETTY__EXPORT ~udt_listener ();
 
 public:
@@ -60,13 +65,12 @@ public:
      */
     NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
 
-public: // static
-    NETTY__EXPORT static peer_socket_type accept (
-          listener_id listener_sock // really here not a listener socket, already accepted socket
+    NETTY__EXPORT peer_socket_type accept (
+          listener_id listener_sock // really there is not a listener socket, already accepted socket
         , error * perr = nullptr);
 
-    NETTY__EXPORT static peer_socket_type accept_nonblocking (
-          listener_id listener_sock // really here not a listener socket, already accepted socket
+    NETTY__EXPORT peer_socket_type accept_nonblocking (
+          listener_id listener_sock // really there is not a listener socket, already accepted socket
         , error * perr = nullptr);
 };
 

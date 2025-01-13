@@ -169,21 +169,12 @@ udt_socket::udt_socket (int mtu, error * perr)
     : udt_socket(mtu, kDefaultExpMaxCounter, kDefaultExpThreshold, perr)
 {}
 
-udt_socket::udt_socket (property_map_t const & props, error * perr)
-{
-    auto mtu = get_or<int>(props, "mtu", 1500);
-    auto exp_max_counter = get_or<int>(props, "exp_max_counter", kDefaultExpMaxCounter);
-    auto exp_threshold_millis = get_or<int>(props, "exp_max_counter", kDefaultExpThreshold.count());
-
-    init(mtu, exp_max_counter, std::chrono::milliseconds(exp_threshold_millis), perr);
-}
-
-udt_socket::udt_socket (udt_socket && other)
+udt_socket::udt_socket (udt_socket && other) noexcept
 {
     this->operator = (std::move(other));
 }
 
-udt_socket & udt_socket::operator = (udt_socket && other)
+udt_socket & udt_socket::operator = (udt_socket && other) noexcept
 {
     this->~udt_socket();
     _socket = other._socket;

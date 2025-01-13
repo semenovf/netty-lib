@@ -70,8 +70,8 @@ public:
      */
     NETTY__EXPORT udt_socket ();
 
-    NETTY__EXPORT udt_socket (udt_socket && other);
-    NETTY__EXPORT udt_socket & operator = (udt_socket && other);
+    NETTY__EXPORT udt_socket (udt_socket && other) noexcept;
+    NETTY__EXPORT udt_socket & operator = (udt_socket && other) noexcept;
 
     /**
      * Constructs new UDT socket.
@@ -100,14 +100,6 @@ public:
      *       `udt/newlib/core.hpp`.
      */
     NETTY__EXPORT udt_socket (int mtu, error * perr = nullptr);
-
-    /**
-     * Constructs UDT socket with specified properties. Accepts the following parameters:
-     *      - "mtu" (int) - MTU;
-     *      - "exp_max_counter" (int) - max socket expiration counter;
-     *      - "exp_threshold" (int) - socket (peer, accepted) expiration threshold in milliseconds.
-     */
-    NETTY__EXPORT udt_socket (property_map_t const & props, error * perr = nullptr);
 
     NETTY__EXPORT ~udt_socket ();
 

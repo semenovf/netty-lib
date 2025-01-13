@@ -10,6 +10,7 @@
 #include "error.hpp"
 #include "namespace.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
 #include <chrono>
 #include <cstdint>
@@ -31,7 +32,7 @@ private:
     struct account
     {
         socket_id id;
-        std::uint16_t chunk_size {1500}; // Initial value is default MTU size
+        std::uint16_t frame_size {1500}; // Initial value is default MTU size
     };
 
 private:
@@ -41,6 +42,10 @@ private:
     mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
     mutable std::function<void(socket_id, std::vector<char> &&)> _on_ready;
     mutable std::function<void(socket_id)> _on_disconnected;
+    mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
+        PFS__TERMINATE(false, "socket location callback must be set");
+        return nullptr;
+    };
 
 public:
     reader_pool (): ReaderPoller()
@@ -63,15 +68,24 @@ public:
             PFS__TERMINATE(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
                 " reader account not found by id");
 
+            auto sock = _locate_socket(id);
+
+            if (sock == nullptr) {
+                remove_later(id);
+                _on_failure(id, error {errc::device_not_found, tr::f_("cannot locate socket for reading by ID: {}"
+                    ", removed from reader pool", id)});
+                return;
+            }
+
             std::vector<char> inpb;
 
             // Read all received data and put it into input buffer.
             for (;;) {
                 error err;
                 auto offset = inpb.size();
-                inpb.resize(offset + acc->chunk_size);
+                inpb.resize(offset + acc->frame_size);
 
-                auto n = Socket::recv(id, inpb.data() + offset, acc->chunk_size, & err);
+                auto n = sock->recv(inpb.data() + offset, acc->frame_size, & err);
 
                 if (n < 0) {
                     _on_failure(id, err);
@@ -177,6 +191,13 @@ public:
     reader_pool & on_disconnected (F && f)
     {
         _on_disconnected = std::forward<F>(f);
+        return *this;
+    }
+
+    template <typename F>
+    reader_pool & on_locate_socket (F && f)
+    {
+        _locate_socket = std::forward<F>(f);
         return *this;
     }
 

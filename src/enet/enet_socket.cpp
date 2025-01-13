@@ -74,16 +74,7 @@ enet_socket::enet_socket (net_quality nq, error * perr)
         , NET_QUALITIES[nq].timeout_max, perr);
 }
 
-enet_socket::enet_socket (property_map_t const & props, error * perr)
-{
-    auto timeout_limit = get_or<int>(props, "timeout_limit", NET_QUALITIES[net_quality::normal].timeout_limit);
-    auto timeout_min = get_or<int>(props, "timeout_min", NET_QUALITIES[net_quality::normal].timeout_min);
-    auto timeout_max = get_or<int>(props, "timeout_max", NET_QUALITIES[net_quality::normal].timeout_max);
-
-    init(timeout_limit, timeout_min, timeout_max, perr);
-}
-
-enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
+enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer) noexcept
     : _host(host)
     , _peer(peer)
     , _accepted_socket(true)
@@ -91,7 +82,7 @@ enet_socket::enet_socket (_ENetHost * host, _ENetPeer * peer)
     _peer->data = & _inpb;
 }
 
-enet_socket::enet_socket (enet_socket && other)
+enet_socket::enet_socket (enet_socket && other) noexcept
     : _host(other._host)
     , _peer(other._peer)
     , _timeout_limit(other._timeout_limit)
@@ -107,7 +98,7 @@ enet_socket::enet_socket (enet_socket && other)
         _peer->data = & _inpb;
 }
 
-enet_socket & enet_socket::operator = (enet_socket && other)
+enet_socket & enet_socket::operator = (enet_socket && other) noexcept
 {
     if (this == & other)
         return *this;
@@ -194,9 +185,9 @@ send_result enet_socket::send (char const * data, int len, error * perr)
 
     if (packet == nullptr) {
         pfs::throw_or(perr, error {
-              std::make_error_code(std::errc::not_enough_memory)
+            std::make_error_code(std::errc::not_enough_memory)
             , tr::_("create packet for sending failure")
-        });
+            });
     }
 
     auto rc = enet_peer_send(_peer, 0, packet);
@@ -205,9 +196,9 @@ send_result enet_socket::send (char const * data, int len, error * perr)
         enet_packet_destroy(packet);
 
         pfs::throw_or(perr, error {
-              errc::socket_error
+            errc::socket_error
             , tr::_("send packet failure")
-        });
+            });
 
         return send_result{send_status::failure, 0};
     }
@@ -219,7 +210,7 @@ send_result enet_socket::send (char const * data, int len, error * perr)
     // deallocation and enet_packet_destroy() should not be used upon it.
     // enet_packet_destroy(packet);
 
-    return send_result{send_status::good, len};
+    return send_result{send_status::good, static_cast<std::uint64_t>(len)};
 }
 
 conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)

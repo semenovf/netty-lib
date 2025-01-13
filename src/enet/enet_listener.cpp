@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -23,12 +23,16 @@ enet_listener::enet_listener ()
 /*
  * With backlog = ENET_PROTOCOL_MAXIMUM_PEER_ID rised segmenatation fault when listener destroying.
  */
-enet_listener::enet_listener (socket4_addr const & saddr, error * perr)
-    : enet_listener(saddr, 10, perr)
+enet_listener::enet_listener (socket4_addr const & saddr, error * /*perr*/)
+    : _saddr(saddr)
 {}
 
-enet_listener::enet_listener (socket4_addr const & saddr, int backlog, error * perr)
-    : _saddr(saddr)
+enet_listener::operator bool () const noexcept
+{
+    return _host != nullptr;
+}
+
+bool enet_listener::listen (int backlog, error * perr)
 {
     ENetAddress address;
 
@@ -41,18 +45,16 @@ enet_listener::enet_listener (socket4_addr const & saddr, int backlog, error * p
         , 0       // assume any amount of incoming bandwidth
         , 0);     // assume any amount of outgoing bandwidth
 
-
     if (_host == nullptr) {
         pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("create ENet listener failure")
         });
-    }
-}
 
-bool enet_listener::listen (int /*backlog*/, error * perr)
-{
-    return _host == nullptr ? false : true;
+        return false;
+    }
+
+    return true;
 }
 
 enet_listener::~enet_listener ()
@@ -71,13 +73,6 @@ enet_listener::listener_id enet_listener::id () const noexcept
     return reinterpret_cast<listener_id>(_host);
 }
 
-// [static]
-enet_socket enet_listener::accept (listener_id listener_sock , error * perr)
-{
-    return accept_nonblocking(listener_sock, perr);
-}
-
-// [static]
 enet_socket enet_listener::accept_nonblocking (listener_id listener_sock, error * /*perr*/)
 {
     auto peer = reinterpret_cast<ENetPeer *>(listener_sock);

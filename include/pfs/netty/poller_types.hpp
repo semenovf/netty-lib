@@ -47,8 +47,8 @@ NETTY__NAMESPACE_END
 NETTY__NAMESPACE_BEGIN
 using connecting_udt_poller_t = connecting_poller<netty::udt::epoll_poller>;
 using listener_udt_poller_t = listener_poller<netty::udt::epoll_poller>;
-using reader_udt_poller_t = reader_poller<linux_os::epoll_poller>;
-using writer_udt_poller_t = writer_poller<linux_os::epoll_poller>;
+using reader_udt_poller_t = reader_poller<netty::udt::epoll_poller>;
+using writer_udt_poller_t = writer_poller<netty::udt::epoll_poller>;
 NETTY__NAMESPACE_END
 #endif
 

@@ -22,7 +22,7 @@ class socket4_addr
 {
 public:
     inet4_addr    addr;
-    std::uint16_t port;
+    std::uint16_t port {0};
 
 public:
     /**

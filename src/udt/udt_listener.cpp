@@ -50,6 +50,11 @@ udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_cou
     _saddr = saddr;
 }
 
+// See default values for udt_socket constructor
+udt_listener::udt_listener (socket4_addr const & saddr, error * perr)
+    : udt_listener(saddr, 1500, 2, std::chrono::milliseconds{625}, perr)
+{}
+
 udt_listener::~udt_listener () = default;
 
 udt_listener::listener_id udt_listener::id () const noexcept

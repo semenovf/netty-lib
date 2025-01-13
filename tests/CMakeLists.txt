@@ -13,11 +13,51 @@
 project(netty-lib-TESTS CXX C)
 
 set(TESTS
-    inet4_addr
-    single_channel_connection)
+    inet4_addr)
 
 foreach (target ${TESTS})
     add_executable(${target} ${target}.cpp)
     target_link_libraries(${target} PRIVATE pfs::netty)
     add_test(NAME ${target} COMMAND ${target})
 endforeach()
+
+get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
+get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)
+get_target_property(_epoll_enabled netty NETTY__EPOLL_ENABLED)
+get_target_property(_enet_enabled netty NETTY__ENET_ENABLED)
+get_target_property(_udt_enabled netty NETTY__UDT_ENABLED)
+
+if (_select_enabled)
+    add_executable(single_channel_connection_select single_channel_connection.cpp)
+    target_link_libraries(single_channel_connection_select PRIVATE pfs::netty)
+    target_compile_definitions(single_channel_connection_select PRIVATE "NETTY__SCC_TEST_SELECT=1")
+    add_test(NAME single_channel_connection_select COMMAND single_channel_connection_select)
+endif()
+
+if (_poll_enabled)
+    add_executable(single_channel_connection_poll single_channel_connection.cpp)
+    target_link_libraries(single_channel_connection_poll PRIVATE pfs::netty)
+    target_compile_definitions(single_channel_connection_poll PRIVATE "NETTY__SCC_TEST_POLL=1")
+    add_test(NAME single_channel_connection_poll COMMAND single_channel_connection_poll)
+endif()
+
+if (_epoll_enabled)
+    add_executable(single_channel_connection_epoll single_channel_connection.cpp)
+    target_link_libraries(single_channel_connection_epoll PRIVATE pfs::netty)
+    target_compile_definitions(single_channel_connection_epoll PRIVATE "NETTY__SCC_TEST_POLL=1")
+    add_test(NAME single_channel_connection_epoll COMMAND single_channel_connection_epoll)
+endif()
+
+if (_enet_enabled)
+    add_executable(single_channel_connection_enet single_channel_connection.cpp)
+    target_link_libraries(single_channel_connection_enet PRIVATE pfs::netty)
+    target_compile_definitions(single_channel_connection_enet PRIVATE "NETTY__SCC_TEST_ENET=1")
+    add_test(NAME single_channel_connection_enet COMMAND single_channel_connection_enet)
+endif()
+
+if (_udt_enabled)
+    add_executable(single_channel_connection_udt single_channel_connection.cpp)
+    target_link_libraries(single_channel_connection_udt PRIVATE pfs::netty)
+    target_compile_definitions(single_channel_connection_udt PRIVATE "NETTY__SCC_TEST_UDT=1")
+    add_test(NAME single_channel_connection_udt COMMAND single_channel_connection_udt)
+endif()

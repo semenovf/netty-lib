@@ -20,6 +20,7 @@
 #include <pfs/netty/connecting_pool.hpp>
 #include <pfs/netty/listener_pool.hpp>
 #include <pfs/netty/reader_pool.hpp>
+#include <pfs/netty/startup.hpp>
 #include <pfs/netty/writer_pool.hpp>
 #include <pfs/netty/p2p/hello_packet.hpp>
 #include <pfs/netty/p2p/primal_serializer.hpp>
@@ -33,53 +34,58 @@
 #include <utility>
 #include <vector>
 
+#if NETTY__UDT_ENABLED
+#   include <pfs/netty/udt/udt_listener.hpp>
+#   include <pfs/netty/udt/udt_socket.hpp>
+#endif
+
 static constexpr char const * TAG = "SCC";
-static constexpr int MAX_NODES_COUNT = 2; //20;
+static constexpr int MAX_NODES_COUNT = 20;
 static constexpr std::uint16_t BASE_PORT = 3101;
 static std::atomic<int> s_listener_counter {0};
 static std::atomic<int> s_node_counter {0};
 static std::atomic<int> s_node_reverse_counter {MAX_NODES_COUNT};
 static std::atomic<bool> s_is_error {false};
 
+#if defined(NETTY__SCC_TEST_EPOLL) && defined(NETTY__EPOLL_ENABLED)
 using socket_t = netty::posix::tcp_socket;
 using listener_t = netty::posix::tcp_listener;
-using socket_id = socket_t::socket_id;
-using listener_id = listener_t::listener_id;
-
-#if 0
 using connecting_pool_t = netty::connecting_pool<netty::connecting_epoll_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_epoll_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_epoll_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_epoll_poller_t, socket_t>;
-#endif
-
-#if 0
+#elif defined(NETTY__SCC_TEST_POLL) && defined(NETTY__POLL_ENABLED)
+using socket_t = netty::posix::tcp_socket;
+using listener_t = netty::posix::tcp_listener;
 using connecting_pool_t = netty::connecting_pool<netty::connecting_poll_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_poll_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_poll_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_poll_poller_t, socket_t>;
-#endif
-
-#if 0
+#elif defined(NETTY__SCC_TEST_SELECT) && defined(NETTY__SELECT_ENABLED)
+using socket_t = netty::posix::tcp_socket;
+using listener_t = netty::posix::tcp_listener;
 using connecting_pool_t = netty::connecting_pool<netty::connecting_select_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_select_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_select_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_select_poller_t, socket_t>;
-#endif
-
-#if 0 // FIXME
+#elif defined(NETTY__SCC_TEST_UDT) && defined(NETTY__UDT_ENABLED)
+using socket_t = netty::udt::udt_socket;
+using listener_t = netty::udt::udt_listener;
 using connecting_pool_t = netty::connecting_pool<netty::connecting_udt_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_udt_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_udt_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_udt_poller_t, socket_t>;
-#endif
-
-#if 1
+#elif defined(NETTY__SCC_TEST_ENET) && defined(NETTY__ENET_ENABLED)
+using socket_t = netty::enet::enet_socket;
+using listener_t = netty::enet::enet_listener;
 using connecting_pool_t = netty::connecting_pool<netty::connecting_enet_poller_t, socket_t>;
 using listener_pool_t = netty::listener_pool<netty::listener_enet_poller_t, listener_t, socket_t>;
 using reader_pool_t = netty::reader_pool<netty::reader_enet_poller_t, socket_t>;
 using writer_pool_t = netty::writer_pool<netty::writer_enet_poller_t, socket_t>;
 #endif
+
+using socket_id = socket_t::socket_id;
+using listener_id = listener_t::listener_id;
 
 using serializer_t = netty::p2p::primal_serializer<pfs::endian::native>;
 
@@ -164,6 +170,9 @@ void worker ()
     }).on_ready([& read_counter, self_port] (socket_id id, std::vector<char> && data) {
         LOGD(TAG, "{:04}: Input data ready: id={}: {} bytes", self_port, id, data.size());
         read_counter++;
+    }).on_locate_socket([& peer_sockets] (socket_id id) {
+        auto pos = peer_sockets.find(id);
+        return pos == peer_sockets.end() ? nullptr : & pos->second;
     });
 
     writer_pool.on_failure([& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {
@@ -173,6 +182,9 @@ void worker ()
     }).on_bytes_written([& write_counter, self_port] (socket_id id, std::uint64_t n) {
         LOGD(TAG, "{:04}: bytes written: id={}: {}", self_port, id, n);
         write_counter++;
+    }).on_locate_socket([& connected_sockets] (socket_id id) {
+        auto pos = connected_sockets.find(id);
+        return pos == connected_sockets.end() ? nullptr : & pos->second;
     });
 
     for (auto port = BASE_PORT; port < BASE_PORT + MAX_NODES_COUNT; port++) {
@@ -207,6 +219,8 @@ void worker ()
 }
 
 TEST_CASE("single channel connection") {
+    netty::startup_guard startup_guard{};
+
     LOGD(TAG, "s_node_counter.is_lock_free = {}", s_node_counter.is_lock_free());
 
     std::vector<std::thread> thread_pool {MAX_NODES_COUNT};

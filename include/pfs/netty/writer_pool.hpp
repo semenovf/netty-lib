@@ -35,10 +35,8 @@ private:
     {
         socket_id id;
         bool writable {false};   // Socket is writable
-        std::uint16_t chunk_size {1500}; // Initial value is default MTU size
-        //std::vector<char> b;     // Output buffer
+        std::uint16_t frame_size {1500}; // Initial value is default MTU size
         writer_queue q; // Output queue
-        //std::size_t cursor {0};  // Index of the first byte to send
     };
 
     struct item
@@ -53,6 +51,10 @@ private:
 
     mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
     mutable std::function<void(socket_id, std::uint64_t)> _on_bytes_written;
+    mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
+        PFS__TERMINATE(false, "socket location callback must be set");
+        return nullptr;
+    };
 
 public:
     writer_pool (): WriterPoller()
@@ -167,11 +169,20 @@ public:
                 if (acc.q.empty())
                     continue;
 
-                char const * chunk = acc.q.data();
-                std::size_t chunk_size = (std::min)(std::size_t{acc.chunk_size}, acc.q.size());
+                auto sock = _locate_socket(acc.id);
+
+                if (sock == nullptr) {
+                    remove_later(acc.id);
+                    _on_failure(acc.id, error {errc::device_not_found, tr::f_("cannot locate socket for writing by ID: {}"
+                        ", removed from writer pool", acc.id)});
+                    continue;
+                }
+
+                char const * frame = acc.q.data();
+                std::size_t frame_size = (std::min)(std::size_t{acc.frame_size}, acc.q.size());
 
                 netty::error err;
-                auto res = Socket::send(acc.id, chunk, chunk_size, & err);
+                auto res = sock->send(frame, frame_size, & err);
 
                 switch (res.status) {
                     case netty::send_status::failure:
@@ -200,7 +211,6 @@ public:
                 }
             }
         } while (stopwatch.current_count() < limit.count());
-
     }
 
     /**
@@ -217,6 +227,13 @@ public:
     writer_pool & on_bytes_written (F && f)
     {
         _on_bytes_written = std::forward<F>(f);
+        return *this;
+    }
+
+    template <typename F>
+    writer_pool & on_locate_socket (F && f)
+    {
+        _locate_socket = std::forward<F>(f);
         return *this;
     }
 

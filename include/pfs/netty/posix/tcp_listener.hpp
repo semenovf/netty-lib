@@ -48,6 +48,12 @@ public:
      */
     NETTY__EXPORT socket_type accept (error * perr = nullptr);
     NETTY__EXPORT socket_type accept_nonblocking (error * perr = nullptr);
+
+    // For compatiblity with listener_pool
+    socket_type accept_nonblocking (listener_id /*id*/, error * perr = nullptr)
+    {
+        return accept_nonblocking(perr);
+    }
 };
 
 }} // namespace netty::posix

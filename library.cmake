@@ -19,10 +19,10 @@ include(CheckIncludeFile)
 
 if (NETTY__BUILD_SHARED)
     add_library(netty SHARED)
-    target_compile_definitions(netty PRIVATE NETTY__EXPORTS)
+    target_compile_definitions(netty PUBLIC NETTY__EXPORTS)
 else()
     add_library(netty STATIC)
-    target_compile_definitions(netty PRIVATE NETTY__STATIC)
+    target_compile_definitions(netty PUBLIC NETTY__STATIC)
 endif()
 
 add_library(pfs::netty ALIAS netty)
@@ -82,12 +82,12 @@ check_include_file("poll.h" __has_poll)
 
 if (__has_poll)
     target_sources(netty PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/poll_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     target_compile_definitions(netty PUBLIC "NETTY__POLL_ENABLED=1")
     set_target_properties(netty PROPERTIES NETTY__POLL_ENABLED ON)
@@ -97,12 +97,12 @@ check_include_file("sys/select.h" __has_sys_select) # Linux
 
 if (MSVC OR __has_sys_select)
     target_sources(netty PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/posix/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/reader_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/select_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/posix/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/writer_poller.cpp)
     target_compile_definitions(netty PUBLIC "NETTY__SELECT_ENABLED=1")
     set_target_properties(netty PROPERTIES NETTY__SELECT_ENABLED ON)
@@ -113,12 +113,12 @@ if (UNIX OR ANDROID)
 
     if (__has_sys_epoll)
         target_sources(netty PRIVATE
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/client_poller.cpp
+#            ${CMAKE_CURRENT_LIST_DIR}/src/linux/client_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/connecting_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/epoll_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/listener_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/reader_poller.cpp
-            ${CMAKE_CURRENT_LIST_DIR}/src/linux/server_poller.cpp
+#            ${CMAKE_CURRENT_LIST_DIR}/src/linux/server_poller.cpp
             ${CMAKE_CURRENT_LIST_DIR}/src/linux/writer_poller.cpp)
         target_compile_definitions(netty PUBLIC "NETTY__EPOLL_ENABLED=1")
         set_target_properties(netty PROPERTIES NETTY__EPOLL_ENABLED ON)
@@ -152,21 +152,18 @@ if (NETTY__ENABLE_UDT)
         ${NETTY__UDT_ROOT}/window.cpp)
 
     target_sources(netty PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/client_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/udt/client_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/epoll_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/listener_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/reader_poller.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/udt/server_poller.cpp
+#        ${CMAKE_CURRENT_LIST_DIR}/src/udt/server_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_listener.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/udt_socket.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/debug_CCC.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/udt/writer_poller.cpp)
 
-    # if (NETTY__BUILD_SHARED)
-    #     target_compile_definitions(netty PRIVATE UDT_EXPORTS)
-    # endif()
-
+    target_compile_definitions(netty PRIVATE UDT_STATIC)
     target_compile_definitions(netty PUBLIC "NETTY__UDT_ENABLED=1")
     set_target_properties(netty PROPERTIES NETTY__UDT_ENABLED ON)
 

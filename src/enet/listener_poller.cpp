@@ -44,7 +44,7 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
 
             NETTY__TRACE(LOGD("ENet", "Accepted from: {}", to_string(saddr)));
 
-            accept(reinterpret_cast<listener_id>(ev->peer)); // <= ENetPeer *
+            accept(reinterpret_cast<socket_id>(ev->peer)); // <= ENetPeer *
             _rep->pop_event();
             n++;
         } else {
