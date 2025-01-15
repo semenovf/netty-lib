@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../connecting_poller.hpp"
+#include "../connecting_poller_impl.hpp"
 #include <pfs/i18n.hpp>
 
 #if NETTY__SELECT_ENABLED

@@ -7,7 +7,7 @@
 //      2023.01.09 Initial version.
 //      2024.07.29 Fixed `connecting_poller` specialization.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../connecting_poller.hpp"
+#include "../connecting_poller_impl.hpp"
 #include "newlib/udt.hpp"
 #include "netty/trace.hpp"
 #include "netty/udt/epoll_poller.hpp"

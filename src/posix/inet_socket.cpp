@@ -145,10 +145,13 @@ inet_socket::inet_socket (inet_socket && other) noexcept
 
 inet_socket & inet_socket::operator = (inet_socket && other) noexcept
 {
-    this->~inet_socket();
-    _socket = other._socket;
-    _saddr  = other._saddr;
-    other._socket = kINVALID_SOCKET;
+    if (& other != this) {
+        this->~inet_socket();
+        _socket = other._socket;
+        _saddr  = other._saddr;
+        other._socket = kINVALID_SOCKET;
+    }
+
     return *this;
 }
 

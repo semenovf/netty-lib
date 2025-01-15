@@ -23,7 +23,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename WriterPoller, typename Socket>
+template <typename WriterPoller, typename Socket, typename WriterQueue = writer_queue>
 class writer_pool: protected WriterPoller
 {
 public:
@@ -36,7 +36,7 @@ private:
         socket_id id;
         bool writable {false};   // Socket is writable
         std::uint16_t frame_size {1500}; // Initial value is default MTU size
-        writer_queue q; // Output queue
+        WriterQueue q; // Output queue
     };
 
     struct item

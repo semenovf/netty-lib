@@ -7,7 +7,7 @@
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #if NETTY__EPOLL_ENABLED
-#include "../listener_poller.hpp"
+#include "../listener_poller_impl.hpp"
 #include "netty/namespace.hpp"
 #include "netty/linux/epoll_poller.hpp"
 #include <pfs/i18n.hpp>

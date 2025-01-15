@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.01.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../writer_poller.hpp"
+#include "../writer_poller_impl.hpp"
 #include "newlib/udt.hpp"
 #include "netty/udt/epoll_poller.hpp"
 

@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.01.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../listener_poller.hpp"
+#include "../listener_poller_impl.hpp"
 #include <pfs/i18n.hpp>
 
 #if NETTY__SELECT_ENABLED

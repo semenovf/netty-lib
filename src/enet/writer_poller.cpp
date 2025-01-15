@@ -6,7 +6,7 @@
 // Changelog:
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../writer_poller.hpp"
+#include "../writer_poller_impl.hpp"
 #include "netty/enet/enet_poller.hpp"
 #include <enet/enet.h>
 

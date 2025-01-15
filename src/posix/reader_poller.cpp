@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../reader_poller.hpp"
+#include "../reader_poller_impl.hpp"
 
 #if NETTY__SELECT_ENABLED
 #   include "pfs/netty/posix/select_poller.hpp"
@@ -86,8 +86,7 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                         } else {
                             on_failure(fd, error {
                                   errc::socket_error
-                                , tr::f_("read socket failure: {} (socket={})"
-                                    , pfs::system_error_text(errno), fd)
+                                , tr::f_("read socket failure: {} (socket={})", pfs::system_error_text(errno), fd)
                             });
                         }
 #if _MSC_VER

@@ -153,14 +153,14 @@ void worker ()
         serializer_t::ostream_type out;
         serializer_t::pack(out, packet);
         writer_pool.enqueue(sock_id, out.data(), out.size());
-    }).on_connection_refused ([self_port] (connecting_pool_t * that
-            , socket_t && sock, netty::connection_refused_reason reason) {
+    }).on_connection_refused ([self_port, & connecting_pool] (socket_id id, netty::socket4_addr saddr
+            , netty::connection_refused_reason reason) {
         LOGE(TAG, "{:04}: connection refused for socket: id={}: {}: reason: {}, reconnecting"
-            , self_port, sock.id(), to_string(sock.saddr()), to_string(reason));
+            , self_port, id, to_string(saddr), to_string(reason));
 
         std::chrono::seconds timeout {1};
         LOGD(TAG, "{:04}: Reconnect after {}", self_port, timeout);
-        that->connect_timeout(timeout, sock.saddr());
+        connecting_pool.connect_timeout(timeout, saddr);
     });
 
     reader_pool.on_failure([& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {

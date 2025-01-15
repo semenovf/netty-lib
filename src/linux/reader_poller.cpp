@@ -6,7 +6,7 @@
 // Changelog:
 //      2023.01.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../reader_poller.hpp"
+#include "../reader_poller_impl.hpp"
 #include "netty/linux/epoll_poller.hpp"
 #include <pfs/i18n.hpp>
 #include <sys/socket.h>
@@ -15,7 +15,9 @@ NETTY__NAMESPACE_BEGIN
 
 template <>
 reader_poller<linux_os::epoll_poller>::reader_poller ()
-    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND))
+    : _rep(new linux_os::epoll_poller(EPOLLERR | EPOLLIN | EPOLLRDNORM | EPOLLRDBAND
+        | EPOLLHUP | EPOLLRDHUP
+    ))
 {}
 
 template <>
@@ -61,6 +63,11 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                     }
                 }
 
+                continue;
+            }
+
+            if (ev.events & (EPOLLHUP | EPOLLRDHUP)) {
+                disconnected(ev.data.fd);
                 continue;
             }
 

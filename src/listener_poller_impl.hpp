@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "netty/listener_poller.hpp"
-#include <pfs/log.hpp>
 
 NETTY__NAMESPACE_BEGIN
 

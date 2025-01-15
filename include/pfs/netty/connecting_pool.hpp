@@ -29,7 +29,12 @@ public:
 
 private:
     using time_point_type = std::chrono::steady_clock::time_point;
-    struct deferred_connection_item {time_point_type t; std::function<void()> f;};
+
+    struct deferred_connection_item
+    {
+        time_point_type t;
+        std::function<void()> f;
+    };
 
     friend constexpr bool operator < (deferred_connection_item const & lhs, deferred_connection_item const & rhs)
     {
@@ -42,7 +47,7 @@ private:
     std::set<deferred_connection_item> _deferred_connections;
     mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
     mutable std::function<void(socket_type &&)> _on_connected;
-    mutable std::function<void(connecting_pool *, socket_type &&, connection_refused_reason)> _on_connection_refused;
+    mutable std::function<void(socket_id, socket4_addr, connection_refused_reason)> _on_connection_refused;
 
 public:
     connecting_pool ()
@@ -75,7 +80,7 @@ public:
 
             if (pos != _connecting_sockets.end()) {
                 if (_on_connection_refused)
-                    _on_connection_refused(this, std::move(pos->second), reason);
+                    _on_connection_refused(id, pos->second.saddr(), reason);
             } else {
                 _on_failure(error {errc::device_not_found
                     , tr::f_("on connection refused on socket failure: id={}", id)});

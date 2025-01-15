@@ -6,7 +6,7 @@
 // Changelog:
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../reader_poller.hpp"
+#include "../reader_poller_impl.hpp"
 #include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
 #include <enet/enet.h>

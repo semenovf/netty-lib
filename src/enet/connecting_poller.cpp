@@ -6,7 +6,7 @@
 // Changelog:
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "../connecting_poller.hpp"
+#include "../connecting_poller_impl.hpp"
 #include "netty/socket4_addr.hpp"
 #include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
