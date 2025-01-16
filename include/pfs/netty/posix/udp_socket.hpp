@@ -48,9 +48,8 @@ public:
     /**
      * Constructs uninitialized (invalid) UDP socket.
      */
-    NETTY__EXPORT udp_socket (uninitialized);
-
     NETTY__EXPORT udp_socket ();
+
     NETTY__EXPORT udp_socket (udp_socket &&);
     NETTY__EXPORT udp_socket & operator = (udp_socket &&);
     NETTY__EXPORT ~udp_socket ();

@@ -25,9 +25,7 @@ NETTY__NAMESPACE_BEGIN
 
 namespace posix {
 
-udp_socket::udp_socket () : inet_socket(type_enum::dgram) {}
-
-udp_socket::udp_socket (uninitialized) : inet_socket() {}
+udp_socket::udp_socket () : inet_socket() {}
 
 udp_socket::udp_socket (udp_socket && s)
     : inet_socket(std::move(s))
@@ -35,8 +33,11 @@ udp_socket::udp_socket (udp_socket && s)
 
 udp_socket & udp_socket::operator = (udp_socket && s)
 {
-    this->~udp_socket();
-    inet_socket::operator = (std::move(s));
+    if (this != & s) {
+        this->~udp_socket();
+        inet_socket::operator = (std::move(s));
+    }
+
     return *this;
 }
 
@@ -46,6 +47,11 @@ udp_socket::~udp_socket () = default;
 bool udp_socket::join (socket4_addr const & group_saddr
     , inet4_addr const & local_addr, error * perr)
 {
+    if (!*this) {
+        if (!init(type_enum::dgram, perr))
+            return false;
+    }
+
     ip_mreq mreq;
     mreq.imr_multiaddr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(group_saddr.addr));
     mreq.imr_interface.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(local_addr));
@@ -57,25 +63,19 @@ bool udp_socket::join (socket4_addr const & group_saddr
 #endif
 
     if (rc != 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::f_("join multicast group: {}", to_string(group_saddr))
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;
 }
 
-bool udp_socket::leave (socket4_addr const & group_saddr
-    , inet4_addr const & local_addr, error * perr)
+bool udp_socket::leave (socket4_addr const & group_saddr, inet4_addr const & local_addr, error * perr)
 {
     ip_mreq mreq;
     mreq.imr_multiaddr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(group_saddr.addr));
@@ -88,18 +88,13 @@ bool udp_socket::leave (socket4_addr const & group_saddr
 #endif
 
     if (rc != 0) {
-        error err {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::f_("leave multicast group: {}", to_string(group_saddr))
             , pfs::system_error_text()
-        };
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;
@@ -108,6 +103,11 @@ bool udp_socket::leave (socket4_addr const & group_saddr
 
 bool udp_socket::enable_broadcast (bool enable, error * perr)
 {
+    if (!*this) {
+        if (!init(type_enum::dgram, perr))
+            return false;
+    }
+
     const int on = enable ? 1 : 0;
 
 #if _MSC_VER

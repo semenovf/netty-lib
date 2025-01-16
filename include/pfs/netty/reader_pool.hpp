@@ -204,15 +204,15 @@ public:
     /**
      * @resturn Number of sockets ready for reading.
      */
-    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
-        pfs::stopwatch<std::milli> stopwatch;
-
         if (!_removable.empty())
             apply_remove();
 
-        millis -= std::chrono::milliseconds{stopwatch.current_count()};
-        return ReaderPoller::poll(millis, perr);
+        ReaderPoller::poll(millis, perr);
+
+        if (!_removable.empty())
+            apply_remove();
     }
 };
 

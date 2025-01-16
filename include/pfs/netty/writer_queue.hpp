@@ -84,5 +84,3 @@ public:
 };
 
 NETTY__NAMESPACE_END
-
-

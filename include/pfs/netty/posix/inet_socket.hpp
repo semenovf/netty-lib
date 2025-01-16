@@ -58,11 +58,6 @@ protected:
     inet_socket ();
 
     /**
-     * Constructs POSIX socket.
-     */
-    inet_socket (type_enum socktype, error * perr = nullptr);
-
-    /**
      * Constructs POSIX socket from native socket.
      */
     inet_socket (socket_id sock, socket4_addr const & saddr, error * perr = nullptr);
@@ -76,6 +71,7 @@ protected:
     NETTY__EXPORT inet_socket & operator = (inet_socket &&) noexcept;
 
 protected:
+    NETTY__EXPORT bool init (type_enum socktype, error * perr);
     NETTY__EXPORT bool set_nonblocking (bool enable, error * perr);
 
 protected:

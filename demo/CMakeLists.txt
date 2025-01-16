@@ -9,11 +9,12 @@
 #      2024.04.08 `available_net_interfaces` included from `ionik-lib`.
 ################################################################################
 add_subdirectory(available_net_interfaces)
+add_subdirectory(meshnet)
 add_subdirectory(mtu)
-add_subdirectory(netty)
+# add_subdirectory(netty) # FIXME
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
-add_subdirectory(service)
+# add_subdirectory(service) # FIXME
 
 if (NETTY__ENABLE_P2P)
     add_subdirectory(discovery)

@@ -36,7 +36,39 @@ inet_socket::inet_socket (socket_id sock, socket4_addr const & saddr, error * /*
     , _saddr(saddr)
 {}
 
-inet_socket::inet_socket (type_enum socktype, error * perr)
+inet_socket::inet_socket (inet_socket && other) noexcept
+{
+    this->operator = (std::move(other));
+}
+
+inet_socket & inet_socket::operator = (inet_socket && other) noexcept
+{
+    if (& other != this) {
+        this->~inet_socket();
+        _socket = other._socket;
+        _saddr  = other._saddr;
+        other._socket = kINVALID_SOCKET;
+    }
+
+    return *this;
+}
+
+inet_socket::~inet_socket ()
+{
+#if _MSC_VER
+    if (_socket != kINVALID_SOCKET) {
+        ::shutdown(_socket, SD_BOTH);
+        ::closesocket(_socket);
+#else
+    if (_socket > 0) {
+        ::shutdown(_socket, SHUT_RDWR);
+        ::close(_socket);
+#endif
+        _socket = kINVALID_SOCKET;
+    }
+}
+
+bool inet_socket::init (type_enum socktype, error * perr)
 {
     int ai_family = AF_INET;
     int ai_socktype = -1;
@@ -54,10 +86,12 @@ inet_socket::inet_socket (type_enum socktype, error * perr)
     }
 
     if (ai_socktype < 0) {
-        throw error {
+        pfs::throw_or(perr, error {
               errc::socket_error
             , tr::_("bad/unsupported socket type")
-        };
+        });
+
+        return false;
     }
 
 #ifndef _MSC_VER
@@ -72,6 +106,8 @@ inet_socket::inet_socket (type_enum socktype, error * perr)
             , tr::_("create INET socket failure")
             , pfs::system_error_text()
         });
+
+        return false;
     }
 
 #if _MSC_VER
@@ -85,6 +121,8 @@ inet_socket::inet_socket (type_enum socktype, error * perr)
                 , tr::_("create INET socket failure: set non-blocking")
                 , pfs::system_error_text()
             });
+
+            return false;
         }
     }
 #endif
@@ -135,40 +173,11 @@ inet_socket::inet_socket (type_enum socktype, error * perr)
             , tr::_("set socket option failure")
             , pfs::system_error_text()
         });
-    }
-}
 
-inet_socket::inet_socket (inet_socket && other) noexcept
-{
-    this->operator = (std::move(other));
-}
-
-inet_socket & inet_socket::operator = (inet_socket && other) noexcept
-{
-    if (& other != this) {
-        this->~inet_socket();
-        _socket = other._socket;
-        _saddr  = other._saddr;
-        other._socket = kINVALID_SOCKET;
+        return false;
     }
 
-    return *this;
-}
-
-inet_socket::~inet_socket ()
-{
-#if _MSC_VER
-    if (_socket != kINVALID_SOCKET) {
-        ::shutdown(_socket, SD_BOTH);
-        ::closesocket(_socket);
-#else
-    if (_socket > 0) {
-        ::shutdown(_socket, SHUT_RDWR);
-        ::close(_socket);
-#endif
-
-        _socket = kINVALID_SOCKET;
-    }
+    return true;
 }
 
 inet_socket::operator bool () const noexcept

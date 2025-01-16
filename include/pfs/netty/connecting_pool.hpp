@@ -186,7 +186,7 @@ public:
     /**
      * @resturn Number of pending connections, or negative value on error.
      */
-    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
         if (!_removable.empty())
             apply_remove();
@@ -202,7 +202,10 @@ public:
             }
         }
 
-        return ConnectingPoller::poll(millis, perr);
+        ConnectingPoller::poll(millis, perr);
+
+        if (!_removable.empty())
+            apply_remove();
     }
 
     bool empty () const noexcept

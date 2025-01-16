@@ -9,6 +9,7 @@
 #pragma once
 #include "error.hpp"
 #include "namespace.hpp"
+#include "send_result.hpp"
 #include "writer_queue.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/stopwatch.hpp>
@@ -240,7 +241,7 @@ public:
     /**
      * @resturn Number of sockets waiting for writing.
      */
-    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
         pfs::stopwatch<std::milli> stopwatch;
 
@@ -252,7 +253,10 @@ public:
         send(millis, perr);
         millis -= std::chrono::milliseconds{stopwatch.current_count()};
 
-        return WriterPoller::poll(millis, perr);
+        WriterPoller::poll(millis, perr);
+
+        if (!_removable.empty())
+            apply_remove();
     }
 
     bool empty () const noexcept

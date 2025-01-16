@@ -11,7 +11,7 @@
 #include <pfs/i18n.hpp>
 #include <chrono>
 #include <functional>
-#include <map>
+#include <unordered_map>
 
 namespace netty {
 
@@ -25,7 +25,7 @@ public:
     using listener_id = typename ListenerSocket::listener_id;
 
 private:
-    std::map<listener_id, listener_socket_type> _listeners;
+    std::unordered_map<listener_id, listener_socket_type> _listeners;
     std::vector<listener_id> _removable;
 
     mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
@@ -122,13 +122,15 @@ public:
     /**
      * @return Number of pending connections, or negative value on error.
      */
-    int step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}
-        , error * perr = nullptr)
+    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
         if (!_removable.empty())
             apply_remove();
 
-        return ListenerPoller::poll(millis, perr);
+        ListenerPoller::poll(millis, perr);
+
+        if (!_removable.empty())
+            apply_remove();
     }
 
     bool empty () const noexcept

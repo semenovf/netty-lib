@@ -24,11 +24,13 @@ NETTY__NAMESPACE_BEGIN
 
 namespace posix {
 
-udp_receiver::udp_receiver () : udp_socket(uninitialized{}) {}
+udp_receiver::udp_receiver () : udp_socket() {}
 
 udp_receiver::udp_receiver (socket4_addr const & src_saddr
     , inet4_addr const & local_addr) : udp_socket()
 {
+    udp_socket::init(type_enum::dgram, nullptr);
+
     if (is_multicast(src_saddr.addr)) {
 #if _MSC_VER
         bind(_socket, socket4_addr{INADDR_ANY, src_saddr.port}, nullptr);

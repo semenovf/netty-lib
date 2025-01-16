@@ -35,9 +35,8 @@ public:
     /**
      * Constructs uninitialized (invalid) TCP socket.
      */
-    NETTY__EXPORT tcp_socket (uninitialized);
-
     NETTY__EXPORT tcp_socket ();
+
     NETTY__EXPORT tcp_socket (tcp_socket && s);
     NETTY__EXPORT tcp_socket & operator = (tcp_socket && s);
     NETTY__EXPORT ~tcp_socket ();

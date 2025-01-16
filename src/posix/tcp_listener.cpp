@@ -27,8 +27,11 @@ namespace posix {
 tcp_listener::tcp_listener () : inet_socket() {}
 
 tcp_listener::tcp_listener (socket4_addr const & saddr, netty::error * perr)
-    : inet_socket(inet_socket::type_enum::stream, perr)
+    : inet_socket()
 {
+    if (!init(inet_socket::type_enum::stream, perr))
+        return;
+
     _saddr = saddr;
 }
 
@@ -77,12 +80,12 @@ tcp_socket tcp_listener::accept (error * perr)
                         " (AF_INET supported only)", sa.sin_family)
             });
 
-            return tcp_socket{uninitialized{}};
+            return tcp_socket{};
         }
     }
 
     if (errno == EAGAIN || errno == EWOULDBLOCK)
-        return tcp_socket{uninitialized{}};
+        return tcp_socket{};
 
     pfs::throw_or(perr, error {
           errc::socket_error
@@ -90,7 +93,7 @@ tcp_socket tcp_listener::accept (error * perr)
         , pfs::system_error_text()
     });
 
-    return tcp_socket{uninitialized{}};
+    return tcp_socket{};
 }
 
 tcp_socket tcp_listener::accept_nonblocking (error * perr)
@@ -98,7 +101,7 @@ tcp_socket tcp_listener::accept_nonblocking (error * perr)
     auto s = accept(perr);
 
     if (!s.set_nonblocking(true, perr))
-        return tcp_socket{uninitialized{}};
+        return tcp_socket{};
 
     return s;
 }
