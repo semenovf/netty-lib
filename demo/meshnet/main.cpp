@@ -60,7 +60,7 @@ int main (int argc, char * argv[])
     netty::startup_guard netty_startup;
 
     std::vector<netty::socket4_addr> _nodes;
-    meshnet_node_t node {pfs::generate_uuid()};
+    meshnet_node_t node;
     netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
     node.add_listener(netty::socket4_addr{listenerAddr, PORT});
 

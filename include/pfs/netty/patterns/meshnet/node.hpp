@@ -7,6 +7,8 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "functional_callbacks.hpp"
+#include "without_reconnection.hpp"
 #include <pfs/netty/namespace.hpp>
 #include <pfs/stopwatch.hpp>
 #include <pfs/netty/conn_status.hpp>
@@ -26,16 +28,18 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename UniversalId
-    , typename Listener
+template <typename Listener
     , typename Socket
     , typename ConnectingPoller
     , typename ListenerPoller
     , typename ReaderPoller
-    , typename WriterPoller>
+    , typename WriterPoller
+    , template <typename> class ReconnectionScheduler = without_reconnection
+    , typename Callbacks = functional_callbacks>
 class node
 {
-    using universal_id_type = UniversalId;
+    friend class ReconnectionScheduler<node>;
+
     using listener_type = Listener;
     using socket_type = Socket;
     using socket_pool_type = netty::socket_pool<socket_type>;
@@ -48,32 +52,17 @@ class node
     using listener_id = typename listener_type::listener_id;
 
 private:
-    universal_id_type    _node_id;
     listener_pool_type   _listener_pool;
     connecting_pool_type _connecting_pool;
     reader_pool_type     _reader_pool;
     writer_pool_type     _writer_pool;
     socket_pool_type     _socket_pool;
 
-    std::chrono::seconds _reconnect_timeout {5};
-
-private:
-    void schedule_reconnection (socket_id id)
-    {
-        bool is_accepted = false;
-        auto psock = _socket_pool.locate(id, & is_accepted);
-        auto reconnecting = !is_accepted;
-
-        if (reconnecting)
-            _connecting_pool.connect_timeout(_reconnect_timeout, psock->saddr());
-
-        _socket_pool.close(id);
-    }
+    ReconnectionScheduler<node> _reconnection_scheduler;
 
 public:
-    node (universal_id_type node_id, std::chrono::seconds reconnect_timeout = std::chrono::seconds{5})
-        : _node_id(node_id)
-        , _reconnect_timeout(reconnect_timeout)
+    node ()
+        : _reconnection_scheduler(*this)
     {
         _listener_pool.on_failure([] (netty::error const & err) {
             LOGE("", "listener pool failure: {}", err.what());
@@ -99,9 +88,9 @@ public:
         }).on_connection_refused ([this] (socket_id sid, netty::socket4_addr saddr
                 , netty::connection_refused_reason reason) {
             LOGE("", "connection refused for socket ({}): {}: reason: {}"
-                ", reconnecting after {}"
-                , sid, to_string(saddr), to_string(reason), _reconnect_timeout);
-            _connecting_pool.connect_timeout(_reconnect_timeout, saddr);
+                ", reconnecting"
+                , sid, to_string(saddr), to_string(reason));
+            _reconnection_scheduler(saddr);
         });
 
         _reader_pool.on_failure([this] (socket_id sid, netty::error const & err) {
@@ -109,7 +98,7 @@ public:
             _socket_pool.close(sid);
         }).on_disconnected([this] (socket_id sid) {
             LOGD("", "socket disconnected: #{}", sid);
-            schedule_reconnection(sid);
+            _reconnection_scheduler(sid);
         }).on_ready([] (socket_id sid, std::vector<char> && data) {
             // FIXME
         //     LOGD(TAG, "{:04}: Input data ready: id={}: {} bytes", self_port, sid, data.size());
@@ -119,7 +108,7 @@ public:
 
         _writer_pool.on_failure([this] (socket_id sid, netty::error const & err) {
             LOGE("", "write to socket failure: socket={}: {}", sid, err.what());
-            schedule_reconnection(sid);
+            _reconnection_scheduler(sid);
         }).on_bytes_written([] (socket_id sid, std::uint64_t n) {
             // FIXME
         //     LOGD(TAG, "{:04}: bytes written: id={}: {}", self_port, id, n);
@@ -131,6 +120,12 @@ public:
     ~node () {}
 
 public:
+    template <typename ...Args>
+    void configure_reconnection_scheduler (Args &&... args)
+    {
+        _reconnection_scheduler.configure(std::forward<Args>(args)...);
+    }
+
     void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr)
     {
         _listener_pool.add(listener_addr, perr);
