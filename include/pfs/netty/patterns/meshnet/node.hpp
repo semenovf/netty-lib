@@ -117,10 +117,12 @@ public:
             if (_cb.on_error)
                 _cb.on_error(tr::f_("read from socket failure: {}: {}", sid, err.what()));
 
+            _writer_pool.remove(sid);
             _heartbeat_generator.remove(sid);
             _socket_pool.close(sid);
         }).on_disconnected([this] (socket_id sid) {
             LOGD("", "socket disconnected: #{}", sid);
+            _writer_pool.remove(sid);
             _heartbeat_generator.remove(sid);
             _reconnection_scheduler(sid);
         }).on_data_ready([this] (socket_id sid, std::vector<char> && data) {
@@ -133,6 +135,7 @@ public:
             if (_cb.on_error)
                 _cb.on_error(tr::f_("write to socket failure: socket={}: {}", sid, err.what()));
 
+            _reader_pool.remove(sid);
             _heartbeat_generator.remove(sid);
             _reconnection_scheduler(sid);
         }).on_bytes_written([] (socket_id sid, std::uint64_t n) {

@@ -166,24 +166,23 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds
 
 #if _MSC_VER
     if (n == SOCKET_ERROR) {
+        auto errn = WSAGetLastError();
+
+        if (errn == WSAEINTR) {
+        } else {
 #else
     if (n < 0) {
-#endif
         if (errno == EINTR) {
             // Is not a critical error, ignore it
         } else {
-            error err {
+#endif
+            pfs::throw_or(perr, error {
                   errc::poller_error
                 , tr::_("select failure")
                 , pfs::system_error_text()
-            };
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return n;
-            } else {
-                throw err;
-            }
+            return n;
         }
     }
 
