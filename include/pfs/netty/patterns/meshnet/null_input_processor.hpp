@@ -4,12 +4,11 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.17 Initial version.
+//      2025.01.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <functional>
-#include <string>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -17,16 +16,17 @@ namespace patterns {
 namespace meshnet {
 
 template <typename Node>
-struct functional_callbacks
+class null_input_processor
 {
-    // Notify when error occurred
-    std::function<void (std::string const &)> on_error;
+public:
+    null_input_processor () {}
 
-    // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+public:
+    void configure () {}
+    void remove (typename Node::socket_id) {}
+    void process_input (typename Node::socket_id, std::vector<char> &&) {}
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-

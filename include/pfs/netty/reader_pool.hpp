@@ -21,7 +21,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename ReaderPoller, typename Socket>
+template <typename Socket, typename ReaderPoller>
 class reader_pool: protected ReaderPoller
 {
 public:
@@ -40,7 +40,7 @@ private:
     std::vector<socket_id> _removable;
 
     mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
-    mutable std::function<void(socket_id, std::vector<char> &&)> _on_ready;
+    mutable std::function<void(socket_id, std::vector<char> &&)> _on_data_ready;
     mutable std::function<void(socket_id)> _on_disconnected;
     mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
@@ -99,8 +99,8 @@ public:
                     break;
             }
 
-            if (_on_ready)
-                _on_ready(id, std::move(inpb));
+            if (_on_data_ready)
+                _on_data_ready(id, std::move(inpb));
         };
     }
 
@@ -181,9 +181,9 @@ public:
      * Sets a callback for reading from the socket. Callback signature is void(socket_id, std::vector<char> &&).
      */
     template <typename F>
-    reader_pool & on_ready (F && f)
+    reader_pool & on_data_ready (F && f)
     {
-        _on_ready = std::forward<F>(f);
+        _on_data_ready = std::forward<F>(f);
         return *this;
     }
 

@@ -12,6 +12,7 @@ namespace netty {
 
 enum class conn_status {
       failure     = -1
+    , unreachable = -2
     , connected   =  0
     , connecting  =  1
     , deferred    =  2

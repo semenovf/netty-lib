@@ -56,7 +56,7 @@ void enet_socket::init (int timeout_limit, int timeout_min, int timeout_max, err
     _timeout_max   = timeout_max;
 }
 
-enet_socket::enet_socket (uninitialized)
+enet_socket::enet_socket ()
 {}
 
 enet_socket::enet_socket (net_quality nq, error * perr)

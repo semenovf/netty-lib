@@ -15,7 +15,7 @@
 
 namespace netty {
 
-template <typename ListenerPoller, typename ListenerSocket, typename Socket>
+template <typename ListenerSocket, typename Socket, typename ListenerPoller>
 class listener_pool: protected ListenerPoller
 {
 public:

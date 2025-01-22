@@ -17,7 +17,7 @@ namespace netty {
 namespace udt {
 
 udt_listener::udt_listener ()
-    : udt_socket(uninitialized{})
+    : udt_socket()
 {}
 
 udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_counter
@@ -134,7 +134,7 @@ udt_socket udt_listener::accept_nonblocking (listener_id listener_sock, error * 
         });
     }
 
-    return udt_socket{uninitialized{}};
+    return udt_socket{};
 }
 
 }} // namespace netty::udt

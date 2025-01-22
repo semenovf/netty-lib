@@ -13,7 +13,6 @@
 #include <pfs/netty/namespace.hpp>
 #include <pfs/netty/send_result.hpp>
 #include <pfs/netty/socket4_addr.hpp>
-#include <pfs/netty/uninitialized.hpp>
 
 #if _MSC_VER
 #   include <winsock2.h>

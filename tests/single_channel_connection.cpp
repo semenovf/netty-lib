@@ -50,38 +50,38 @@ static std::atomic<bool> s_is_error {false};
 #if defined(NETTY__SCC_TEST_EPOLL) && defined(NETTY__EPOLL_ENABLED)
 using socket_t = netty::posix::tcp_socket;
 using listener_t = netty::posix::tcp_listener;
-using connecting_pool_t = netty::connecting_pool<netty::connecting_epoll_poller_t, socket_t>;
-using listener_pool_t = netty::listener_pool<netty::listener_epoll_poller_t, listener_t, socket_t>;
-using reader_pool_t = netty::reader_pool<netty::reader_epoll_poller_t, socket_t>;
-using writer_pool_t = netty::writer_pool<netty::writer_epoll_poller_t, socket_t>;
+using connecting_pool_t = netty::connecting_pool<socket_t, netty::connecting_epoll_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, netty::listener_epoll_poller_t>;
+using reader_pool_t = netty::reader_pool<socket_t, netty::reader_epoll_poller_t>;
+using writer_pool_t = netty::writer_pool<socket_t, netty::writer_epoll_poller_t>;
 #elif defined(NETTY__SCC_TEST_POLL) && defined(NETTY__POLL_ENABLED)
 using socket_t = netty::posix::tcp_socket;
 using listener_t = netty::posix::tcp_listener;
-using connecting_pool_t = netty::connecting_pool<netty::connecting_poll_poller_t, socket_t>;
-using listener_pool_t = netty::listener_pool<netty::listener_poll_poller_t, listener_t, socket_t>;
-using reader_pool_t = netty::reader_pool<netty::reader_poll_poller_t, socket_t>;
-using writer_pool_t = netty::writer_pool<netty::writer_poll_poller_t, socket_t>;
+using connecting_pool_t = netty::connecting_pool<socket_t, netty::connecting_poll_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, netty::listener_poll_poller_t>;
+using reader_pool_t = netty::reader_pool<socket_t, netty::reader_poll_poller_t>;
+using writer_pool_t = netty::writer_pool<socket_t, netty::writer_poll_poller_t>;
 #elif defined(NETTY__SCC_TEST_SELECT) && defined(NETTY__SELECT_ENABLED)
 using socket_t = netty::posix::tcp_socket;
 using listener_t = netty::posix::tcp_listener;
-using connecting_pool_t = netty::connecting_pool<netty::connecting_select_poller_t, socket_t>;
-using listener_pool_t = netty::listener_pool<netty::listener_select_poller_t, listener_t, socket_t>;
-using reader_pool_t = netty::reader_pool<netty::reader_select_poller_t, socket_t>;
-using writer_pool_t = netty::writer_pool<netty::writer_select_poller_t, socket_t>;
+using connecting_pool_t = netty::connecting_pool<socket_t, netty::connecting_select_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, netty::listener_select_poller_t>;
+using reader_pool_t = netty::reader_pool<socket_t, netty::reader_select_poller_t>;
+using writer_pool_t = netty::writer_pool<socket_t, netty::writer_select_poller_t>;
 #elif defined(NETTY__SCC_TEST_UDT) && defined(NETTY__UDT_ENABLED)
 using socket_t = netty::udt::udt_socket;
 using listener_t = netty::udt::udt_listener;
-using connecting_pool_t = netty::connecting_pool<netty::connecting_udt_poller_t, socket_t>;
-using listener_pool_t = netty::listener_pool<netty::listener_udt_poller_t, listener_t, socket_t>;
-using reader_pool_t = netty::reader_pool<netty::reader_udt_poller_t, socket_t>;
-using writer_pool_t = netty::writer_pool<netty::writer_udt_poller_t, socket_t>;
+using connecting_pool_t = netty::connecting_pool<socket_t, netty::connecting_udt_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, netty::listener_udt_poller_t>;
+using reader_pool_t = netty::reader_pool<socket_t, netty::reader_udt_poller_t>;
+using writer_pool_t = netty::writer_pool<socket_t, netty::writer_udt_poller_t>;
 #elif defined(NETTY__SCC_TEST_ENET) && defined(NETTY__ENET_ENABLED)
 using socket_t = netty::enet::enet_socket;
 using listener_t = netty::enet::enet_listener;
-using connecting_pool_t = netty::connecting_pool<netty::connecting_enet_poller_t, socket_t>;
-using listener_pool_t = netty::listener_pool<netty::listener_enet_poller_t, listener_t, socket_t>;
-using reader_pool_t = netty::reader_pool<netty::reader_enet_poller_t, socket_t>;
-using writer_pool_t = netty::writer_pool<netty::writer_enet_poller_t, socket_t>;
+using connecting_pool_t = netty::connecting_pool<socket_t, netty::connecting_enet_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, netty::listener_enet_poller_t>;
+using reader_pool_t = netty::reader_pool<socket_t, netty::reader_enet_poller_t>;
+using writer_pool_t = netty::writer_pool<socket_t, netty::writer_enet_poller_t>;
 #endif
 
 using socket_id = socket_t::socket_id;
@@ -167,7 +167,7 @@ void worker ()
         LOGE(TAG, "{:04}: read socket failure: id={}: {}", self_port, id, err.what());
         connected_sockets.erase(id);
         peer_sockets.erase(id);
-    }).on_ready([& read_counter, self_port] (socket_id id, std::vector<char> && data) {
+    }).on_data_ready([& read_counter, self_port] (socket_id id, std::vector<char> && data) {
         LOGD(TAG, "{:04}: Input data ready: id={}: {} bytes", self_port, id, data.size());
         read_counter++;
     }).on_locate_socket([& peer_sockets] (socket_id id) {

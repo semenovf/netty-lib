@@ -14,8 +14,9 @@ namespace netty {
 enum class connection_refused_reason
 {
       other
-    , timeout // Connection timed out
-    , reset   // Connection reset by peer
+    , timeout     // Connection timed out
+    , reset       // Connection reset by peer
+    , unreachable // No rote to host / host down
 };
 
 inline std::string to_string (connection_refused_reason reason)
@@ -23,6 +24,7 @@ inline std::string to_string (connection_refused_reason reason)
     switch (reason) {
         case connection_refused_reason::timeout: return "timed out";
         case connection_refused_reason::reset: return "reset by peer";
+        case connection_refused_reason::unreachable: return "unreachable";
         case connection_refused_reason::other:
         default:
             break;

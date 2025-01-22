@@ -8,8 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
+#include <algorithm>
 #include <list>
 #include <queue>
+#include <utility>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -31,12 +33,28 @@ public:
     writer_queue () {}
 
 public:
+    void enqueue (int /*priority*/, char const * data, std::size_t len)
+    {
+        if (len == 0)
+            return;
+
+        _q.push(elem{std::vector<char>{data, data + len}, 0});
+    }
+
     void enqueue (char const * data, std::size_t len)
     {
         if (len == 0)
             return;
 
         _q.push(elem{std::vector<char>{data, data + len}, 0});
+    }
+
+    void enqueue (int /*priority*/, std::vector<char> && data)
+    {
+        if (data.empty())
+            return;
+
+        _q.push(elem{std::move(data), 0});
     }
 
     void enqueue (std::vector<char> && data)
@@ -52,34 +70,29 @@ public:
         return _q.empty();
     }
 
-    char const * data () const
+    std::pair<char const *, std::size_t> data_view (std::size_t max_size) const
     {
         if (empty())
-            return nullptr;
+            return std::make_pair(nullptr, 0);
 
         auto & front = _q.front();
-        return front.b.data() + front.cursor;
-    }
-
-    std::size_t size () const
-    {
-        if (empty())
-            return 0;
-
-        auto & front = _q.front();
-        return front.b.size() - front.cursor;
+        auto size = (std::min)(front.b.size() - front.cursor, max_size);
+        return std::make_pair(front.b.data() + front.cursor, size);
     }
 
     void shift (std::size_t n)
     {
-        if (empty())
-            return;
-
         auto & front = _q.front();
         front.cursor += n;
 
         if (front.cursor >= front.b.size())
             _q.pop();
+    }
+
+public: // static
+    static constexpr int priority_count () noexcept
+    {
+        return 1;
     }
 };
 

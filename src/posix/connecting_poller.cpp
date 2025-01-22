@@ -69,16 +69,25 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
                 if (rc != 0) {
                     on_failure(fd, error {
                           make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket option failure: {} (socket={})"
-                            , pfs::system_error_text(), fd)
+                        , tr::f_("get socket ({}) option failure: {} (errno={})"
+                            , fd, pfs::system_error_text(), errno)
                     });
                 } else {
                     switch (error_val) {
                         case 0: // No error
                             break;
 
+                        case EHOSTUNREACH:
+                            connection_refused(fd, connection_refused_reason::unreachable);
+                            break;
+
                         case ECONNREFUSED:
                             connection_refused(fd, connection_refused_reason::other);
+                            break;
+
+                        // Connection reset by peer
+                        case ECONNRESET:
+                            connection_refused(fd, connection_refused_reason::reset);
                             break;
 
                         case ETIMEDOUT:
@@ -161,28 +170,30 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 if (rc != 0) {
                     on_failure(ev.fd, error {
                           make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket option failure: {} (socket={})"
-                            , pfs::system_error_text(), ev.fd)
+                        , tr::f_("get socket ({}) option failure: {} (errno={})"
+                            , ev.fd, pfs::system_error_text(), errno)
                     });
                 } else {
                     switch (error_val) {
                         case 0: // No error
                             on_failure(ev.fd, error {
                                   make_error_code(pfs::errc::unexpected_error)
-                                , tr::f_("EPOLLERR event happend, but no error occurred on it (socket={})"
+                                , tr::f_("EPOLLERR event happend, but no error occurred on socket: {}"
                                     , ev.fd)
                             });
                             break;
 
                         case EHOSTUNREACH:
-                            on_failure(ev.fd, error {
-                                  errc::socket_error
-                                , tr::f_("no route to host (socket={})", ev.fd)
-                            });
+                            connection_refused(ev.fd, connection_refused_reason::unreachable);
                             break;
 
                         case ECONNREFUSED:
                             connection_refused(ev.fd, connection_refused_reason::other);
+                            break;
+
+                        // Connection reset by peer
+                        case ECONNRESET:
+                            connection_refused(ev.fd, connection_refused_reason::reset);
                             break;
 
                         case ETIMEDOUT:

@@ -20,7 +20,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename ConnectingPoller, typename Socket>
+template <typename Socket, typename ConnectingPoller>
 class connecting_pool: protected ConnectingPoller
 {
 public:
@@ -155,6 +155,10 @@ public:
 
                 break;
             }
+
+            case netty::conn_status::unreachable:
+                _on_connection_refused(sock.id(), sock.saddr(), connection_refused_reason::unreachable);
+                break;
 
             case netty::conn_status::failure:
                 _on_failure(err);

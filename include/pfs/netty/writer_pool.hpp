@@ -13,7 +13,6 @@
 #include "writer_queue.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/stopwatch.hpp>
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -22,9 +21,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include <pfs/log.hpp> // FIXME REMOVE
+
 NETTY__NAMESPACE_BEGIN
 
-template <typename WriterPoller, typename Socket, typename WriterQueue = writer_queue>
+template <typename Socket, typename WriterPoller, typename WriterQueue = writer_queue>
 class writer_pool: protected WriterPoller
 {
 public:
@@ -120,42 +121,6 @@ private:
         _removable.clear();
     }
 
-public:
-    void add (socket_id id)
-    {
-        /*auto acc = */ensure_account(id);
-    }
-
-    void remove (socket_id id)
-    {
-        remove_later(id);
-    }
-
-    std::uint64_t remain_bytes () const noexcept
-    {
-        return _remain_bytes;
-    }
-
-    void enqueue (socket_id id, char const * data, std::size_t len)
-    {
-        if (len == 0)
-            return;
-
-        auto acc = ensure_account(id);
-        acc->q.enqueue(data, len);
-        _remain_bytes += len;
-    }
-
-    void enqueue (socket_id id, std::vector<char> && data)
-    {
-        if (data.empty())
-            return;
-
-        auto acc = ensure_account(id);
-        _remain_bytes += data.size();
-        acc->q.enqueue(std::move(data));
-    }
-
     void send (std::chrono::milliseconds limit = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
         pfs::stopwatch<std::milli> stopwatch;
@@ -179,11 +144,10 @@ public:
                     continue;
                 }
 
-                char const * frame = acc.q.data();
-                std::size_t frame_size = (std::min)(std::size_t{acc.frame_size}, acc.q.size());
+                auto frame = acc.q.data_view(acc.frame_size);
 
                 netty::error err;
-                auto res = sock->send(frame, frame_size, & err);
+                auto res = sock->send(frame.first, frame.second, & err);
 
                 switch (res.status) {
                     case netty::send_status::failure:
@@ -212,6 +176,52 @@ public:
                 }
             }
         } while (stopwatch.current_count() < limit.count());
+    }
+
+public:
+    void add (socket_id id)
+    {
+        /*auto acc = */ensure_account(id);
+    }
+
+    void remove (socket_id id)
+    {
+        remove_later(id);
+    }
+
+    std::uint64_t remain_bytes () const noexcept
+    {
+        return _remain_bytes;
+    }
+
+    void enqueue (socket_id id, int priority, char const * data, std::size_t len)
+    {
+        if (len == 0)
+            return;
+
+        auto acc = ensure_account(id);
+        acc->q.enqueue(priority, data, len);
+        _remain_bytes += len;
+    }
+
+    void enqueue (socket_id id, char const * data, std::size_t len)
+    {
+        enqueue(id, 0, data, len);
+    }
+
+    void enqueue (socket_id id, int priority, std::vector<char> && data)
+    {
+        if (data.empty())
+            return;
+
+        auto acc = ensure_account(id);
+        _remain_bytes += data.size();
+        acc->q.enqueue(priority, std::move(data));
+    }
+
+    void enqueue (socket_id id, std::vector<char> && data)
+    {
+        enqueue(id, 0, std::move(data));
     }
 
     /**
@@ -262,6 +272,12 @@ public:
     bool empty () const noexcept
     {
         return _accounts.empty();
+    }
+
+public: // static
+    static constexpr int priority_count () noexcept
+    {
+        return WriterQueue::priority_count();
     }
 };
 

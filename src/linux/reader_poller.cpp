@@ -48,17 +48,17 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                 if (rc != 0) {
                     on_failure(ev.data.fd, error {
                           make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket option failure: {} (socket={})"
-                            , pfs::system_error_text(), ev.data.fd)
+                        , tr::f_("get socket ({}) option failure: {} (errno={})"
+                            , ev.data.fd, pfs::system_error_text(), errno)
                     });
                 } else {
-                    if (error_val == EPIPE) {
+                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH) {
                         disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
                               errc::socket_error
-                            , tr::f_("get socket option failure: {} (socket={})"
-                                , pfs::system_error_text(error_val), ev.data.fd)
+                            , tr::f_("get socket ({}) option failure: {} (error_val={})"
+                                , ev.data.fd, pfs::system_error_text(error_val), error_val)
                         });
                     }
                 }

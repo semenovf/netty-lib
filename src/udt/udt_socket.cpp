@@ -147,13 +147,13 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
     _socket = sock;
 }
 
-udt_socket::udt_socket (uninitialized)
+udt_socket::udt_socket ()
 {}
 
-udt_socket::udt_socket ()
-{
-    init(1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
-}
+// udt_socket::udt_socket ()
+// {
+//     init(1500, kDefaultExpMaxCounter, kDefaultExpThreshold, nullptr);
+// }
 
 udt_socket::udt_socket (socket_id sock, socket4_addr const & saddr)
     : _socket(sock)

@@ -50,24 +50,21 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
                     on_failure(ev.data.fd
                         , error {
                               make_error_code(pfs::errc::system_error)
-                            , tr::f_("get socket option failure: {} (socket={})"
-                                , pfs::system_error_text(), ev.data.fd)
+                            , tr::f_("get socket ({}) option failure: {} (errno={})"
+                                , ev.data.fd, pfs::system_error_text(), errno)
                         });
                 } else {
                     switch (error_val) {
                         case 0: // No error
                             on_failure(ev.data.fd, error {
                                   make_error_code(pfs::errc::unexpected_error)
-                                , tr::f_("EPOLLERR event happend, but no error occurred on it (socket={})"
+                                , tr::f_("EPOLLERR event happend, but no error occurred on socket: {}"
                                 , ev.data.fd)
                             });
                             break;
 
                         case EHOSTUNREACH:
-                            on_failure(ev.data.fd, error {
-                                  errc::socket_error
-                                , tr::f_("no route to host (socket={})", ev.data.fd)
-                            });
+                            connection_refused(ev.data.fd, connection_refused_reason::unreachable);
                             break;
 
                         case ECONNREFUSED:

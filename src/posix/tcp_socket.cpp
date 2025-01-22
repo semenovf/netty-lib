@@ -56,6 +56,7 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
     addr_in4.sin_family      = AF_INET;
     addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
     addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
+    _saddr = saddr;
 
     auto rc = ::connect(_socket, reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
@@ -64,29 +65,30 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
     if (rc < 0) {
 #if _MSC_VER
         auto lastWsaError = WSAGetLastError();
-        in_progress = lastWsaError == WSAEINPROGRESS || lastWsaError == WSAEWOULDBLOCK;
+        in_progress = (lastWsaError == WSAEINPROGRESS || lastWsaError == WSAEWOULDBLOCK);
 #else
         in_progress = (errno == EINPROGRESS || errno == EWOULDBLOCK);
 #endif
 
         if (!in_progress) {
-            error err {
-                  errc::socket_error
-                , tr::_("socket connect error")
-                , pfs::system_error_text()
-            };
-
-            if (perr) {
-                *perr = std::move(err);
+#if _MSC_VER
+            auto unreachable = (lastWsaError == WSAENETUNREACH || errno == WSAENETDOWN);
+#else
+            auto unreachable = (errno == ENETUNREACH || errno == ENETDOWN);
+#endif
+            if (unreachable) {
+                return conn_status::unreachable;
             } else {
-                throw err;
-            }
+                pfs::throw_or(perr, error {
+                      errc::socket_error
+                    , tr::_("socket connect error")
+                    , pfs::system_error_text()
+                });
 
-            return conn_status::failure;
+                return conn_status::failure;
+            }
         }
     }
-
-    _saddr = saddr;
 
     return in_progress ? conn_status::connecting : conn_status::connected;
 }

@@ -8,8 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <functional>
-#include <string>
+#include <pfs/netty/socket4_addr.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -17,16 +16,22 @@ namespace patterns {
 namespace meshnet {
 
 template <typename Node>
-struct functional_callbacks
+class without_heartbeat
 {
-    // Notify when error occurred
-    std::function<void (std::string const &)> on_error;
+    using socket_id = typename Node::socket_id;
 
-    // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+public:
+    without_heartbeat (Node &) {}
+
+public:
+    void configure () {}
+    void add (socket_id) {}
+    void remove (socket_id) {}
+    void step () {}
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
+
 

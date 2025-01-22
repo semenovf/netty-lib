@@ -152,13 +152,13 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
-                    if (error_val == EPIPE) {
+                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH) {
                         disconnected(ev.fd);
                     } else {
                         on_failure(ev.fd, error {
                               errc::socket_error
-                            , tr::f_("get socket option failure: {} (socket={})"
-                                , pfs::system_error_text(error_val), ev.fd)
+                            , tr::f_("get socket ({}) option failure: {} (error_val={})"
+                                , ev.fd, pfs::system_error_text(error_val), error_val)
                         });
                     }
                 }

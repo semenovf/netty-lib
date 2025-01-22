@@ -14,7 +14,7 @@
 #include <pfs/netty/exports.hpp>
 #include <pfs/netty/send_result.hpp>
 #include <pfs/netty/socket4_addr.hpp>
-#include <pfs/netty/uninitialized.hpp>
+// #include <pfs/netty/uninitialized.hpp>
 #include <chrono>
 #include <string>
 #include <vector>
@@ -61,11 +61,6 @@ public:
 
     /**
      * Constructs uninitialized (invalid) UDT socket.
-     */
-    NETTY__EXPORT udt_socket (uninitialized);
-
-    /**
-     * Constructs UDT socket with default properties.
      */
     NETTY__EXPORT udt_socket ();
 

@@ -12,7 +12,6 @@
 #include <pfs/netty/exports.hpp>
 #include <pfs/netty/send_result.hpp>
 #include <pfs/netty/socket4_addr.hpp>
-#include <pfs/netty/uninitialized.hpp>
 #include <cstdint>
 #include <vector>
 
@@ -90,9 +89,9 @@ public:
     /**
      * Constructs uninitialized (invalid) ENet socket.
      */
-    NETTY__EXPORT enet_socket (uninitialized);
+    NETTY__EXPORT enet_socket ();
 
-    NETTY__EXPORT enet_socket (net_quality nq = net_quality::normal, error * perr = nullptr);
+    NETTY__EXPORT enet_socket (net_quality nq/* = net_quality::normal*/, error * perr = nullptr);
 
     NETTY__EXPORT enet_socket (enet_socket && other) noexcept;
     NETTY__EXPORT enet_socket & operator = (enet_socket && other) noexcept;
