@@ -141,6 +141,12 @@ private:
         return acc;
     }
 
+public:
+    void add (socket_id id)
+    {
+        /*auto acc = */ensure_account(id);
+    }
+
     void remove_later (socket_id id)
     {
         _removable.push_back(id);
@@ -148,23 +154,14 @@ private:
 
     void apply_remove ()
     {
-        for (auto id: _removable) {
-            ReaderPoller::remove(id);
-            _accounts.erase(id);
+        if (!_removable.empty()) {
+            for (auto id: _removable) {
+                ReaderPoller::remove(id);
+                _accounts.erase(id);
+            }
+
+            _removable.clear();
         }
-
-        _removable.clear();
-    }
-
-public:
-    void add (socket_id id)
-    {
-        /*auto acc = */ensure_account(id);
-    }
-
-    void remove (socket_id id)
-    {
-        remove_later(id);
     }
 
     /**
@@ -206,13 +203,7 @@ public:
      */
     void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
-        if (!_removable.empty())
-            apply_remove();
-
         ReaderPoller::poll(millis, perr);
-
-        if (!_removable.empty())
-            apply_remove();
     }
 };
 

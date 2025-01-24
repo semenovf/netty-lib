@@ -57,22 +57,6 @@ public:
         };
     }
 
-private:
-    void remove_later (socket_id id)
-    {
-        _removable.push_back(id);
-    }
-
-    void apply_remove ()
-    {
-        for (auto id: _removable) {
-            ListenerPoller::remove(id);
-            _listeners.erase(id);
-        }
-
-        _removable.clear();
-    }
-
 public:
     /**
      * Sets a callback for the failure. Callback signature is void(netty::error const &).
@@ -104,6 +88,23 @@ public:
             _listeners[listener.id()] = std::move(listener);
     }
 
+    void remove_later (socket_id id)
+    {
+        _removable.push_back(id);
+    }
+
+    void apply_remove ()
+    {
+        if (!_removable.empty()) {
+            for (auto id: _removable) {
+                ListenerPoller::remove(id);
+                _listeners.erase(id);
+            }
+
+            _removable.clear();
+        }
+    }
+
     void listen (int backlog)
     {
         for (auto & x: _listeners) {
@@ -124,13 +125,7 @@ public:
      */
     void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
-        if (!_removable.empty())
-            apply_remove();
-
         ListenerPoller::poll(millis, perr);
-
-        if (!_removable.empty())
-            apply_remove();
     }
 
     bool empty () const noexcept

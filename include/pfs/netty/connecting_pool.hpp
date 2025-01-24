@@ -88,7 +88,7 @@ public:
         };
     }
 
-private:
+public:
     void remove_later (socket_id id)
     {
         _removable.push_back(id);
@@ -96,15 +96,16 @@ private:
 
     void apply_remove ()
     {
-        for (auto id: _removable) {
-            ConnectingPoller::remove(id);
-            _connecting_sockets.erase(id);
-        }
+        if (!_removable.empty()) {
+            for (auto id: _removable) {
+                ConnectingPoller::remove(id);
+                _connecting_sockets.erase(id);
+            }
 
-        _removable.clear();
+            _removable.clear();
+        }
     }
 
-public:
     /**
      * Sets a callback for the failure. Callback signature is void(netty::error const &).
      */
@@ -192,9 +193,6 @@ public:
      */
     void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
-        if (!_removable.empty())
-            apply_remove();
-
         // Reconnect
         if (!_deferred_connections.empty()) {
             auto now = std::chrono::steady_clock::now();
@@ -207,9 +205,6 @@ public:
         }
 
         ConnectingPoller::poll(millis, perr);
-
-        if (!_removable.empty())
-            apply_remove();
     }
 
     bool empty () const noexcept

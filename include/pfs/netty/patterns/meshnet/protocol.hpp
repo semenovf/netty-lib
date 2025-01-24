@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
+#include <pfs/numeric_cast.hpp>
+#include <pfs/optional.hpp>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -44,33 +46,60 @@ enum class packet_enum
 // (Pr) - Priority (0 - max, 7 - min).
 // (C) - Checksum bit (0 - no checksum, 1 - has checksum).
 //
-struct header
-{
-    std::uint8_t b0;
-    std::uint8_t b1;
-    std::uint32_t crc32;  // Optional if checksum bit is 0
-    std::uint32_t length; // Optional if packet is a service type packet (all excluding packet_enum::data)
-};
 
 namespace {
     constexpr std::size_t MIN_HEADER_SIZE = 2;
 }
 
-class header_constructor
+class header
 {
-    header & _h;
+    struct {
+        std::uint8_t b0;
+        std::uint8_t b1;
+        std::uint32_t crc32;  // Optional if checksum bit is 0
+        std::uint32_t length; // Optional if packet is a service type packet (all excluding packet_enum::data)
+    } _h;
 
 protected:
-    header_constructor (header & h, packet_enum type, int priority, bool has_checksum, int version = 0)
-        : _h(h)
+    header (packet_enum type, int priority, bool has_checksum, int version = 0) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
         _h.b0 |= static_cast<std::uint8_t>(version) & 0xF0;
-        _h.b0 |= static_cast<std::uint8_t>(packet_enum::handshake) & 0x0F;
+        _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
         _h.b1 |= static_cast<std::uint8_t>(priority) & 0xF0;
         _h.b1 |= (has_checksum ? 0x01 : 0x00);
     }
 
+public:
+    template <typename Deserializer>
+    header (Deserializer & in)
+    {
+        in >> _h.b0;
+        in >> _h.b1;
+    }
+
+public:
+    inline int version () const noexcept
+    {
+        return static_cast<int>((_h.b0 >> 4) & 0x0F);
+    }
+
+    inline packet_enum type () const noexcept
+    {
+        return static_cast<packet_enum>(_h.b0 & 0x0F);
+    }
+
+    inline int priority () const noexcept
+    {
+        return static_cast<int>((_h.b1 >> 4) & 0x0F);
+    }
+
+    inline bool has_checksum () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x01);
+    }
+
+protected:
     template <typename Serializer>
     void serialize (Serializer & out)
     {
@@ -83,85 +112,73 @@ protected:
         if (static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::data)
             out << _h.length;
     }
-
-public:
-    int priority () const noexcept
-    {
-        return static_cast<int>((_h.b1 >> 4) & 0x0F);
-    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // HeartBeat packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct heartbeat_packet
+class heartbeat_packet: public header
 {
-    header h;
+public:
     std::uint8_t health_data;
-};
-
-class heartbeat_packet_builder: public header_constructor
-{
-    heartbeat_packet _p;
 
 public:
-    heartbeat_packet_builder () noexcept
-        : header_constructor(_p.h, packet_enum::heartbeat, 0, false, 0)
+    heartbeat_packet () noexcept
+        : header(packet_enum::heartbeat, 0, false, 0)
     {
-        _p.health_data = 0;
+        health_data = 0;
+    }
+
+    template <typename Deserializer>
+    explicit heartbeat_packet (Deserializer & in)
+        : heartbeat_packet()
+    {
+        in >> health_data;
     }
 
 public:
-    void set_health_data (std::uint8_t value)
-    {
-        _p.health_data = value;
-    }
-
     template <typename Serializer>
     void serialize (Serializer & out)
     {
-        header_constructor::serialize(out);
-        out << _p.health_data;
+        header::serialize(out);
+        out << health_data;
     }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handshake packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct handshake_packet
+class handshake_packet: public header
 {
-    header h;
-    std::uint8_t uuid_size;
-    std::string uuid;
-};
-
-class handshake_packet_builder: public header_constructor
-{
-    handshake_packet _p;
+    std::string _id;
 
 public:
-    handshake_packet_builder () noexcept
-        : header_constructor(_p.h, packet_enum::handshake, 0, false, 0)
+    handshake_packet () noexcept
+        : header(packet_enum::handshake, 0, false, 0)
+    {}
+
+    template <typename Deserializer>
+    explicit handshake_packet (Deserializer & in)
+        : handshake_packet()
     {
-        _p.uuid_size = 0;
+        std::uint8_t sz = 0;
+        in >> sz >> std::make_pair(& _id, & sz);
     }
 
 public:
     template <typename U>
-    void set_uuid (U const & value)
+    void set_id (U const & value)
     {
-        _p.uuid = to_string(value);
-        _p.uuid_size = static_cast<std::uint8_t>(_p.uuid.size());
+        _id = to_string(value);
     }
 
     template <typename Serializer>
     void serialize (Serializer & out)
     {
-        header_constructor::serialize(out);
-        out << _p.uuid_size;
-
-        if (_p.uuid_size > 0)
-            out << _p.uuid;
+        if (!_id.empty()) {
+            header::serialize(out);
+            out << std::make_pair(_id.data(), pfs::numeric_cast<std::uint8_t>(_id.size()));
+        }
     }
 };
 

@@ -9,9 +9,12 @@
 #pragma once
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/utility.hpp>
 #include <pfs/netty/namespace.hpp>
 #include <cstring>
 #include <unordered_map>
+
+#include <pfs/log.hpp> // FIXME Remove
 
 NETTY__NAMESPACE_BEGIN
 
@@ -51,27 +54,24 @@ private:
         return & acc;
     }
 
-    account & ensure_account (socket_id sid)
-    {
-        auto pacc = locate_account(sid);
-
-        if (pacc == nullptr) {
-            account a;
-            a.sid = sid;
-            auto res = _accounts.emplace(sid, std::move(a));
-
-            pacc = & res.first->second;
-        }
-
-        return *pacc;
-    }
-
 public:
     void configure () {}
 
-    void remove (socket_id id)
+    void add (socket_id sid)
     {
-        _accounts.erase(id);
+        auto * pacc = locate_account(sid);
+
+        if (pacc != nullptr)
+            remove(sid);
+
+        account a;
+        a.sid = sid;
+        /*auto res = */_accounts.emplace(sid, std::move(a));
+    }
+
+    void remove (socket_id sid)
+    {
+        _accounts.erase(sid);
     }
 
     void process_input (socket_id sid, std::vector<char> && data)
@@ -79,15 +79,73 @@ public:
         if (data.empty())
             return;
 
-        auto & acc = ensure_account(sid);
+        auto * pacc = locate_account(sid);
 
-        PFS__ASSERT(acc.sid == sid, "Fix the algorithm for basic_input_processor");
+        if (pacc == nullptr) {
+            throw error {
+                  pfs::errc::unexpected_error
+                , tr::f_("input account not found: #{}, fix the algorithm for basic_input_processor", sid)
+            };
+            return;
+        }
 
-        auto offset = acc.b.size();
-        acc.b.resize(offset + data.size());
-        std::memcpy(acc.b.data() + offset, data.data(), data.size());
+        if (pacc->sid != sid) {
+            throw error {
+                  pfs::errc::unexpected_data
+                , tr::f_("socket IDs is not equal: #{} != #{}, fix the algorithm for basic_input_processor"
+                    , pacc->sid, sid)
+            };
+            return;
+        }
 
-        auto available = acc.b.size();
+        auto & inpb = pacc->b;
+        auto offset = inpb.size();
+        inpb.resize(offset + data.size());
+        std::memcpy(inpb.data() + offset, data.data(), data.size());
+
+        auto in = Node::serializer_traits::make_deserializer(inpb.data(), inpb.size());
+
+        while (in.available() > 0) {
+            in.start_transaction();
+            header h {in};
+
+            if (!in.commit_transaction())
+                break;
+
+            switch (h.type()) {
+                case packet_enum::heartbeat: {
+                    in.start_transaction();
+                    heartbeat_packet pkt {in};
+
+                    if (in.commit_transaction()) {
+                        // TODO Process Heartbeat packet
+                        LOGD("", "Heartbeat received: health={}", pkt.health_data);
+                    }
+                    break;
+                }
+                case packet_enum::handshake:
+                    break;
+                case packet_enum::data:
+                    break;
+                case packet_enum::discovery: // Not implemented yet
+                    throw error {
+                          pfs::errc::unexpected_data
+                        , tr::_("discovery packet not supported yet")
+                    };
+                    break;
+                default:
+                    throw error {
+                          pfs::errc::unexpected_data
+                        , tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))
+                    };
+                    break;
+            }
+        }
+
+        if (in.available() == 0)
+            inpb.clear();
+        else
+            inpb.erase(inpb.begin(), inpb.begin() + (inpb.size() - in.available()));
     }
 };
 

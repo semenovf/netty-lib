@@ -13,7 +13,6 @@
 #include <pfs/netty/patterns/meshnet/functional_callbacks.hpp>
 #include <pfs/netty/patterns/meshnet/serializer_traits.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
-#include <pfs/netty/patterns/meshnet/timeout_reconnection.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/priority_writer_queue.hpp>
 #include <pfs/netty/writer_queue.hpp>
@@ -44,7 +43,6 @@ using meshnet_node_t = netty::patterns::meshnet::node<
     , netty::writer_queue
     //, netty::priority_writer_queue<3>
     , netty::patterns::meshnet::default_serializer_traits_t
-    , netty::patterns::meshnet::timeout_reconnection
     , netty::patterns::meshnet::simple_heartbeat
     , netty::patterns::meshnet::basic_input_processor
     , netty::patterns::meshnet::functional_callbacks>;

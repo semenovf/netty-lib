@@ -57,27 +57,6 @@ private:
         }
     }
 
-    void remove_later (socket_id id)
-    {
-        _removable.push_back(id);
-    }
-
-    void apply_remove ()
-    {
-        for (auto const & id: _removable) {
-            auto pos = _mapping.find(id);
-
-            if (pos != _mapping.end()) {
-                auto index = pos->second;
-                _accounts[index].sock = socket_type{};
-                _free_indices.emplace(index);
-                _mapping.erase(pos);
-            }
-        }
-
-        _removable.clear();
-    }
-
     account * locate_account (socket_id id)
     {
         auto pos = _mapping.find(id);
@@ -113,12 +92,27 @@ public:
         add(std::move(sock), kind_enum::accepted);
     }
 
-    /**
-     * Close socket specified by @a id.
-     */
-    void close (socket_id id)
+    void remove_later (socket_id id)
     {
-        remove_later(id);
+        _removable.push_back(id);
+    }
+
+    void apply_remove ()
+    {
+        if (!_removable.empty())  {
+            for (auto const & id: _removable) {
+                auto pos = _mapping.find(id);
+
+                if (pos != _mapping.end()) {
+                    auto index = pos->second;
+                    _accounts[index].sock = socket_type{};
+                    _free_indices.emplace(index);
+                    _mapping.erase(pos);
+                }
+            }
+
+            _removable.clear();
+        }
     }
 
     /**
@@ -142,12 +136,6 @@ public:
             *is_accepted = pacc->kind == kind_enum::accepted;
 
         return & pacc->sock;
-    }
-
-    void step ()
-    {
-        if (!_removable.empty())
-            apply_remove();
     }
 };
 

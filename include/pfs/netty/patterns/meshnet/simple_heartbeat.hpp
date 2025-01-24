@@ -88,13 +88,13 @@ public:
             auto pos = _q.begin();
 
             auto out = serializer_traits::make_serializer();
-            heartbeat_packet_builder builder;
-            builder.serialize(out);
+            heartbeat_packet pkt;
+            pkt.serialize(out);
 
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node.send(pos->sid, builder.priority(), out.data(), out.size());
+                _node.send(pos->sid, pkt.priority(), out.data(), out.size());
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);

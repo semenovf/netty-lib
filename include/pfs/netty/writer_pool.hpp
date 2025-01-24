@@ -106,21 +106,6 @@ private:
         return acc;
     }
 
-    void remove_later (socket_id id)
-    {
-        _removable.push_back(id);
-    }
-
-    void apply_remove ()
-    {
-        for (auto id: _removable) {
-            WriterPoller::remove(id);
-            _accounts.erase(id);
-        }
-
-        _removable.clear();
-    }
-
     void send (std::chrono::milliseconds limit = std::chrono::milliseconds{0}, error * perr = nullptr)
     {
         pfs::stopwatch<std::milli> stopwatch;
@@ -184,9 +169,21 @@ public:
         /*auto acc = */ensure_account(id);
     }
 
-    void remove (socket_id id)
+    void remove_later (socket_id id)
     {
-        remove_later(id);
+        _removable.push_back(id);
+    }
+
+    void apply_remove ()
+    {
+        if (!_removable.empty()) {
+            for (auto id: _removable) {
+                WriterPoller::remove(id);
+                _accounts.erase(id);
+            }
+
+            _removable.clear();
+        }
     }
 
     std::uint64_t remain_bytes () const noexcept
@@ -255,18 +252,12 @@ public:
     {
         pfs::stopwatch<std::milli> stopwatch;
 
-        if (!_removable.empty())
-            apply_remove();
-
         millis -= std::chrono::milliseconds{stopwatch.current_count()};
         stopwatch.start();
         send(millis, perr);
         millis -= std::chrono::milliseconds{stopwatch.current_count()};
 
         WriterPoller::poll(millis, perr);
-
-        if (!_removable.empty())
-            apply_remove();
     }
 
     bool empty () const noexcept

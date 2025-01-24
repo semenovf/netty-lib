@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -41,8 +41,7 @@ struct primal_serializer
             << pkt.payloadsize
             << pkt.partcount
             << pkt.partindex
-            << pfs::exclude_size{}
-            << std::make_pair(pkt.payload, pkt.packetsize - packet::PACKET_HEADER_SIZE);
+            << pfs::string_view{pkt.payload, pkt.packetsize - packet::PACKET_HEADER_SIZE};
     }
 
     static void unpack (istream_type & in, packet & pkt)
@@ -56,8 +55,7 @@ struct primal_serializer
 
         auto n = static_cast<typename istream_type::size_type>(pkt.packetsize) - packet::PACKET_HEADER_SIZE;
 
-        in  >> pfs::expected_size{n}
-            >> std::make_pair(pkt.payload, n);
+        in >> std::make_pair(pkt.payload, & n);
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -152,14 +150,12 @@ struct primal_serializer
     ////////////////////////////////////////////////////////////////////////////////
     static void pack (ostream_type & out, file_chunk const & fc)
     {
-        out << fc.fileid << fc.offset << fc.chunksize << pfs::exclude_size{} << fc.chunk;
+        out << fc.fileid << fc.offset << fc.chunksize << fc.chunk;
     }
 
     static void unpack (istream_type & in, file_chunk & fc)
     {
-        in >> fc.fileid >> fc.offset >> fc.chunksize
-            >> pfs::expected_size{static_cast<typename istream_type::size_type>(fc.chunksize)}
-            >> fc.chunk;
+        in >> fc.fileid >> fc.offset >> fc.chunksize >> std::make_pair(& fc.chunk, & fc.chunksize);
     }
 
     ////////////////////////////////////////////////////////////////////////////////

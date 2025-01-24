@@ -72,7 +72,6 @@ int main (int argc, char * argv[])
     meshnet_node_t node(pfs::generate_uuid(), std::move(callbacks));
 
     node.configure_heartbeat_processor(std::chrono::seconds{5});
-    node.configure_reconnection_scheduler(std::chrono::seconds{5});
     node.configure_input_processor();
     netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
     node.add_listener(netty::socket4_addr{listenerAddr, PORT});
