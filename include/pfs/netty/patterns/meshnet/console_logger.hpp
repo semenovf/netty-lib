@@ -4,26 +4,26 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.17 Initial version.
+//      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <functional>
-#include <string>
+#include <pfs/log.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <typename Node>
-struct functional_callbacks
+class console_logger
 {
-    // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+public:
+    void log_debug (std::string const & msg) { LOGD("[meshnet]", "{}", msg); }
+    void log_info (std::string const & msg)  { LOGI("[meshnet]", "{}", msg); }
+    void log_warn (std::string const & msg)  { LOGW("[meshnet]", "{}", msg); }
+    void log_error (std::string const & msg) { LOGE("[meshnet]", "{}", msg); }
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-

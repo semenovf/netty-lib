@@ -4,23 +4,21 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.17 Initial version.
+//      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <functional>
-#include <string>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <typename Node>
-struct functional_callbacks
+enum class handshake_result_enum
 {
-    // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+      unusable = 0 // Socket is unusable, may be closed
+    , reader = 1   // Use socket as reader
+    , writer = 2   // Use socket as writer
 };
 
 }} // namespace patterns::meshnet

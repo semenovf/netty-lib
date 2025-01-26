@@ -21,8 +21,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <pfs/log.hpp> // FIXME REMOVE
-
 NETTY__NAMESPACE_BEGIN
 
 template <typename Socket, typename WriterPoller, typename WriterQueue = writer_queue>

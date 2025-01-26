@@ -43,7 +43,7 @@ private:
     std::vector<socket_id> _tmp;
 
 public:
-    simple_heartbeat (Node & node)
+    simple_heartbeat (Node & node, std::chrono::seconds timeout = std::chrono::seconds{5})
         : _node(node)
     {}
 
@@ -54,17 +54,6 @@ private:
     }
 
 public:
-    void configure (std::chrono::seconds timeout)
-    {
-        if (timeout < std::chrono::seconds{0})
-            timeout = std::chrono::seconds{0};
-
-        if (timeout > std::chrono::seconds{3600 * 24})
-            timeout = std::chrono::seconds{3600 * 24};
-
-        _timeout = timeout;
-    }
-
     void add (socket_id sid)
     {
         remove(sid);
@@ -79,6 +68,12 @@ public:
             else
                 ++pos;
         }
+    }
+
+    void process (socket_id sid, heartbeat_packet const & pkt)
+    {
+        // TODO Process Heartbeat packet
+        LOGD("", "Heartbeat received: #{}: health={}", sid, pkt.health_data);
     }
 
     void step ()

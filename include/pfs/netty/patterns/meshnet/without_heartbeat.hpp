@@ -19,14 +19,15 @@ template <typename Node>
 class without_heartbeat
 {
     using socket_id = typename Node::socket_id;
+    using serializer_traits = typename Node::serializer_traits;
 
 public:
     without_heartbeat (Node &) {}
 
 public:
-    void configure () {}
     void add (socket_id) {}
     void remove (socket_id) {}
+    void process_input (typename serializer_traits::deserializer_type &) {}
     void step () {}
 };
 

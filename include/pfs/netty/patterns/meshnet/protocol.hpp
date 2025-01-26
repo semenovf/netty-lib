@@ -22,10 +22,24 @@ namespace meshnet {
 /// Packet type
 enum class packet_enum
 {
-      discovery =  1 /// Network discovery packet (unused yet, for future purposes)
+      handshake =  1 /// Handshake phase packet
     , heartbeat =  2 /// Heartbeat loop packet
-    , handshake =  3 /// Handshake phase packet
     , data      = 15 /// User data packet
+};
+
+// Used when need to specify the direction/way of the packet
+enum class packet_way_enum
+{
+      request
+    , response
+};
+
+enum class packet_category_enum
+{
+      notification
+    , request
+    , response
+    , reply = response
 };
 
 // Byte 0:
@@ -38,14 +52,14 @@ enum class packet_enum
 // (P) - Packet type (see packet_enum).
 //
 // Byte 1:
-// ----------------------------
-// | 7  6  5  4 | 3  2  1 | 0 |
-// ----------------------------
-// |    (Pr)    |reserved | C |
-// ----------------------------
+// ------------------------------
+// | 7  6  5  4 | 3 | 2 | 1 | 0 |
+// ------------------------------
+// |    (Pr)    | F2| F1| F0| C |
+// ------------------------------
 // (Pr) - Priority (0 - max, 7 - min).
 // (C) - Checksum bit (0 - no checksum, 1 - has checksum).
-//
+// (F0), (F1), (F2) - free bits (can be used by some packets)
 
 namespace {
     constexpr std::size_t MIN_HEADER_SIZE = 2;
@@ -53,6 +67,7 @@ namespace {
 
 class header
 {
+protected:
     struct {
         std::uint8_t b0;
         std::uint8_t b1;
@@ -68,6 +83,11 @@ protected:
         _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
         _h.b1 |= static_cast<std::uint8_t>(priority) & 0xF0;
         _h.b1 |= (has_checksum ? 0x01 : 0x00);
+    }
+
+    header (header const & other)
+    {
+        std::memcpy(& _h, & other._h, sizeof(_h));
     }
 
 public:
@@ -99,6 +119,36 @@ public:
         return static_cast<bool>(_h.b1 & 0x01);
     }
 
+    inline bool is_f0 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x02);
+    }
+
+    inline bool is_f1 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x04);
+    }
+
+    inline bool is_f2 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x08);
+    }
+
+    inline void enable_f0 ()
+    {
+        _h.b1 |= 0x02;
+    }
+
+    inline void enable_f1 ()
+    {
+        _h.b1 |= 0x04;
+    }
+
+    inline void enable_f2 ()
+    {
+        _h.b1 |= 0x08;
+    }
+
 protected:
     template <typename Serializer>
     void serialize (Serializer & out)
@@ -115,7 +165,51 @@ protected:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// HeartBeat packet
+// handshake packet
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class handshake_packet: public header
+{
+public:
+    std::string id;
+
+public:
+    handshake_packet (packet_way_enum way) noexcept
+        : header(packet_enum::handshake, 0, false, 0)
+    {
+        if (way == packet_way_enum::response)
+            enable_f0();
+    }
+
+    /**
+     * Constructs handshake packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
+    template <typename Deserializer>
+    explicit handshake_packet (header const & h, Deserializer & in)
+        : header(h)
+    {
+        std::uint8_t sz = 0;
+        in >> sz >> std::make_pair(& id, & sz);
+    }
+
+public:
+    bool is_response () const noexcept
+    {
+        return is_f0();
+    }
+
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        if (!id.empty()) {
+            header::serialize(out);
+            out << std::make_pair(id.data(), pfs::numeric_cast<std::uint8_t>(id.size()));
+        }
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// heartbeat packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 class heartbeat_packet: public header
 {
@@ -129,9 +223,13 @@ public:
         health_data = 0;
     }
 
+    /**
+     * Constructs heartbeat packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
     template <typename Deserializer>
-    explicit heartbeat_packet (Deserializer & in)
-        : heartbeat_packet()
+    explicit heartbeat_packet (header const & h, Deserializer & in)
+        : header(h)
     {
         in >> health_data;
     }
@@ -142,43 +240,6 @@ public:
     {
         header::serialize(out);
         out << health_data;
-    }
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Handshake packet
-////////////////////////////////////////////////////////////////////////////////////////////////////
-class handshake_packet: public header
-{
-    std::string _id;
-
-public:
-    handshake_packet () noexcept
-        : header(packet_enum::handshake, 0, false, 0)
-    {}
-
-    template <typename Deserializer>
-    explicit handshake_packet (Deserializer & in)
-        : handshake_packet()
-    {
-        std::uint8_t sz = 0;
-        in >> sz >> std::make_pair(& _id, & sz);
-    }
-
-public:
-    template <typename U>
-    void set_id (U const & value)
-    {
-        _id = to_string(value);
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out)
-    {
-        if (!_id.empty()) {
-            header::serialize(out);
-            out << std::make_pair(_id.data(), pfs::numeric_cast<std::uint8_t>(_id.size()));
-        }
     }
 };
 

@@ -14,8 +14,6 @@
 #include <cstring>
 #include <unordered_map>
 
-#include <pfs/log.hpp> // FIXME Remove
-
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -33,10 +31,13 @@ class basic_input_processor
     };
 
 private:
+    Node & _node;
     std::unordered_map<socket_id, account> _accounts;
 
 public:
-    basic_input_processor () {}
+    basic_input_processor (Node & node)
+        : _node(node)
+    {}
 
 private:
     account * locate_account (socket_id sid)
@@ -55,8 +56,6 @@ private:
     }
 
 public:
-    void configure () {}
-
     void add (socket_id sid)
     {
         auto * pacc = locate_account(sid);
@@ -109,30 +108,33 @@ public:
             in.start_transaction();
             header h {in};
 
+            // Not enough data
             if (!in.commit_transaction())
                 break;
 
             switch (h.type()) {
-                case packet_enum::heartbeat: {
+                case packet_enum::handshake: {
                     in.start_transaction();
-                    heartbeat_packet pkt {in};
+                    handshake_packet pkt {h, in};
 
-                    if (in.commit_transaction()) {
-                        // TODO Process Heartbeat packet
-                        LOGD("", "Heartbeat received: health={}", pkt.health_data);
-                    }
+                    if (in.commit_transaction())
+                        _node.handshake_processor().process(sid, pkt);
+
                     break;
                 }
-                case packet_enum::handshake:
+
+                case packet_enum::heartbeat: {
+                    in.start_transaction();
+                    heartbeat_packet pkt {h, in};
+
+                    if (in.commit_transaction())
+                        _node.heartbeat_processor().process(sid, pkt);
                     break;
+                }
+
                 case packet_enum::data:
                     break;
-                case packet_enum::discovery: // Not implemented yet
-                    throw error {
-                          pfs::errc::unexpected_data
-                        , tr::_("discovery packet not supported yet")
-                    };
-                    break;
+
                 default:
                     throw error {
                           pfs::errc::unexpected_data

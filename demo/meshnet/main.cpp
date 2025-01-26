@@ -59,11 +59,7 @@ int main (int argc, char * argv[])
 
     netty::startup_guard netty_startup;
 
-    meshnet_node_t::callback_traits callbacks;
-
-    callbacks.on_error = [] (std::string const & text) {
-        LOGE(TAG, "{}", text);
-    };
+    meshnet_node_t::callback_suite callbacks;
 
     callbacks.on_connection_established = [] (meshnet_node_t::node_id id) {
         LOGD(TAG, "Connection established with node: {}", id);
@@ -71,8 +67,6 @@ int main (int argc, char * argv[])
 
     meshnet_node_t node(pfs::generate_uuid(), std::move(callbacks));
 
-    node.configure_heartbeat_processor(std::chrono::seconds{5});
-    node.configure_input_processor();
     netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
     node.add_listener(netty::socket4_addr{listenerAddr, PORT});
 

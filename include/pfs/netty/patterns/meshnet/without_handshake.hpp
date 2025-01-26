@@ -4,12 +4,11 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.17 Initial version.
+//      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <functional>
-#include <string>
+#include <pfs/netty/socket4_addr.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -17,13 +16,23 @@ namespace patterns {
 namespace meshnet {
 
 template <typename Node>
-struct functional_callbacks
+class without_handshake
 {
-    // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+    using socket_id = typename Node::socket_id;
+    using serializer_traits = typename Node::serializer_traits;
+
+public:
+    without_handshake (Node &) {}
+
+public:
+    void process_accepted (socket_id) {}
+    void process_connected (socket_id) {}
+    void process_input (typename serializer_traits::deserializer_type &) {}
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
+
+
 

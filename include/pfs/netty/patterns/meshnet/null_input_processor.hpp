@@ -22,7 +22,6 @@ public:
     null_input_processor () {}
 
 public:
-    void configure () {}
     void remove (typename Node::socket_id) {}
     void process_input (typename Node::socket_id, std::vector<char> &&) {}
 };
