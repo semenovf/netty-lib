@@ -12,6 +12,7 @@
 #include <pfs/netty/patterns/meshnet/console_logger.hpp>
 #include <pfs/netty/patterns/meshnet/exclusive_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/functional_callbacks.hpp>
+#include <pfs/netty/patterns/meshnet/reconnection_policy.hpp>
 #include <pfs/netty/patterns/meshnet/serializer_traits.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/universal_id_traits.hpp>
@@ -46,6 +47,7 @@ using meshnet_node_t = netty::patterns::meshnet::node<
 #endif
     , netty::writer_queue // netty::priority_writer_queue<3>
     , netty::patterns::meshnet::default_serializer_traits_t
+    , netty::patterns::meshnet::reconnection_policy
     , netty::patterns::meshnet::exclusive_handshake
     , netty::patterns::meshnet::simple_heartbeat
     , netty::patterns::meshnet::basic_input_processor

@@ -37,6 +37,7 @@ template <typename NodeIdintifierTraits
     , typename WriterPoller
     , typename WriterQueue
     , typename SerializerTraits
+    , typename ReconnectionPolicty
     , template <typename> class HandshakeProcessor
     , template <typename> class HeartbeatProcessor
     , template <typename> class InputProcessor
@@ -56,6 +57,7 @@ class node: public Loggable
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using listener_id = typename listener_type::listener_id;
+    using reconnection_policy = ReconnectionPolicty;
 
 public:
     using node_idintifier_traits = NodeIdintifierTraits;
@@ -72,7 +74,10 @@ private:
     writer_pool_type     _writer_pool;
     socket_pool_type     _socket_pool;
 
-    std::chrono::seconds _reconnection_timeout {5};
+    // True if the node is behind NAT
+    bool _behind_nat {false};
+
+    // std::chrono::seconds _reconnection_timeout {5};
     HandshakeProcessor<node> _handshake_processor;
     HeartbeatProcessor<node> _heartbeat_processor;
     InputProcessor<node> _input_processor;
@@ -82,25 +87,15 @@ private:
     std::unordered_map<node_id, socket_id> _writers;
 
 public:
-    node (node_id id, callback_suite && callbacks)
-        : node(id, std::chrono::seconds{5}, std::move(callbacks))
-    {}
-
-    node (node_id id, std::chrono::seconds reconnection_timeout, callback_suite && callbacks)
+    node (node_id id, bool behind_nat, callback_suite && callbacks)
         : Loggable()
         , _id(id)
-        , _reconnection_timeout(reconnection_timeout)
+        , _behind_nat(behind_nat)
         , _handshake_processor(*this)
         , _heartbeat_processor(*this)
         , _input_processor(*this)
         , _callbacks(std::move(callbacks))
     {
-        if (_reconnection_timeout < std::chrono::seconds{0})
-            _reconnection_timeout = std::chrono::seconds{0};
-
-        if (_reconnection_timeout > std::chrono::seconds{3600 * 24})
-            _reconnection_timeout = std::chrono::seconds{3600 * 24};
-
         _listener_pool.on_failure([this] (netty::error const & err) {
             this->log_error(tr::f_("listener pool failure: {}", err.what()));
         }).on_accepted([this] (socket_type && sock) {
@@ -123,8 +118,8 @@ public:
             this->log_error(tr::f_("connection refused for socket: #{}: {}: reason: {}"
                 ", reconnecting", sid, to_string(saddr), to_string(reason)));
 
-            if (_reconnection_timeout > std::chrono::seconds{0})
-                _connecting_pool.connect_timeout(_reconnection_timeout, saddr);
+            if (reconnection_policy::timeout() > std::chrono::seconds{0})
+                _connecting_pool.connect_timeout(reconnection_policy::timeout(), saddr);
         });
 
         _reader_pool.on_failure([this] (socket_id sid, netty::error const & err) {
@@ -146,7 +141,7 @@ public:
             close_socket(sid);
         }).on_bytes_written([] (socket_id sid, std::uint64_t n) {
             // FIXME Use this callback to collect statistics
-            LOGD("***", "bytes written: id={}: {}", sid, n);
+            // LOGD("***", "bytes written: id={}: {}", sid, n);
         }).on_locate_socket([this] (socket_id sid) {
             return _socket_pool.locate(sid);
         });
@@ -160,16 +155,19 @@ public:
         }).on_completed([this] (node_id id, socket_id sid, handshake_result_enum status) {
             switch (status) {
                 case handshake_result_enum::unusable:
-                    this->log_debug(tr::f_("handshake complete: socket #{} excluded for node: {}", sid, to_string(id)));
+                    this->log_debug(tr::f_("handshake complete: socket #{} excluded for node: {}"
+                        , sid, node_idintifier_traits::stringify(id)));
                     close_socket(sid);
                     break;
                 case handshake_result_enum::reader:
-                    this->log_debug(tr::f_("handshake complete: socket #{} is reader for node: {}", sid, to_string(id)));
+                    this->log_debug(tr::f_("handshake complete: socket #{} is reader for node: {}"
+                        , sid, node_idintifier_traits::stringify(id)));
                     _readers[id] = sid;
                     _heartbeat_processor.add(sid);
                     break;
                 case handshake_result_enum::writer:
-                    this->log_debug(tr::f_("handshake complete: socket #{} is writer for node: {}", sid, to_string(id)));
+                    this->log_debug(tr::f_("handshake complete: socket #{} is writer for node: {}"
+                        , sid, node_idintifier_traits::stringify(id)));
                     _writers[id] = sid;
                     _heartbeat_processor.add(sid);
                     break;
@@ -179,7 +177,7 @@ public:
             }
         });
 
-        this->log_debug(tr::f_("Node: {}", _id));
+        this->log_debug(tr::f_("Node: {}", node_idintifier_traits::stringify(_id)));
     }
 
     ~node () {}
@@ -200,16 +198,6 @@ public:
         netty::error err;
         auto rs = _connecting_pool.connect(addr);
         return rs == netty::conn_status::failure;
-    }
-
-    void send (socket_id id, int priority, char const * data, std::size_t len)
-    {
-        _writer_pool.enqueue(id, priority, data, len);
-    }
-
-    void send (socket_id id, int priority, std::vector<char> && data)
-    {
-        _writer_pool.enqueue(id, priority, std::move(data));
     }
 
     void listen (int backlog = 50)
@@ -260,7 +248,7 @@ private:
 
     void schedule_reconnection (socket_id sid)
     {
-        if (_reconnection_timeout > std::chrono::seconds{0}) {
+        if (reconnection_policy::timeout() > std::chrono::seconds{0}) {
             bool is_accepted = false;
             auto psock = _socket_pool.locate(sid, & is_accepted);
             auto reconnecting = !is_accepted;
@@ -268,7 +256,7 @@ private:
             PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
 
             if (reconnecting)
-                _connecting_pool.connect_timeout(_reconnection_timeout, psock->saddr());
+                _connecting_pool.connect_timeout(reconnection_policy::timeout(), psock->saddr());
         }
     }
 
@@ -280,6 +268,17 @@ private:
     HeartbeatProcessor<node> & heartbeat_processor ()
     {
         return _heartbeat_processor;
+    }
+
+public: // Below methods are for internal use only
+    void send (socket_id id, int priority, char const * data, std::size_t len)
+    {
+        _writer_pool.enqueue(id, priority, data, len);
+    }
+
+    void send (socket_id id, int priority, std::vector<char> && data)
+    {
+        _writer_pool.enqueue(id, priority, std::move(data));
     }
 };
 

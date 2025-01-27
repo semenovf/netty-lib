@@ -42,6 +42,12 @@ enum class packet_category_enum
     , reply = response
 };
 
+enum class behind_nat_enum
+{
+      no
+    , yes
+};
+
 // Byte 0:
 // ---------------------------
 // | 7  6  5  4 | 3  2  1  0 |
@@ -59,7 +65,7 @@ enum class packet_category_enum
 // ------------------------------
 // (Pr) - Priority (0 - max, 7 - min).
 // (C) - Checksum bit (0 - no checksum, 1 - has checksum).
-// (F0), (F1), (F2) - free bits (can be used by some packets)
+// (F0), (F1), (F2) - free/reserved bits (can be used by some packets)
 
 namespace {
     constexpr std::size_t MIN_HEADER_SIZE = 2;
@@ -173,11 +179,14 @@ public:
     std::string id;
 
 public:
-    handshake_packet (packet_way_enum way) noexcept
+    handshake_packet (packet_way_enum way, behind_nat_enum behind_nat = behind_nat_enum::no) noexcept
         : header(packet_enum::handshake, 0, false, 0)
     {
         if (way == packet_way_enum::response)
             enable_f0();
+
+        if (behind_nat == behind_nat_enum::yes)
+            enable_f1();
     }
 
     /**
@@ -196,6 +205,11 @@ public:
     bool is_response () const noexcept
     {
         return is_f0();
+    }
+
+    bool is_behind_nat () const noexcept
+    {
+        return is_f1();
     }
 
     template <typename Serializer>

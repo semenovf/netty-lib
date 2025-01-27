@@ -65,7 +65,7 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Connection established with node: {}", id);
     };
 
-    meshnet_node_t node(pfs::generate_uuid(), std::move(callbacks));
+    meshnet_node_t node(pfs::generate_uuid(), false, std::move(callbacks));
 
     netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
     node.add_listener(netty::socket4_addr{listenerAddr, PORT});

@@ -31,8 +31,14 @@ public:
     {}
 
 protected:
-    void nodeid_ready (socket_id sid, node_id const & id, packet_way_enum way)
+    void nodeid_ready (socket_id sid, node_id const & id, packet_way_enum way, behind_nat_enum behind_nat)
     {
+        if (behind_nat == behind_nat_enum::yes) {
+            this->_on_completed(id, sid, handshake_result_enum::reader);
+            this->_on_completed(id, sid, handshake_result_enum::writer);
+            return;
+        }
+
         if (way == packet_way_enum::response) {
             if (this->_node.id() < id) { // Remote socket is master
                 this->_on_completed(id, sid, handshake_result_enum::reader);
