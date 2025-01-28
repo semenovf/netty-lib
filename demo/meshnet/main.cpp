@@ -38,17 +38,19 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} --node-addr=ADDR...\n\n"
+        "{0} --id=NODE_ID --node-addr=ADDR...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
         "\tPrint this help and exit\n"
+        "--id=NODE_ID\n"
+        "\tThis node identifier\n\n"
         "--node-addr=ADDR\n"
-        "\tPeer node address\n\n"
+        "\tNeighbor node address\n\n"
 
         "Example:\n\n"
         "Run with connection to 192.168.0.2:\n"
-        "\t{0} --node-addr=192.168.0.2\n"
+        "\t{0} --id=01JJP9YBH0TXV3HFQ3B10BXXXW --node-addr=192.168.0.2\n"
         , programName);
 }
 
@@ -57,18 +59,8 @@ int main (int argc, char * argv[])
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
-    netty::startup_guard netty_startup;
-
-    meshnet_node_t::callback_suite callbacks;
-
-    callbacks.on_connection_established = [] (meshnet_node_t::node_id id) {
-        LOGD(TAG, "Connection established with node: {}", id);
-    };
-
-    meshnet_node_t node(pfs::generate_uuid(), false, std::move(callbacks));
-
-    netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
-    node.add_listener(netty::socket4_addr{listenerAddr, PORT});
+    std::vector<netty::socket4_addr> neighbor_node_saddrs;
+    pfs::optional<meshnet_node_t::node_id> node_id_opt;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -82,6 +74,18 @@ int main (int argc, char * argv[])
             if (x.is_option("help") || x.is_option("h")) {
                 print_usage(programName);
                 return EXIT_SUCCESS;
+            } else if (x.is_option("id")) {
+                if (x.has_arg()) {
+                    node_id_opt = meshnet_node_t::node_idintifier_traits::parse(x.arg().data()
+                        , x.arg().size());
+
+                    if (!node_id_opt) {
+                        LOGE(TAG, "Bad node identifier");
+                        return EXIT_FAILURE;
+                    }
+                } else {
+                    expectedArgError = true;
+                }
             } else if (x.is_option("node-addr")) {
                 if (x.has_arg()) {
                     auto addr = netty::inet4_addr::parse(x.arg());
@@ -91,7 +95,7 @@ int main (int argc, char * argv[])
                         return EXIT_FAILURE;
                     }
 
-                    node.connect_host(netty::socket4_addr{*addr, PORT});
+                    neighbor_node_saddrs.push_back(netty::socket4_addr{*addr, PORT});
                 } else {
                     expectedArgError = true;
                 }
@@ -110,7 +114,32 @@ int main (int argc, char * argv[])
         return EXIT_SUCCESS;
     }
 
+    if (!node_id_opt) {
+        LOGE(TAG, "Node identifier must be specified");
+        return EXIT_FAILURE;
+    }
+
+    if (neighbor_node_saddrs.empty()) {
+        LOGE(TAG, "No neighbor node address specified");
+        return EXIT_FAILURE;
+    }
+
+    netty::startup_guard netty_startup;
+
+    meshnet_node_t::callback_suite callbacks;
+
+    callbacks.on_connection_established = [] (meshnet_node_t::node_id id) {
+        LOGD(TAG, "Connection established with node: {}", id);
+    };
+
+    meshnet_node_t node(*node_id_opt, false, std::move(callbacks));
+
+    netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
+    node.add_listener(netty::socket4_addr{listenerAddr, PORT});
     node.listen();
+
+    for (auto const & saddr: neighbor_node_saddrs)
+        node.connect_host(saddr);
 
     while (!s_quit.load())
         node.step(std::chrono::milliseconds {10});

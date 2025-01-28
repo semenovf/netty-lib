@@ -10,7 +10,9 @@
 #include "protocol.hpp"
 #include <pfs/netty/namespace.hpp>
 #include <chrono>
+#include <functional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -31,26 +33,40 @@ class simple_heartbeat
         socket_id sid;
     };
 
+    // Sort by ascending order
     friend constexpr bool operator < (heartbeat_item const & lhs, heartbeat_item const & rhs)
     {
         return lhs.t < rhs.t;
     }
 
+    // // Sort by descending order
+    // friend constexpr bool operator < (timelimit_item const & lhs, timelimit_item const & rhs)
+    // {
+    //     return lhs.t > rhs.t;
+    // }
+
 private:
     Node & _node;
-    std::chrono::seconds _timeout {5};
+    std::chrono::seconds _interval {5};
+    std::chrono::seconds _timeout {15};
     std::set<heartbeat_item> _q;
     std::vector<socket_id> _tmp;
 
+    // TODO May be not optimized for large number of sockets
+    std::unordered_map<socket_id, time_point_type> _limits;
+
+    std::function<void (socket_id)> _on_expired = [] (socket_id) {};
+
 public:
-    simple_heartbeat (Node & node, std::chrono::seconds timeout = std::chrono::seconds{5})
+    simple_heartbeat (Node & node, std::chrono::seconds interval = std::chrono::seconds{5})
         : _node(node)
+        , _interval(interval)
     {}
 
 private:
     void enqueue (socket_id sid)
     {
-        _q.insert(heartbeat_item{std::chrono::steady_clock::now() + _timeout, sid});
+        _q.insert(heartbeat_item{std::chrono::steady_clock::now() + _interval, sid});
     }
 
 public:
@@ -68,12 +84,21 @@ public:
             else
                 ++pos;
         }
+
+        _limits.erase(sid);
     }
 
-    void process (socket_id sid, heartbeat_packet const & pkt)
+    void process (socket_id sid, heartbeat_packet const & /*pkt*/)
     {
-        // TODO Process Heartbeat packet
-        LOGD("", "Heartbeat received: #{}: health={}", sid, pkt.health_data);
+        LOGD("[meshnet]", "heartbeat: {}", sid);
+        _limits[sid] = std::chrono::steady_clock::now() + _timeout;
+    }
+
+    template <typename F>
+    simple_heartbeat & on_expired (F && f)
+    {
+        _on_expired = std::forward<F>(f);
+        return *this;
     }
 
     void step ()
@@ -99,6 +124,21 @@ public:
                 enqueue(sid);
 
             _tmp.clear();
+        }
+
+        if (!_limits.empty()) {
+            auto now = std::chrono::steady_clock::now();
+
+            for (auto pos = _limits.begin(); pos != _limits.end();) {
+                if (pos->second <= now) {
+                    auto sid = pos->first;
+                    pos = _limits.erase(pos);
+                    remove(sid);
+                    _on_expired(sid);
+                } else {
+                    ++pos;
+                }
+            }
         }
     }
 };

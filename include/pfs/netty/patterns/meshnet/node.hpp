@@ -177,6 +177,12 @@ public:
             }
         });
 
+        _heartbeat_processor.on_expired ([this] (socket_id sid) {
+            this->log_warn(tr::f_("socket heartbeat timeout exceeded: #{}", sid));
+            schedule_reconnection(sid);
+            close_socket(sid);
+        });
+
         this->log_debug(tr::f_("Node: {}", node_idintifier_traits::stringify(_id)));
     }
 
