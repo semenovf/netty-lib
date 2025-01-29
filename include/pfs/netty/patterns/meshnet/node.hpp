@@ -37,7 +37,7 @@ template <typename NodeIdintifierTraits
     , typename WriterPoller
     , typename WriterQueue
     , typename SerializerTraits
-    , typename ReconnectionPolicty
+    , typename ReconnectionPolicy
     , template <typename> class HandshakeProcessor
     , template <typename> class HeartbeatProcessor
     , template <typename> class InputProcessor
@@ -57,7 +57,7 @@ class node: public Loggable
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using listener_id = typename listener_type::listener_id;
-    using reconnection_policy = ReconnectionPolicty;
+    using reconnection_policy = ReconnectionPolicy;
 
 public:
     using node_idintifier_traits = NodeIdintifierTraits;
@@ -164,12 +164,24 @@ public:
                         , sid, node_idintifier_traits::stringify(id)));
                     _readers[id] = sid;
                     _heartbeat_processor.add(sid);
+
+                    // If the writer already set, full virtual connection established with the
+                    // neighbor node.
+                    if (_writers.find(id) != _writers.end())
+                        _callbacks.on_node_ready(id);
+
                     break;
                 case handshake_result_enum::writer:
                     this->log_debug(tr::f_("handshake complete: socket #{} is writer for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
                     _writers[id] = sid;
                     _heartbeat_processor.add(sid);
+
+                    // If the reader already set, full virtual connection established with the
+                    // neighbor node.
+                    if (_readers.find(id) != _readers.end())
+                        _callbacks.on_node_ready(id);
+
                     break;
                 default:
                     PFS__TERMINATE(false, "Fix meshnet::node algorithm");

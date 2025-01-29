@@ -20,7 +20,7 @@ template <typename Node>
 struct functional_callbacks
 {
     // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_connection_established;
+    std::function<void(typename Node::node_id id)> on_node_ready = [] (typename Node::node_id) {};
 };
 
 }} // namespace patterns::meshnet

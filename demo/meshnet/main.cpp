@@ -128,8 +128,8 @@ int main (int argc, char * argv[])
 
     meshnet_node_t::callback_suite callbacks;
 
-    callbacks.on_connection_established = [] (meshnet_node_t::node_id id) {
-        LOGD(TAG, "Connection established with node: {}", id);
+    callbacks.on_node_ready = [] (meshnet_node_t::node_id id) {
+        LOGD(TAG, "Node ready: {}", id);
     };
 
     meshnet_node_t node(*node_id_opt, false, std::move(callbacks));
