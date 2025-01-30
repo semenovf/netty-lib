@@ -223,6 +223,28 @@ public:
         _listener_pool.listen(backlog);
     }
 
+    void send (node_id id, int priority, char const * data, std::size_t len)
+    {
+        auto pos = _writers.find(id);
+
+        if (pos != _writers.end()) {
+            send_private(pos->second, priority, data, len);
+        } else {
+            this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
+        }
+    }
+
+    void send (node_id id, int priority, std::vector<char> && data)
+    {
+        auto pos = _writers.find(id);
+
+        if (pos != _writers.end()) {
+            send_private(pos->second, priority, std::move(data));
+        } else {
+            this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
+        }
+    }
+
     void step (std::chrono::milliseconds millis)
     {
         pfs::countdown_timer<std::milli> countdown_timer {millis};
@@ -289,14 +311,14 @@ private:
     }
 
 public: // Below methods are for internal use only
-    void send (socket_id id, int priority, char const * data, std::size_t len)
+    void send_private (socket_id sid, int priority, char const * data, std::size_t len)
     {
-        _writer_pool.enqueue(id, priority, data, len);
+        _writer_pool.enqueue(sid, priority, data, len);
     }
 
-    void send (socket_id id, int priority, std::vector<char> && data)
+    void send_private (socket_id sid, int priority, std::vector<char> && data)
     {
-        _writer_pool.enqueue(id, priority, std::move(data));
+        _writer_pool.enqueue(sid, priority, std::move(data));
     }
 };
 

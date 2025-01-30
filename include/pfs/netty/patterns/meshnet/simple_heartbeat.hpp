@@ -114,7 +114,7 @@ public:
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node.send(pos->sid, pkt.priority(), out.data(), out.size());
+                _node.send_private(pos->sid, pkt.priority(), out.data(), out.size());
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);

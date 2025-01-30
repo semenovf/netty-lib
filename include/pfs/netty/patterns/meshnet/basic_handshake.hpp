@@ -56,7 +56,7 @@ protected:
         if (way == packet_way_enum::request)
             _cache[sid] = std::chrono::steady_clock::now() + _timeout;
 
-        _node.send(sid, pkt.priority(), out.data(), out.size());
+        _node.send_private(sid, pkt.priority(), out.data(), out.size());
     }
 
     void check_expired ()

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
+#include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
 #include <cstdint>
@@ -194,7 +195,7 @@ public:
      * Header can be read before from the deserializer.
      */
     template <typename Deserializer>
-    explicit handshake_packet (header const & h, Deserializer & in)
+    handshake_packet (header const & h, Deserializer & in)
         : header(h)
     {
         std::uint8_t sz = 0;
@@ -242,7 +243,7 @@ public:
      * Header can be read before from the deserializer.
      */
     template <typename Deserializer>
-    explicit heartbeat_packet (header const & h, Deserializer & in)
+    heartbeat_packet (header const & h, Deserializer & in)
         : header(h)
     {
         in >> health_data;
@@ -254,6 +255,62 @@ public:
     {
         header::serialize(out);
         out << health_data;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// data packet
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class data_packet: public header
+{
+public:
+    std::vector<char> bytes;   // used by deserializer only
+    bool bad_checksum {false}; // used by deserializer only
+
+public:
+    data_packet (int priority, bool has_checksum) noexcept
+        : header(packet_enum::data, priority, has_checksum, 0)
+    {}
+
+    template <typename Deserializer>
+    data_packet (header const & h, Deserializer & in)
+        : header(h)
+    {
+        in.start_transaction();
+        in >> std::make_pair(& bytes, & _h.length);
+
+        if(!in.commit_transaction()) {
+            bytes.clear();
+            return;
+        }
+
+        if (has_checksum()) {
+            auto crc32 = pfs::crc32_of_ptr(bytes.data(), bytes.size());
+
+            if (crc32 != _h.crc32) {
+                bytes.clear();
+                bad_checksum = true;
+            }
+        }
+    }
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out, char const * data, std::size_t len)
+    {
+        if (has_checksum())
+            _h.crc32 = pfs::crc32_of_ptr(data, len);
+
+        _h.length = pfs::numeric_cast<decltype(_h.length)>(len);
+
+        header::serialize(out);
+        out << std::make_pair(data, len);
+    }
+
+    template <typename Serializer>
+    void serialize (Serializer & out, std::vector<char> && data)
+    {
+        serialize<Serializer>(out, data.data(), data.size());
     }
 };
 
