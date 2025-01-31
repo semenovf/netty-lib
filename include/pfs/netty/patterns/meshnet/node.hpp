@@ -206,6 +206,11 @@ public:
         return _id;
     }
 
+    bool is_behind_nat () const noexcept
+    {
+        return _behind_nat;
+    }
+
     void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr)
     {
         _listener_pool.add(listener_addr, perr);

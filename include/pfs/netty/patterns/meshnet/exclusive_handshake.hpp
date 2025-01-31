@@ -31,23 +31,50 @@ public:
     {}
 
 protected:
-    void nodeid_ready (socket_id sid, node_id const & id, packet_way_enum way, behind_nat_enum behind_nat)
+    void handshake_ready (socket_id sid, node_id const & id, bool is_response, bool is_behind_nat)
     {
-        if (behind_nat == behind_nat_enum::yes) {
+        // if (is_response) {
+        //     if (is_behind_nat) {
+        //         // Responder is behind NAT, so there is no need to choose connection - only one is available.
+        //         this->_on_completed(id, sid, handshake_result_enum::reader);
+        //         this->_on_completed(id, sid, handshake_result_enum::writer);
+        //         return;
+        //     } else {
+        //         // Responder is not behind NAT, so there is need to choose connection. Select master
+        //         // socket by comparison of node identifiers.
+        //         if (this->_node.id() < id) {
+        //             // Remote client socket is master
+        //             this->_on_completed(id, sid, handshake_result_enum::reader);
+        //             this->_on_completed(id, sid, handshake_result_enum::writer);
+        //         } else {
+        //             this->_on_completed(id, sid, handshake_result_enum::unusable);
+        //         }
+        //     }
+        // } else {
+        //     if (this->_node.id() > id) { // Server sockey socket is master
+        //         this->_on_completed(id, sid, handshake_result_enum::reader);
+        //         this->_on_completed(id, sid, handshake_result_enum::writer);
+        //     }
+        // }
+
+        // Responder is behind NAT, so there is no need to choose connection - only one is available.
+        if (is_behind_nat) {
             this->_on_completed(id, sid, handshake_result_enum::reader);
             this->_on_completed(id, sid, handshake_result_enum::writer);
             return;
         }
 
-        if (way == packet_way_enum::response) {
-            if (this->_node.id() < id) { // Remote socket is master
+        if (is_response) {
+            // Responder is not behind NAT, so there is need to choose connection. Select master
+            // socket by comparison of node identifiers.
+            if (this->_node.id() < id) { // Remote client socket is master
                 this->_on_completed(id, sid, handshake_result_enum::reader);
                 this->_on_completed(id, sid, handshake_result_enum::writer);
             } else {
                 this->_on_completed(id, sid, handshake_result_enum::unusable);
             }
         } else {
-            if (this->_node.id() > id) { // Accepted socket is master
+            if (this->_node.id() > id) { // Server socket is master
                 this->_on_completed(id, sid, handshake_result_enum::reader);
                 this->_on_completed(id, sid, handshake_result_enum::writer);
             }

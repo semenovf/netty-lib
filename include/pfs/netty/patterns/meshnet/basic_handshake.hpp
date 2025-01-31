@@ -48,7 +48,7 @@ protected:
     void send (socket_id sid, packet_way_enum way)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet pkt {way};
+        handshake_packet pkt {way, (_node.is_behind_nat() ? behind_nat_enum::yes : behind_nat_enum::no)};
         pkt.id = node_idintifier_traits::stringify(_node.id());
         pkt.serialize(out);
 
@@ -119,23 +119,14 @@ public:
 
             if (pos != _cache.end()) { // Received response
                 cancel(sid);
-
-                // If response received so it is not behind NAT
-                PFS__TERMINATE(!pkt.is_behind_nat(), "Fix handshake algorithm regarding NAT support");
-
-                static_cast<Derived<Node> *>(this)->nodeid_ready(sid, *optid
-                    , packet_way_enum::response, behind_nat_enum::no);
+                static_cast<Derived<Node> *>(this)->handshake_ready(sid, *optid
+                    , pkt.is_response(), pkt.is_behind_nat());
             } else {
-                // Received from handshake initiator
+                // Received request from handshake initiator
                 if (!pkt.is_response()) {
-                    if (pkt.is_behind_nat()) {
-                        static_cast<Derived<Node> *>(this)->nodeid_ready(sid, *optid
-                            , packet_way_enum::request, behind_nat_enum::yes);
-                    } else {
-                        send(sid, packet_way_enum::response);
-                        static_cast<Derived<Node> *>(this)->nodeid_ready(sid, *optid
-                            , packet_way_enum::request, behind_nat_enum::no);
-                    }
+                    send(sid, packet_way_enum::response);
+                    static_cast<Derived<Node> *>(this)->handshake_ready(sid, *optid
+                        , pkt.is_response(), pkt.is_behind_nat());
                 }
                 // } else { the socket is already expired }
             }
