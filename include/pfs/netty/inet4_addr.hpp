@@ -12,6 +12,7 @@
 #include "exports.hpp"
 #include "pfs/optional.hpp"
 #include "pfs/string_view.hpp"
+#include <cstdint>
 #include <functional>
 #include <string>
 

@@ -113,7 +113,7 @@ void worker ()
         LOGE(TAG, "{:04}listener pool failure: {}", self_port, err.what());
     }).on_accepted([& peer_sockets, & reader_pool, self_port] (socket_t && sock) {
         auto sock_id = sock.id();
-        LOGD(TAG, "{:04}: socket accepted: id={}: {}", self_port, sock.id(), to_string(sock.saddr()));
+        LOGD(TAG, "{:04}: socket accepted: id={}: {}", self_port, sock_id, to_string(sock.saddr()));
         peer_sockets[sock.id()] = std::move(sock);
         reader_pool.add(sock_id);
     });
@@ -134,7 +134,7 @@ void worker ()
 
     s_listener_counter++;
 
-    // Wait until all threads are initialized
+    // Wait until all threads are initialized: all listeners are ready
     while (s_listener_counter != MAX_NODES_COUNT)
         ;
 
@@ -145,7 +145,7 @@ void worker ()
         LOGE(TAG, "{:04}: {}", self_port, err.what());
     }).on_connected([& connected_sockets, & writer_pool, host_id, self_port] (socket_t && sock) {
         auto sock_id = sock.id();
-        LOGD(TAG, "{:04}: socket connected: id={}: {}", self_port, sock.id(), to_string(sock.saddr()));
+        LOGD(TAG, "{:04}: socket connected: id={}: {}", self_port, sock_id, to_string(sock.saddr()));
         connected_sockets[sock.id()] = std::move(sock);
 
         netty::p2p::hello_packet packet;
@@ -195,6 +195,9 @@ void worker ()
 
         listener_pool.step();
         connecting_pool.step();
+
+        connecting_pool.apply_remove();
+        listener_pool.apply_remove();
     }
 
     auto n = MAX_NODES_COUNT - 1;
@@ -215,6 +218,11 @@ void worker ()
             --s_node_reverse_counter;
             read_counter = 0;
         }
+
+        connecting_pool.apply_remove();
+        listener_pool.apply_remove();
+        reader_pool.apply_remove();
+        writer_pool.apply_remove();
     }
 }
 
