@@ -122,7 +122,7 @@ public:
      *
      * @param a Numeric part.
      */
-    inet4_addr (std::uint32_t a) : _addr(a)
+    constexpr inet4_addr (std::uint32_t a) : _addr(a)
     {}
 
     inet4_addr & operator = (std::uint32_t a)
@@ -226,6 +226,11 @@ inline bool operator <= (inet4_addr const & a, inet4_addr const & b)
 inline bool operator >= (inet4_addr const & a, inet4_addr const & b)
 {
     return static_cast<std::uint32_t>(a) >= static_cast<std::uint32_t>(b);
+}
+
+inline inet4_addr any_inet4_addr ()
+{
+    return inet4_addr{inet4_addr::any_addr_value};
 }
 
 /**

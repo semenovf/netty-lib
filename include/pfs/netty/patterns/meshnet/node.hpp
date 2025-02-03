@@ -216,10 +216,17 @@ public:
         _listener_pool.add(listener_addr, perr);
     }
 
-    bool connect_host (netty::socket4_addr addr)
+    bool connect_host (netty::socket4_addr remote_saddr)
     {
         netty::error err;
-        auto rs = _connecting_pool.connect(addr);
+        auto rs = _connecting_pool.connect(remote_saddr);
+        return rs == netty::conn_status::failure;
+    }
+
+    bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
+    {
+        netty::error err;
+        auto rs = _connecting_pool.connect(remote_saddr, local_addr);
         return rs == netty::conn_status::failure;
     }
 

@@ -42,13 +42,21 @@ public:
     NETTY__EXPORT ~tcp_socket ();
 
     /**
-     * Connects to the TCP server.
+     * Connects to the TCP server @a remote_addr.
      *
      * @return @c conn_status::failure if error occurred while connecting,
      *         @c conn_status::success if connection established successfully or
      *         @c conn_status::in_progress if connection in progress.
      */
-    NETTY__EXPORT conn_status connect (socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, error * perr = nullptr);
+
+    /**
+     * Connects to the TCP server @a remote_addr binding to the local address @a local_addr.
+     *
+     * @return @see connect(socket4_addr const &, error * perr)
+     */
+    NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, inet4_addr const & local_addr
+        , error * perr = nullptr);
 
     /**
      * Shutdown connection.

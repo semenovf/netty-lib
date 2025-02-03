@@ -44,19 +44,27 @@ tcp_socket & tcp_socket::operator = (tcp_socket && other)
 
 tcp_socket::~tcp_socket () = default;
 
-conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
+conn_status tcp_socket::connect (socket4_addr const & remote_saddr, inet4_addr const & local_addr
+    , error * perr)
 {
     if (!init(type_enum::stream, perr))
         return conn_status::failure;
+
+    if (local_addr != any_inet4_addr()) {
+        auto success = bind(_socket, socket4_addr{local_addr, 0}, perr);
+
+        if (!success)
+            return conn_status::failure;
+    }
 
     sockaddr_in addr_in4;
 
     memset(& addr_in4, 0, sizeof(addr_in4));
 
     addr_in4.sin_family      = AF_INET;
-    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(saddr.port));
-    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(saddr.addr));
-    _saddr = saddr;
+    addr_in4.sin_port        = pfs::to_network_order(static_cast<std::uint16_t>(remote_saddr.port));
+    addr_in4.sin_addr.s_addr = pfs::to_network_order(static_cast<std::uint32_t>(remote_saddr.addr));
+    _saddr = remote_saddr;
 
     auto rc = ::connect(_socket, reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 
@@ -91,6 +99,11 @@ conn_status tcp_socket::connect (socket4_addr const & saddr, error * perr)
     }
 
     return in_progress ? conn_status::connecting : conn_status::connected;
+}
+
+conn_status tcp_socket::connect (socket4_addr const & remote_saddr, error * perr)
+{
+    return connect(remote_saddr, any_inet4_addr(), perr);
 }
 
 void tcp_socket::disconnect (error * perr)

@@ -40,8 +40,7 @@ udp_sender & udp_sender::operator = (udp_sender && s)
 
 udp_sender::~udp_sender () = default;
 
-bool udp_sender::set_multicast_interface (inet4_addr const & local_addr
-    , error * perr)
+bool udp_sender::set_multicast_interface (inet4_addr const & local_addr, error * perr)
 {
     auto success = bind(_socket, socket4_addr{local_addr, 0}, perr);
 
