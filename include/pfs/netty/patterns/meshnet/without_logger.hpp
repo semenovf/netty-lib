@@ -4,26 +4,24 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.21 Initial version.
+//      2025.02.04 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <vector>
+#include <string>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <typename Node>
-class null_input_processor
+class without_logger
 {
 public:
-    null_input_processor () {}
-
-public:
-    void remove (typename Node::socket_id) {}
-    void process_input (typename Node::socket_id, std::vector<char> &&) {}
+    void log_debug (std::string const & msg) {}
+    void log_info (std::string const & msg)  {}
+    void log_warn (std::string const & msg)  {}
+    void log_error (std::string const & msg) {}
 };
 
 }} // namespace patterns::meshnet

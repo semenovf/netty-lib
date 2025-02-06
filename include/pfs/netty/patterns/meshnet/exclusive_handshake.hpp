@@ -33,6 +33,7 @@ public:
 protected:
     void handshake_ready (socket_id sid, node_id const & id, bool is_response, bool is_behind_nat)
     {
+        // TODO Remote later
         // if (is_response) {
         //     if (is_behind_nat) {
         //         // Responder is behind NAT, so there is no need to choose connection - only one is available.

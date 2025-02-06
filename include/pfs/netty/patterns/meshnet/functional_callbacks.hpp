@@ -9,7 +9,7 @@
 #pragma once
 #include <pfs/netty/namespace.hpp>
 #include <functional>
-#include <string>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -20,7 +20,14 @@ template <typename Node>
 struct functional_callbacks
 {
     // Notify when connection established with the remote node
-    std::function<void(typename Node::node_id id)> on_node_ready = [] (typename Node::node_id) {};
+    std::function<void(typename Node::node_id)> on_node_connected = [] (typename Node::node_id) {};
+
+    // Notify when connection disconnected with the remote node
+    std::function<void(typename Node::node_id)> on_node_disconnected = [] (typename Node::node_id) {};
+
+    // On data/message received
+    std::function<void(typename Node::node_id, std::vector<char> &&)> on_message_received
+        = [] (typename Node::node_id, std::vector<char> && bytes) {};
 };
 
 }} // namespace patterns::meshnet

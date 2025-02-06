@@ -23,6 +23,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include <pfs/log.hpp>
+
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -83,7 +85,7 @@ private:
     InputProcessor<node> _input_processor;
     callback_suite _callbacks;
 
-    std::unordered_map<node_id, socket_id> _readers;
+    std::unordered_map<socket_id, node_id> _readers;
     std::unordered_map<node_id, socket_id> _writers;
 
 public:
@@ -159,30 +161,32 @@ public:
                         , sid, node_idintifier_traits::stringify(id)));
                     close_socket(sid);
                     break;
+
                 case handshake_result_enum::reader:
                     this->log_debug(tr::f_("handshake complete: socket #{} is reader for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
-                    _readers[id] = sid;
+                    _readers[sid] = id;
                     _heartbeat_processor.add(sid);
 
                     // If the writer already set, full virtual connection established with the
                     // neighbor node.
-                    if (_writers.find(id) != _writers.end())
-                        _callbacks.on_node_ready(id);
+                    if (find_writer(id) != _writers.end())
+                        _callbacks.on_node_connected(id);
 
                     break;
+
                 case handshake_result_enum::writer:
                     this->log_debug(tr::f_("handshake complete: socket #{} is writer for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
                     _writers[id] = sid;
                     _heartbeat_processor.add(sid);
 
-                    // If the reader already set, full virtual connection established with the
-                    // neighbor node.
-                    if (_readers.find(id) != _readers.end())
-                        _callbacks.on_node_ready(id);
+                    // If the reader already set, channel established with the neighbor node.
+                    if (find_reader(id) != _readers.end())
+                        _callbacks.on_node_connected(id);
 
                     break;
+
                 default:
                     PFS__TERMINATE(false, "Fix meshnet::node algorithm");
                     break;
@@ -288,7 +292,35 @@ public: // static
     }
 
 private:
-    void close_socket (socket_id sid)
+    typename std::unordered_map<socket_id, node_id>::iterator find_reader (socket_id sid)
+    {
+        return _readers.find(sid);
+    }
+
+    typename std::unordered_map<socket_id, node_id>::iterator find_reader (node_id id)
+    {
+        for (auto pos = _readers.begin(); pos != _readers.end(); ++pos)
+            if (pos->second == id)
+                return pos;
+        return _readers.end();
+    }
+
+    typename std::unordered_map<node_id, socket_id>::iterator find_writer (node_id id)
+    {
+        return _writers.find(id);
+    }
+
+    typename std::unordered_map<node_id, socket_id>::iterator find_writer (socket_id sid)
+    {
+        for (auto pos = _writers.begin(); pos != _writers.end(); ++pos)
+            if (pos->second == sid)
+                return pos;
+
+        return _writers.end();
+    }
+
+    // Acceptable values for level: 0 or 1
+    void close_socket (socket_id sid, int level = 0)
     {
         _handshake_processor.cancel(sid);
         _heartbeat_processor.remove(sid);
@@ -296,6 +328,76 @@ private:
         _reader_pool.remove_later(sid);
         _writer_pool.remove_later(sid);
         _socket_pool.remove_later(sid);
+
+        if (level == 0)
+            close_channel(sid, level);
+    }
+
+    // TODO More optimized data structures and algorithms are needed to track the lifecycle of node
+    // connections.
+    //
+    // Closes channel associated with socket identifier.
+    // One socket may be reader and writer simultaneously, or reader and writer may be represented
+    // by two different sockets.
+    // Acceptable values for level: 0 or 1
+    void close_channel (socket_id sid, int level)
+    {
+        auto rpos = find_reader(sid);
+        auto wpos = find_writer(sid);
+
+        // Channel not established (full and partially)
+        if (rpos == _readers.end() && wpos == _writers.end())
+            return;
+
+        // Channel already established and one socket are reader and writer simultaneously
+        if (rpos != _readers.end() && wpos != _writers.end()) {
+            auto id = wpos->first;
+            PFS__ASSERT(id == rpos->second, "Fix meshnet::node algorithm");
+            _readers.erase(rpos);
+            _writers.erase(wpos);
+            _callbacks.on_node_disconnected(id);
+            return;
+        }
+
+        if (rpos == _readers.end()) {
+            PFS__ASSERT(wpos != _writers.end(), "Fix meshnet::node algorithm");
+
+            rpos = find_reader(wpos->first); // find by node ID
+
+            // Channel already established and reader and writer represented by two different sockets
+            if (rpos != _readers.end()) {
+                auto id = wpos->first;
+                close_socket(rpos->first, ++level);
+                _readers.erase(rpos);
+                _writers.erase(wpos);
+                _callbacks.on_node_disconnected(id);
+            } else {
+                _writers.erase(wpos);
+            }
+
+            return;
+        }
+
+        if (wpos == _writers.end()) {
+            PFS__ASSERT(rpos != _readers.end(), "Fix meshnet::node algorithm");
+            wpos = find_writer(rpos->second); // find by node ID
+
+            // Channel already established and reader and writer represented by two different sockets
+            if (wpos != _writers.end()) {
+                auto id = rpos->second;
+                close_socket(wpos->second, ++level);
+                _readers.erase(rpos);
+                _writers.erase(wpos);
+                _callbacks.on_node_disconnected(id);
+            } else {
+                _readers.erase(rpos);
+            }
+
+            return;
+        }
+
+        // Must be unreachable
+        PFS__ASSERT(false, "Fix meshnet::node algorithm");
     }
 
     void schedule_reconnection (socket_id sid)
@@ -310,6 +412,14 @@ private:
             if (reconnecting)
                 _connecting_pool.connect_timeout(reconnection_policy::timeout(), psock->saddr());
         }
+    }
+
+    void process_message_received (socket_id sid, std::vector<char> && bytes)
+    {
+        auto pos = _readers.find(sid);
+
+        if (pos != _readers.end())
+            _callbacks.on_message_received(pos->second, std::move(bytes));
     }
 
     HandshakeProcessor<node> & handshake_processor ()

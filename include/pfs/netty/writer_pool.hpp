@@ -30,12 +30,17 @@ public:
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
 
+    static constexpr std::uint16_t default_frame_size ()
+    {
+        return 1500;
+    }
+
 private:
     struct account
     {
         socket_id id;
         bool writable {false};   // Socket is writable
-        std::uint16_t frame_size {1500}; // Initial value is default MTU size
+        std::uint16_t frame_size {default_frame_size()}; // Initial value is default MTU size
         WriterQueue q; // Output queue
     };
 
@@ -88,13 +93,14 @@ private:
         return & acc;
     }
 
-    account * ensure_account (socket_id id)
+    account * ensure_account (socket_id id, std::uint16_t frame_size = default_frame_size())
     {
         auto acc = locate_account(id);
 
         if (acc == nullptr) {
             account a;
             a.id = id;
+            a.frame_size = frame_size;
             auto res = _accounts.emplace(id, std::move(a));
 
             acc = & res.first->second;
@@ -127,10 +133,13 @@ private:
                     continue;
                 }
 
-                auto frame = acc.q.data_view(acc.frame_size);
+                auto frame = acc.q.frame(acc.frame_size);
+
+                if (frame.empty())
+                    continue;
 
                 netty::error err;
-                auto res = sock->send(frame.first, frame.second, & err);
+                auto res = sock->send(frame.data(), frame.size(), & err);
 
                 switch (res.status) {
                     case netty::send_status::failure:
@@ -162,9 +171,9 @@ private:
     }
 
 public:
-    void add (socket_id id)
+    void add (socket_id id, std::uint16_t frame_size = default_frame_size())
     {
-        /*auto acc = */ensure_account(id);
+        /*auto acc = */ensure_account(id, frame_size);
     }
 
     void remove_later (socket_id id)

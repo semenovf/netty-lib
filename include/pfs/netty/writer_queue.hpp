@@ -70,14 +70,15 @@ public:
         return _q.empty();
     }
 
-    std::pair<char const *, std::size_t> data_view (std::size_t max_size) const
+    std::vector<char> frame (std::size_t frame_size) const
     {
         if (empty())
-            return std::make_pair(nullptr, 0);
+            return std::vector<char>{};
 
         auto & front = _q.front();
-        auto size = (std::min)(front.b.size() - front.cursor, max_size);
-        return std::make_pair(front.b.data() + front.cursor, size);
+        auto size = (std::min)(front.b.size() - front.cursor, frame_size);
+        auto first = front.b.data() + front.cursor;
+        return std::vector<char>(first, first + size);
     }
 
     void shift (std::size_t n)

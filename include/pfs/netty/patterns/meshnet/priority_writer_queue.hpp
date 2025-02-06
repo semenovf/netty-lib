@@ -5,9 +5,11 @@
 //
 // Changelog:
 //      2025.01.20 Initial version.
+//      2025.02.04 It is a part of patterns::meshnet now.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "namespace.hpp"
+#include "priority_frame.hpp"
+#include <pfs/netty/namespace.hpp>
 #include <pfs/assert.hpp>
 #include <algorithm>
 #include <array>
@@ -18,6 +20,9 @@
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
+
+namespace patterns {
+namespace meshnet {
 
 template <int N>
 struct frame_calculator;
@@ -73,8 +78,8 @@ class priority_writer_queue
     };
 
 private:
-    std::array<queue, N> _qp; // queue pool
-    int _queue_cursor {0};
+    std::array<queue, N> _qp;      // queue pool
+    int _priority_cursor {0};      // queue pool cursor
     std::uint64_t _total_size {0}; // total data size
 
 public:
@@ -120,21 +125,30 @@ public:
         return _total_size == 0;
     }
 
-    std::pair<char const *, std::size_t> data_view (std::size_t max_size) const
+    std::vector<char> frame (std::size_t frame_size) const
     {
         if (empty())
-            return std::make_pair(nullptr, 0);
+            return std::vector<char>{};
 
-        auto & q = _qp[_queue_cursor].q;
+        // _priority_cursor already points to non-empty queue
+        auto & q = _qp[_priority_cursor].q;
         auto & front = q.front();
-        auto size = (std::min)(front.b.size() - front.cursor, max_size);
-        return std::make_pair(front.b.data() + front.cursor, size);
+        frame_size = (std::min)(front.b.size() - front.cursor + priority_frame::header_size(), frame_size);
+
+        std::vector<char> chunk;
+        auto first = front.b.data() + front.cursor;
+        priority_frame{_priority_cursor}.serialize(chunk, first, frame_size);
+
+        return chunk;
     }
 
-    void shift (std::size_t n)
+    void shift (std::size_t frame_size)
     {
+        // Actual length to shift
+        auto n = frame_size - priority_frame::header_size();
+
         _total_size -= n;
-        auto & x = _qp[_queue_cursor];
+        auto & x = _qp[_priority_cursor];
         auto & front = x.q.front();
         front.cursor += n;
 
@@ -149,33 +163,33 @@ public:
 
         // No more data, reset phase
         if (_total_size == 0) {
-            _queue_cursor = 0;
+            _priority_cursor = 0;
             reset_phase();
             return;
         }
 
         // Phase is complete for the current queue
         x.frame_counter = 0;
-        _queue_cursor++;
+        _priority_cursor++;
 
         // Find nearest suitable queue
-        while (_queue_cursor != N) {
-            x = _qp[_queue_cursor];
+        while (_priority_cursor != N) {
+            x = _qp[_priority_cursor];
 
             if (x.frame_counter != 0)
                 return;
 
-            _queue_cursor++;
+            _priority_cursor++;
         }
 
-        // _queue_cursor == N => Phase is complete totally
+        // _priority_cursor == N => Phase is complete totally
         // Reset phase and find nearest suitable queue
-        _queue_cursor = 0;
+        _priority_cursor = 0;
         reset_phase();
 
         // A suitable queue must be found since its total size is not zero.
-        for (_queue_cursor = 0; _queue_cursor < N; _queue_cursor++) {
-            x = _qp[_queue_cursor];
+        for (_priority_cursor = 0; _priority_cursor < N; _priority_cursor++) {
+            x = _qp[_priority_cursor];
 
             if (!x.q.empty())
                 return;
@@ -192,5 +206,6 @@ public: // static
     }
 };
 
-NETTY__NAMESPACE_END
+}} // namespace patterns::meshnet
 
+NETTY__NAMESPACE_END

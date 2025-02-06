@@ -128,8 +128,12 @@ int main (int argc, char * argv[])
 
     meshnet_node_t::callback_suite callbacks;
 
-    callbacks.on_node_ready = [] (meshnet_node_t::node_id id) {
-        LOGD(TAG, "Node ready: {}", id);
+    callbacks.on_node_connected = [] (meshnet_node_t::node_id id) {
+        LOGD(TAG, "Node connected: {}", id);
+    };
+
+    callbacks.on_node_disconnected = [] (meshnet_node_t::node_id id) {
+        LOGD(TAG, "Node disconnected: {}", id);
     };
 
     meshnet_node_t node(*node_id_opt, false, std::move(callbacks));

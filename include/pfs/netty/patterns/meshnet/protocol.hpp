@@ -62,9 +62,8 @@ enum class behind_nat_enum
 // ------------------------------
 // | 7  6  5  4 | 3 | 2 | 1 | 0 |
 // ------------------------------
-// |    (Pr)    | F2| F1| F0| C |
+// | (reserved) | F2| F1| F0| C |
 // ------------------------------
-// (Pr) - Priority (0 - max, 7 - min).
 // (C) - Checksum bit (0 - no checksum, 1 - has checksum).
 // (F0), (F1), (F2) - free/reserved bits (can be used by some packets)
 
@@ -86,9 +85,9 @@ protected:
     header (packet_enum type, int priority, bool has_checksum, int version = 0) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
-        _h.b0 |= static_cast<std::uint8_t>(version) & 0xF0;
+        _h.b0 |= (static_cast<std::uint8_t>(version) << 4) & 0xF0;
         _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
-        _h.b1 |= static_cast<std::uint8_t>(priority) & 0xF0;
+        _h.b1 |= (static_cast<std::uint8_t>(priority) << 4) & 0xF0;
         _h.b1 |= (has_checksum ? 0x01 : 0x00);
     }
 
