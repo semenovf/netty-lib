@@ -82,12 +82,11 @@ protected:
     } _h;
 
 protected:
-    header (packet_enum type, int priority, bool has_checksum, int version = 0) noexcept
+    header (packet_enum type, bool has_checksum, int version = 0) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
         _h.b0 |= (static_cast<std::uint8_t>(version) << 4) & 0xF0;
         _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
-        _h.b1 |= (static_cast<std::uint8_t>(priority) << 4) & 0xF0;
         _h.b1 |= (has_checksum ? 0x01 : 0x00);
     }
 
@@ -102,6 +101,12 @@ public:
     {
         in >> _h.b0;
         in >> _h.b1;
+
+        if (has_checksum())
+            in >> _h.crc32;
+
+        if (type() == packet_enum::data)
+            in >> _h.length;
     }
 
 public:
@@ -113,11 +118,6 @@ public:
     inline packet_enum type () const noexcept
     {
         return static_cast<packet_enum>(_h.b0 & 0x0F);
-    }
-
-    inline int priority () const noexcept
-    {
-        return static_cast<int>((_h.b1 >> 4) & 0x0F);
     }
 
     inline bool has_checksum () const noexcept
@@ -180,7 +180,7 @@ public:
 
 public:
     handshake_packet (packet_way_enum way, behind_nat_enum behind_nat = behind_nat_enum::no) noexcept
-        : header(packet_enum::handshake, 0, false, 0)
+        : header(packet_enum::handshake, false, 0)
     {
         if (way == packet_way_enum::response)
             enable_f0();
@@ -217,7 +217,7 @@ public:
     {
         if (!id.empty()) {
             header::serialize(out);
-            out << std::make_pair(id.data(), pfs::numeric_cast<std::uint8_t>(id.size()));
+            out << pfs::numeric_cast<std::uint8_t>(id.size()) << id;
         }
     }
 };
@@ -232,7 +232,7 @@ public:
 
 public:
     heartbeat_packet () noexcept
-        : header(packet_enum::heartbeat, 0, false, 0)
+        : header(packet_enum::heartbeat, false, 0)
     {
         health_data = 0;
     }
@@ -267,8 +267,8 @@ public:
     bool bad_checksum {false}; // used by deserializer only
 
 public:
-    data_packet (int priority, bool has_checksum) noexcept
-        : header(packet_enum::data, priority, has_checksum, 0)
+    data_packet (bool has_checksum) noexcept
+        : header(packet_enum::data, has_checksum, 0)
     {}
 
     template <typename Deserializer>
@@ -278,7 +278,7 @@ public:
         in.start_transaction();
         in >> std::make_pair(& bytes, & _h.length);
 
-        if(!in.commit_transaction()) {
+        if (!in.commit_transaction()) {
             bytes.clear();
             return;
         }

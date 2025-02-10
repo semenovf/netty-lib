@@ -18,12 +18,14 @@
 #include <pfs/netty/patterns/meshnet/serializer_traits.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/simple_input_processor.hpp>
+#include <pfs/netty/patterns/meshnet/simple_message_sender.hpp>
 #include <pfs/netty/patterns/meshnet/universal_id_traits.hpp>
 #include <pfs/netty/patterns/meshnet/without_callbacks.hpp>
 #include <pfs/netty/patterns/meshnet/without_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/without_input_processor.hpp>
 #include <pfs/netty/patterns/meshnet/without_logger.hpp>
+#include <pfs/netty/patterns/meshnet/without_message_sender.hpp>
 #include <pfs/netty/patterns/meshnet/without_reconnection_policy.hpp>
 #include <pfs/netty/writer_queue.hpp>
 #include <pfs/netty/posix/tcp_listener.hpp>
@@ -34,7 +36,10 @@ using priority_writer_queue_t = netty::patterns::meshnet::priority_writer_queue<
 template <typename Node>
 using priority_input_processor = netty::patterns::meshnet::priority_input_processor<3, Node>;
 
-using meshnet_node_t = netty::patterns::meshnet::node<
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// nopriority_meshnet_node_t
+////////////////////////////////////////////////////////////////////////////////////////////////////
+using nopriority_meshnet_node_t = netty::patterns::meshnet::node<
       netty::patterns::meshnet::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
@@ -60,10 +65,14 @@ using meshnet_node_t = netty::patterns::meshnet::node<
     , netty::patterns::meshnet::reconnection_policy
     , netty::patterns::meshnet::exclusive_handshake
     , netty::patterns::meshnet::simple_heartbeat
+    , netty::patterns::meshnet::simple_message_sender
     , netty::patterns::meshnet::simple_input_processor
     , netty::patterns::meshnet::functional_callbacks
     , netty::patterns::meshnet::console_logger>;
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// priority_meshnet_node_t
+////////////////////////////////////////////////////////////////////////////////////////////////////
 using priority_meshnet_node_t = netty::patterns::meshnet::node<
       netty::patterns::meshnet::universal_id_traits
     , netty::posix::tcp_listener
@@ -90,10 +99,15 @@ using priority_meshnet_node_t = netty::patterns::meshnet::node<
     , netty::patterns::meshnet::reconnection_policy
     , netty::patterns::meshnet::exclusive_handshake
     , netty::patterns::meshnet::simple_heartbeat
+    , netty::patterns::meshnet::simple_message_sender
     , priority_input_processor
     , netty::patterns::meshnet::functional_callbacks
     , netty::patterns::meshnet::console_logger>;
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// bare_meshnet_node_t
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Unusable, for test without_XXX parameters only.
 using bare_meshnet_node_t = netty::patterns::meshnet::node<
       netty::patterns::meshnet::universal_id_traits
     , netty::posix::tcp_listener
@@ -120,6 +134,14 @@ using bare_meshnet_node_t = netty::patterns::meshnet::node<
     , netty::patterns::meshnet::without_reconnection_policy
     , netty::patterns::meshnet::without_handshake
     , netty::patterns::meshnet::without_heartbeat
+    , netty::patterns::meshnet::without_message_sender
     , netty::patterns::meshnet::without_input_processor
     , netty::patterns::meshnet::without_callbacks
     , netty::patterns::meshnet::without_logger>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// meshnet_node_t
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Choose required type here
+//using meshnet_node_t = nopriority_meshnet_node_t;
+using meshnet_node_t = priority_meshnet_node_t;

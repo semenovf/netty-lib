@@ -126,17 +126,29 @@ int main (int argc, char * argv[])
 
     netty::startup_guard netty_startup;
 
+    meshnet_node_t * node_ptr = nullptr;
     meshnet_node_t::callback_suite callbacks;
 
-    callbacks.on_node_connected = [] (meshnet_node_t::node_id id) {
+    callbacks.on_node_connected = [& node_ptr] (meshnet_node_t::node_id id) {
         LOGD(TAG, "Node connected: {}", id);
+        std::string msg0 = "Hello, meshnet node [priority=0]: " + to_string(id);
+        std::string msg1 = "Hello, meshnet node [priority=1]: " + to_string(id);
+        std::string msg2 = "Hello, meshnet node [priority=2]: " + to_string(id);
+        node_ptr->send(id, 2, msg2.data(), msg2.size());
+        node_ptr->send(id, 1, msg1.data(), msg1.size());
+        node_ptr->send(id, 0, msg0.data(), msg0.size());
     };
 
     callbacks.on_node_disconnected = [] (meshnet_node_t::node_id id) {
         LOGD(TAG, "Node disconnected: {}", id);
     };
 
+    callbacks.on_message_received = [] (meshnet_node_t::node_id id, std::vector<char> && bytes) {
+        LOGD(TAG, "Message received from node: {}: {}", id, std::string(bytes.data(), bytes.size()));
+    };
+
     meshnet_node_t node(*node_id_opt, false, std::move(callbacks));
+    node_ptr = & node;
 
     netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
     node.add_listener(netty::socket4_addr{listenerAddr, PORT});

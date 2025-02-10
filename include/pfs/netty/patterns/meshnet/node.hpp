@@ -23,8 +23,6 @@
 #include <thread>
 #include <unordered_map>
 
-#include <pfs/log.hpp>
-
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -42,6 +40,7 @@ template <typename NodeIdintifierTraits
     , typename ReconnectionPolicy
     , template <typename> class HandshakeProcessor
     , template <typename> class HeartbeatProcessor
+    , template <typename> class MessageSender
     , template <typename> class InputProcessor
     , template <typename> class CallbackSuite
     , typename Loggable>
@@ -79,9 +78,9 @@ private:
     // True if the node is behind NAT
     bool _behind_nat {false};
 
-    // std::chrono::seconds _reconnection_timeout {5};
     HandshakeProcessor<node> _handshake_processor;
     HeartbeatProcessor<node> _heartbeat_processor;
+    MessageSender<node> _message_sender;
     InputProcessor<node> _input_processor;
     callback_suite _callbacks;
 
@@ -95,6 +94,7 @@ public:
         , _behind_nat(behind_nat)
         , _handshake_processor(*this)
         , _heartbeat_processor(*this)
+        , _message_sender(*this)
         , _input_processor(*this)
         , _callbacks(std::move(callbacks))
     {
@@ -125,7 +125,7 @@ public:
         });
 
         _reader_pool.on_failure([this] (socket_id sid, netty::error const & err) {
-            this->log_error(tr::f_("read from socket failure: {}: {}", sid, err.what()));
+            this->log_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
             close_socket(sid);
         }).on_disconnected([this] (socket_id sid) {
             this->log_debug(tr::f_("socket disconnected: #{}", sid));
@@ -157,13 +157,13 @@ public:
         }).on_completed([this] (node_id id, socket_id sid, handshake_result_enum status) {
             switch (status) {
                 case handshake_result_enum::unusable:
-                    this->log_debug(tr::f_("handshake complete: socket #{} excluded for node: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} excluded for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
                     close_socket(sid);
                     break;
 
                 case handshake_result_enum::reader:
-                    this->log_debug(tr::f_("handshake complete: socket #{} is reader for node: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} is reader for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
                     _readers[sid] = id;
                     _heartbeat_processor.add(sid);
@@ -176,7 +176,7 @@ public:
                     break;
 
                 case handshake_result_enum::writer:
-                    this->log_debug(tr::f_("handshake complete: socket #{} is writer for node: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} is writer for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
                     _writers[id] = sid;
                     _heartbeat_processor.add(sid);
@@ -224,14 +224,14 @@ public:
     {
         netty::error err;
         auto rs = _connecting_pool.connect(remote_saddr);
-        return rs == netty::conn_status::failure;
+        return rs != netty::conn_status::failure;
     }
 
     bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
     {
         netty::error err;
         auto rs = _connecting_pool.connect(remote_saddr, local_addr);
-        return rs == netty::conn_status::failure;
+        return rs != netty::conn_status::failure;
     }
 
     void listen (int backlog = 50)
@@ -239,26 +239,36 @@ public:
         _listener_pool.listen(backlog);
     }
 
-    void send (node_id id, int priority, char const * data, std::size_t len)
+    void send (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
     {
         auto pos = _writers.find(id);
 
         if (pos != _writers.end()) {
-            send_private(pos->second, priority, data, len);
+            _message_sender.send(pos->second, priority, force_checksum, data, len);
         } else {
             this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
         }
     }
 
-    void send (node_id id, int priority, std::vector<char> && data)
+    void send (node_id id, int priority, bool force_checksum, std::vector<char> && data)
     {
         auto pos = _writers.find(id);
 
         if (pos != _writers.end()) {
-            send_private(pos->second, priority, std::move(data));
+            _message_sender.send(pos->second, priority, force_checksum, std::move(data));
         } else {
             this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
         }
+    }
+
+    void send (node_id id, int priority, char const * data, std::size_t len)
+    {
+        this->send(id, priority, false, data, len);
+    }
+
+    void send (node_id id, int priority, std::vector<char> && data)
+    {
+        this->send(id, priority, false, std::move(data));
     }
 
     void step (std::chrono::milliseconds millis)

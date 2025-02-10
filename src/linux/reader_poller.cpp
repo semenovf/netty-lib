@@ -52,7 +52,8 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                             , ev.data.fd, pfs::system_error_text(), errno)
                     });
                 } else {
-                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH) {
+                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
+                            || error_val == ECONNRESET) {
                         disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {

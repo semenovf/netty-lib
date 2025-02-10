@@ -48,12 +48,13 @@ public:
             auto & inpb = that->inpb_ref(*pacc);
 
             auto in = Node::serializer_traits::make_deserializer(inpb.data(), inpb.size());
+            bool has_more_packets = true;
 
-            while (in.available() > 0) {
+            while (has_more_packets && in.available() > 0) {
                 in.start_transaction();
                 header h {in};
 
-                // Not enough data
+                // Not enough data for header
                 if (!in.commit_transaction())
                     break;
 
@@ -64,6 +65,8 @@ public:
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
+                        else
+                            has_more_packets = false;
 
                         break;
                     }
@@ -74,6 +77,8 @@ public:
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
+                        else
+                            has_more_packets = false;
 
                         break;
                     }
@@ -84,15 +89,19 @@ public:
 
                         if (in.commit_transaction())
                             that->process(sid, std::move(pkt.bytes));
+                        else
+                            has_more_packets = false;
 
                         break;
                     }
 
                     default:
                         throw error {
-                            pfs::errc::unexpected_data
+                              pfs::errc::unexpected_data
                             , tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))
                         };
+
+                        has_more_packets = false;
                         break;
                 }
             }

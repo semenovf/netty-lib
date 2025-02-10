@@ -4,11 +4,11 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.17 Initial version.
+//      2025.02.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <pfs/netty/socket4_addr.hpp>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -16,26 +16,20 @@ namespace patterns {
 namespace meshnet {
 
 template <typename Node>
-class without_heartbeat
+class without_message_sender
 {
     using socket_id = typename Node::socket_id;
-    using serializer_traits = typename Node::serializer_traits;
 
 public:
-    without_heartbeat (Node &) {}
+    without_message_sender (Node &)
+    {}
 
 public:
-    void add (socket_id) {}
-    void remove (socket_id) {}
-    void process (socket_id, heartbeat_packet const &) {}
-    void step () {}
+    void send (socket_id, int, bool, char const *, std::size_t)
+    {}
 
-    template <typename F>
-    without_heartbeat & on_expired (F &&)
-    {
-        return *this;
-    }
-
+    void send (socket_id, int, bool, std::vector<char> &&)
+    {}
 };
 
 }} // namespace patterns::meshnet

@@ -152,7 +152,8 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
-                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH) {
+                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
+                            || error_val == ECONNRESET) {
                         disconnected(ev.fd);
                     } else {
                         on_failure(ev.fd, error {

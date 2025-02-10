@@ -49,10 +49,10 @@ public:
         _h.size = 0;
     }
 
-    priority_frame (int priority)
+    priority_frame (int priority) : priority_frame()
     {
-        _h.b0 |= (static_cast<std::uint8_t>(5) << 4) & 0xF0;
-        _h.b0 |= static_cast<std::uint8_t>(priority) & 0x0F;
+        _h.b0 |= static_cast<std::uint8_t>((5 << 4) & 0xF0);
+        _h.b0 |= static_cast<std::uint8_t>(priority & 0x0F);
         _h.size = 0;
     }
 
