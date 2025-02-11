@@ -295,6 +295,19 @@ public:
         std::this_thread::sleep_for(countdown_timer.remain());
     }
 
+    /**
+     * Sets frame size for exchange with node specified by identifier @a id.
+     */
+    void set_frame_size (node_id id, std::uint16_t frame_size)
+    {
+        auto pos = _writers.find(id);
+
+        if (pos != _writers.end()) {
+            _writer_pool.ensure(pos->second, frame_size);
+        }
+    }
+
+
 public: // static
     static constexpr int priority_count () noexcept
     {

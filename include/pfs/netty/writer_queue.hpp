@@ -70,15 +70,16 @@ public:
         return _q.empty();
     }
 
-    std::vector<char> frame (std::size_t frame_size) const
+    bool acquire_frame (std::vector<char> & frame, std::size_t frame_size) const
     {
         if (empty())
-            return std::vector<char>{};
+            return false;
 
         auto & front = _q.front();
         auto size = (std::min)(front.b.size() - front.cursor, frame_size);
         auto first = front.b.data() + front.cursor;
-        return std::vector<char>(first, first + size);
+        frame.insert(frame.end(), first, first + size);
+        return true;
     }
 
     void shift (std::size_t n)

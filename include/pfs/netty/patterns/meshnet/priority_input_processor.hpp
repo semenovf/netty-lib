@@ -60,7 +60,7 @@ private:
         return & acc;
     }
 
-    void append_chunk(account & acc, std::vector<char> && chunk)
+    void append_chunk (account & acc, std::vector<char> && chunk)
     {
         acc.tmp.insert(acc.tmp.end(), chunk.begin(), chunk.end());
     }
@@ -80,6 +80,7 @@ private:
     {
         auto opt_frame = priority_frame::parse(acc.tmp.data(), acc.tmp.size());
 
+        // Incomplete frame
         if (!opt_frame)
             return false;
 

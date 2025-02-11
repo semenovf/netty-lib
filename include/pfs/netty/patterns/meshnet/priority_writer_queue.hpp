@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <list>
 #include <queue>
 #include <utility>
 #include <vector>
@@ -64,41 +63,96 @@ struct frame_calculator<6>
 template <int N, typename FrameCalculator = frame_calculator<N>>
 class priority_writer_queue
 {
-    struct elem
+    struct chunk
     {
         std::vector<char> b;
-        std::size_t cursor;
     };
 
-    struct queue
+    struct item
     {
-        std::queue<elem, std::list<elem>> q;
-        int frame_limit;
+        std::queue<chunk> q;
         int frame_counter;
     };
 
 private:
-    std::array<queue, N> _qp;      // queue pool
-    int _priority_cursor {0};      // queue pool cursor
-    std::uint64_t _total_size {0}; // total data size
+    std::array<item, N> _qpool;   // queue pool
+    int _priority_index {0};       // queue pool index (same as priority value)
+    std::uint64_t _total_size {0}; // total data size excluding _frame.size()
+    std::vector<char> _frame;      // current sending frame
 
 public:
     priority_writer_queue ()
     {
-        FrameCalculator fc;
-
-        for (int i = 0; i < N; i++) {
-            PFS__TERMINATE(fc.x[i] > 0, "priority_writer_queue: frame limit must be greater than zero");
-            _qp[i].frame_limit = fc.x[i];
-            _qp[i].frame_counter = fc.x[i];
-        }
+        reset_phase();
     }
 
 private:
     void reset_phase ()
     {
-        for (int i = 0; i < N; i++)
-            _qp[i].frame_counter = _qp[i].frame_limit;
+        FrameCalculator fc;
+
+        for (int i = 0; i < N; i++) {
+            PFS__ASSERT(fc.x[i] > 0, "priority_writer_queue: frame limit must be greater than zero");
+            _qpool[i].frame_counter = fc.x[i];
+        }
+
+        _priority_index = 0;
+        _frame.clear();
+    }
+
+    void acquire_priority ()
+    {
+        PFS__ASSERT(!empty(), "");
+
+        auto & x = _qpool[_priority_index];
+
+        // TODO May be optimized later
+        if (!x.q.empty()) {
+            if (x.frame_counter > 0) {
+                // Phase is not complete for the current queue
+                return;
+            } else {
+                // Phase is complete for the current queue, need to find next suitable queue
+                FrameCalculator fc;
+                x.frame_counter = fc.x[_priority_index];
+            }
+        } else {
+            // No more data in the current queue,
+            if (x.frame_counter > 0) {
+                // Need to find next suitable queue
+                ;
+            } else {
+                // Phase is complete for the current queue, need to find next suitable queue
+                FrameCalculator fc;
+                x.frame_counter = fc.x[_priority_index];
+            }
+        }
+
+        _priority_index++;
+
+        if (_priority_index == N)
+            _priority_index = 0;
+
+        // Find nearest suitable queue
+        while (_priority_index < N) {
+            auto & x = _qpool[_priority_index];
+
+            if (x.frame_counter != 0 && !x.q.empty())
+                return;
+
+            _priority_index++;
+        }
+
+        // A suitable queue must be found since total size is not zero.
+        for (_priority_index = 0; _priority_index < N; _priority_index++) {
+            auto & x = _qpool[_priority_index];
+
+            if (!x.q.empty())
+                return;
+        }
+
+        // Must be unreachable
+        PFS__TERMINATE(false, "priority_writer_queue: fix acquire_priority() method");
     }
 
 public:
@@ -108,7 +162,7 @@ public:
             return;
 
         _total_size += len;
-        _qp[priority].q.push(elem{std::vector<char>{data, data + len}, 0});
+        _qpool[priority].q.push(chunk{std::vector<char>{data, data + len}});
     }
 
     void enqueue (int priority, std::vector<char> && data)
@@ -117,86 +171,65 @@ public:
             return;
 
         _total_size += data.size();
-        _qp[priority].q.push(elem{std::move(data), 0});
+        _qpool[priority].q.push(chunk{std::move(data)});
     }
 
     bool empty () const
     {
-        return _total_size == 0;
+        return _total_size == 0 && _frame.empty();
     }
 
-    std::vector<char> frame (std::size_t frame_size) const
+    bool acquire_frame (std::vector<char> & frame, std::size_t frame_size)
     {
+        if (!_frame.empty()) {
+            frame.insert(frame.end(), _frame.begin(), _frame.end());
+            return true;
+        }
+
         if (empty())
-            return std::vector<char>{};
+            return false;
 
-        // _priority_cursor already points to non-empty queue
-        auto & q = _qp[_priority_cursor].q;
-        auto & front = q.front();
-        frame_size = (std::min)(front.b.size() - front.cursor + priority_frame::header_size(), frame_size);
+        acquire_priority();
 
-        std::vector<char> chunk;
-        auto first = front.b.data() + front.cursor;
-        priority_frame{_priority_cursor}.serialize(chunk, first, frame_size);
+        // _priority_index already points to non-empty queue (after constructor or `shift` method calling)
+        auto & q = _qpool[_priority_index].q;
+        auto & b = q.front().b;
 
-        return chunk;
+        // Recalculate actual frame size according to frame header and bytes left.
+        frame_size = (std::min)(b.size() + priority_frame::header_size(), frame_size);
+
+        priority_frame{_priority_index}.serialize(_frame, b.data(), frame_size);
+        b.erase(b.begin(), b.begin() + frame_size - priority_frame::header_size());
+
+        PFS__ASSERT(_total_size >= frame_size - priority_frame::header_size(), "");
+
+        _total_size -= (frame_size - priority_frame::header_size());
+
+        frame.insert(frame.end(), _frame.begin(), _frame.end());
+
+        // Check topmost message is processed
+        if (b.empty())
+            q.pop();
+
+        return true;
     }
 
-    void shift (std::size_t frame_size)
+    void shift (std::size_t n)
     {
-        // Actual length to shift
-        auto n = frame_size - priority_frame::header_size();
+        PFS__ASSERT(n > 0 && n <= _frame.size(), "");
 
-        _total_size -= n;
-        auto & x = _qp[_priority_cursor];
-        auto & front = x.q.front();
-        front.cursor += n;
+        _frame.erase(_frame.begin(), _frame.begin() + n);
 
-        if (front.cursor >= front.b.size())
-            x.q.pop();
+        auto & x = _qpool[_priority_index];
 
-        x.frame_counter--;
+        // Sending message complete
+        if (_frame.empty()) {
+            x.frame_counter--;
+            PFS__ASSERT(x.frame_counter >= 0, "");
+        }
 
-        // Phase is not complete for the current queue
-        if (x.frame_counter > 0 && !x.q.empty())
-            return;
-
-        // No more data, reset phase
-        if (_total_size == 0) {
-            _priority_cursor = 0;
+        if (empty())
             reset_phase();
-            return;
-        }
-
-        // Phase is complete for the current queue
-        x.frame_counter = 0;
-        _priority_cursor++;
-
-        // Find nearest suitable queue
-        while (_priority_cursor != N) {
-            x = _qp[_priority_cursor];
-
-            if (x.frame_counter != 0)
-                return;
-
-            _priority_cursor++;
-        }
-
-        // _priority_cursor == N => Phase is complete totally
-        // Reset phase and find nearest suitable queue
-        _priority_cursor = 0;
-        reset_phase();
-
-        // A suitable queue must be found since its total size is not zero.
-        for (_priority_cursor = 0; _priority_cursor < N; _priority_cursor++) {
-            x = _qp[_priority_cursor];
-
-            if (!x.q.empty())
-                return;
-        }
-
-        // Must be unreachable
-        PFS__TERMINATE(false, "priority_writer_queue: fix shift() method");
     }
 
 public: // static

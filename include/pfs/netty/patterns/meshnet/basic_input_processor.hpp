@@ -46,7 +46,6 @@ public:
 
         while (that->read_frame(*pacc)) {
             auto & inpb = that->inpb_ref(*pacc);
-
             auto in = Node::serializer_traits::make_deserializer(inpb.data(), inpb.size());
             bool has_more_packets = true;
 
@@ -54,13 +53,8 @@ public:
                 in.start_transaction();
                 header h {in};
 
-                // Not enough data for header
-                if (!in.commit_transaction())
-                    break;
-
                 switch (h.type()) {
                     case packet_enum::handshake: {
-                        in.start_transaction();
                         handshake_packet pkt {h, in};
 
                         if (in.commit_transaction())
@@ -72,7 +66,6 @@ public:
                     }
 
                     case packet_enum::heartbeat: {
-                        in.start_transaction();
                         heartbeat_packet pkt {h, in};
 
                         if (in.commit_transaction())
@@ -84,7 +77,6 @@ public:
                     }
 
                     case packet_enum::data: {
-                        in.start_transaction();
                         data_packet pkt {h, in};
 
                         if (in.commit_transaction())
@@ -106,10 +98,12 @@ public:
                 }
             }
 
-            if (in.available() == 0)
+            if (in.available() == 0) {
                 inpb.clear();
-            else
-                inpb.erase(inpb.begin(), inpb.begin() + (inpb.size() - in.available()));
+            } else {
+                if (inpb.size() > in.available())
+                    inpb.erase(inpb.begin(), inpb.begin() + (inpb.size() - in.available()));
+            }
         }
     }
 };

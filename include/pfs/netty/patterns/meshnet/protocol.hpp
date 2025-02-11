@@ -275,10 +275,9 @@ public:
     data_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in.start_transaction();
         in >> std::make_pair(& bytes, & _h.length);
 
-        if (!in.commit_transaction()) {
+        if (!in.is_good()) {
             bytes.clear();
             return;
         }

@@ -16,6 +16,8 @@
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/startup.hpp>
 #include <atomic>
+#include <cstdlib>
+#include <ctime>
 #include <signal.h>
 
 using string_view = pfs::string_view;
@@ -124,6 +126,9 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
 
+    // For priority randoimization
+    std::srand(std::time({}));
+
     netty::startup_guard netty_startup;
 
     meshnet_node_t * node_ptr = nullptr;
@@ -131,6 +136,8 @@ int main (int argc, char * argv[])
 
     callbacks.on_node_connected = [& node_ptr] (meshnet_node_t::node_id id) {
         LOGD(TAG, "Node connected: {}", id);
+        // node_ptr->set_frame_size(id, 16);
+
         std::string msg0 = "Hello, meshnet node [priority=0]: " + to_string(id);
         std::string msg1 = "Hello, meshnet node [priority=1]: " + to_string(id);
         std::string msg2 = "Hello, meshnet node [priority=2]: " + to_string(id);
@@ -143,8 +150,22 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Node disconnected: {}", id);
     };
 
-    callbacks.on_message_received = [] (meshnet_node_t::node_id id, std::vector<char> && bytes) {
+    callbacks.on_message_received = [& node_ptr] (meshnet_node_t::node_id id, std::vector<char> && bytes) {
         LOGD(TAG, "Message received from node: {}: {}", id, std::string(bytes.data(), bytes.size()));
+
+        int priority = std::rand() % priority_writer_queue_t::priority_count();
+        int repetition_count = std::rand() % 1000;
+        // int repetition_count = std::rand() % 10;
+
+        if (repetition_count == 0)
+            repetition_count = 1;
+
+        std::string msg;
+
+        for (int i = 0; i < repetition_count; i++)
+            msg += "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+        node_ptr->send(id, priority, msg.data(), msg.size());
     };
 
     meshnet_node_t node(*node_id_opt, false, std::move(callbacks));

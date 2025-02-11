@@ -79,7 +79,7 @@ public:
         _h.size = frame_size - header_size();
 
         // Size increment
-        auto new_size = out.size() + header_size() + _h.size;
+        auto new_size = out.size() + frame_size;
 
         out.reserve(new_size);
 

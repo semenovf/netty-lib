@@ -93,14 +93,14 @@ private:
         return & acc;
     }
 
-    account * ensure_account (socket_id id, std::uint16_t frame_size = default_frame_size())
+    account * ensure_account (socket_id id)
     {
         auto acc = locate_account(id);
 
         if (acc == nullptr) {
             account a;
             a.id = id;
-            a.frame_size = frame_size;
+            a.frame_size = default_frame_size();
             auto res = _accounts.emplace(id, std::move(a));
 
             acc = & res.first->second;
@@ -115,6 +115,8 @@ private:
         pfs::stopwatch<std::milli> stopwatch;
 
         do {
+            std::vector<char> frame;
+
             for (auto & item: _accounts) {
                 auto & acc = item.second;
 
@@ -133,7 +135,8 @@ private:
                     continue;
                 }
 
-                auto frame = acc.q.frame(acc.frame_size);
+                frame.clear();
+                acc.q.acquire_frame(frame, acc.frame_size);
 
                 if (frame.empty())
                     continue;
@@ -171,9 +174,13 @@ private:
     }
 
 public:
-    void add (socket_id id, std::uint16_t frame_size = default_frame_size())
+    /**
+     * Ensures the account exists and set it's frame size
+     */
+    void ensure (socket_id id, std::uint16_t frame_size = default_frame_size())
     {
-        /*auto acc = */ensure_account(id, frame_size);
+        auto pacc = ensure_account(id);
+        pacc->frame_size = frame_size;
     }
 
     void remove_later (socket_id id)
