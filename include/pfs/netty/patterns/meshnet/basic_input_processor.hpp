@@ -46,6 +46,10 @@ public:
 
         while (that->read_frame(*pacc)) {
             auto & inpb = that->inpb_ref(*pacc);
+            auto priority = that->priority(*pacc);
+
+            PFS__TERMINATE(priority >= 0, "invalid priority, fix");
+
             auto in = Node::serializer_traits::make_deserializer(inpb.data(), inpb.size());
             bool has_more_packets = true;
 
@@ -97,7 +101,7 @@ public:
                         ddata_packet pkt {h, in};
 
                         if (in.commit_transaction())
-                            that->process(sid, std::move(pkt.bytes));
+                            that->process(sid, priority, std::move(pkt.bytes));
                         else
                             has_more_packets = false;
 
@@ -108,7 +112,7 @@ public:
                         fdata_packet pkt {h, in};
 
                         if (in.commit_transaction())
-                            that->process(sid, std::move(pkt.bytes));
+                            that->process(sid, priority, std::move(pkt.bytes));
                         else
                             has_more_packets = false;
 

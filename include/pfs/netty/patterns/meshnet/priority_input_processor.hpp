@@ -71,6 +71,11 @@ private:
         return acc.priority_buffers[acc.current_priority];
     }
 
+    int priority (account & acc) const noexcept
+    {
+        return acc.current_priority;
+    }
+
     /**
      * Attempt too read frame.
      *
@@ -131,17 +136,18 @@ public:
         this->_node.process_route_received(sid, is_response, std::move(route));
     }
 
-    void process (socket_id sid, std::vector<char> && bytes)
+    void process (socket_id sid, int priority, std::vector<char> && bytes)
     {
-        this->_node.process_message_received(sid, std::move(bytes));
+        this->_node.process_message_received(sid, priority, std::move(bytes));
     }
 
     void process (socket_id sid
+        , int priority
         , std::pair<std::uint64_t, std::uint64_t> sender_id
         , std::pair<std::uint64_t, std::uint64_t> receiver_id
         , std::vector<char> && bytes)
     {
-        this->_node.process_message_received(sid, std::move(sender_id), std::move(receiver_id), std::move(bytes));
+        this->_node.process_message_received(sid, priority, std::move(sender_id), std::move(receiver_id), std::move(bytes));
     }
 };
 

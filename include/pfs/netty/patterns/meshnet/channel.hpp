@@ -444,18 +444,22 @@ private:
 
     void process_route_received (socket_id sid, bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
     {
-        _callbacks->on_route_received(sid, is_response, std::move(route));
+        auto id_ptr = _readers.locate_by_first(sid);
+
+        if (id_ptr != nullptr)
+            _callbacks->on_route_received(*id_ptr, is_response, std::move(route));
     }
 
-    void process_message_received (socket_id sid, std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, std::vector<char> && bytes)
     {
         auto id_ptr = _readers.locate_by_first(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_message_received(*id_ptr, std::move(bytes));
+            _callbacks->on_message_received(*id_ptr, priority, std::move(bytes));
     }
 
     void process_message_received (socket_id sid
+        , int priority
         , std::pair<std::uint64_t, std::uint64_t> sender_id
         , std::pair<std::uint64_t, std::uint64_t> receiver_id
         , std::vector<char> && bytes)
@@ -464,6 +468,7 @@ private:
 
         if (id_ptr != nullptr) {
             _callbacks.on_foreign_message_received(*id_ptr
+                , priority
                 , std::move(sender_id)
                 , std::move(receiver_id)
                 , std::move(bytes));

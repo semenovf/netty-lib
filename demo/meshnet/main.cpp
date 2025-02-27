@@ -143,16 +143,17 @@ int main (int argc, char * argv[])
     std::srand(std::time({}));
 
     netty::startup_guard netty_startup;
-    node_t node {*node_id_opt, behind_nat};
+    node_t node {*node_id_opt, behind_nat, node_t::callback_suite{}};
 
-    auto & channel = node.add_channel<channel_t>();
-    netty::inet4_addr listener_addr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
-    channel.add_listener(netty::socket4_addr{listener_addr, PORT});
+    std::vector<netty::socket4_addr> listener_saddrs {
+        netty::socket4_addr{netty::inet4_addr{netty::inet4_addr::any_addr_value}, PORT}
+    };
+    auto cid = node.add_channel<channel_t>(listener_saddrs);
 
     node.listen();
 
     for (auto const & saddr: neighbor_node_saddrs)
-        channel.connect_host(saddr);
+        node.connect_host(cid, saddr);
 
     while (!quit_flag.load())
         node.step(std::chrono::milliseconds {10});

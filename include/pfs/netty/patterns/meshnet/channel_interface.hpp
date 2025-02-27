@@ -7,6 +7,7 @@
 //      2025.02.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "../../socket4_addr.hpp"
 #include <chrono>

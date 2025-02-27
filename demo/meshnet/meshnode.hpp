@@ -152,4 +152,5 @@ using channel_t = priority_meshnet_channel_t;
 using routing_table_t = meshnet::routing_table<meshnet::universal_id_traits>;
 using node_t = meshnet::node<meshnet::universal_id_traits
     , routing_table_t
+    , meshnet::functional_node_callbacks
     , netty::patterns::console_logger>;
