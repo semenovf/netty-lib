@@ -8,18 +8,22 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "handshake_result.hpp"
+#include "node_interface.hpp"
+#include "unordered_bimap.hpp"
+#include "../../conn_status.hpp"
+#include "../../connection_refused_reason.hpp"
+#include "../../error.hpp"
+#include "../../namespace.hpp"
+#include "../../socket4_addr.hpp"
+#include "../../connecting_pool.hpp"
+#include "../../listener_pool.hpp"
+#include "../../reader_pool.hpp"
+#include "../../socket_pool.hpp"
+#include "../../writer_pool.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
-#include <pfs/netty/conn_status.hpp>
-#include <pfs/netty/connection_refused_reason.hpp>
-#include <pfs/netty/error.hpp>
-#include <pfs/netty/namespace.hpp>
-#include <pfs/netty/socket4_addr.hpp>
-#include <pfs/netty/connecting_pool.hpp>
-#include <pfs/netty/listener_pool.hpp>
-#include <pfs/netty/reader_pool.hpp>
-#include <pfs/netty/socket_pool.hpp>
-#include <pfs/netty/writer_pool.hpp>
+#include <chrono>
+#include <memory>
 #include <thread>
 #include <unordered_map>
 
@@ -28,7 +32,7 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeIdintifierTraits
+template <typename NodeIdTraits
     , typename Listener
     , typename Socket
     , typename ConnectingPoller
@@ -48,7 +52,24 @@ class node: public Loggable
 {
     friend class HandshakeProcessor<node>;
     friend class HeartbeatProcessor<node>;
-    friend class InputProcessor<node>;
+    friend /*class */InputProcessor<node>;
+
+    using node_class = node<NodeIdTraits
+        , Listener
+        , Socket
+        , ConnectingPoller
+        , ListenerPoller
+        , ReaderPoller
+        , WriterPoller
+        , WriterQueue
+        , SerializerTraits
+        , ReconnectionPolicy
+        , HandshakeProcessor
+        , HeartbeatProcessor
+        , MessageSender
+        , InputProcessor
+        , CallbackSuite
+        , Loggable>;
 
     using listener_type = Listener;
     using socket_type = Socket;
@@ -61,11 +82,11 @@ class node: public Loggable
     using reconnection_policy = ReconnectionPolicy;
 
 public:
-    using node_idintifier_traits = NodeIdintifierTraits;
-    using node_id = typename NodeIdintifierTraits::node_id;
+    using node_idintifier_traits = NodeIdTraits;
+    using node_id = typename NodeIdTraits::node_id;
     using socket_id = typename socket_type::socket_id;
     using serializer_traits = SerializerTraits;
-    using callback_suite = CallbackSuite<node>;
+    using callback_suite = CallbackSuite<node_id>;
 
 private:
     node_id              _id;
@@ -82,13 +103,13 @@ private:
     HeartbeatProcessor<node> _heartbeat_processor;
     MessageSender<node> _message_sender;
     InputProcessor<node> _input_processor;
-    callback_suite _callbacks;
+    std::shared_ptr<callback_suite> _callbacks;
 
-    std::unordered_map<socket_id, node_id> _readers;
-    std::unordered_map<node_id, socket_id> _writers;
+    unordered_bimap<socket_id, node_id> _readers;
+    unordered_bimap<socket_id, node_id> _writers;
 
 public:
-    node (node_id id, bool behind_nat, callback_suite && callbacks)
+    node (node_id id, bool behind_nat, std::shared_ptr<callback_suite> callbacks)
         : Loggable()
         , _id(id)
         , _behind_nat(behind_nat)
@@ -96,7 +117,7 @@ public:
         , _heartbeat_processor(*this)
         , _message_sender(*this)
         , _input_processor(*this)
-        , _callbacks(std::move(callbacks))
+        , _callbacks(callbacks)
     {
         _listener_pool.on_failure([this] (netty::error const & err) {
             this->log_error(tr::f_("listener pool failure: {}", err.what()));
@@ -141,9 +162,11 @@ public:
             this->log_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
             schedule_reconnection(sid);
             close_socket(sid);
-        }).on_bytes_written([] (socket_id sid, std::uint64_t n) {
-            // FIXME Use this callback to collect statistics
-            // LOGD("***", "bytes written: id={}: {}", sid, n);
+        }).on_bytes_written([this] (socket_id sid, std::uint64_t n) {
+            auto id_ptr = _writers.locate_by_first(sid);
+
+            if (id_ptr != nullptr)
+                _callbacks->on_bytes_written(*id_ptr, n);
         }).on_locate_socket([this] (socket_id sid) {
             return _socket_pool.locate(sid);
         });
@@ -165,25 +188,25 @@ public:
                 case handshake_result_enum::reader:
                     this->log_debug(tr::f_("handshake state changed: socket #{} is reader for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
-                    _readers[sid] = id;
+                    _readers.insert(sid, id);
                     _heartbeat_processor.add(sid);
 
                     // If the writer already set, full virtual connection established with the
                     // neighbor node.
-                    if (find_writer(id) != _writers.end())
-                        _callbacks.on_node_connected(id);
+                    if (_writers.locate_by_second(id) != nullptr)
+                        _callbacks->on_node_connected(id);
 
                     break;
 
                 case handshake_result_enum::writer:
                     this->log_debug(tr::f_("handshake state changed: socket #{} is writer for node: {}"
                         , sid, node_idintifier_traits::stringify(id)));
-                    _writers[id] = sid;
+                    _writers.insert(sid, id);
                     _heartbeat_processor.add(sid);
 
                     // If the reader already set, channel established with the neighbor node.
-                    if (find_reader(id) != _readers.end())
-                        _callbacks.on_node_connected(id);
+                    if (_readers.locate_by_second(id) != nullptr)
+                        _callbacks->on_node_connected(id);
 
                     break;
 
@@ -201,6 +224,11 @@ public:
 
         this->log_debug(tr::f_("Node: {}", node_idintifier_traits::stringify(_id)));
     }
+
+    node (node const &) = delete;
+    node (node &&) = delete;
+    node & operator = (node const &) = delete;
+    node & operator = (node &&) = delete;
 
     ~node () {}
 
@@ -239,39 +267,39 @@ public:
         _listener_pool.listen(backlog);
     }
 
-    void send (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
+    void enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
     {
-        auto pos = _writers.find(id);
+        auto sid_ptr = _writers.locate_by_second(id);
 
-        if (pos != _writers.end()) {
-            _message_sender.send(pos->second, priority, force_checksum, data, len);
+        if (sid_ptr != nullptr) {
+            _message_sender.enqueue(*sid_ptr, priority, force_checksum, data, len);
         } else {
             this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
         }
     }
 
-    void send (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
     {
-        auto pos = _writers.find(id);
+        auto sid_ptr = _writers.locate_by_second(id);
 
-        if (pos != _writers.end()) {
-            _message_sender.send(pos->second, priority, force_checksum, std::move(data));
+        if (sid_ptr != nullptr) {
+            _message_sender.send(*sid_ptr, priority, force_checksum, std::move(data));
         } else {
             this->log_error(tr::f_("node for send message not found: {}", node_idintifier_traits::stringify(id)));
         }
     }
 
-    void send (node_id id, int priority, char const * data, std::size_t len)
+    void enqueue (node_id id, int priority, char const * data, std::size_t len)
     {
-        this->send(id, priority, false, data, len);
+        this->enqueue(id, priority, false, data, len);
     }
 
-    void send (node_id id, int priority, std::vector<char> && data)
+    void enqueue (node_id id, int priority, std::vector<char> && data)
     {
-        this->send(id, priority, false, std::move(data));
+        this->enqueue(id, priority, false, std::move(data));
     }
 
-    void step (std::chrono::milliseconds millis)
+    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0})
     {
         pfs::countdown_timer<std::milli> countdown_timer {millis};
 
@@ -300,13 +328,11 @@ public:
      */
     void set_frame_size (node_id id, std::uint16_t frame_size)
     {
-        auto pos = _writers.find(id);
+        auto sid_ptr = _writers.locate_by_second(id);
 
-        if (pos != _writers.end()) {
-            _writer_pool.ensure(pos->second, frame_size);
-        }
+        if (sid_ptr != nullptr)
+            _writer_pool.ensure(*sid_ptr, frame_size);
     }
-
 
 public: // static
     static constexpr int priority_count () noexcept
@@ -315,33 +341,6 @@ public: // static
     }
 
 private:
-    typename std::unordered_map<socket_id, node_id>::iterator find_reader (socket_id sid)
-    {
-        return _readers.find(sid);
-    }
-
-    typename std::unordered_map<socket_id, node_id>::iterator find_reader (node_id id)
-    {
-        for (auto pos = _readers.begin(); pos != _readers.end(); ++pos)
-            if (pos->second == id)
-                return pos;
-        return _readers.end();
-    }
-
-    typename std::unordered_map<node_id, socket_id>::iterator find_writer (node_id id)
-    {
-        return _writers.find(id);
-    }
-
-    typename std::unordered_map<node_id, socket_id>::iterator find_writer (socket_id sid)
-    {
-        for (auto pos = _writers.begin(); pos != _writers.end(); ++pos)
-            if (pos->second == sid)
-                return pos;
-
-        return _writers.end();
-    }
-
     // Acceptable values for level: 0 or 1
     void close_socket (socket_id sid, int level = 0)
     {
@@ -356,64 +355,62 @@ private:
             close_channel(sid, level);
     }
 
-    // TODO More optimized data structures and algorithms are needed to track the lifecycle of node
-    // connections.
-    //
     // Closes channel associated with socket identifier.
     // One socket may be reader and writer simultaneously, or reader and writer may be represented
     // by two different sockets.
     // Acceptable values for level: 0 or 1
     void close_channel (socket_id sid, int level)
     {
-        auto rpos = find_reader(sid);
-        auto wpos = find_writer(sid);
+        auto r_id_ptr = _readers.locate_by_first(sid);
+        auto w_id_ptr = _writers.locate_by_first(sid);
 
         // Channel not established (full and partially)
-        if (rpos == _readers.end() && wpos == _writers.end())
+        if (r_id_ptr == nullptr && w_id_ptr == nullptr)
             return;
 
         // Channel already established and one socket are reader and writer simultaneously
-        if (rpos != _readers.end() && wpos != _writers.end()) {
-            auto id = wpos->first;
-            PFS__ASSERT(id == rpos->second, "Fix meshnet::node algorithm");
-            _readers.erase(rpos);
-            _writers.erase(wpos);
-            _callbacks.on_node_disconnected(id);
+        if (r_id_ptr != nullptr && w_id_ptr != nullptr) {
+            auto id = *w_id_ptr;
+            PFS__ASSERT(id == *r_id_ptr, "Fix meshnet::node algorithm");
+            _readers.erase_by_second(id);
+            _writers.erase_by_second(id);
+            _callbacks->on_node_disconnected(id);
             return;
         }
 
-        if (rpos == _readers.end()) {
-            PFS__ASSERT(wpos != _writers.end(), "Fix meshnet::node algorithm");
+        if (r_id_ptr == nullptr) {
+            PFS__ASSERT(w_id_ptr != nullptr, "Fix meshnet::node algorithm");
 
-            rpos = find_reader(wpos->first); // find by node ID
+            auto id = *w_id_ptr;
+            auto r_sid_ptr = _readers.locate_by_second(id);
 
             // Channel already established and reader and writer represented by two different sockets
-            if (rpos != _readers.end()) {
-                auto id = wpos->first;
-                close_socket(rpos->first, ++level);
-                _readers.erase(rpos);
-                _writers.erase(wpos);
-                _callbacks.on_node_disconnected(id);
+            if (r_sid_ptr != nullptr) {
+                close_socket(*r_sid_ptr, ++level);
+                _readers.erase_by_first(*r_sid_ptr);
+                _writers.erase_by_second(id);
+                _callbacks->on_node_disconnected(id);
             } else {
-                _writers.erase(wpos);
+                _writers.erase_by_second(id);
             }
 
             return;
         }
 
-        if (wpos == _writers.end()) {
-            PFS__ASSERT(rpos != _readers.end(), "Fix meshnet::node algorithm");
-            wpos = find_writer(rpos->second); // find by node ID
+        if (w_id_ptr == nullptr) {
+            PFS__ASSERT(r_id_ptr != nullptr, "Fix meshnet::node algorithm");
+
+            auto id = *r_id_ptr;
+            auto w_sid_ptr = _writers.locate_by_second(id);
 
             // Channel already established and reader and writer represented by two different sockets
-            if (wpos != _writers.end()) {
-                auto id = rpos->second;
-                close_socket(wpos->second, ++level);
-                _readers.erase(rpos);
-                _writers.erase(wpos);
-                _callbacks.on_node_disconnected(id);
+            if (w_sid_ptr != nullptr) {
+                close_socket(*w_sid_ptr, ++level);
+                _readers.erase_by_second(id);
+                _writers.erase_by_first(*w_sid_ptr);
+                _callbacks->on_node_disconnected(id);
             } else {
-                _readers.erase(rpos);
+                _readers.erase_by_second(id);
             }
 
             return;
@@ -437,12 +434,32 @@ private:
         }
     }
 
+    void process_route_received (socket_id sid, bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
+    {
+        _callbacks->on_route_received(sid, is_response, std::move(route));
+    }
+
     void process_message_received (socket_id sid, std::vector<char> && bytes)
     {
-        auto pos = _readers.find(sid);
+        auto id_ptr = _readers.locate_by_first(sid);
 
-        if (pos != _readers.end())
-            _callbacks.on_message_received(pos->second, std::move(bytes));
+        if (id_ptr != nullptr)
+            _callbacks->on_message_received(*id_ptr, std::move(bytes));
+    }
+
+    void process_message_received (socket_id sid
+        , std::pair<std::uint64_t, std::uint64_t> sender_id
+        , std::pair<std::uint64_t, std::uint64_t> receiver_id
+        , std::vector<char> && bytes)
+    {
+        auto id_ptr = _readers.locate_by_first(sid);
+
+        if (id_ptr != nullptr) {
+            _callbacks.on_foreign_message_received(*id_ptr
+                , std::move(sender_id)
+                , std::move(receiver_id)
+                , std::move(bytes));
+        }
     }
 
     HandshakeProcessor<node> & handshake_processor ()
@@ -456,14 +473,67 @@ private:
     }
 
 public: // Below methods are for internal use only
-    void send_private (socket_id sid, int priority, char const * data, std::size_t len)
+    void enqueue_private (socket_id sid, int priority, char const * data, std::size_t len)
     {
         _writer_pool.enqueue(sid, priority, data, len);
     }
 
-    void send_private (socket_id sid, int priority, std::vector<char> && data)
+    void enqueue_private (socket_id sid, int priority, std::vector<char> && data)
     {
         _writer_pool.enqueue(sid, priority, std::move(data));
+    }
+
+public: // node_interface
+    template <class Node>
+    class node_interface_impl: public node_interface<NodeIdTraits>
+        , public Node
+    {
+    public:
+        template <typename ...Args>
+        node_interface_impl (Args &&... args)
+            : Node(std::forward<Args>(args)...)
+        {}
+
+        virtual ~node_interface_impl () {}
+
+    public:
+        void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr) override
+        {
+            Node::add_listener(listener_addr, perr);
+        }
+
+        bool connect_host (netty::socket4_addr remote_saddr) override
+        {
+            return Node::connect_host(remote_saddr);
+        }
+
+        bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr) override
+        {
+            return Node::connect_host(remote_saddr, local_addr);
+        }
+
+        void listen (int backlog = 50) override
+        {
+            Node::listen(backlog);
+        }
+
+        void enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len) override
+        {
+            Node::enqueue(id, priority, force_checksum, data, len);
+        }
+
+        void step (std::chrono::milliseconds limit) override
+        {
+            Node::step(limit);
+        }
+    };
+
+    template <typename ...Args>
+    static std::unique_ptr<node_interface<NodeIdTraits>>
+    make_interface (Args &&... args)
+    {
+        return std::unique_ptr<node_interface<NodeIdTraits>>(
+            new node_interface_impl<node_class>(std::forward<Args>(args)...));
     }
 };
 

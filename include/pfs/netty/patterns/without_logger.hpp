@@ -13,7 +13,6 @@
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
-namespace meshnet {
 
 class without_logger
 {
@@ -24,6 +23,6 @@ public:
     void log_error (std::string const & msg) {}
 };
 
-}} // namespace patterns::meshnet
+} // namespace patterns
 
 NETTY__NAMESPACE_END

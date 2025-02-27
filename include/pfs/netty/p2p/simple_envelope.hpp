@@ -9,6 +9,8 @@
 #pragma once
 #include <cstdint>
 
+// DEPRECATED use patterns/reliable_delivery namespace
+
 namespace netty {
 namespace p2p {
 

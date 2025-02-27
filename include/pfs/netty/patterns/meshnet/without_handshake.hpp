@@ -25,9 +25,12 @@ public:
     without_handshake (Node &) {}
 
 public:
-    void process_accepted (socket_id) {}
-    void process_connected (socket_id) {}
-    void process_input (typename serializer_traits::deserializer_type &) {}
+    template <typename F> without_handshake & on_expired (F &&) { return *this; }
+    template <typename F> without_handshake & on_failure (F &&) { return *this; }
+    template <typename F> without_handshake & on_completed (F &&)  { return *this; }
+
+    void start (socket_id) {}
+    void cancel (socket_id) {}
 };
 
 }} // namespace patterns::meshnet

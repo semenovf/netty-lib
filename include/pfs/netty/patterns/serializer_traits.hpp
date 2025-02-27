@@ -15,7 +15,6 @@
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
-namespace meshnet {
 
 // Serializer traits must contains:
 //
@@ -59,6 +58,6 @@ struct serializer_traits
 
 using default_serializer_traits_t = serializer_traits<pfs::endian::network>;
 
-}} // namespace patterns::meshnet
+} // namespace patterns
 
 NETTY__NAMESPACE_END

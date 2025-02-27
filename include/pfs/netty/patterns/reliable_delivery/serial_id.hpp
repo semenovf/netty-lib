@@ -4,24 +4,20 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.02.04 Initial version.
+//      2025.02.14 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/namespace.hpp>
-#include <string>
+#include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
-namespace meshnet {
+namespace reliable_delivery {
 
-template <typename Node>
-struct without_callbacks
-{
-    static void on_node_ready (typename Node::node_id) {}
-};
+using serial_id = std::uint64_t;
 
-}} // namespace patterns::meshnet
+}} // namespace patterns::reliable_delivery
 
 NETTY__NAMESPACE_END
 

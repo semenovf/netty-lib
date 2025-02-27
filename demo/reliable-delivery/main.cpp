@@ -1,240 +1,185 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2024 Vladislav Trifochkin
+// Copyright (c) 2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2024.05.01 Initial version.
+//      2025.02.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "reliable_delivery.hpp"
-#include "pfs/argvapi.hpp"
-#include "pfs/emitter.hpp"
-#include "pfs/memory.hpp"
-#include "pfs/standard_paths.hpp"
-#include "pfs/netty/socket4_addr.hpp"
-#include <chrono>
+#include "reliable_delivery_engine.hpp"
+// #include <pfs/argvapi.hpp>
+// #include <pfs/filesystem.hpp>
+// #include <pfs/fmt.hpp>
+// #include <pfs/integer.hpp>
+// #include <pfs/log.hpp>
+// #include <pfs/string_view.hpp>
+// #include <pfs/netty/socket4_addr.hpp>
+// #include <pfs/netty/startup.hpp>
+#include <atomic>
 #include <cstdlib>
+// #include <ctime>
+#include <signal.h>
 
-using namespace std::chrono;
+// using string_view = pfs::string_view;
+// using pfs::to_string;
 
-bool __failure = false;
+static constexpr char const * TAG = "reliable-delivery";
+// static constexpr std::uint16_t PORT = 4242;
+static std::atomic_bool quit_flag {false};
 
-void print_usage (pfs::filesystem::path const & programName
-    , std::string const & errorString = std::string{})
+static void sigterm_handler (int /*sig*/)
 {
-    std::FILE * out = stdout;
-
-    if (!errorString.empty()) {
-        out = stderr;
-        fmt::println(out, "Error: {}", errorString);
-    }
-
-    fmt::println(out, "Usage:\n\n"
-        "{0} --help | -h\n"
-        "\tPrint this help and exit\n\n"
-        "{0} [--host-id=HOST_ID] [--listener=ADDR:PORT] --peer=ADDR...\n\n"
-        "--host-id=HOST_ID\n"
-        "\tSet host ID. If not specified then it will be generated automatically\n"
-        "--listener=ADDR:PORT\n"
-        "\tSpecify listener socket address. Default is 0.0.0.0:42042\n"
-        "--discovery=ADDR:PORT\n"
-        "\tSpecify discovery receiver socket address. Default is 0.0.0.0:42043\n"
-        "--peer=ADDR\n"
-        "\tSpecify peer socket addresses for communications\n"
-        , programName);
+    quit_flag.store(true);
 }
+
+// static void print_usage (pfs::filesystem::path const & programName
+//     , std::string const & errorString = std::string{})
+// {
+//     if (!errorString.empty())
+//         LOGE(TAG, "{}", errorString);
+//
+//     fmt::println("Usage:\n\n"
+//         "{0} --help | -h\n"
+//         "{0} --id=NODE_ID --node-addr=ADDR...\n\n"
+//
+//         "Options:\n\n"
+//         "--help | -h\n"
+//         "\tPrint this help and exit\n"
+//         "--id=NODE_ID\n"
+//         "\tThis node identifier\n\n"
+//         "--node-addr=ADDR\n"
+//         "\tNeighbor node address\n\n"
+//
+//         "Example:\n\n"
+//         "Run with connection to 192.168.0.2:\n"
+//         "\t{0} --id=01JJP9YBH0TXV3HFQ3B10BXXXW --node-addr=192.168.0.2\n"
+//         , programName);
+// }
 
 int main (int argc, char * argv[])
 {
-    netty::p2p::peer_id host_id;
-    std::vector<netty::inet4_addr> peers;
-    netty::socket4_addr discovery_saddr {netty::inet4_addr::any_addr_value, 42043};
-    netty::socket4_addr listener_saddr {netty::inet4_addr::any_addr_value, 42042};
+    signal(SIGINT, sigterm_handler);
+    signal(SIGTERM, sigterm_handler);
 
-    auto commandLine = pfs::make_argvapi(argc, argv);
-    auto programName = commandLine.program_name();
-    auto commandLineIterator = commandLine.begin();
-
-    if (commandLineIterator.has_more()) {
-        while (commandLineIterator.has_more()) {
-            auto x = commandLineIterator.next();
-
-            if (x.is_option("help") || x.is_option("h")) {
-                print_usage(programName);
-                return EXIT_SUCCESS;
-            } else if (x.is_option("host-id")) {
-                if (!x.has_arg()) {
-                    print_usage(programName, "Expected host ID");
-                    return EXIT_FAILURE;
-                }
-
-                host_id = pfs::from_string<netty::p2p::peer_id>(pfs::to_string(x.arg()));
-
-                if (host_id == netty::p2p::peer_id{}) {
-                    fmt::println(stderr, "Bad host ID");
-                    return EXIT_FAILURE;
-                }
-            } else if (x.is_option("listener")) {
-                if (!x.has_arg()) {
-                    print_usage(programName, "Expected listener");
-                    return EXIT_FAILURE;
-                }
-
-                auto saddr = netty::socket4_addr::parse(x.arg());
-
-                if (!saddr) {
-                    fmt::println(stderr, "Bad listener address");
-                    return EXIT_FAILURE;
-                }
-
-                listener_saddr = std::move(*saddr);
-            } else if (x.is_option("discovery")) {
-                if (!x.has_arg()) {
-                    print_usage(programName, "Expected discovery");
-                    return EXIT_FAILURE;
-                }
-
-                auto saddr = netty::socket4_addr::parse(x.arg());
-
-                if (!saddr) {
-                    fmt::println(stderr, "Bad discovery address");
-                    return EXIT_FAILURE;
-                }
-
-                discovery_saddr = std::move(*saddr);
-            } else if (x.is_option("peer")) {
-                if (!x.has_arg()) {
-                    print_usage(programName, "Expected address");
-                    return EXIT_FAILURE;
-                }
-
-                auto addr = netty::inet4_addr::parse(x.arg());
-
-                if (!addr) {
-                    fmt::println(stderr, "Bad peer address");
-                    return EXIT_FAILURE;
-                }
-
-                peers.push_back(std::move(*addr));
-            } else {
-                fmt::println(stderr, "Bad arguments. Try --help option.");
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
-    if (peers.empty()) {
-        fmt::println(stderr, "No peer specified. Try --help option.");
-        return EXIT_FAILURE;
-    }
-
-    if (host_id == netty::p2p::peer_id{})
-        host_id = pfs::generate_uuid();
-
-    discovery_engine::options discoveryengineopts;
-    discoveryengineopts.host_port = listener_saddr.port;
-    auto discoveryengine = pfs::make_unique<discovery_engine>(host_id, std::move(discoveryengineopts));
-
-    reliable_delivery_engine::options deliveryengineopts;
-    deliveryengineopts.listener_saddr = listener_saddr;
-    deliveryengineopts.listener_backlog = 99;
-
-    auto storage = pfs::make_unique<netty::sample::persistent_storage>(pfs::filesystem::standard_paths::temp_folder());
-    auto deliveryengine = pfs::make_unique<reliable_delivery_engine>(std::move(storage), host_id
-        , std::move(deliveryengineopts));
-
-    std::vector<netty::p2p::peer_id> defered_expired_peers;
-    pfs::emitter<netty::p2p::peer_id, std::vector<char>> sendData;
-
-    sendData.connect([& deliveryengine] (netty::p2p::peer_id addressee, std::vector<char> data) {
-        deliveryengine->enqueue(addressee, std::move(data));
-    });
-
-    discoveryengine->on_failure = [] (netty::error const & err) {
-        LOGE("", "Descovery failure: {}, exit", err.what());
-        __failure = true;
-    };
-
-    discoveryengine->peer_discovered2 = [& deliveryengine] (netty::host4_addr haddr, milliseconds const & /*timediff*/) {
-        LOGD("", "Peer discovered, connecting: {}", to_string(haddr));
-        deliveryengine->connect(std::move(haddr));
-    };
-
-    discoveryengine->peer_timediff = [] (netty::p2p::peer_id peerid, milliseconds const & timediff) {
-        LOGD("", "Peer time difference: {}: {}", peerid, timediff);
-    };
-
-    discoveryengine->peer_expired2 = [& deliveryengine] (netty::host4_addr haddr) {
-        LOGD("", "Peer expired: {}", to_string(haddr));
-        deliveryengine->expire_peer(haddr.host_id);
-    };
-
-    deliveryengine->on_failure = [] (netty::error const & err) {
-        LOGE("", "Unrecoverable error: {}, exit", err.what());
-        __failure = true;
-    };
-
-    deliveryengine->on_error = [] (std::string const & errstr) {
-        LOGE("", "{}", errstr);
-    };
-
-    deliveryengine->on_warn = [] (std::string const & errstr) {
-        LOGW("", "{}", errstr);
-    };
-
-    deliveryengine->writer_ready = [] (netty::host4_addr haddr) {
-        LOGD("", "Writer ready: {}", to_string(haddr));
-    };
-
-    deliveryengine->writer_closed = [] (netty::host4_addr haddr) {
-        LOGD("", "Writer closed: {}", to_string(haddr));
-    };
-
-    deliveryengine->reader_ready = [] (netty::host4_addr haddr) {
-        LOGD("", "Reader ready: {}", to_string(haddr));
-    };
-
-    deliveryengine->reader_closed = [] (netty::host4_addr haddr) {
-        LOGD("", "Reader closed: {}", to_string(haddr));
-    };
-
-    deliveryengine->defere_expire_peer = [& discoveryengine] (netty::p2p::peer_id peer_id) {
-        discoveryengine->expire_peer(peer_id);
-    };
-
-    deliveryengine->channel_established = [& sendData] (netty::host4_addr haddr) {
-        LOGD("", "Channel established: {}", to_string(haddr));
-
-        sendData(haddr.host_id, std::vector<char>{'H', 'E', 'L', 'L', 'O'});
-    };
-
-    deliveryengine->channel_closed = [] (netty::p2p::peer_id peer_id) {
-        LOGD("", "Channel closed: {}", peer_id);
-    };
-
-    deliveryengine->data_received = [& sendData] (netty::p2p::peer_id peer_id, std::vector<char> data) {
-        LOGD("", "Message received from: {}", peer_id);
-        sendData(peer_id, std::move(data));
-    };
-
-    discoveryengine->add_receiver(discovery_saddr);
-
-    for (auto const & peer: peers) {
-        discoveryengine->add_target(netty::socket4_addr{peer, discovery_saddr.port}, seconds{1});
-        LOGD("", "Peer added as discovery target: {}", to_string(peer));
-    }
-
-    milliseconds timeout {10};
-
-    deliveryengine->ready();
-
-    while (!__failure) {
-        auto t = discoveryengine->step_timing();
-        deliveryengine->step(timeout > duration_cast<milliseconds>(t)
-            ? timeout - duration_cast<milliseconds>(t) : milliseconds{0});
-    }
-
-    discoveryengine->expire_all_peers();
+    // std::vector<netty::socket4_addr> neighbor_node_saddrs;
+    // pfs::optional<meshnet_node_t::node_id> node_id_opt;
+    //
+    // auto commandLine = pfs::make_argvapi(argc, argv);
+    // auto programName = commandLine.program_name();
+    // auto commandLineIterator = commandLine.begin();
+    //
+    // if (commandLineIterator.has_more()) {
+    //     while (commandLineIterator.has_more()) {
+    //         auto x = commandLineIterator.next();
+    //         auto expectedArgError = false;
+    //
+    //         if (x.is_option("help") || x.is_option("h")) {
+    //             print_usage(programName);
+    //             return EXIT_SUCCESS;
+    //         } else if (x.is_option("id")) {
+    //             if (x.has_arg()) {
+    //                 node_id_opt = meshnet_node_t::node_idintifier_traits::parse(x.arg().data()
+    //                     , x.arg().size());
+    //
+    //                 if (!node_id_opt) {
+    //                     LOGE(TAG, "Bad node identifier");
+    //                     return EXIT_FAILURE;
+    //                 }
+    //             } else {
+    //                 expectedArgError = true;
+    //             }
+    //         } else if (x.is_option("node-addr")) {
+    //             if (x.has_arg()) {
+    //                 auto addr = netty::inet4_addr::parse(x.arg());
+    //
+    //                 if (!addr) {
+    //                     LOGE(TAG, "Bad address for '{}'", to_string(x.optname()));
+    //                     return EXIT_FAILURE;
+    //                 }
+    //
+    //                 neighbor_node_saddrs.push_back(netty::socket4_addr{*addr, PORT});
+    //             } else {
+    //                 expectedArgError = true;
+    //             }
+    //         } else {
+    //             LOGE(TAG, "Bad arguments. Try --help option.");
+    //             return EXIT_FAILURE;
+    //         }
+    //
+    //         if (expectedArgError) {
+    //             print_usage(programName, "Expected argument for " + to_string(x.optname()));
+    //             return EXIT_FAILURE;
+    //         }
+    //     }
+    // } else {
+    //     print_usage(programName);
+    //     return EXIT_SUCCESS;
+    // }
+    //
+    // if (!node_id_opt) {
+    //     LOGE(TAG, "Node identifier must be specified");
+    //     return EXIT_FAILURE;
+    // }
+    //
+    // if (neighbor_node_saddrs.empty()) {
+    //     LOGE(TAG, "No neighbor node address specified");
+    //     return EXIT_FAILURE;
+    // }
+    //
+    // // For priority randoimization
+    // std::srand(std::time({}));
+    //
+    // netty::startup_guard netty_startup;
+    //
+    // meshnet_node_t * node_ptr = nullptr;
+    // meshnet_node_t::callback_suite callbacks;
+    //
+    // callbacks.on_node_connected = [& node_ptr] (meshnet_node_t::node_id id) {
+    //     LOGD(TAG, "Node connected: {}", id);
+    //     // node_ptr->set_frame_size(id, 16);
+    //
+    //     std::string msg0 = "Hello, meshnet node [priority=0]: " + to_string(id);
+    //     std::string msg1 = "Hello, meshnet node [priority=1]: " + to_string(id);
+    //     std::string msg2 = "Hello, meshnet node [priority=2]: " + to_string(id);
+    //     node_ptr->send(id, 2, msg2.data(), msg2.size());
+    //     node_ptr->send(id, 1, msg1.data(), msg1.size());
+    //     node_ptr->send(id, 0, msg0.data(), msg0.size());
+    // };
+    //
+    // callbacks.on_node_disconnected = [] (meshnet_node_t::node_id id) {
+    //     LOGD(TAG, "Node disconnected: {}", id);
+    // };
+    //
+    // callbacks.on_message_received = [& node_ptr] (meshnet_node_t::node_id id, std::vector<char> && bytes) {
+    //     LOGD(TAG, "Message received from node: {}: {}", id, std::string(bytes.data(), bytes.size()));
+    //
+    //     int priority = std::rand() % priority_writer_queue_t::priority_count();
+    //     int repetition_count = std::rand() % 1000;
+    //     // int repetition_count = std::rand() % 10;
+    //
+    //     if (repetition_count == 0)
+    //         repetition_count = 1;
+    //
+    //     std::string msg;
+    //
+    //     for (int i = 0; i < repetition_count; i++)
+    //         msg += "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    //
+    //     node_ptr->send(id, priority, msg.data(), msg.size());
+    // };
+    //
+    // meshnet_node_t node(*node_id_opt, false, std::move(callbacks));
+    // node_ptr = & node;
+    //
+    // netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
+    // node.add_listener(netty::socket4_addr{listenerAddr, PORT});
+    // node.listen();
+    //
+    // for (auto const & saddr: neighbor_node_saddrs)
+    //     node.connect_host(saddr);
+    //
+    // while (!quit_flag.load())
+    //     node.step(std::chrono::milliseconds {10});
 
     return EXIT_SUCCESS;
 }

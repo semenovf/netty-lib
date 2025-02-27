@@ -12,13 +12,14 @@ add_subdirectory(available_net_interfaces)
 add_subdirectory(meshnet)
 add_subdirectory(mtu)
 # add_subdirectory(netty) # FIXME
+# add_subdirectory(reliable-delivery) # TODO IMPLEMENT
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
 # add_subdirectory(service) # FIXME
 
+# DEPRECATED
 if (NETTY__ENABLE_P2P)
     add_subdirectory(discovery)
-    add_subdirectory(reliable-delivery)
     # add_subdirectory(p2p) // FIXME
 endif()
 

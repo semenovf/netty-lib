@@ -53,6 +53,12 @@ public:
                 in.start_transaction();
                 header h {in};
 
+                // Incomplete header
+                if (!in.is_good()) {
+                    has_more_packets = false;
+                    continue;
+                }
+
                 switch (h.type()) {
                     case packet_enum::handshake: {
                         handshake_packet pkt {h, in};
@@ -76,8 +82,30 @@ public:
                         break;
                     }
 
-                    case packet_enum::data: {
-                        data_packet pkt {h, in};
+                    case packet_enum::route: {
+                        route_packet pkt {h, in};
+
+                        if (in.commit_transaction())
+                            that->process(sid, pkt.is_response(), std::move(pkt.route));
+                        else
+                            has_more_packets = false;
+
+                        break;
+                    }
+
+                    case packet_enum::ddata: {
+                        ddata_packet pkt {h, in};
+
+                        if (in.commit_transaction())
+                            that->process(sid, std::move(pkt.bytes));
+                        else
+                            has_more_packets = false;
+
+                        break;
+                    }
+
+                    case packet_enum::fdata: {
+                        fdata_packet pkt {h, in};
 
                         if (in.commit_transaction())
                             that->process(sid, std::move(pkt.bytes));

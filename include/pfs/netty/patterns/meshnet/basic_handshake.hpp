@@ -45,18 +45,18 @@ public:
     {}
 
 protected:
-    void send (socket_id sid, packet_way_enum way)
+    void enqueue (socket_id sid, packet_way_enum way)
     {
         auto out = serializer_traits::make_serializer();
         handshake_packet pkt {way, (_node.is_behind_nat() ? behind_nat_enum::yes : behind_nat_enum::no)};
-        pkt.id = node_idintifier_traits::stringify(_node.id());
+        pkt.id = std::make_pair(node_idintifier_traits::high(_node.id()), node_idintifier_traits::low(_node.id()));
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
         if (way == packet_way_enum::request)
             _cache[sid] = std::chrono::steady_clock::now() + _timeout;
 
-        _node.send_private(sid, 0, out.data(), out.size());
+        _node.enqueue_private(sid, 0, out.data(), out.size());
     }
 
     void check_expired ()
@@ -100,7 +100,7 @@ public:
 
     void start (socket_id sid)
     {
-        send(sid, packet_way_enum::request);
+        enqueue(sid, packet_way_enum::request);
     }
 
     void cancel (socket_id sid)
@@ -111,28 +111,23 @@ public:
 
     void process (socket_id sid, handshake_packet const & pkt)
     {
-        auto optid = node_idintifier_traits::parse(pkt.id.data(), pkt.id.size());
+        auto id = node_idintifier_traits::make(pkt.id.first, pkt.id.second);
 
-        if (optid) { // Valid node ID received
-            // If item not found, it means it is already expired
-            auto pos = _cache.find(sid);
+        // If item not found, it means it is already expired
+        auto pos = _cache.find(sid);
 
-            if (pos != _cache.end()) { // Received response
-                cancel(sid);
-                static_cast<Derived<Node> *>(this)->handshake_ready(sid, *optid
-                    , pkt.is_response(), pkt.is_behind_nat());
-            } else {
-                // Received request from handshake initiator
-                if (!pkt.is_response()) {
-                    send(sid, packet_way_enum::response);
-                    static_cast<Derived<Node> *>(this)->handshake_ready(sid, *optid
-                        , pkt.is_response(), pkt.is_behind_nat());
-                }
-                // } else { the socket is already expired }
-            }
-        } else { // Invalid node ID received
+        if (pos != _cache.end()) { // Received response
             cancel(sid);
-            _on_failure(sid, tr::f_("bad node identifier received from: #{}", sid));
+            static_cast<Derived<Node> *>(this)->handshake_ready(sid, id
+                , pkt.is_response(), pkt.is_behind_nat());
+        } else {
+            // Received request from handshake initiator
+            if (!pkt.is_response()) {
+                enqueue(sid, packet_way_enum::response);
+                static_cast<Derived<Node> *>(this)->handshake_ready(sid, id
+                    , pkt.is_response(), pkt.is_behind_nat());
+            }
+            // } else { the socket is already expired }
         }
     }
 

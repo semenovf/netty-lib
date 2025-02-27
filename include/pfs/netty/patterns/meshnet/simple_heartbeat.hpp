@@ -39,12 +39,6 @@ class simple_heartbeat
         return lhs.t < rhs.t;
     }
 
-    // // Sort by descending order
-    // friend constexpr bool operator < (timelimit_item const & lhs, timelimit_item const & rhs)
-    // {
-    //     return lhs.t > rhs.t;
-    // }
-
 private:
     Node & _node;
     std::chrono::seconds _interval {5};
@@ -114,7 +108,7 @@ public:
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node.send_private(pos->sid, 0, out.data(), out.size());
+                _node.enqueue_private(pos->sid, 0, out.data(), out.size());
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);

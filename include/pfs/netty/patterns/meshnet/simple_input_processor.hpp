@@ -7,13 +7,13 @@
 //      2025.02.05 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "basic_input_processor.hpp"
-// #include "protocol.hpp"
+#include "protocol.hpp"
 #include <pfs/assert.hpp>
-// #include <pfs/utility.hpp>
-// #include <pfs/netty/namespace.hpp>
-// #include <cstring>
-// #include <unordered_map>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -106,6 +106,11 @@ public:
     void process (socket_id sid, heartbeat_packet const & pkt)
     {
         this->_node.heartbeat_processor().process(sid, pkt);
+    }
+
+    void process (socket_id sid, bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
+    {
+        this->_node.process_route_received(sid, is_response, std::move(route));
     }
 
     void process (socket_id sid, std::vector<char> && bytes)

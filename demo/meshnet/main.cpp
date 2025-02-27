@@ -25,11 +25,11 @@ using pfs::to_string;
 
 static constexpr char const * TAG = "meshnet";
 static constexpr std::uint16_t PORT = 4242;
-static std::atomic_bool s_quit {false};
+static std::atomic_bool quit_flag {false};
 
 static void sigterm_handler (int /*sig*/)
 {
-    s_quit.store(true);
+    quit_flag.store(true);
 }
 
 static void print_usage (pfs::filesystem::path const & programName
@@ -40,13 +40,15 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} --id=NODE_ID --node-addr=ADDR...\n\n"
+        "{0} --id=NODE_ID [--nat] --node-addr=ADDR...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
         "\tPrint this help and exit\n"
         "--id=NODE_ID\n"
         "\tThis node identifier\n\n"
+        "--nat\n"
+        "\tThis node is behind NAT\n\n"
         "--node-addr=ADDR\n"
         "\tNeighbor node address\n\n"
 
@@ -56,11 +58,20 @@ static void print_usage (pfs::filesystem::path const & programName
         , programName);
 }
 
+// Check node specilizations
+void dumb ()
+{
+    bare_meshnet_node_t n0 {pfs::generate_uuid(), false, std::make_shared<bare_meshnet_node_t::callback_suite>()};
+    nopriority_meshnet_node_t n1 {pfs::generate_uuid(), false, std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
+    priority_meshnet_node_t n2 {pfs::generate_uuid(), false, std::make_shared<priority_meshnet_node_t::callback_suite>()};
+}
+
 int main (int argc, char * argv[])
 {
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
+    bool behind_nat = false;
     std::vector<netty::socket4_addr> neighbor_node_saddrs;
     pfs::optional<meshnet_node_t::node_id> node_id_opt;
 
@@ -101,6 +112,8 @@ int main (int argc, char * argv[])
                 } else {
                     expectedArgError = true;
                 }
+            } else if (x.is_option("nat")) {
+                behind_nat = true;
             } else {
                 LOGE(TAG, "Bad arguments. Try --help option.");
                 return EXIT_FAILURE;
@@ -130,56 +143,19 @@ int main (int argc, char * argv[])
     std::srand(std::time({}));
 
     netty::startup_guard netty_startup;
+    node_pool_t node_pool {*node_id_opt, behind_nat};
 
-    meshnet_node_t * node_ptr = nullptr;
-    meshnet_node_t::callback_suite callbacks;
+    auto & node = node_pool.add_node<meshnet_node_t>();
+    netty::inet4_addr listener_addr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
+    node.add_listener(netty::socket4_addr{listener_addr, PORT});
 
-    callbacks.on_node_connected = [& node_ptr] (meshnet_node_t::node_id id) {
-        LOGD(TAG, "Node connected: {}", id);
-        // node_ptr->set_frame_size(id, 16);
-
-        std::string msg0 = "Hello, meshnet node [priority=0]: " + to_string(id);
-        std::string msg1 = "Hello, meshnet node [priority=1]: " + to_string(id);
-        std::string msg2 = "Hello, meshnet node [priority=2]: " + to_string(id);
-        node_ptr->send(id, 2, msg2.data(), msg2.size());
-        node_ptr->send(id, 1, msg1.data(), msg1.size());
-        node_ptr->send(id, 0, msg0.data(), msg0.size());
-    };
-
-    callbacks.on_node_disconnected = [] (meshnet_node_t::node_id id) {
-        LOGD(TAG, "Node disconnected: {}", id);
-    };
-
-    callbacks.on_message_received = [& node_ptr] (meshnet_node_t::node_id id, std::vector<char> && bytes) {
-        LOGD(TAG, "Message received from node: {}: {}", id, std::string(bytes.data(), bytes.size()));
-
-        int priority = std::rand() % priority_writer_queue_t::priority_count();
-        int repetition_count = std::rand() % 1000;
-        // int repetition_count = std::rand() % 10;
-
-        if (repetition_count == 0)
-            repetition_count = 1;
-
-        std::string msg;
-
-        for (int i = 0; i < repetition_count; i++)
-            msg += "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-        node_ptr->send(id, priority, msg.data(), msg.size());
-    };
-
-    meshnet_node_t node(*node_id_opt, false, std::move(callbacks));
-    node_ptr = & node;
-
-    netty::inet4_addr listenerAddr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
-    node.add_listener(netty::socket4_addr{listenerAddr, PORT});
-    node.listen();
+    node_pool.listen();
 
     for (auto const & saddr: neighbor_node_saddrs)
         node.connect_host(saddr);
 
-    while (!s_quit.load())
-        node.step(std::chrono::milliseconds {10});
+    while (!quit_flag.load())
+        node_pool.step(std::chrono::milliseconds {10});
 
     return EXIT_SUCCESS;
 }

@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2021-2024 Vladislav Trifochkin
+# Copyright (c) 2021-2025 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -9,17 +9,34 @@
 #       2024.04.03 Added selection of proper dependencies.
 #       2024.12.08 Removed `portable_target` dependency.
 #       2024.12.25 Added `single_channel_connection` test.
+#       2024.02.13 Added `reliable_delivery_engine` test.
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
+set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
+message(STATUS "Fetching lorem ...")
+include(FetchContent)
+FetchContent_Declare(lorem
+    GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
+    GIT_TAG master
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/lorem
+    SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/lorem)
+FetchContent_MakeAvailable(lorem)
+message(STATUS "Fetching lorem complete")
+
 set(TESTS
-    inet4_addr)
+    inet4_addr
+    reliable_delivery_manager)
 
 foreach (target ${TESTS})
     add_executable(${target} ${target}.cpp)
     target_link_libraries(${target} PRIVATE pfs::netty)
     add_test(NAME ${target} COMMAND ${target})
 endforeach()
+
+if (TARGET reliable_delivery_manager)
+    target_link_libraries(reliable_delivery_manager PRIVATE pfs::lorem)
+endif()
 
 get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
 get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)

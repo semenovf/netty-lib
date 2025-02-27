@@ -30,6 +30,27 @@ struct universal_id_traits
     {
         return pfs::parse_universal_id(s, n);
     }
+
+    /**
+     * Low 64-bit part of the node ID binary representation
+     */
+    static std::uint64_t low (node_id const & id)
+    {
+        return PFS__NAMESPACE_NAME::low(id);
+    }
+
+    /**
+     * High 64-bit part of the node ID binary representation
+     */
+    static std::uint64_t high (node_id const & id)
+    {
+        return PFS__NAMESPACE_NAME::high(id);
+    }
+
+    static node_id make (std::uint64_t high, std::uint64_t low)
+    {
+        return pfs::make_uuid(high, low);
+    }
 };
 
 }} // namespace patterns::meshnet

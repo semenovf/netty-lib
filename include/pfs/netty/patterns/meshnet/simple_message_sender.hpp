@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "protocol.hpp"
-#include <pfs/netty/namespace.hpp>
+#include "../../namespace.hpp"
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -31,20 +31,20 @@ public:
     {}
 
 public:
-    void send (socket_id sid, int priority, bool has_checksum, char const * data, std::size_t len)
+    void enqueue (socket_id sid, int priority, bool has_checksum, char const * data, std::size_t len)
     {
         auto out = serializer_traits::make_serializer();
-        data_packet pkt {has_checksum};
+        ddata_packet pkt {has_checksum};
         pkt.serialize(out, data, len);
-        _node.send_private(sid, priority, out.data(), out.size());
+        _node.enqueue_private(sid, priority, out.data(), out.size());
     }
 
-    void send (socket_id sid, int priority, bool has_checksum, std::vector<char> && data)
+    void enqueue (socket_id sid, int priority, bool has_checksum, std::vector<char> && data)
     {
         auto out = serializer_traits::make_serializer();
-        data_packet pkt {has_checksum};
+        ddata_packet pkt {has_checksum};
         pkt.serialize(out, std::move(data));
-        _node.send_private(sid, priority, out.data(), out.size());
+        _node.enqueue_private(sid, priority, out.data(), out.size());
     }
 };
 
