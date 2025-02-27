@@ -19,13 +19,13 @@ namespace patterns {
 namespace meshnet {
 
 template <typename NodeId>
-struct functional_node_callbacks
+struct functional_channel_callbacks
 {
     // Notify when connection established with the remote node
-    std::function<void (NodeId)> on_node_connected = [] (NodeId) {};
+    std::function<void (NodeId)> on_channel_established = [] (NodeId) {};
 
-    // Notify when connection disconnected with the remote node
-    std::function<void (NodeId)> on_node_disconnected = [] (NodeId) {};
+    // Notify when the channel is destroyed with the remote node
+    std::function<void (NodeId)> on_channel_destroyed = [] (NodeId) {};
 
     // Notify when data actually sent (written into the socket)
     std::function<void (NodeId, std::uint64_t)> on_bytes_written

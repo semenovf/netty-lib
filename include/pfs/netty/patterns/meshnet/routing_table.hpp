@@ -48,6 +48,14 @@ public:
     ~routing_table () = default;
 
 public:
+    /**
+     * Processes routing data.
+     *
+     * @param id Node
+     */
+    void process (bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
+    {
+    };
 };
 
 }} // namespace patterns::meshnet

@@ -61,9 +61,9 @@ static void print_usage (pfs::filesystem::path const & programName
 // Check node specilizations
 void dumb ()
 {
-    bare_meshnet_node_t n0 {pfs::generate_uuid(), false, std::make_shared<bare_meshnet_node_t::callback_suite>()};
-    nopriority_meshnet_node_t n1 {pfs::generate_uuid(), false, std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
-    priority_meshnet_node_t n2 {pfs::generate_uuid(), false, std::make_shared<priority_meshnet_node_t::callback_suite>()};
+    bare_meshnet_channel_t n0 {pfs::generate_uuid(), false, std::make_shared<bare_meshnet_channel_t::callback_suite>()};
+    nopriority_meshnet_channel_t n1 {pfs::generate_uuid(), false, std::make_shared<nopriority_meshnet_channel_t::callback_suite>()};
+    priority_meshnet_channel_t n2 {pfs::generate_uuid(), false, std::make_shared<priority_meshnet_channel_t::callback_suite>()};
 }
 
 int main (int argc, char * argv[])
@@ -73,7 +73,7 @@ int main (int argc, char * argv[])
 
     bool behind_nat = false;
     std::vector<netty::socket4_addr> neighbor_node_saddrs;
-    pfs::optional<meshnet_node_t::node_id> node_id_opt;
+    pfs::optional<node_t::node_id> node_id_opt;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -89,7 +89,7 @@ int main (int argc, char * argv[])
                 return EXIT_SUCCESS;
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
-                    node_id_opt = meshnet_node_t::node_idintifier_traits::parse(x.arg().data()
+                    node_id_opt = node_t::node_id_traits::parse(x.arg().data()
                         , x.arg().size());
 
                     if (!node_id_opt) {
@@ -143,19 +143,19 @@ int main (int argc, char * argv[])
     std::srand(std::time({}));
 
     netty::startup_guard netty_startup;
-    node_pool_t node_pool {*node_id_opt, behind_nat};
+    node_t node {*node_id_opt, behind_nat};
 
-    auto & node = node_pool.add_node<meshnet_node_t>();
+    auto & channel = node.add_channel<channel_t>();
     netty::inet4_addr listener_addr = netty::inet4_addr{netty::inet4_addr::any_addr_value};
-    node.add_listener(netty::socket4_addr{listener_addr, PORT});
+    channel.add_listener(netty::socket4_addr{listener_addr, PORT});
 
-    node_pool.listen();
+    node.listen();
 
     for (auto const & saddr: neighbor_node_saddrs)
-        node.connect_host(saddr);
+        channel.connect_host(saddr);
 
     while (!quit_flag.load())
-        node_pool.step(std::chrono::milliseconds {10});
+        node.step(std::chrono::milliseconds {10});
 
     return EXIT_SUCCESS;
 }

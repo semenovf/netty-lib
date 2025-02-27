@@ -17,13 +17,13 @@ namespace patterns {
 namespace meshnet {
 
 template <typename NodeIdTraits>
-class node_interface
+class channel_interface
 {
 public:
     using node_id = typename NodeIdTraits::node_id;
 
 public:
-    virtual ~node_interface () {}
+    virtual ~channel_interface () {}
 
 public:
     virtual void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr) = 0;

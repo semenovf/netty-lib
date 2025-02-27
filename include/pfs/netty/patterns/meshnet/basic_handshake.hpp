@@ -26,7 +26,7 @@ class basic_handshake
 protected:
     using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
-    using node_idintifier_traits = typename Node::node_idintifier_traits;
+    using node_id_traits = typename Node::node_id_traits;
     using serializer_traits = typename Node::serializer_traits;
     using time_point_type = std::chrono::steady_clock::time_point;
 
@@ -49,7 +49,7 @@ protected:
     {
         auto out = serializer_traits::make_serializer();
         handshake_packet pkt {way, (_node.is_behind_nat() ? behind_nat_enum::yes : behind_nat_enum::no)};
-        pkt.id = std::make_pair(node_idintifier_traits::high(_node.id()), node_idintifier_traits::low(_node.id()));
+        pkt.id = std::make_pair(node_id_traits::high(_node.id()), node_id_traits::low(_node.id()));
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
@@ -111,7 +111,7 @@ public:
 
     void process (socket_id sid, handshake_packet const & pkt)
     {
-        auto id = node_idintifier_traits::make(pkt.id.first, pkt.id.second);
+        auto id = node_id_traits::make(pkt.id.first, pkt.id.second);
 
         // If item not found, it means it is already expired
         auto pos = _cache.find(sid);
