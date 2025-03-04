@@ -49,7 +49,7 @@ void run_receiver (netty::socket4_addr const & src_saddr, netty::inet4_addr loca
         else
             receiver = Receiver{src_saddr};
 
-        poller.ready_read = [& receiver, & finish, & packetsReceived, outputLog] (receiver_poller_type::socket_id /*sock*/) {
+        poller.on_ready_read = [& receiver, & finish, & packetsReceived, outputLog] (receiver_poller_type::socket_id /*sock*/) {
             char buffer[5];
             std::memset(buffer, 0, sizeof(buffer));
 

@@ -56,6 +56,7 @@ private:
 
     mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
     mutable std::function<void(socket_id, std::uint64_t)> _on_bytes_written;
+    mutable std::function<void(socket_id)> _on_disconnected = [] (socket_id) {};
     mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
         return nullptr;
@@ -67,6 +68,11 @@ public:
         WriterPoller::on_failure = [this] (socket_id id, error const & err) {
             remove_later(id);
             _on_failure(id, err);
+        };
+
+        WriterPoller::on_disconnected = [this] (socket_id id) {
+            remove_later(id);
+            _on_disconnected(id);
         };
 
         WriterPoller::can_write = [this] (socket_id id) {
@@ -235,6 +241,17 @@ public:
         enqueue(id, 0, std::move(data));
     }
 
+    void enqueue_broadcast (int priority, char const * data, std::size_t len)
+    {
+        for (auto & acc: _accounts)
+            enqueue(acc.second.id, priority, data, len);
+    }
+
+    void enqueue_broadcast (char const * data, std::size_t len)
+    {
+        enqueue_broadcast(0, data, len);
+    }
+
     /**
      * Sets a callback for the failure. Callback signature is void(socket_id, netty::error const &).
      */
@@ -242,6 +259,13 @@ public:
     writer_pool & on_failure (F && f)
     {
         _on_failure = std::forward<F>(f);
+        return *this;
+    }
+
+    template <typename F>
+    writer_pool & on_disconnected (F && f)
+    {
+        _on_disconnected = std::forward<F>(f);
         return *this;
     }
 

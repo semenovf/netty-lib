@@ -23,11 +23,11 @@ class simple_message_sender
     using serializer_traits = typename Node::serializer_traits;
 
 private:
-    Node & _node;
+    Node * _node {nullptr};
 
 public:
     simple_message_sender (Node & node)
-        : _node(node)
+        : _node(& node)
     {}
 
 public:
@@ -36,7 +36,7 @@ public:
         auto out = serializer_traits::make_serializer();
         ddata_packet pkt {has_checksum};
         pkt.serialize(out, data, len);
-        _node.enqueue_private(sid, priority, out.data(), out.size());
+        _node->enqueue_private(sid, priority, out.data(), out.size());
     }
 
     void enqueue (socket_id sid, int priority, bool has_checksum, std::vector<char> && data)
@@ -44,7 +44,7 @@ public:
         auto out = serializer_traits::make_serializer();
         ddata_packet pkt {has_checksum};
         pkt.serialize(out, std::move(data));
-        _node.enqueue_private(sid, priority, out.data(), out.size());
+        _node->enqueue_private(sid, priority, out.data(), out.size());
     }
 };
 

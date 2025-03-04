@@ -68,9 +68,9 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 #endif
 
                 if (n1 > 0) {
-                    ready_read(fd);
+                    on_ready_read(fd);
                 } else if (n1 == 0) {
-                    disconnected(fd);
+                    on_disconnected(fd);
                 } else {
 #if _MSC_VER
                     auto lastWsaError = WSAGetLastError();
@@ -82,7 +82,7 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                     } else {
 #endif
                         if (errno == ECONNRESET) {
-                            disconnected(fd);
+                            on_disconnected(fd);
                         } else {
                             on_failure(fd, error {
                                   errc::socket_error
@@ -154,7 +154,7 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 } else {
                     if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
                             || error_val == ECONNRESET) {
-                        disconnected(ev.fd);
+                        on_disconnected(ev.fd);
                     } else {
                         on_failure(ev.fd, error {
                               errc::socket_error
@@ -182,9 +182,9 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 auto n = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
                 if (n > 0) {
-                    ready_read(ev.fd);
+                    on_ready_read(ev.fd);
                 } else if (n == 0) {
-                    disconnected(ev.fd);
+                    on_disconnected(ev.fd);
                 } else {
                     if (errno != ECONNRESET) {
                         on_failure(ev.fd, error {
@@ -193,7 +193,7 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                                 , pfs::system_error_text(errno), ev.fd)
                         });
                     } else {
-                        disconnected(ev.fd);
+                        on_disconnected(ev.fd);
                     }
                 }
             }

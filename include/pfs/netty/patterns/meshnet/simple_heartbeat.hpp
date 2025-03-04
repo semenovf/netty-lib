@@ -40,7 +40,7 @@ class simple_heartbeat
     }
 
 private:
-    Node & _node;
+    Node * _node {nullptr};
     std::chrono::seconds _interval {5};
     std::chrono::seconds _timeout {15};
     std::set<heartbeat_item> _q;
@@ -53,7 +53,7 @@ private:
 
 public:
     simple_heartbeat (Node & node, std::chrono::seconds interval = std::chrono::seconds{5})
-        : _node(node)
+        : _node(& node)
         , _interval(interval)
     {}
 
@@ -84,7 +84,6 @@ public:
 
     void process (socket_id sid, heartbeat_packet const & /*pkt*/)
     {
-        LOGD("[meshnet]", "heartbeat: {}", sid);
         _limits[sid] = std::chrono::steady_clock::now() + _timeout;
     }
 
@@ -108,7 +107,7 @@ public:
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node.enqueue_private(pos->sid, 0, out.data(), out.size());
+                _node->enqueue_private(pos->sid, 0, out.data(), out.size());
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);

@@ -13,16 +13,20 @@
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
-set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
-message(STATUS "Fetching lorem ...")
-include(FetchContent)
-FetchContent_Declare(lorem
-    GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
-    GIT_TAG master
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/lorem
-    SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/lorem)
-FetchContent_MakeAvailable(lorem)
-message(STATUS "Fetching lorem complete")
+if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/lorem/.git)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/lorem 2ndparty/lorem)
+else()
+    set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
+    message(STATUS "Fetching lorem ...")
+    include(FetchContent)
+    FetchContent_Declare(lorem
+        GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
+        GIT_TAG master
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/lorem
+        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/lorem)
+    FetchContent_MakeAvailable(lorem)
+    message(STATUS "Fetching lorem complete")
+endif()
 
 set(TESTS
     inet4_addr

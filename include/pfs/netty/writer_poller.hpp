@@ -27,6 +27,7 @@ private:
 
 public:
     mutable std::function<void(socket_id, error const &)> on_failure;
+    mutable std::function<void(socket_id)> on_disconnected;
     mutable std::function<void(socket_id)> can_write;
 
 public:

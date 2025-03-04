@@ -55,13 +55,13 @@ public:
             _on_failure(id, err);
         };
 
-        ReaderPoller::disconnected = [this] (socket_id id) {
+        ReaderPoller::on_disconnected = [this] (socket_id id) {
             if (_on_disconnected)
                 _on_disconnected(id);
             remove_later(id);
         };
 
-        ReaderPoller::ready_read = [this] (socket_id id) {
+        ReaderPoller::on_ready_read = [this] (socket_id id) {
             auto acc = locate_account(id);
 
             // Inconsistent data: requested socket ID is not equal to account's ID

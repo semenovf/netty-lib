@@ -27,8 +27,8 @@ private:
 
 public:
     mutable std::function<void(socket_id, error const &)> on_failure;
-    mutable std::function<void(socket_id)> disconnected;
-    mutable std::function<void(socket_id)> ready_read;
+    mutable std::function<void(socket_id)> on_disconnected;
+    mutable std::function<void(socket_id)> on_ready_read;
 
 public:
     NETTY__EXPORT reader_poller ();

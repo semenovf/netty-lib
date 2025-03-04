@@ -34,11 +34,11 @@ int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
 
                 if (state == CONNECTED || state == OPENED) {
                     res++;
-                    ready_read(u);
+                    on_ready_read(u);
                 } else {
                     // BROKEN - on connected socket when peer socket closed.
                     if (state == BROKEN || state == CLOSED) {
-                        disconnected(u);
+                        on_disconnected(u);
                     } else {
                         on_failure(u, error {
                               errc::socket_error

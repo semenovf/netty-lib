@@ -21,6 +21,11 @@ struct reconnection_policy
     {
         return std::chrono::seconds{5};
     }
+
+    static unsigned int attempts ()
+    {
+        return 5;
+    }
 };
 
 }} // namespace patterns::meshnet

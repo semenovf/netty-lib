@@ -121,11 +121,15 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
-                    on_failure(ev.fd, error {
-                          errc::socket_error
-                        , tr::f_("write socket failure: {} (socket={})"
-                            , pfs::system_error_text(error_val), ev.fd)
-                    });
+                    if (error_val == ECONNRESET) {
+                        on_disconnected(ev.fd);
+                    } else {
+                        on_failure(ev.fd, error {
+                            errc::socket_error
+                            , tr::f_("write socket failure: {} (socket={})"
+                                , pfs::system_error_text(error_val), ev.fd)
+                        });
+                    }
                 }
 
                 continue;

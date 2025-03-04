@@ -61,16 +61,20 @@ if (NETTY__ENABLE_UTILS)
 endif()
 
 if (NOT TARGET pfs::common)
-    set(FETCHCONTENT_UPDATES_DISCONNECTED_COMMON ON)
-    message(STATUS "Fetching common ...")
-    include(FetchContent)
-    FetchContent_Declare(common
-        GIT_REPOSITORY https://github.com/semenovf/common-lib.git
-        GIT_TAG master
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/common
-        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/common)
-    FetchContent_MakeAvailable(common)
-    message(STATUS "Fetching common complete")
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/common/.git)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/common 2ndparty/common)
+    else()
+        set(FETCHCONTENT_UPDATES_DISCONNECTED_COMMON ON)
+        message(STATUS "Fetching common ...")
+        include(FetchContent)
+        FetchContent_Declare(common
+            GIT_REPOSITORY https://github.com/semenovf/common-lib.git
+            GIT_TAG master
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/common
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/common)
+        FetchContent_MakeAvailable(common)
+        message(STATUS "Fetching common complete")
+    endif()
 endif()
 
 if (MSVC)
@@ -173,16 +177,20 @@ if (NETTY__ENABLE_UDT)
 endif(NETTY__ENABLE_UDT)
 
 if (NETTY__ENABLE_ENET)
-    set(FETCHCONTENT_UPDATES_DISCONNECTED_ENET ON)
-    message(STATUS "Fetching ENet ...")
-    include(FetchContent)
-    FetchContent_Declare(enet
-        GIT_REPOSITORY https://github.com/lsalzman/enet.git
-        GIT_TAG "v1.3.18"
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/enet
-        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/3rdparty/enet)
-    FetchContent_MakeAvailable(enet)
-    message(STATUS "Fetching ENet complete")
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/enet/.git)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/enet 3rdparty/enet)
+    else()
+        set(FETCHCONTENT_UPDATES_DISCONNECTED_ENET ON)
+        message(STATUS "Fetching ENet ...")
+        include(FetchContent)
+        FetchContent_Declare(enet
+            GIT_REPOSITORY https://github.com/lsalzman/enet.git
+            GIT_TAG "v1.3.18"
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/enet
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/3rdparty/enet)
+        FetchContent_MakeAvailable(enet)
+        message(STATUS "Fetching ENet complete")
+    endif()
 
     target_include_directories(enet PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/enet/include)
 
@@ -213,16 +221,20 @@ if (NETTY__ENABLE_P2P)
         # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_provider.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
 
-    set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
-    message(STATUS "Fetching pfs::ionik ...")
-    include(FetchContent)
-    FetchContent_Declare(ionik
-        GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
-        GIT_TAG master
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/ionik
-        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/ionik)
-    FetchContent_MakeAvailable(ionik)
-    message(STATUS "Fetching pfs::ionik complete")
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/ionik/.git)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/ionik 2ndparty/ionik)
+    else()
+        set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
+        message(STATUS "Fetching pfs::ionik ...")
+        include(FetchContent)
+        FetchContent_Declare(ionik
+            GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
+            GIT_TAG master
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/ionik
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/ionik)
+        FetchContent_MakeAvailable(ionik)
+        message(STATUS "Fetching pfs::ionik complete")
+    endif()
 
     target_link_libraries(netty PRIVATE pfs::ionik)
 endif()

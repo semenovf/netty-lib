@@ -10,6 +10,7 @@
 #include "../../namespace.hpp"
 #include "basic_input_processor.hpp"
 #include "protocol.hpp"
+#include "route_info.hpp"
 #include <pfs/assert.hpp>
 #include <cstdint>
 #include <utility>
@@ -113,9 +114,9 @@ public:
         this->_node.heartbeat_processor().process(sid, pkt);
     }
 
-    void process (socket_id sid, bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
+    void process (socket_id sid, route_packet const & pkt)
     {
-        this->_node.process_route_received(sid, is_response, std::move(route));
+        this->_node.process_route_info(sid, pkt.is_response(), pkt.rinfo);
     }
 
     void process (socket_id sid, int priority, std::vector<char> && bytes)
@@ -131,7 +132,6 @@ public:
     {
         this->_node.process_message_received(sid, priority, std::move(sender_id), std::move(receiver_id), std::move(bytes));
     }
-
 };
 
 }} // namespace patterns::meshnet

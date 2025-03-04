@@ -55,11 +55,15 @@ int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                             , pfs::system_error_text(), ev.data.fd)
                     });
                 } else {
-                    on_failure(ev.data.fd, error {
-                          errc::socket_error
-                        , tr::f_("write socket failure: {} (socket={})"
-                            , pfs::system_error_text(error_val), ev.data.fd)
-                    });
+                    if (error_val == ECONNRESET) {
+                        on_disconnected(ev.data.fd);
+                    } else {
+                        on_failure(ev.data.fd, error {
+                            errc::socket_error
+                            , tr::f_("write socket failure: {} (socket={})"
+                                , pfs::system_error_text(error_val), ev.data.fd)
+                        });
+                    }
                 }
 
                 continue;

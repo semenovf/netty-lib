@@ -90,7 +90,7 @@ public:
                         route_packet pkt {h, in};
 
                         if (in.commit_transaction())
-                            that->process(sid, pkt.is_response(), std::move(pkt.route));
+                            that->process(sid, pkt);
                         else
                             has_more_packets = false;
 

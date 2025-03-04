@@ -131,9 +131,9 @@ public:
         this->_node.heartbeat_processor().process(sid, pkt);
     }
 
-    void process (socket_id sid, bool is_response, std::vector<std::pair<std::uint64_t, std::uint64_t>> && route)
+    void process (socket_id sid, route_packet const & pkt)
     {
-        this->_node.process_route_received(sid, is_response, std::move(route));
+        this->_node.process_route_info(sid, pkt.is_response(), pkt.rinfo);
     }
 
     void process (socket_id sid, int priority, std::vector<char> && bytes)

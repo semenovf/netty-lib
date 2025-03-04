@@ -49,7 +49,7 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
             inpb_ptr->resize(offset + ev->packet->dataLength);
             std::memcpy(inpb_ptr->data() + offset, ev->packet->data, ev->packet->dataLength);
 
-            ready_read(event.sock);
+            on_ready_read(event.sock);
             enet_packet_destroy(ev->packet);
             _rep->pop_event();
             n++;
@@ -57,7 +57,7 @@ int reader_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
             // Reset the peer's client information
             ev->peer->data = nullptr;
 
-            disconnected(event.sock);
+            on_disconnected(event.sock);
             _rep->pop_event();
             n++;
         } else {

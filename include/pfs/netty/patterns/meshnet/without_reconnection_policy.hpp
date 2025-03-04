@@ -21,6 +21,11 @@ struct without_reconnection_policy
     {
         return std::chrono::seconds{0};
     }
+
+    static int attempts ()
+    {
+        return 0;
+    }
 };
 
 }} // namespace patterns::meshnet

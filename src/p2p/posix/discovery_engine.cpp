@@ -25,7 +25,7 @@ void discovery_engine::add_receiver (socket4_addr src_saddr, inet4_addr local_ad
     else
         receiver = netty::posix::udp_receiver{src_saddr};
 
-    _poller.ready_read = [this] (poller_type::socket_id sock) {
+    _poller.on_ready_read = [this] (poller_type::socket_id sock) {
         auto pos = _receivers.find(sock);
 
         if (pos != _receivers.end()) {

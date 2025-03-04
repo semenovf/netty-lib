@@ -7,10 +7,14 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "behind_nat_enum.hpp"
+#include "gateway_enum.hpp"
+#include "route_info.hpp"
 #include <pfs/netty/namespace.hpp>
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
+#include <pfs/time_point.hpp>
 #include <cstdint>
 #include <cstring>
 #include <utility>
@@ -44,12 +48,6 @@ enum class packet_category_enum
     , request
     , response
     , reply = response
-};
-
-enum class behind_nat_enum
-{
-      no
-    , yes
 };
 
 // Byte 0:
@@ -176,7 +174,7 @@ public:
     std::pair<std::uint64_t, std::uint64_t> id;
 
 public:
-    handshake_packet (packet_way_enum way, behind_nat_enum behind_nat = behind_nat_enum::no) noexcept
+    handshake_packet (packet_way_enum way, behind_nat_enum behind_nat, gateway_enum is_gateway) noexcept
         : header(packet_enum::handshake, false, 0)
     {
         if (way == packet_way_enum::response)
@@ -184,6 +182,9 @@ public:
 
         if (behind_nat == behind_nat_enum::yes)
             enable_f1();
+
+        if (is_gateway == gateway_enum::yes)
+            enable_f2();
     }
 
     /**
@@ -203,9 +204,14 @@ public:
         return is_f0();
     }
 
-    bool is_behind_nat () const noexcept
+    bool behind_nat () const noexcept
     {
         return is_f1();
+    }
+
+    bool is_gateway () const noexcept
+    {
+        return is_f2();
     }
 
     template <typename Serializer>
@@ -257,8 +263,7 @@ public:
 class route_packet: public header
 {
 public:
-    // first - high part, seconf - low part
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> route; // router IDs
+    route_info rinfo;
 
 public:
     route_packet (packet_way_enum way) noexcept
@@ -272,6 +277,11 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
+        in >> rinfo.utctime >> rinfo.initiator_id.first >> rinfo.initiator_id.second;
+
+        if (is_response())
+            in >> rinfo.responder_id.first >> rinfo.responder_id.second;
+
         std::uint8_t count = 0;
         in >> count;
 
@@ -279,7 +289,7 @@ public:
             std::uint64_t id_high = 0;
             std::uint64_t id_low = 0;
             in >> id_high >> id_low;
-            route.push_back(std::make_pair(id_high, id_low));
+            rinfo.route.push_back(std::make_pair(id_high, id_low));
         }
     }
 
@@ -292,13 +302,21 @@ public:
     template <typename Serializer>
     void serialize (Serializer & out)
     {
-        if (!route.empty()) {
-            header::serialize(out);
-            out << pfs::numeric_cast<std::uint8_t>(route.size());
+        header::serialize(out);
 
-            for (auto const & id: route)
-                out << id.first << id.second;
-        }
+        // For response utctime must be set from request
+        if (!is_response())
+            rinfo.utctime = static_cast<std::uint64_t>(pfs::utc_time::now().to_millis().count());
+
+        out << rinfo.utctime << rinfo.initiator_id.first << rinfo.initiator_id.second;
+
+        if (is_response())
+            out << rinfo.responder_id.first << rinfo.responder_id.second;
+
+        out << pfs::numeric_cast<std::uint8_t>(rinfo.route.size());
+
+        for (auto const & id: rinfo.route)
+            out << id.first << id.second;
     }
 };
 

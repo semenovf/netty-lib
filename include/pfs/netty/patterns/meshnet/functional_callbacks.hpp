@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "route_info.hpp"
 #include <cstdint>
 #include <functional>
 #include <utility>
@@ -19,10 +20,10 @@ namespace patterns {
 namespace meshnet {
 
 template <typename NodeId>
-struct functional_channel_callbacks
+struct node_callbacks
 {
     // Notify when connection established with the remote node
-    std::function<void (NodeId)> on_channel_established = [] (NodeId) {};
+    std::function<void (NodeId, bool)> on_channel_established = [] (NodeId, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     std::function<void (NodeId)> on_channel_destroyed = [] (NodeId) {};
@@ -32,8 +33,8 @@ struct functional_channel_callbacks
         = [] (NodeId, std::uint64_t /*n*/) {};
 
     // On intermediate route info received
-    std::function<void (NodeId, bool, std::vector<std::pair<std::uint64_t, std::uint64_t>> &&)> on_route_received
-        = [] (NodeId, bool /*is_response*/, std::vector<std::pair<std::uint64_t, std::uint64_t>> && /*route*/) {};
+    std::function<void (NodeId, bool, route_info const &)> on_route_received
+        = [] (NodeId, bool /*is_response*/, route_info const &) {};
 
     // On domestic message received
     std::function<void (NodeId, int, std::vector<char> &&)> on_message_received
@@ -53,10 +54,10 @@ struct functional_channel_callbacks
 };
 
 template <typename NodeId>
-struct functional_node_callbacks
+struct node_pool_callbacks
 {
     // Notify when connection established with the remote node
-    std::function<void (NodeId)> on_channel_established = [] (NodeId) {};
+    std::function<void (NodeId, bool)> on_channel_established = [] (NodeId, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     std::function<void (NodeId)> on_channel_destroyed = [] (NodeId) {};
@@ -65,7 +66,7 @@ struct functional_node_callbacks
     std::function<void (NodeId, std::uint64_t)> on_bytes_written
         = [] (NodeId, std::uint64_t /*n*/) {};
 
-    // On domestic message received
+    // On message received
     std::function<void (NodeId, int, std::vector<char> &&)> on_message_received
         = [] (NodeId, int /*priority*/, std::vector<char> && /*bytes*/) {};
 };
@@ -73,4 +74,3 @@ struct functional_node_callbacks
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-

@@ -49,6 +49,8 @@ static void print_usage (pfs::filesystem::path const & programName
         "\tThis node identifier\n\n"
         "--nat\n"
         "\tThis node is behind NAT\n\n"
+        "--gw\n"
+        "\tThis node is a gateway\n\n"
         "--node-addr=ADDR\n"
         "\tNeighbor node address\n\n"
 
@@ -61,9 +63,9 @@ static void print_usage (pfs::filesystem::path const & programName
 // Check node specilizations
 void dumb ()
 {
-    bare_meshnet_channel_t n0 {pfs::generate_uuid(), false, std::make_shared<bare_meshnet_channel_t::callback_suite>()};
-    nopriority_meshnet_channel_t n1 {pfs::generate_uuid(), false, std::make_shared<nopriority_meshnet_channel_t::callback_suite>()};
-    priority_meshnet_channel_t n2 {pfs::generate_uuid(), false, std::make_shared<priority_meshnet_channel_t::callback_suite>()};
+    bare_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<bare_meshnet_node_t::callback_suite>()};
+    nopriority_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
+    priority_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<priority_meshnet_node_t::callback_suite>()};
 }
 
 int main (int argc, char * argv[])
@@ -71,9 +73,10 @@ int main (int argc, char * argv[])
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
-    bool behind_nat = false;
+    auto behind_nat = netty::patterns::meshnet::behind_nat_enum::no;
+    auto is_gateway = netty::patterns::meshnet::gateway_enum::no;
     std::vector<netty::socket4_addr> neighbor_node_saddrs;
-    pfs::optional<node_t::node_id> node_id_opt;
+    pfs::optional<node_pool_t::node_id> node_id_opt;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -89,7 +92,7 @@ int main (int argc, char * argv[])
                 return EXIT_SUCCESS;
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
-                    node_id_opt = node_t::node_id_traits::parse(x.arg().data()
+                    node_id_opt = node_pool_t::node_id_traits::parse(x.arg().data()
                         , x.arg().size());
 
                     if (!node_id_opt) {
@@ -113,7 +116,9 @@ int main (int argc, char * argv[])
                     expectedArgError = true;
                 }
             } else if (x.is_option("nat")) {
-                behind_nat = true;
+                behind_nat = netty::patterns::meshnet::behind_nat_enum::yes;
+            } else if (x.is_option("gw")) {
+                is_gateway = is_gateway = netty::patterns::meshnet::gateway_enum::yes;
             } else {
                 LOGE(TAG, "Bad arguments. Try --help option.");
                 return EXIT_FAILURE;
@@ -143,20 +148,31 @@ int main (int argc, char * argv[])
     std::srand(std::time({}));
 
     netty::startup_guard netty_startup;
-    node_t node {*node_id_opt, behind_nat, node_t::callback_suite{}};
+    auto callbacks = std::make_shared<node_pool_t::callback_suite>();
+
+    callbacks->on_channel_established = [] (node_t::node_id id, bool is_gateway) {
+        auto node_type = is_gateway ? "gateway node" : "regular node";
+        LOGD(TAG, "Channel established with {}: {}", node_type, to_string(id));
+    };
+
+    callbacks->on_channel_destroyed = [] (node_t::node_id id) {
+        LOGD(TAG, "Channel destroyed with {}", to_string(id));
+    };
+
+    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, callbacks};
 
     std::vector<netty::socket4_addr> listener_saddrs {
-        netty::socket4_addr{netty::inet4_addr{netty::inet4_addr::any_addr_value}, PORT}
+        netty::socket4_addr{netty::inet4_addr {netty::inet4_addr::any_addr_value}, PORT}
     };
-    auto cid = node.add_channel<channel_t>(listener_saddrs);
+    auto cid = node_pool.add_node<node_t>(listener_saddrs);
 
-    node.listen();
+    node_pool.listen();
 
     for (auto const & saddr: neighbor_node_saddrs)
-        node.connect_host(cid, saddr);
+        node_pool.connect_host(cid, saddr);
 
     while (!quit_flag.load())
-        node.step(std::chrono::milliseconds {10});
+        node_pool.step(std::chrono::milliseconds {10});
 
     return EXIT_SUCCESS;
 }

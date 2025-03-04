@@ -11,10 +11,10 @@
 #include <pfs/netty/patterns/console_logger.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/without_logger.hpp>
-#include <pfs/netty/patterns/meshnet/channel.hpp>
-#include <pfs/netty/patterns/meshnet/node.hpp>
 #include <pfs/netty/patterns/meshnet/exclusive_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/functional_callbacks.hpp>
+#include <pfs/netty/patterns/meshnet/node.hpp>
+#include <pfs/netty/patterns/meshnet/node_pool.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_processor.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table.hpp>
@@ -42,7 +42,7 @@ using priority_input_processor = meshnet::priority_input_processor<3, Node>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // nopriority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-using nopriority_meshnet_channel_t = meshnet::channel<
+using nopriority_meshnet_node_t = meshnet::node<
       meshnet::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
@@ -70,13 +70,13 @@ using nopriority_meshnet_channel_t = meshnet::channel<
     , meshnet::simple_heartbeat
     , meshnet::simple_message_sender
     , meshnet::simple_input_processor
-    , meshnet::functional_channel_callbacks
+    , meshnet::node_callbacks
     , netty::patterns::console_logger>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // priority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-using priority_meshnet_channel_t = meshnet::channel<
+using priority_meshnet_node_t = meshnet::node<
       meshnet::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
@@ -104,14 +104,14 @@ using priority_meshnet_channel_t = meshnet::channel<
     , meshnet::simple_heartbeat
     , meshnet::simple_message_sender
     , priority_input_processor
-    , meshnet::functional_channel_callbacks
+    , meshnet::node_callbacks
     , netty::patterns::console_logger>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // bare_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Unusable, for test without_XXX parameters only.
-using bare_meshnet_channel_t = meshnet::channel<
+using bare_meshnet_node_t = meshnet::node<
       meshnet::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
@@ -139,18 +139,19 @@ using bare_meshnet_channel_t = meshnet::channel<
     , meshnet::without_heartbeat
     , meshnet::without_message_sender
     , meshnet::without_input_processor
-    , meshnet::functional_channel_callbacks
+    , meshnet::node_callbacks
     , netty::patterns::without_logger>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Choose required type here
-//using channel_t = nopriority_meshnet_channel_t;
-using channel_t = priority_meshnet_channel_t;
+//using node_t = nopriority_meshnet_node_t;
+using node_t = priority_meshnet_node_t;
 
-using routing_table_t = meshnet::routing_table<meshnet::universal_id_traits>;
-using node_t = meshnet::node<meshnet::universal_id_traits
+using routing_table_t = meshnet::routing_table<meshnet::universal_id_traits
+    , netty::patterns::default_serializer_traits_t>;
+using node_pool_t = meshnet::node_pool<meshnet::universal_id_traits
     , routing_table_t
-    , meshnet::functional_node_callbacks
+    , meshnet::node_pool_callbacks<meshnet::universal_id_traits::node_id>
     , netty::patterns::console_logger>;

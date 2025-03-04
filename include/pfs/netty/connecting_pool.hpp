@@ -47,7 +47,7 @@ private:
     std::set<deferred_connection_item> _deferred_connections;
     mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
     mutable std::function<void(socket_type &&)> _on_connected;
-    mutable std::function<void(socket_id, socket4_addr, connection_refused_reason)> _on_connection_refused;
+    mutable std::function<void(socket4_addr, connection_refused_reason)> _on_connection_refused;
 
 public:
     connecting_pool ()
@@ -80,7 +80,7 @@ public:
 
             if (pos != _connecting_sockets.end()) {
                 if (_on_connection_refused)
-                    _on_connection_refused(id, pos->second.saddr(), reason);
+                    _on_connection_refused(pos->second.saddr(), reason);
             } else {
                 _on_failure(error {errc::device_not_found
                     , tr::f_("on connection refused on socket failure: id={}", id)});
@@ -158,7 +158,7 @@ public:
             }
 
             case netty::conn_status::unreachable:
-                _on_connection_refused(sock.id(), sock.saddr(), connection_refused_reason::unreachable);
+                _on_connection_refused(sock.saddr(), connection_refused_reason::unreachable);
                 break;
 
             case netty::conn_status::failure:

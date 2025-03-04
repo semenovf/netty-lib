@@ -4,25 +4,21 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.25 Initial version.
+//      2025.02.27 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
+#include "../../namespace.hpp"
+#include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-enum class handshake_result_enum
-{
-      unusable = 0   // Socket is unusable, may be closed
-    , reader = 1     // Use socket as reader
-    , writer = 2     // Use socket as writer
-    , duplicated = 3 // Attempt to establish a connection with a node that has the same identifier
-};
+// Node index (started from 1)
+using node_index_t = std::uint16_t;
+constexpr node_index_t INVALID_NODE_INDEX = node_index_t{0};
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-

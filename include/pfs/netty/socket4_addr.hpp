@@ -61,4 +61,36 @@ inline bool operator != (socket4_addr const & a, socket4_addr const & b)
     return a.addr != b.addr || a.port != b.port;
 }
 
+inline bool operator < (socket4_addr const & a, socket4_addr const & b)
+{
+    if (a.addr < b.addr)
+        return true;
+
+    if (a.addr == b.addr)
+        return a.port < b.port;
+
+    return false;
+}
+
+inline bool operator > (socket4_addr const & a, socket4_addr const & b)
+{
+    if (a.addr > b.addr)
+        return true;
+
+    if (a.addr == b.addr)
+        return a.port > b.port;
+
+    return false;
+}
+
+inline bool operator <= (socket4_addr const & a, socket4_addr const & b)
+{
+    return (a < b || a == b);
+}
+
+inline bool operator >= (socket4_addr const & a, socket4_addr const & b)
+{
+    return (a > b || a == b);
+}
+
 } // namespace netty

@@ -90,11 +90,11 @@ private:
             }
         };
 
-        _reader_poller.ready_read = [this] (socket_id sock) {
+        _reader_poller.on_ready_read = [this] (socket_id sock) {
             ready_read(sock);
         };
 
-        _reader_poller.disconnected = [this] (socket_id sock) {
+        _reader_poller.on_disconnected = [this] (socket_id sock) {
             _removable_readers.push_back(sock);
             _removable.insert(sock);
             disconnected(sock);

@@ -54,7 +54,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                 } else {
                     if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
                             || error_val == ECONNRESET) {
-                        disconnected(ev.data.fd);
+                        on_disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
                               errc::socket_error
@@ -68,7 +68,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
             }
 
             if (ev.events & (EPOLLHUP | EPOLLRDHUP)) {
-                disconnected(ev.data.fd);
+                on_disconnected(ev.data.fd);
                 continue;
             }
 
@@ -78,12 +78,12 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                 auto n = ::recv(ev.data.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
                 if (n > 0) {
-                    ready_read(ev.data.fd);
+                    on_ready_read(ev.data.fd);
                 } else if (n == 0) {
-                    disconnected(ev.data.fd);
+                    on_disconnected(ev.data.fd);
                 } else {
                     if (errno == ECONNRESET) {
-                        disconnected(ev.data.fd);
+                        on_disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
                               errc::socket_error
