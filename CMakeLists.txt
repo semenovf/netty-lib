@@ -53,10 +53,6 @@ endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
-if (NETTY__BUILD_P2P)
-    include(${CMAKE_CURRENT_LIST_DIR}/library-p2p.cmake)
-endif()
-
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)
     enable_testing()
     add_subdirectory(tests)

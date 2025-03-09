@@ -114,13 +114,8 @@ public:
         _node_callbacks->on_global_message_received = [this] (node_id /*id*/, int priority
                 , node_id sender_id, node_id receiver_id, std::vector<char> && bytes) {
 
-            if (_id == receiver_id) {
-                _callbacks->on_message_received(sender_id, priority, std::move(bytes));
-            } else {
-                // Need to forward the message if the node is a gateway, or discard the message otherwise.
-                if (_is_gateway)
-                    forward_global_message(priority, sender_id, receiver_id, std::move(bytes));
-            }
+            PFS__TERMINATE(_id == receiver_id, "Fix meshnet::node_pool algorithm");
+            _callbacks->on_message_received(sender_id, priority, std::move(bytes));
         };
 
         _node_callbacks->on_forward_global_message = [this] (int priority
