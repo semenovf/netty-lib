@@ -38,9 +38,9 @@ public:
     virtual void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}) = 0;
 
     // For internal use only
-    virtual void enqueue_packet (node_id id, std::vector<char> && data) = 0;
-    virtual void enqueue_packet (node_id id, char const * data, std::size_t len) = 0;
-    virtual void enqueue_broadcast_packet (char const * data, std::size_t len) = 0;
+    virtual void enqueue_packet (node_id id, int priority, std::vector<char> && data) = 0;
+    virtual void enqueue_packet (node_id id, int priority, char const * data, std::size_t len) = 0;
+    virtual void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) = 0;
 };
 
 }} // namespace patterns::meshnet

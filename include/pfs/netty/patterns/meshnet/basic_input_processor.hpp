@@ -22,13 +22,16 @@ template <typename Derived, typename Node>
 class basic_input_processor
 {
     using socket_id = typename Node::socket_id;
+    using node_id_traits = typename Node::node_id_traits;
+    using node_id = typename Node::node_id;
+    using serializer_traits = typename Node::serializer_traits;
 
 protected:
-    Node & _node;
+    Node * _node {nullptr};
 
 public:
     basic_input_processor (Node & node)
-        : _node(node)
+        : _node(& node)
     {}
 
 public:
@@ -50,7 +53,7 @@ public:
 
             PFS__TERMINATE(priority >= 0, "invalid priority, fix");
 
-            auto in = Node::serializer_traits::make_deserializer(inpb.data(), inpb.size());
+            auto in = serializer_traits::make_deserializer(inpb.data(), inpb.size());
             bool has_more_packets = true;
 
             while (has_more_packets && in.available() > 0) {
@@ -101,20 +104,37 @@ public:
                         ddata_packet pkt {h, in};
 
                         if (in.commit_transaction())
-                            that->process(sid, priority, std::move(pkt.bytes));
+                            that->process_message_received(sid, priority, std::move(pkt.bytes));
                         else
                             has_more_packets = false;
 
                         break;
                     }
 
-                    case packet_enum::fdata: {
-                        fdata_packet pkt {h, in};
+                    case packet_enum::gdata: {
+                        gdata_packet pkt {h, in};
 
-                        if (in.commit_transaction())
-                            that->process(sid, priority, std::move(pkt.bytes));
-                        else
+                        if (in.commit_transaction()) {
+                            auto receiver_id = node_id_traits::make(pkt.receiver_id);
+
+                            if (receiver_id == _node->id()) {
+                                that->process_message_received(sid, priority
+                                    , node_id_traits::make(pkt.sender_id)
+                                    , receiver_id
+                                    , std::move(pkt.bytes));
+                            } else {
+                                // Need to forward the message if the node is a gateway, or discard
+                                // the message otherwise.
+                                if (_node->is_gateway()) {
+                                    auto out = serializer_traits::make_serializer();
+                                    pkt.serialize(out);
+                                    that->forward_global_message(priority, node_id_traits::make(pkt.sender_id)
+                                        , receiver_id, out.take());
+                                }
+                            }
+                        } else {
                             has_more_packets = false;
+                        }
 
                         break;
                     }

@@ -31,8 +31,8 @@ enum class packet_enum
       handshake =  1 /// Handshake phase packet
     , heartbeat =  2 /// Heartbeat loop packet
     , route     =  3 /// Route discovery packet
-    , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic data)
-    , fdata     = 15 /// User data packet for exchange bitween subnets using router nodes (foreign data)
+    , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message)
+    , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message).
 };
 
 // Used when need to specify the direction/way of the packet
@@ -97,7 +97,7 @@ public:
         if (has_checksum())
             in >> _h.crc32;
 
-        if (type() == packet_enum::ddata || type() == packet_enum::fdata)
+        if (type() == packet_enum::ddata || type() == packet_enum::gdata)
             in >> _h.length;
     }
 
@@ -158,7 +158,7 @@ protected:
             out << _h.crc32;
 
         auto has_data = static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::ddata
-            || static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::fdata;
+            || static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::gdata;
 
         if (has_data)
             out << _h.length;
@@ -376,9 +376,9 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// fdata packet
+// gdata packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-class fdata_packet: public header
+class gdata_packet: public header
 {
 public:
     std::pair<std::uint64_t, std::uint64_t> sender_id;
@@ -387,26 +387,26 @@ public:
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    fdata_packet (std::pair<std::uint64_t, std::uint64_t> sender_id
+    gdata_packet (std::pair<std::uint64_t, std::uint64_t> sender_id
         , std::pair<std::uint64_t, std::uint64_t> receiver_id
         , bool has_checksum) noexcept
-        : header(packet_enum::fdata, has_checksum, 0)
+        : header(packet_enum::gdata, has_checksum, 0)
         , sender_id(std::move(sender_id))
         , receiver_id(std::move(receiver_id))
     {}
 
     template <typename NodeIdTraits>
-    fdata_packet (typename NodeIdTraits::node_id sender_id
+    gdata_packet (typename NodeIdTraits::node_id sender_id
         , typename NodeIdTraits::node_id receiver_id
         , bool has_checksum) noexcept
-        : fdata_packet(
+        : gdata_packet(
               std::make_pair(NodeIdTraits::high(sender_id), NodeIdTraits::low(sender_id))
             , std::make_pair(NodeIdTraits::high(receiver_id), NodeIdTraits::low(receiver_id))
             , has_checksum)
     {}
 
     template <typename Deserializer>
-    fdata_packet (header const & h, Deserializer & in)
+    gdata_packet (header const & h, Deserializer & in)
         : header(h)
     {
         in >> sender_id.first >> sender_id.second;
@@ -454,6 +454,18 @@ public:
     void serialize (Serializer & out, std::vector<char> && data)
     {
         serialize<Serializer>(out, data.data(), data.size());
+    }
+
+    /**
+     * This serializer used when need to forward message.
+     * Expected packet is already initialized.
+     */
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        header::serialize(out);
+        out << sender_id.first << sender_id.second << receiver_id.first << receiver_id.second;
+        out << std::make_pair(bytes.data(), bytes.size());
     }
 };
 

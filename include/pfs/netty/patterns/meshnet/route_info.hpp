@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include <pfs/optional.hpp>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -25,6 +26,20 @@ struct route_info
 
     // first - high part, second - low part
     std::vector<std::pair<std::uint64_t, std::uint64_t>> route; // router IDs
+
+public:
+    /**
+     * Find gateway index in the route.
+     */
+    pfs::optional<std::size_t> gateway_index (std::pair<std::uint64_t, std::uint64_t> const & id) const
+    {
+        for (std::size_t i = 0; i < route.size(); i++) {
+            if (id == route[i])
+                return i;
+        }
+
+        return pfs::nullopt;
+    }
 };
 
 }} // namespace patterns::meshnet

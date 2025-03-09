@@ -24,13 +24,19 @@ using string_view = pfs::string_view;
 using pfs::to_string;
 
 static constexpr char const * TAG = "meshnet";
-static constexpr std::uint16_t PORT = 4242;
+// static constexpr std::uint16_t PORT = 4242;
 static std::atomic_bool quit_flag {false};
 
 static void sigterm_handler (int /*sig*/)
 {
     quit_flag.store(true);
 }
+
+struct node_item
+{
+    std::vector<netty::socket4_addr> listener_saddrs;
+    std::vector<netty::socket4_addr> neighbor_saddrs;
+};
 
 static void print_usage (pfs::filesystem::path const & programName
     , std::string const & errorString = std::string{})
@@ -40,7 +46,7 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} --id=NODE_ID [--nat] --node-addr=ADDR...\n\n"
+        "{0} --id=NODE_ID [--nat] [--gw] {{--node --port=PORT... --nb=ADDR:PORT...}}...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
@@ -51,12 +57,20 @@ static void print_usage (pfs::filesystem::path const & programName
         "\tThis node is behind NAT\n\n"
         "--gw\n"
         "\tThis node is a gateway\n\n"
-        "--node-addr=ADDR\n"
-        "\tNeighbor node address\n\n"
+        "--node\n"
+        "\tStart node parameters\n\n"
+        "--port=PORT...\n"
+        "\tRun listeners for node on specified ports\n\n"
+        "--nb=ADDR:PORT...\n"
+        "\tNeighbor nodes addresses\n\n"
 
-        "Example:\n\n"
+        "Examples:\n\n"
         "Run with connection to 192.168.0.2:\n"
-        "\t{0} --id=01JJP9YBH0TXV3HFQ3B10BXXXW --node-addr=192.168.0.2\n"
+        "\t{0} --id=01JJP9Y5YTSC57COOLERMASTER --node --port=4242 --nb=192.168.0.2:4242\n"
+        "Run gateway:\n"
+        "\t{0} --id=01JJP9Y5YTSC57COOLERMASTER --gw\\\n"
+        "\t    --node --port=4242 --nb=192.168.0.2:4242\\\n"
+        "\t    --node --port=4343 --nb=192.168.0.3:4243"
         , programName);
 }
 
@@ -75,8 +89,8 @@ int main (int argc, char * argv[])
 
     auto behind_nat = netty::patterns::meshnet::behind_nat_enum::no;
     auto is_gateway = netty::patterns::meshnet::gateway_enum::no;
-    std::vector<netty::socket4_addr> neighbor_node_saddrs;
     pfs::optional<node_pool_t::node_id> node_id_opt;
+    std::vector<node_item> nodes;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -102,23 +116,51 @@ int main (int argc, char * argv[])
                 } else {
                     expectedArgError = true;
                 }
-            } else if (x.is_option("node-addr")) {
-                if (x.has_arg()) {
-                    auto addr = netty::inet4_addr::parse(x.arg());
-
-                    if (!addr) {
-                        LOGE(TAG, "Bad address for '{}'", to_string(x.optname()));
-                        return EXIT_FAILURE;
-                    }
-
-                    neighbor_node_saddrs.push_back(netty::socket4_addr{*addr, PORT});
-                } else {
-                    expectedArgError = true;
-                }
             } else if (x.is_option("nat")) {
                 behind_nat = netty::patterns::meshnet::behind_nat_enum::yes;
             } else if (x.is_option("gw")) {
                 is_gateway = is_gateway = netty::patterns::meshnet::gateway_enum::yes;
+            } else if (x.is_option("node")) {
+                nodes.emplace_back(); // Emplace back empty item
+            } else if (x.is_option("port")) {
+                if (x.has_arg()) {
+                    std::error_code ec;
+                    auto port = pfs::to_integer<std::uint16_t>(x.arg().begin(), x.arg().end()
+                        , std::uint16_t{1024}, std::uint16_t{65535}, ec);
+
+                    if (ec) {
+                        LOGE(TAG, "Bad port");
+                        return EXIT_FAILURE;
+                    }
+
+                    if (nodes.empty()) {
+                        LOGE(TAG, "Expected --node option before --port option");
+                        return EXIT_FAILURE;
+                    }
+
+                    netty::socket4_addr listener {netty::inet4_addr {netty::inet4_addr::any_addr_value}, port};
+                    nodes.back().listener_saddrs.push_back(std::move(listener));
+                } else {
+                    expectedArgError = true;
+                }
+            } else if (x.is_option("nb")) {
+                if (x.has_arg()) {
+                    auto saddr_opt = netty::socket4_addr::parse(x.arg());
+
+                    if (!saddr_opt) {
+                        LOGE(TAG, "Bad socket address for '{}'", to_string(x.optname()));
+                        return EXIT_FAILURE;
+                    }
+
+                    if (nodes.empty()) {
+                        LOGE(TAG, "Expected --node option before --nb option");
+                        return EXIT_FAILURE;
+                    }
+
+                    nodes.back().neighbor_saddrs.push_back(*saddr_opt);
+                } else {
+                    expectedArgError = true;
+                }
             } else {
                 LOGE(TAG, "Bad arguments. Try --help option.");
                 return EXIT_FAILURE;
@@ -139,13 +181,10 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
 
-    if (neighbor_node_saddrs.empty()) {
-        LOGE(TAG, "No neighbor node address specified");
+    if (nodes.empty()) {
+        LOGE(TAG, "No nodes");
         return EXIT_FAILURE;
     }
-
-    // For priority randoimization
-    std::srand(std::time({}));
 
     netty::startup_guard netty_startup;
     auto callbacks = std::make_shared<node_pool_t::callback_suite>();
@@ -161,15 +200,13 @@ int main (int argc, char * argv[])
 
     node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, callbacks};
 
-    std::vector<netty::socket4_addr> listener_saddrs {
-        netty::socket4_addr{netty::inet4_addr {netty::inet4_addr::any_addr_value}, PORT}
-    };
-    auto cid = node_pool.add_node<node_t>(listener_saddrs);
+    for (auto & node: nodes) {
+        auto node_index = node_pool.add_node<node_t>(node.listener_saddrs);
+        node_pool.listen(node_index, 10);
 
-    node_pool.listen();
-
-    for (auto const & saddr: neighbor_node_saddrs)
-        node_pool.connect_host(cid, saddr);
+        for (auto const & saddr: node.neighbor_saddrs)
+            node_pool.connect_host(node_index, saddr);
+    }
 
     while (!quit_flag.load())
         node_pool.step(std::chrono::milliseconds {10});

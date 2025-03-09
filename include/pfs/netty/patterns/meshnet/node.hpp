@@ -511,24 +511,27 @@ private:
         auto id_ptr = _readers.locate_by_first(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_message_received(*id_ptr, priority, std::move(bytes));
+            _callbacks->on_domestic_message_received(*id_ptr, priority, std::move(bytes));
     }
 
-    void process_message_received (socket_id sid
-        , int priority
-        , std::pair<std::uint64_t, std::uint64_t> sender_id
-        , std::pair<std::uint64_t, std::uint64_t> receiver_id
+    void process_message_received (socket_id sid, int priority, node_id sender_id, node_id receiver_id
         , std::vector<char> && bytes)
     {
         auto id_ptr = _readers.locate_by_first(sid);
 
         if (id_ptr != nullptr) {
-            _callbacks.on_foreign_message_received(*id_ptr
+            _callbacks->on_global_message_received(*id_ptr
                 , priority
-                , std::move(sender_id)
-                , std::move(receiver_id)
+                , sender_id
+                , receiver_id
                 , std::move(bytes));
         }
+    }
+
+    void forward_global_message (int priority, node_id sender_id, node_id receiver_id
+        , std::vector<char> && packet)
+    {
+        _callbacks->on_forward_global_message(priority, sender_id, receiver_id, std::move(packet));
     }
 
     HandshakeProcessor<node> & handshake_processor ()
@@ -611,31 +614,31 @@ public: // node_interface
             Node::step(limit);
         }
 
-        void enqueue_packet (node_id id, std::vector<char> && data) override
+        void enqueue_packet (node_id id, int priority, std::vector<char> && data) override
         {
             auto sid_ptr = Node::_writers.locate_by_second(id);
 
             if (sid_ptr != nullptr) {
-                Node::enqueue_private(*sid_ptr, 0, std::move(data));
+                Node::enqueue_private(*sid_ptr, priority, std::move(data));
             } else {
                 this->log_error(tr::f_("channel for send packet not found: {}", node_id_traits::stringify(id)));
             }
         }
 
-        void enqueue_packet (node_id id, char const * data, std::size_t len) override
+        void enqueue_packet (node_id id, int priority, char const * data, std::size_t len) override
         {
             auto sid_ptr = Node::_writers.locate_by_second(id);
 
             if (sid_ptr != nullptr) {
-                Node::enqueue_private(*sid_ptr, 0, data, len);
+                Node::enqueue_private(*sid_ptr, priority, data, len);
             } else {
                 this->log_error(tr::f_("channel for send packet not found: {}", node_id_traits::stringify(id)));
             }
         }
 
-        void enqueue_broadcast_packet (char const * data, std::size_t len) override
+        void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) override
         {
-            Node::enqueue_broadcast_private(0, data, len);
+            Node::enqueue_broadcast_private(priority, data, len);
         }
     };
 

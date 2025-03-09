@@ -12,6 +12,7 @@
 #include "../../error.hpp"
 #include "../../namespace.hpp"
 #include <pfs/optional.hpp>
+#include <limits>
 #include <vector>
 #include <unordered_map>
 
@@ -32,8 +33,8 @@ private:
     // For N(0) gateway is N(gw0) and hops = 2 (number of intermediate gateways)
     struct route_item
     {
-        node_id gwid;
-        unsigned int hops {0};
+        node_id gwid;          // for direct access no matter the gateway
+        unsigned int hops {0}; // 0 - direct access
     };
 
 private:
@@ -80,6 +81,33 @@ public:
             throw error {pfs::errc::unexpected_error, "no default gateway"};
 
         return _gateways[0];
+    }
+
+    node_id gateway_for (node_id id)
+    {
+        auto hops = std::numeric_limits<unsigned int>::max();
+        auto res = _routes.equal_range(id);
+
+        // If range not found return default gateway
+        if (res.first == res.second)
+            return default_gateway();
+
+        node_id gwid{};
+
+        for (auto pos = res.first; pos != res.second; ++pos) {
+            // Direct access
+            if (pos->second.hops == 0) {
+                gwid = id;
+                break;
+            }
+
+            if (hops > pos->second.hops) {
+                hops = pos->second.hops;
+                gwid = pos->second.gwid;
+            }
+        }
+
+        return gwid;
     }
 
     std::vector<char> build_route_request ()

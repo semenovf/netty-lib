@@ -37,20 +37,23 @@ struct node_callbacks
         = [] (NodeId, bool /*is_response*/, route_info const &) {};
 
     // On domestic message received
-    std::function<void (NodeId, int, std::vector<char> &&)> on_message_received
+    std::function<void (NodeId, int, std::vector<char> &&)> on_domestic_message_received
         = [] (NodeId, int /*priority*/, std::vector<char> && /*bytes*/) {};
 
-    // On foreign (intersubnet) message received
-    std::function<void (NodeId
-        , int
-        , std::pair<std::uint64_t, std::uint64_t>
-        , std::pair<std::uint64_t, std::uint64_t>
-        , std::vector<char> &&)> on_foreign_message_received
-        = [] (NodeId
-            , int /*priority*/
-            , std::pair<std::uint64_t, std::uint64_t> /*sender_id*/
-            , std::pair<std::uint64_t, std::uint64_t> /*receiver_id*/
-            , std::vector<char> && /*bytes*/) {};
+    // On global (intersubnet) message received
+    std::function<void (NodeId // last transmitter node
+        , int // priority
+        , NodeId // sender ID
+        , NodeId // receiver ID
+        , std::vector<char> &&)> on_global_message_received
+        = [] (NodeId, int /*priority*/, NodeId /*sender_id*/, NodeId /*receiver_id*/, std::vector<char> && /*bytes*/) {};
+
+    // On global (intersubnet) message received
+    std::function<void (int // priority
+        , NodeId // sender ID
+        , NodeId // receiver ID
+        , std::vector<char> &&)> on_forward_global_message
+        = [] (int /*priority*/, NodeId /*sender_id*/, NodeId /*receiver_id*/, std::vector<char> && /*packet*/) {};
 };
 
 template <typename NodeId>
@@ -66,7 +69,7 @@ struct node_pool_callbacks
     std::function<void (NodeId, std::uint64_t)> on_bytes_written
         = [] (NodeId, std::uint64_t /*n*/) {};
 
-    // On message received
+    // Notify when message received (domestic or global)
     std::function<void (NodeId, int, std::vector<char> &&)> on_message_received
         = [] (NodeId, int /*priority*/, std::vector<char> && /*bytes*/) {};
 };

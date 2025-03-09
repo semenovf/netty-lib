@@ -26,7 +26,7 @@ option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OF
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
 option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" OFF)
 
-if (DEBBY__BUILD_STRICT)
+if (NETTY__BUILD_STRICT)
     if (NOT CMAKE_CXX_STANDARD)
         set(CMAKE_CXX_STANDARD 14)
     endif()

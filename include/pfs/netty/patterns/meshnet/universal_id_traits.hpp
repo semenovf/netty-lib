@@ -11,6 +11,7 @@
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_hash.hpp>
 #include <string>
+#include <utility>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -50,6 +51,11 @@ struct universal_id_traits
     static node_id make (std::uint64_t high, std::uint64_t low)
     {
         return pfs::make_uuid(high, low);
+    }
+
+    static node_id make (std::pair<std::uint64_t, std::uint64_t> const & id_pair)
+    {
+        return pfs::make_uuid(id_pair.first, id_pair.second);
     }
 };
 

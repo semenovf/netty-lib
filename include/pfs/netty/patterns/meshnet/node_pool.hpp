@@ -86,8 +86,11 @@ public:
             if (is_gateway) {
                 _rtab.append_gateway(id);
                 std::vector<char> msg = _rtab.build_route_request();
-                this->enqueue_packet(id, std::move(msg));
+                this->enqueue_packet(id, 0, std::move(msg));
             }
+
+            // Add direct route
+            _rtab.add_route(id, node_id{}, 0);
 
             _callbacks->on_channel_established(id, is_gateway);
         };
@@ -100,79 +103,31 @@ public:
             _callbacks->on_bytes_written(id, n);
         };
 
-        _node_callbacks->on_route_received = [this] (node_id id, bool is_response
-            , route_info const & rinfo) {
-
-            if (is_response) {
-                // Initiator node received response
-                if (rinfo.initiator_id == _id_pair) {
-                    // Route complete: responder:gateway
-                    _rtab.add_route(node_id_traits::make(rinfo.responder_id.first, rinfo.responder_id.second)
-                        , id, pfs::numeric_cast<unsigned int>(rinfo.route.size()));
-                    return;
-                }
-
-                // Forward response
-                if (_is_gateway) {
-                    std::vector<char> msg = _rtab.build_route_response(rinfo, false);
-
-                    // This is a first gateway for initiator node
-                    if (rinfo.route[0] == _id_pair) {
-                        auto addressee_id = node_id_traits::make(rinfo.initiator_id.first, rinfo.initiator_id.second);
-                        enqueue_packet(addressee_id, std::move(msg));
-                        return;
-                    }
-
-                    // Find prior gateway and forward response to it
-                    for (int i = 1; i < rinfo.route.size(); i++) {
-                        if (_id_pair == rinfo.route[i]) {
-                            auto addressee_id = node_id_traits::make(rinfo.route[i - 1].first
-                                , rinfo.route[i - 1].second);
-                            enqueue_packet(addressee_id, std::move(msg));
-                            return;
-                        }
-                    }
-                }
-            } else {
-                // Initiate response and transmit it by reverse route
-                std::vector<char> msg = _rtab.build_route_response(rinfo, true);
-                enqueue_packet(id, std::move(msg));
-
-                // Forward request (broadcast) to nearest nodes
-                if (_is_gateway) {
-                    std::vector<char> msg = _rtab.update_route_request(rinfo);
-                    auto idx = find_node_index(id);
-
-                    PFS__TERMINATE(idx != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");
-
-                    for (node_index_t i = 0; i < _nodes.size(); i++) {
-                        // Exclude
-                        if (i + 1 == idx)
-                            continue;
-
-                        _nodes[i]->enqueue_broadcast_packet(msg.data(), msg.size());
-                    }
-                }
-            }
+        _node_callbacks->on_route_received = [this] (node_id id, bool is_response, route_info const & rinfo) {
+            process_route_received(id, is_response, rinfo);
         };
 
-        _node_callbacks->on_message_received = [this] (node_id id, int priority, std::vector<char> && bytes) {
+        _node_callbacks->on_domestic_message_received = [this] (node_id id, int priority, std::vector<char> && bytes) {
             _callbacks->on_message_received(id, priority, std::move(bytes));
         };
 
-        _node_callbacks->on_foreign_message_received = [this] (node_id id
-            , int priority
-            , std::pair<std::uint64_t, std::uint64_t> sender_id
-            , std::pair<std::uint64_t, std::uint64_t> receiver_id
-            , std::vector<char> && bytes) {
+        _node_callbacks->on_global_message_received = [this] (node_id /*id*/, int priority
+                , node_id sender_id, node_id receiver_id, std::vector<char> && bytes) {
 
-            // I am a message receiver
-            if (receiver_id == _id_pair) {
-                _callbacks->on_message_received(node_id_traits::make(sender_id.first, sender_id.second)
-                    , priority, std::move(bytes));
+            if (_id == receiver_id) {
+                _callbacks->on_message_received(sender_id, priority, std::move(bytes));
             } else {
-                // TODO retransmit this message to the receiver
+                // Need to forward the message if the node is a gateway, or discard the message otherwise.
+                if (_is_gateway)
+                    forward_global_message(priority, sender_id, receiver_id, std::move(bytes));
             }
+        };
+
+        _node_callbacks->on_forward_global_message = [this] (int priority
+                , node_id /*sender_id*/, node_id receiver_id, std::vector<char> && packet) {
+
+            PFS__TERMINATE(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
+            enqueue_packet(receiver_id, priority, std::move(packet));
         };
     }
 
@@ -189,21 +144,13 @@ private:
         if (_nodes.empty())
             return nullptr;
 
-        // TODO First check routing table
-        //...
+        auto gwid = _rtab.gateway_for(id);
 
-        if (_nodes[0]->has_writer(id)) {
-            // TODO Update routing table
-            // ...
-
+        if (_nodes[0]->has_writer(gwid))
             return & *_nodes[0];
-        }
 
         for (int i = 1; i < _nodes.size(); i++) {
-            if (_nodes[i]->has_writer(id)) {
-                // TODO Update routing table
-                // ...
-
+            if (_nodes[i]->has_writer(gwid)) {
                 return & *_nodes[i];
             }
         }
@@ -240,7 +187,7 @@ private:
         return INVALID_NODE_INDEX;
     }
 
-    bool enqueue_packet (node_id id, std::vector<char> && data)
+    bool enqueue_packet (node_id id, int priority, std::vector<char> && data)
     {
         auto ptr = locate_writer(id);
 
@@ -249,11 +196,11 @@ private:
             return false;
         }
 
-        ptr->enqueue_packet(id, std::move(data));
+        ptr->enqueue_packet(id, priority, std::move(data));
         return true;
     }
 
-    bool enqueue_packet (node_id id, char const * data, std::size_t len)
+    bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len)
     {
         auto ptr = locate_writer(id);
 
@@ -262,10 +209,98 @@ private:
             return false;
         }
 
-        ptr->enqueue_packet(id, data, len);
+        ptr->enqueue_packet(id, priority, data, len);
         return true;
     }
 
+    void process_route_received (node_id id, bool is_response, route_info const & rinfo)
+    {
+        if (is_response) {
+            auto responder_id = node_id_traits::make(rinfo.responder_id.first, rinfo.responder_id.second);
+
+            // Initiator node received response - add route to the routing table.
+            if (rinfo.initiator_id == _id_pair) {
+                auto hops = pfs::numeric_cast<unsigned int>(rinfo.route.size());
+                LOGD("***", "Route complete: responder ID: {}, hops={}"
+                    , node_id_traits::stringify(responder_id), hops);
+
+                _rtab.add_route(responder_id, id, hops);
+                return;
+            }
+
+            // Add route to responder to routing table and forward response.
+            if (_is_gateway) {
+                PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
+
+                // Find this gateway
+                auto opt_index = rinfo.gateway_index(_id_pair);
+
+                PFS__TERMINATE(opt_index, "Fix meshnet::node_pool algorithm");
+
+                auto index = *opt_index;
+
+                // This gateway is the first one for responder
+                if (rinfo.route.size() == 1 || index == rinfo.route.size() - 1) {
+                    _rtab.add_route(responder_id, _id, 0);
+                } else {
+                    PFS__TERMINATE(rinfo.route.size() > index, "Fix meshnet::node_pool algorithm");
+
+                    auto hops = static_cast<unsigned int>(rinfo.route.size() - index - 1);
+
+                    _rtab.add_route(responder_id, id, hops);
+                }
+
+                // Forward
+                std::vector<char> msg = _rtab.build_route_response(rinfo, false);
+
+                // This gateway is the first one for request initiator
+                if (index == 0) {
+                    auto addressee_id = node_id_traits::make(rinfo.initiator_id.first, rinfo.initiator_id.second);
+                    enqueue_packet(addressee_id, 0, std::move(msg));
+                } else {
+                    auto addressee_id = node_id_traits::make(rinfo.route[index - 1].first
+                        , rinfo.route[index - 1].second);
+                    enqueue_packet(addressee_id, 0, std::move(msg));
+                }
+            }
+        } else { // Request
+            auto initiator_id = node_id_traits::make(rinfo.initiator_id.first, rinfo.initiator_id.second);
+
+            // Add record to the routing table about the route to the initiator
+            if (_is_gateway) {
+                if (rinfo.route.empty()) {
+                    // First gateway for the initiator (direct access).
+                    // For direct access no matter the gateway.
+                    _rtab.add_route(initiator_id, _id, 0);
+                } else {
+                    _rtab.add_route(initiator_id, id, rinfo.route.size());
+                }
+            } else {
+                PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
+                _rtab.add_route(initiator_id, id, rinfo.route.size());
+            }
+
+            // Initiate response and transmit it by the reverse route
+            std::vector<char> msg = _rtab.build_route_response(rinfo, true);
+            enqueue_packet(id, 0, std::move(msg));
+
+            // Forward request (broadcast) to nearest nodes
+            if (_is_gateway) {
+                std::vector<char> msg = _rtab.update_route_request(rinfo);
+                auto idx = find_node_index(id);
+
+                PFS__TERMINATE(idx != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");
+
+                for (node_index_t i = 0; i < _nodes.size(); i++) {
+                    // Exclude subnet
+                    if (i + 1 == idx)
+                        continue;
+
+                    _nodes[i]->enqueue_broadcast_packet(0, msg.data(), msg.size());
+                }
+            }
+        }
+    }
 public:
     node_id id () const noexcept
     {
@@ -321,6 +356,22 @@ public:
     node_index_t add_node (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
         return add_node<Node>(listener_saddrs.begin(), listener_saddrs.end(), perr);
+    }
+
+    void listen (int backlog = 50)
+    {
+        for (auto & x: _nodes)
+            x->listen(backlog);
+    }
+
+    void listen (node_index_t index, int backlog)
+    {
+        auto ptr = locate_node(index);
+
+        if (ptr == nullptr)
+            return;
+
+        ptr->listen(backlog);
     }
 
     bool connect_host (node_index_t index, netty::socket4_addr remote_saddr)
@@ -398,12 +449,6 @@ public:
     bool enqueue (node_id id, int priority, std::vector<char> && data)
     {
         return enqueue(id, priority, false, std::move(data));
-    }
-
-    void listen (int backlog = 50)
-    {
-        for (auto & x: _nodes)
-            x->listen(backlog);
     }
 
     void step (std::chrono::milliseconds millis)
