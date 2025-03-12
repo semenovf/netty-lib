@@ -354,12 +354,7 @@ netlink_monitor::netlink_monitor (error * perr)
     _d->epoll_id = epoll_create1(0);
 
     if (_d->epoll_id < 0) {
-        pfs::throw_or(perr, error {
-              make_error_code(pfs::errc::system_error)
-            , tr::_("epoll create failure")
-            , pfs::system_error_text()
-        });
-
+        pfs::throw_or(perr, error { tr::f_("epoll create failure: {}", pfs::system_error_text())});
         return;
     }
 
@@ -374,12 +369,7 @@ netlink_monitor::netlink_monitor (error * perr)
         if (errno == EEXIST)
             return;
 
-        pfs::throw_or(perr, error {
-              make_error_code(pfs::errc::system_error)
-            , tr::_("epoll add socket failure")
-            , pfs::system_error_text()
-        });
-
+        pfs::throw_or(perr, error {tr::f_("epoll add socket failure: {}", pfs::system_error_text())});
         return;
     }
 }
@@ -404,11 +394,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
         if (errno == EINTR) {
             // Is not a critical error, ignore it
         } else {
-            pfs::throw_or(perr, error {
-                  make_error_code(pfs::errc::system_error)
-                , tr::_("epoll wait failure")
-                , pfs::system_error_text()
-            });
+            pfs::throw_or(perr, error {tr::f_("epoll wait failure: {}", pfs::system_error_text())});
         }
 
         return n;
@@ -427,14 +413,12 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 
             if (rc != 0) {
                 on_failure(error {
-                      make_error_code(pfs::errc::system_error)
-                    , tr::f_("get netlink socket option failure: {} (socket={})"
+                    tr::f_("get netlink socket option failure: {} (socket={})"
                         , pfs::system_error_text(), fd)
                 });
             } else {
                 on_failure(error {
-                      make_error_code(pfs::errc::system_error)
-                    , tr::f_("read netlink socket failure: {} (socket={})"
+                    tr::f_("read netlink socket failure: {} (socket={})"
                         , pfs::system_error_text(error_val), fd)
                 });
             }
@@ -463,9 +447,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
 #endif
                     if (rc == callback_result::error) {
                         on_failure(error {
-                              make_error_code(pfs::errc::system_error)
-                            , tr::_("netlink parse data failure")
-                            , pfs::system_error_text()
+                            tr::f_("netlink parse data failure: {}", pfs::system_error_text())
                         });
 
                         break;
@@ -485,8 +467,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
                         // Disconnected, not an error here, ignore it
                     } else {
                         on_failure(error {
-                              make_error_code(pfs::errc::system_error)
-                            , tr::f_("read netlink socket failure: {} (socket={})"
+                            tr::f_("read netlink socket failure: {} (socket={})"
                                 , pfs::system_error_text(errno), fd)
                         });
                     }

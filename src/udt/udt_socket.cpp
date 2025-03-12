@@ -60,9 +60,7 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
 
     if (sock == UDT::INVALID_SOCK) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("create UDT socket failure")
-            , UDT::getlasterror_desc()
+            tr::f_("create UDT socket failure: {}", UDT::getlasterror_desc())
         });
 
         return;
@@ -103,8 +101,7 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
         if (exp_max_counter < 0) {
             pfs::throw_or(perr, error {
                   std::make_error_code(std::errc::invalid_argument)
-                , tr::_("bad `exp_max_counter` value")
-                , UDT::getlasterror_desc()
+                , tr::f_("bad `exp_max_counter` value: {}", UDT::getlasterror_desc())
             });
 
             UDT::close(sock);
@@ -114,8 +111,7 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
         if (exp_threshold < std::chrono::milliseconds{0}) {
             pfs::throw_or(perr, error {
                   std::make_error_code(std::errc::invalid_argument)
-                , tr::_("bad `exp_threshold` value")
-                , UDT::getlasterror_desc()
+                , tr::f_("bad `exp_threshold` value: {}", UDT::getlasterror_desc())
             });
 
             UDT::close(sock);
@@ -134,13 +130,12 @@ void udt_socket::init (int mtu, int exp_max_counter, std::chrono::milliseconds e
     //UDT::setsockopt(sock, 0, UDT_CC, new CCCFactory<debug_CCC>, sizeof(CCCFactory<debug_CCC>));
 
     if (rc == UDT::ERROR) {
+        UDT::close(sock);
+
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("UDT set socket option failure")
-            , UDT::getlasterror_desc()
+            tr::f_("UDT set socket option failure: {}", UDT::getlasterror_desc())
         });
 
-        UDT::close(sock);
         return;
     }
 
@@ -320,10 +315,7 @@ int udt_socket::recv (char * data, int len, error * perr)
         } else {
             LOGE(TAG, "RECV: code={}, text={} (FIXME handle error)", ecode, UDT::getlasterror_desc());
 
-            pfs::throw_or(perr, error {
-                  errc::socket_error
-                , UDT::getlasterror_desc()
-            });
+            pfs::throw_or(perr, error {UDT::getlasterror_desc()});
         }
     }
 
@@ -372,12 +364,7 @@ conn_status udt_socket::connect (socket4_addr const & saddr, error * perr)
         , sizeof(addr_in4));
 
     if (rc == UDT::ERROR) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("socket connect error")
-            , UDT::getlasterror_desc()
-        });
-
+        pfs::throw_or(perr, error {tr::f_("socket connect error: {}", UDT::getlasterror_desc())});
         return conn_status::failure;
     }
 
@@ -391,11 +378,8 @@ conn_status udt_socket::connect (socket4_addr const & saddr, error * perr)
     if (status == CONNECTED)
         return conn_status::connected;
 
-    pfs::throw_or(perr, error {
-          errc::socket_error
-        , tr::f_("unexpected UDT socket state while connecting: {}"
-            , static_cast<int>(status))
-    });
+    pfs::throw_or(perr, error {tr::f_("unexpected UDT socket state while connecting: {}"
+        , static_cast<int>(status))});
 
     return conn_status::failure;
 }

@@ -60,18 +60,12 @@ bool udp_sender::set_multicast_interface (inet4_addr const & local_addr, error *
 #endif
 
     if (rc != 0) {
-        error err {
-              errc::socket_error
-            , tr::f_("set multicast interface to: {}", to_string(local_addr))
-            , pfs::system_error_text()
-        };
+        pfs::throw_or(perr, error {
+            tr::f_("set multicast interface to: {}: {}", to_string(local_addr)
+                , pfs::system_error_text())
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-             return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;

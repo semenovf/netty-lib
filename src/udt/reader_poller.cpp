@@ -41,8 +41,7 @@ int reader_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, er
                         on_disconnected(u);
                     } else {
                         on_failure(u, error {
-                              errc::socket_error
-                            , tr::f_("read socket failure: state={} (TODO: need to handle properly)"
+                            tr::f_("read socket failure: state={} (TODO: need to handle properly)"
                                 , static_cast<int>(state))
                         });
                     }

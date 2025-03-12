@@ -116,8 +116,7 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
 
                 if (rc != 0) {
                     on_failure(ev.fd, error {
-                          make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket option failure: {} (socket={})"
+                        tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
@@ -125,8 +124,7 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                         on_disconnected(ev.fd);
                     } else {
                         on_failure(ev.fd, error {
-                            errc::socket_error
-                            , tr::f_("write socket failure: {} (socket={})"
+                            tr::f_("write socket failure: {} (socket={})"
                                 , pfs::system_error_text(error_val), ev.fd)
                         });
                     }

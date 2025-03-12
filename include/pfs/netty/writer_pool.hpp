@@ -136,8 +136,10 @@ private:
 
                 if (sock == nullptr) {
                     remove_later(acc.id);
-                    _on_failure(acc.id, error {errc::device_not_found, tr::f_("cannot locate socket for writing by ID: {}"
-                        ", removed from writer pool", acc.id)});
+                    _on_failure(acc.id, error {
+                        tr::f_("cannot locate socket for writing by ID: {}"
+                            ", removed from writer pool", acc.id)
+                    });
                     continue;
                 }
 

@@ -46,11 +46,7 @@ bool enet_listener::listen (int backlog, error * perr)
         , 0);     // assume any amount of outgoing bandwidth
 
     if (_host == nullptr) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("create ENet listener failure")
-        });
-
+        pfs::throw_or(perr, error {tr::_("create ENet listener failure")});
         return false;
     }
 

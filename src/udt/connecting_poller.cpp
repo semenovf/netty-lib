@@ -42,12 +42,7 @@ void connecting_poller<udt::epoll_poller>::add (socket_id sock, error * perr)
         auto rc = UDT::getsockopt(sock, 0, UDT_EXP_THRESHOLD, & exp_threshold, & exp_threshold_size);
 
         if (rc == UDT::ERROR) {
-            pfs::throw_or(perr, error {
-                  errc::poller_error
-                , tr::_("UDT get socket option failure")
-                , UDT::getlasterror_desc()
-            });
-
+            pfs::throw_or(perr, error {tr::f_("UDT get socket option failure: {}", UDT::getlasterror_desc())});
             return;
         }
 

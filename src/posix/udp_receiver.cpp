@@ -54,11 +54,7 @@ udp_receiver::udp_receiver (socket4_addr const & src_saddr
 udp_receiver::udp_receiver (socket4_addr const & local_saddr)
 {
     if (is_multicast(local_saddr.addr)) {
-        throw error {
-              errc::socket_error
-            , tr::f_("expected unicast or broadcast address: {}"
-                , to_string(local_saddr.addr))
-        };
+        throw error {tr::f_("expected unicast or broadcast address: {}", to_string(local_saddr.addr))};
     }
 
     bind(_socket, local_saddr, nullptr);

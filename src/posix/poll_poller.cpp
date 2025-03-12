@@ -85,18 +85,11 @@ int poll_poller::poll (std::chrono::milliseconds millis, error * perr)
         if (errno == EINTR) {
             // Is not a critical error, ignore it
         } else {
-            error err {
-                  errc::poller_error
-                , tr::_("poll failure")
-                , pfs::system_error_text()
-            };
+            pfs::throw_or(perr, error {
+                tr::f_("poll failure: {}", pfs::system_error_text())
+            });
 
-            if (perr) {
-                *perr = std::move(err);
-                return n;
-            } else {
-                throw err;
-            }
+            return n;
         }
     }
 

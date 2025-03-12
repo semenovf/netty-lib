@@ -86,10 +86,7 @@ bool inet_socket::init (type_enum socktype, error * perr)
     }
 
     if (ai_socktype < 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("bad/unsupported socket type")
-        });
+        pfs::throw_or(perr, error {tr::_("bad/unsupported socket type")});
 
         return false;
     }
@@ -101,12 +98,7 @@ bool inet_socket::init (type_enum socktype, error * perr)
     _socket = ::socket(ai_family, ai_socktype, ai_protocol);
 
     if (_socket < 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("create INET socket failure")
-            , pfs::system_error_text()
-        });
-
+        pfs::throw_or(perr, error {tr::f_("create INET socket failure: {}", pfs::system_error_text())});
         return false;
     }
 
@@ -117,9 +109,7 @@ bool inet_socket::init (type_enum socktype, error * perr)
 
         if (rc != 0) {
             pfs::throw_or(perr, error {
-                  errc::socket_error
-                , tr::_("create INET socket failure: set non-blocking")
-                , pfs::system_error_text()
+                tr::f_("create INET socket failure: set non-blocking: {}", pfs::system_error_text())
             });
 
             return false;
@@ -169,9 +159,7 @@ bool inet_socket::init (type_enum socktype, error * perr)
 
     if (rc != 0) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("set socket option failure")
-            , pfs::system_error_text()
+            tr::f_("set socket option failure: {}", pfs::system_error_text())
         });
 
         return false;
@@ -228,9 +216,7 @@ bool inet_socket::bind (socket_id sock, socket4_addr const & saddr, error * perr
 
     if (rc != 0) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("bind name to socket failure: {}", to_string(saddr))
-            , pfs::system_error_text()
+            tr::f_("bind name to socket failure: {}: {}", to_string(saddr), pfs::system_error_text())
         });
 
         return false;
@@ -265,10 +251,9 @@ bool inet_socket::set_nonblocking (socket_id sock, bool enable, error * perr)
     if (rc < 0) {
 #endif
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("set socket to {} mode failure"
-                , enable ? tr::_("nonblocking") : tr::_("blocking"))
-            , pfs::system_error_text()
+            tr::f_("set socket to {} mode failure: {}"
+                , enable ? tr::_("nonblocking") : tr::_("blocking")
+                , pfs::system_error_text())
         });
 
         return false;
@@ -285,9 +270,7 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
 #if _MSC_VER
     // No "direct" way to determine mode of the socket.
     pfs::throw_or(perr, error {
-          errc::operation_not_permitted
-        , tr::_("unable to determine socket mode on Windows")
-        , pfs::system_error_text()
+        tr::f_("unable to determine socket mode on Windows: {}", pfs::system_error_text())
     });
 
     return false;
@@ -298,11 +281,7 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
         return rc & O_NONBLOCK;
 
     if (rc < 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("get socket flags failure")
-            , pfs::system_error_text()
-        });
+        pfs::throw_or(perr, error {tr::f_("get socket flags failure: {}", pfs::system_error_text())});
     }
 
     return false;
@@ -398,12 +377,7 @@ int inet_socket::recv (char * data, int len, error * perr)
 #endif
             n = 0;
         } else {
-            pfs::throw_or(perr, error {
-                errc::socket_error
-                , tr::_("receive data failure")
-                , pfs::system_error_text()
-            });
-
+            pfs::throw_or(perr, error { tr::f_("receive data failure: {}", pfs::system_error_text())});
             return n;
         }
     }
@@ -436,18 +410,8 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 #endif
             n = 0;
         } else {
-            error err {
-                  errc::socket_error
-                , tr::_("receive data failure")
-                , pfs::system_error_text()
-            };
-
-            if (perr) {
-                *perr = std::move(err);
-                 return n;
-            } else {
-                throw err;
-            }
+            pfs::throw_or(perr, error {tr::f_("receive data failure: {}", pfs::system_error_text())});
+            return n;
         }
     }
 
@@ -504,7 +468,7 @@ send_result inet_socket::send (char const * data, int len, error * perr)
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
             return send_result{send_status::again, 0};
 #endif
-        pfs::throw_or(perr, error {errc::socket_error, tr::_("send failure"), pfs::system_error_text()});
+        pfs::throw_or(perr, error {tr::f_("send failure: {}", pfs::system_error_text())});
         return send_result{send_status::failure, 0};
     }
 
@@ -556,9 +520,8 @@ send_result inet_socket::send_to (socket4_addr const & saddr, char const * data,
             return send_result{send_status::again, 0};
 #endif
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("send to socket failure: {}", to_string(saddr))
-            , pfs::system_error_text()
+              tr::f_("send to socket failure: {}: {}", to_string(saddr)
+                , pfs::system_error_text())
         });
 
         return send_result{send_status::failure, 0};

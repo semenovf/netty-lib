@@ -141,8 +141,7 @@ public:
 
                     default:
                         throw error {
-                              pfs::errc::unexpected_data
-                            , tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))
+                            tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))
                         };
 
                         has_more_packets = false;

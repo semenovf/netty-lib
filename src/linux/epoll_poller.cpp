@@ -28,11 +28,7 @@ epoll_poller::epoll_poller (std::uint32_t observable_events)
     eid = epoll_create(size);
 
     if (eid < 0) {
-        throw error {
-              errc::poller_error
-            , tr::_("epoll create failure")
-            , pfs::system_error_text()
-        };
+        throw error {tr::f_("epoll create failure: {}", pfs::system_error_text())};
     }
 }
 
@@ -58,9 +54,7 @@ void epoll_poller::add_socket (socket_id sock, error * perr)
             return;
 
         pfs::throw_or(perr, error {
-              errc::poller_error
-            , tr::f_("epoll add socket ({}) failure", sock)
-            , pfs::system_error_text()
+            tr::f_("epoll add socket ({}) failure: }", sock, pfs::system_error_text())
         });
 
         return;
@@ -89,12 +83,7 @@ void epoll_poller::remove_socket (socket_id sock, error * perr)
     if (rc != 0) {
         // ENOENT is not a failure
         if (errno != ENOENT) {
-            pfs::throw_or(perr, error {
-                  errc::poller_error
-                , tr::_("epoll delete failure")
-                , pfs::system_error_text()
-            });
-
+            pfs::throw_or(perr, error {tr::f_("epoll delete failure: {}", pfs::system_error_text())});
             return;
         }
     }
@@ -121,18 +110,8 @@ int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)
         if (errno == EINTR) {
             // Is not a critical error, ignore it
         } else {
-            error err {
-                  errc::poller_error
-                , tr::_("epoll wait failure")
-                , pfs::system_error_text()
-            };
-
-            if (perr) {
-                *perr = std::move(err);
-                return n;
-            } else {
-                throw err;
-            }
+            pfs::throw_or(perr, error {tr::f_("epoll wait failure: {}", pfs::system_error_text())});
+            return n;
         }
     }
 

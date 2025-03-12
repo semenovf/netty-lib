@@ -66,7 +66,7 @@ public:
                 if (_on_connected)
                     _on_connected(std::move(pos->second));
             } else {
-                err = error {errc::device_not_found, tr::f_("on socket connected failure: id={}", id)};
+                err = error {tr::f_("on socket connected failure: id={}", id)};
             }
 
             if (err)
@@ -82,8 +82,7 @@ public:
                 if (_on_connection_refused)
                     _on_connection_refused(pos->second.saddr(), reason);
             } else {
-                _on_failure(error {errc::device_not_found
-                    , tr::f_("on connection refused on socket failure: id={}", id)});
+                _on_failure(error {tr::f_("on connection refused on socket failure: id={}", id)});
             }
         };
     }

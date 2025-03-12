@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../trace.hpp"
 #include "behind_nat_enum.hpp"
 #include "functional_callbacks.hpp"
 #include "gateway_enum.hpp"
@@ -24,8 +25,6 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
-
-#include <pfs/log.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -61,19 +60,22 @@ private:
     // There will rarely be more than two nodes, so vector is a optimal choice
     std::vector<node_interface_ptr> _nodes;
 
-    routing_table_type _rtab;
+    // Routing table
+    std::unique_ptr<routing_table_type> _rtab;
+
     std::shared_ptr<callback_suite> _callbacks;
 
     std::shared_ptr<node_callbacks<node_id>> _node_callbacks;
 
 public:
     node_pool (node_id id, behind_nat_enum behind_nat, gateway_enum is_gateway
+        , std::unique_ptr<routing_table_type> && rtab
         , std::shared_ptr<callback_suite> callbacks)
         : Loggable()
         , _id(id)
         , _behind_nat(behind_nat == behind_nat_enum::yes)
         , _is_gateway(is_gateway == gateway_enum::yes)
-        , _rtab(id)
+        , _rtab(std::move(rtab))
         , _callbacks(callbacks)
     {
         _id_pair.first = node_id_traits::high(_id);
@@ -84,13 +86,13 @@ public:
         _node_callbacks->on_channel_established = [this] (node_id id, bool is_gateway) {
             // Start routes discovery if channel established with gateway
             if (is_gateway) {
-                _rtab.append_gateway(id);
-                std::vector<char> msg = _rtab.build_route_request();
+                _rtab->append_gateway(id);
+                std::vector<char> msg = _rtab->build_route_request();
                 this->enqueue_packet(id, 0, std::move(msg));
             }
 
             // Add direct route
-            _rtab.add_route(id, node_id{}, 0);
+            _rtab->add_route(id, node_id{}, 0);
 
             _callbacks->on_channel_established(id, is_gateway);
         };
@@ -139,7 +141,7 @@ private:
         if (_nodes.empty())
             return nullptr;
 
-        auto gwid = _rtab.gateway_for(id);
+        auto gwid = _rtab->gateway_for(id);
 
         if (_nodes[0]->has_writer(gwid))
             return & *_nodes[0];
@@ -216,10 +218,13 @@ private:
             // Initiator node received response - add route to the routing table.
             if (rinfo.initiator_id == _id_pair) {
                 auto hops = pfs::numeric_cast<unsigned int>(rinfo.route.size());
-                LOGD("***", "Route complete: responder ID: {}, hops={}"
-                    , node_id_traits::stringify(responder_id), hops);
 
-                _rtab.add_route(responder_id, id, hops);
+                NETTY__TRACE(
+                    this->log_debug("route complete: responder ID: {}, hops={}"
+                        , node_id_traits::stringify(responder_id), hops);
+                );
+
+                _rtab->add_route(responder_id, id, hops);
                 return;
             }
 
@@ -236,17 +241,17 @@ private:
 
                 // This gateway is the first one for responder
                 if (rinfo.route.size() == 1 || index == rinfo.route.size() - 1) {
-                    _rtab.add_route(responder_id, _id, 0);
+                    _rtab->add_route(responder_id, _id, 0);
                 } else {
                     PFS__TERMINATE(rinfo.route.size() > index, "Fix meshnet::node_pool algorithm");
 
                     auto hops = static_cast<unsigned int>(rinfo.route.size() - index - 1);
 
-                    _rtab.add_route(responder_id, id, hops);
+                    _rtab->add_route(responder_id, id, hops);
                 }
 
                 // Forward
-                std::vector<char> msg = _rtab.build_route_response(rinfo, false);
+                std::vector<char> msg = _rtab->build_route_response(rinfo, false);
 
                 // This gateway is the first one for request initiator
                 if (index == 0) {
@@ -266,22 +271,22 @@ private:
                 if (rinfo.route.empty()) {
                     // First gateway for the initiator (direct access).
                     // For direct access no matter the gateway.
-                    _rtab.add_route(initiator_id, _id, 0);
+                    _rtab->add_route(initiator_id, _id, 0);
                 } else {
-                    _rtab.add_route(initiator_id, id, rinfo.route.size());
+                    _rtab->add_route(initiator_id, id, rinfo.route.size());
                 }
             } else {
                 PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
-                _rtab.add_route(initiator_id, id, rinfo.route.size());
+                _rtab->add_route(initiator_id, id, rinfo.route.size());
             }
 
             // Initiate response and transmit it by the reverse route
-            std::vector<char> msg = _rtab.build_route_response(rinfo, true);
+            std::vector<char> msg = _rtab->build_route_response(rinfo, true);
             enqueue_packet(id, 0, std::move(msg));
 
             // Forward request (broadcast) to nearest nodes
             if (_is_gateway) {
-                std::vector<char> msg = _rtab.update_route_request(rinfo);
+                std::vector<char> msg = _rtab->update_route_request(rinfo);
                 auto idx = find_node_index(id);
 
                 PFS__TERMINATE(idx != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");

@@ -7,9 +7,11 @@
 //      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include <pfs/optional.hpp>
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_hash.hpp>
+#include <pfs/universal_id_pack.hpp>
 #include <string>
 #include <utility>
 
@@ -37,7 +39,7 @@ struct universal_id_traits
      */
     static std::uint64_t low (node_id const & id)
     {
-        return PFS__NAMESPACE_NAME::low(id);
+        return pfs::low(id);
     }
 
     /**
@@ -45,7 +47,7 @@ struct universal_id_traits
      */
     static std::uint64_t high (node_id const & id)
     {
-        return PFS__NAMESPACE_NAME::high(id);
+        return pfs::high(id);
     }
 
     static node_id make (std::uint64_t high, std::uint64_t low)

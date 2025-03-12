@@ -43,11 +43,7 @@ void enet_socket::init (int timeout_limit, int timeout_min, int timeout_max, err
         , 0); // assume any amount of outgoing bandwidth
 
     if (_host == nullptr) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("create ENet socket failure")
-        });
-
+        pfs::throw_or(perr, error {tr::_("create ENet socket failure")});
         return;
     }
 
@@ -185,21 +181,17 @@ send_result enet_socket::send (char const * data, int len, error * perr)
 
     if (packet == nullptr) {
         pfs::throw_or(perr, error {
-            std::make_error_code(std::errc::not_enough_memory)
+              std::make_error_code(std::errc::not_enough_memory)
             , tr::_("create packet for sending failure")
-            });
+        });
+        return send_result{send_status::failure, 0};
     }
 
     auto rc = enet_peer_send(_peer, 0, packet);
 
     if (rc < 0) {
         enet_packet_destroy(packet);
-
-        pfs::throw_or(perr, error {
-            errc::socket_error
-            , tr::_("send packet failure")
-            });
-
+        pfs::throw_or(perr, error {tr::_("send packet failure")});
         return send_result{send_status::failure, 0};
     }
 
@@ -216,20 +208,12 @@ send_result enet_socket::send (char const * data, int len, error * perr)
 conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
 {
     if (_host == nullptr) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("ENet socket is not initialized")
-        });
-
+        pfs::throw_or(perr, error {tr::_("ENet socket is not initialized")});
         return conn_status::failure;
     }
 
     if (_peer != nullptr) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("ENet socket already connected")
-        });
-
+        pfs::throw_or(perr, error {tr::_("ENet socket already connected")});
         return conn_status::failure;
     }
 
@@ -242,11 +226,7 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
     _peer = enet_host_connect(_host, & address, 2, 0);
 
     if (_peer == nullptr) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("no available peers for initiating an ENet connection")
-        });
-
+        pfs::throw_or(perr, error {tr::_("no available peers for initiating an ENet connection")});
         return conn_status::failure;
     }
 
@@ -263,8 +243,7 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
 
     if (rc < 0) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("connecting ENet socket failure to: {}", to_string(saddr))
+            tr::f_("connecting ENet socket failure to: {}", to_string(saddr))
         });
 
         return conn_status::failure;
@@ -275,8 +254,7 @@ conn_status enet_socket::connect (socket4_addr const & saddr, error * perr)
         _peer = nullptr;
 
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("connecting ENet socket failure to: {} (received disconnect event)", to_string(saddr))
+            tr::f_("connecting ENet socket failure to: {} (received disconnect event)", to_string(saddr))
         });
 
         return conn_status::failure;

@@ -21,11 +21,7 @@ epoll_poller::epoll_poller (bool oread, bool owrite)
     eid = UDT::epoll_create();
 
     if (eid < 0) {
-        throw error {
-              errc::poller_error
-            , tr::_("UDT epoll_poller: create failure")
-            , UDT::getlasterror_desc()
-        };
+        throw error {tr::f_("UDT epoll_poller: create failure: {}", UDT::getlasterror_desc())};
     }
 }
 
@@ -51,9 +47,7 @@ void epoll_poller::add_socket (socket_id sock, error * perr)
 
     if (rc == UDT::ERROR) {
         pfs::throw_or(perr, error {
-              errc::poller_error
-            , tr::f_("UDT epoll_poller: add socket ({}) failure", sock)
-            , UDT::getlasterror_desc()
+            tr::f_("UDT epoll_poller: add socket ({}) failure: {}", sock, UDT::getlasterror_desc())
         });
 
         return;
@@ -81,9 +75,7 @@ void epoll_poller::remove_socket (socket_id sock, error * perr)
 
     if (rc == UDT::ERROR) {
         pfs::throw_or(perr, error {
-              errc::poller_error
-            , tr::_("UDT epoll_poller: delete failure")
-            , UDT::getlasterror_desc()
+            tr::f_("UDT epoll_poller: delete failure: {}", UDT::getlasterror_desc())
         });
 
         return;
@@ -93,8 +85,7 @@ void epoll_poller::remove_socket (socket_id sock, error * perr)
 
     if (counter < 0) {
         pfs::throw_or(perr, error {
-              errc::poller_error
-            , tr::_("UDT epoll_poller: counter management not consistent")
+            tr::_("UDT epoll_poller: counter management not consistent")
         });
     }
 }
@@ -130,9 +121,7 @@ int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
             n = 0;
         } else {
             pfs::throw_or(perr, error {
-                  errc::poller_error
-                , tr::_("UDT epoll_poller: poll failure")
-                , UDT::getlasterror_desc()
+                tr::f_("UDT epoll_poller: poll failure: {}", UDT::getlasterror_desc())
             });
 
             return n;

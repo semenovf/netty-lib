@@ -64,9 +64,7 @@ bool udp_socket::join (socket4_addr const & group_saddr
 
     if (rc != 0) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("join multicast group: {}", to_string(group_saddr))
-            , pfs::system_error_text()
+            tr::f_("join multicast group: {}: {}", to_string(group_saddr), pfs::system_error_text())
         });
 
         return false;
@@ -89,9 +87,7 @@ bool udp_socket::leave (socket4_addr const & group_saddr, inet4_addr const & loc
 
     if (rc != 0) {
         pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::f_("leave multicast group: {}", to_string(group_saddr))
-            , pfs::system_error_text()
+            tr::f_("leave multicast group: {}: {}", to_string(group_saddr), pfs::system_error_text())
         });
 
         return false;
@@ -117,19 +113,13 @@ bool udp_socket::enable_broadcast (bool enable, error * perr)
 #endif
 
     if (rc != 0) {
-        error err {
-              errc::socket_error
-            , tr::_("{} broadcast"
-                , (enable ? tr::_("enable") : tr::_("disable")))
-            , pfs::system_error_text()
-        };
+        pfs::throw_or(perr, error {
+            tr::f_("{} broadcast error: {}"
+                , (enable ? tr::_("enable") : tr::_("disable"))
+                , pfs::system_error_text())
+        });
 
-        if (perr) {
-            *perr = std::move(err);
-            return false;
-        } else {
-            throw err;
-        }
+        return false;
     }
 
     return true;

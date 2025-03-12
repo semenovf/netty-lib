@@ -47,14 +47,12 @@ int listener_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds mil
 
                 if (rc != 0) {
                     on_failure(ev.data.fd, error {
-                          make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket option failure: {}, listener socket removed: {}"
+                        tr::f_("get socket option failure: {}, listener socket removed: {}"
                             , pfs::system_error_text(), ev.data.fd)
                     });
                 } else {
                     on_failure(ev.data.fd, error {
-                          errc::socket_error
-                        , tr::f_("accept socket error: {}, listener socket removed: {}"
+                        tr::f_("accept socket error: {}, listener socket removed: {}"
                             , pfs::system_error_text(error_val), ev.data.fd)
                     });
                 }

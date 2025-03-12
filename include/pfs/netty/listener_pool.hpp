@@ -49,7 +49,7 @@ public:
                 if (!err)
                     _on_accepted(std::move(peer_socket));
             } else {
-                err = error {errc::device_not_found, tr::f_("listener not found: {}", id)};
+                err = error {tr::f_("listener not found: {}", id)};
             }
 
             if (err)

@@ -11,6 +11,7 @@
 #include "route_info.hpp"
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include <pfs/i18n.hpp>
 #include <pfs/optional.hpp>
 #include <limits>
 #include <vector>
@@ -37,7 +38,7 @@ private:
         unsigned int hops {0}; // 0 - direct access
     };
 
-private:
+protected:
     std::pair<std::uint64_t, std::uint64_t> _id_pair; // Node ID representation
 
     // The first gateway is the default one
@@ -78,7 +79,7 @@ public:
     node_id default_gateway () const
     {
         if (_gateways.empty())
-            throw error {pfs::errc::unexpected_error, "no default gateway"};
+            throw error {tr::_("no default gateway")};
 
         return _gateways[0];
     }

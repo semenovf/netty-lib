@@ -255,20 +255,14 @@ public:
                     }
 
                     default:
-                        throw error {
-                              pfs::errc::unexpected_data
-                            , tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))
-                        };
+                        throw error {tr::f_("unexpected packet type: {}", pfs::to_underlying(h.type()))};
 
                         break;
                 }
             }
 
             if (!in.is_good()) {
-                throw error {
-                      pfs::errc::unexpected_data
-                    , tr::f_("bad or corrupted header for reliable delivery packet")
-                };
+                throw error {tr::f_("bad or corrupted header for reliable delivery packet")};
             }
         } while (in.available() > 0);
     }

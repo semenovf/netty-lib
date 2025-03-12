@@ -43,12 +43,7 @@ bool tcp_listener::listen (int backlog, error * perr)
     auto rc = ::listen(_socket, backlog);
 
     if (rc != 0) {
-        pfs::throw_or(perr, error {
-              errc::socket_error
-            , tr::_("listen failure")
-            , pfs::system_error_text()
-        });
-
+        pfs::throw_or(perr, error {tr::f_("listen failure: {}", pfs::system_error_text())});
         return false;
     }
 
@@ -75,9 +70,8 @@ tcp_socket tcp_listener::accept (error * perr)
             return tcp_socket{sock, socket4_addr{addr, port}};
         } else {
             pfs::throw_or(perr, error {
-                  errc::socket_error
-                , tr::f_("socket accept failure: unsupported sockaddr family: {}"
-                        " (AF_INET supported only)", sa.sin_family)
+                tr::f_("socket accept failure: unsupported sockaddr family: {}"
+                    " (AF_INET supported only)", sa.sin_family)
             });
 
             return tcp_socket{};
@@ -87,11 +81,7 @@ tcp_socket tcp_listener::accept (error * perr)
     if (errno == EAGAIN || errno == EWOULDBLOCK)
         return tcp_socket{};
 
-    pfs::throw_or(perr, error {
-          errc::socket_error
-        , tr::_("socket accept failure")
-        , pfs::system_error_text()
-    });
+    pfs::throw_or(perr, error {tr::f_("socket accept failure: {}", pfs::system_error_text())});
 
     return tcp_socket{};
 }

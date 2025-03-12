@@ -7,11 +7,13 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "meshnode.hpp"
+#include "tag.hpp"
 #include <pfs/argvapi.hpp>
 #include <pfs/filesystem.hpp>
 #include <pfs/fmt.hpp>
 #include <pfs/integer.hpp>
 #include <pfs/log.hpp>
+#include <pfs/standard_paths.hpp>
 #include <pfs/string_view.hpp>
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/startup.hpp>
@@ -23,7 +25,6 @@
 using string_view = pfs::string_view;
 using pfs::to_string;
 
-static constexpr char const * TAG = "meshnet";
 // static constexpr std::uint16_t PORT = 4242;
 static std::atomic_bool quit_flag {false};
 
@@ -198,7 +199,9 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Channel destroyed with {}", to_string(id));
     };
 
-    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, callbacks};
+    auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
+    auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
+    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, std::move(rtab), callbacks};
 
     for (auto & node: nodes) {
         auto node_index = node_pool.add_node<node_t>(node.listener_saddrs);

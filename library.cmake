@@ -27,12 +27,15 @@ endif()
 
 add_library(pfs::netty ALIAS netty)
 
+if (NETTY__ENABLE_TRACE)
+    target_compile_definitions(netty PUBLIC "NETTY__TRACE_ENABLED=1")
+endif()
+
 if (MSVC)
     target_compile_definitions(netty PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 target_sources(netty PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/src/error.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/inet4_addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/socket4_addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/startup.cpp
@@ -76,6 +79,25 @@ if (NOT TARGET pfs::common)
         message(STATUS "Fetching common complete")
     endif()
 endif()
+
+if (NOT TARGET pfs::ionik)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/ionik/.git)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/ionik 2ndparty/ionik)
+    else()
+        set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
+        message(STATUS "Fetching pfs::ionik ...")
+        include(FetchContent)
+        FetchContent_Declare(ionik
+            GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
+            GIT_TAG master
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/ionik
+            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/ionik)
+        FetchContent_MakeAvailable(ionik)
+        message(STATUS "Fetching pfs::ionik complete")
+    endif()
+endif()
+
+target_link_libraries(netty PUBLIC pfs::ionik)
 
 if (MSVC)
     target_compile_options(netty PRIVATE "/wd4251" "/wd4267" "/wd4244")
@@ -220,21 +242,6 @@ if (NETTY__ENABLE_P2P)
         # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_protocol.cpp
         # ${CMAKE_CURRENT_LIST_DIR}/src/p2p/remote_file_provider.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
-
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/ionik/.git)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/ionik 2ndparty/ionik)
-    else()
-        set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
-        message(STATUS "Fetching pfs::ionik ...")
-        include(FetchContent)
-        FetchContent_Declare(ionik
-            GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
-            GIT_TAG master
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/ionik
-            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/ionik)
-        FetchContent_MakeAvailable(ionik)
-        message(STATUS "Fetching pfs::ionik complete")
-    endif()
 
     target_link_libraries(netty PRIVATE pfs::ionik)
 endif()

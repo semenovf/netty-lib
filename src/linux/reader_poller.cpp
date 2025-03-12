@@ -47,8 +47,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
 
                 if (rc != 0) {
                     on_failure(ev.data.fd, error {
-                          make_error_code(pfs::errc::system_error)
-                        , tr::f_("get socket ({}) option failure: {} (errno={})"
+                        tr::f_("get socket ({}) option failure: {} (errno={})"
                             , ev.data.fd, pfs::system_error_text(), errno)
                     });
                 } else {
@@ -57,8 +56,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                         on_disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
-                              errc::socket_error
-                            , tr::f_("get socket ({}) option failure: {} (error_val={})"
+                            tr::f_("get socket ({}) option failure: {} (error_val={})"
                                 , ev.data.fd, pfs::system_error_text(error_val), error_val)
                         });
                     }
@@ -86,8 +84,7 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                         on_disconnected(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
-                              errc::socket_error
-                              , tr::f_("read socket failure: {} (socket={})"
+                            tr::f_("read socket failure: {} (socket={})"
                                 , pfs::system_error_text(errno), ev.data.fd)
                         });
                     }

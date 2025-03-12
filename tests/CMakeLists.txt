@@ -30,17 +30,14 @@ endif()
 
 set(TESTS
     inet4_addr
+    meshnet_routing_table
     reliable_delivery_manager)
 
 foreach (target ${TESTS})
     add_executable(${target} ${target}.cpp)
-    target_link_libraries(${target} PRIVATE pfs::netty)
+    target_link_libraries(${target} PRIVATE pfs::netty pfs::lorem)
     add_test(NAME ${target} COMMAND ${target})
 endforeach()
-
-if (TARGET reliable_delivery_manager)
-    target_link_libraries(reliable_delivery_manager PRIVATE pfs::lorem)
-endif()
 
 get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
 get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)

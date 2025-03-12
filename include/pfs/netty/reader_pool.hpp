@@ -72,8 +72,9 @@ public:
 
             if (sock == nullptr) {
                 remove_later(id);
-                _on_failure(id, error {errc::device_not_found, tr::f_("cannot locate socket for reading by ID: {}"
-                    ", removed from reader pool", id)});
+                _on_failure(id, error {tr::f_("cannot locate socket for reading by ID: {}"
+                    ", removed from reader pool", id)
+                });
                 return;
             }
 

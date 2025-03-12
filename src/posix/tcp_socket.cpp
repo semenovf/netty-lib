@@ -87,12 +87,7 @@ conn_status tcp_socket::connect (socket4_addr const & remote_saddr, inet4_addr c
             if (unreachable) {
                 return conn_status::unreachable;
             } else {
-                pfs::throw_or(perr, error {
-                      errc::socket_error
-                    , tr::_("socket connect error")
-                    , pfs::system_error_text()
-                });
-
+                pfs::throw_or(perr, error {tr::f_("socket connect error: {}", pfs::system_error_text())});
                 return conn_status::failure;
             }
         }
@@ -124,17 +119,7 @@ void tcp_socket::disconnect (error * perr)
 #else // _MSC_VER
             if (errno != ENOTCONN && errno != ECONNRESET) {
 #endif // POSIX
-                error err {
-                      errc::socket_error
-                    , tr::_("socket shutdown error")
-                    , pfs::system_error_text()
-                };
-
-                if (perr) {
-                    *perr = std::move(err);
-                } else {
-                    throw err;
-                }
+                pfs::throw_or(perr, error {tr::f_("socket shutdown error: {}", pfs::system_error_text())});
             }
         }
     }
