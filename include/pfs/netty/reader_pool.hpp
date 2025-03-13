@@ -200,11 +200,12 @@ public:
     }
 
     /**
-     * @resturn Number of sockets ready for reading.
+     * @return Number of events occurred.
      */
-    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    unsigned int step (error * perr = nullptr)
     {
-        ReaderPoller::poll(millis, perr);
+        auto n = ReaderPoller::poll(std::chrono::milliseconds{0}, perr);
+        return n > 0 ? static_cast<unsigned int>(n) : 0;
     }
 };
 

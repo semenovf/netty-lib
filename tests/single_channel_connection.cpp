@@ -203,16 +203,10 @@ void worker ()
     auto n = MAX_NODES_COUNT - 1;
 
     while (s_node_reverse_counter.load() > 0) {
-        std::chrono::milliseconds timeout {5};
-
-        pfs::stopwatch<std::milli> stopwatch;
         listener_pool.step();
         connecting_pool.step();
         writer_pool.step();
-        stopwatch.stop();
-
-        timeout -= std::chrono::milliseconds{stopwatch.count()};
-        reader_pool.step(timeout);
+        reader_pool.step();
 
         if (read_counter == n && write_counter == n) {
             --s_node_reverse_counter;

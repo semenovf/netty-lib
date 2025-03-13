@@ -188,9 +188,9 @@ public:
     }
 
     /**
-     * @resturn Number of pending connections, or negative value on error.
+     * @return Number of events occurred.
      */
-    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    unsigned int step (error * perr = nullptr)
     {
         // Reconnect
         if (!_deferred_connections.empty()) {
@@ -203,7 +203,8 @@ public:
             }
         }
 
-        ConnectingPoller::poll(millis, perr);
+        auto n =ConnectingPoller::poll(std::chrono::milliseconds{0}, perr);
+        return n > 0 ? static_cast<unsigned int>(n) : 0;
     }
 
     bool empty () const noexcept

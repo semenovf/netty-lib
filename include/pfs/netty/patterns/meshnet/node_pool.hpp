@@ -33,6 +33,7 @@ namespace meshnet {
 
 template <typename NodeIdTraits
     , typename RoutingTable
+    , typename AliveProcessor
     , typename CallbackSuite
     , typename Loggable>
 class node_pool: public Loggable
@@ -46,6 +47,7 @@ private:
     using node_interface_type = node_interface<NodeIdTraits>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
+    using alive_processor_type = AliveProcessor;
 
 private:
     node_id _id;
@@ -63,6 +65,8 @@ private:
     // Routing table
     std::unique_ptr<routing_table_type> _rtab;
 
+    std::unique_ptr<alive_processor_type> _aproc;
+
     std::shared_ptr<callback_suite> _callbacks;
 
     std::shared_ptr<node_callbacks<node_id>> _node_callbacks;
@@ -70,12 +74,14 @@ private:
 public:
     node_pool (node_id id, behind_nat_enum behind_nat, gateway_enum is_gateway
         , std::unique_ptr<routing_table_type> && rtab
+        , std::unique_ptr<alive_processor_type> && aproc
         , std::shared_ptr<callback_suite> callbacks)
         : Loggable()
         , _id(id)
         , _behind_nat(behind_nat == behind_nat_enum::yes)
         , _is_gateway(is_gateway == gateway_enum::yes)
         , _rtab(std::move(rtab))
+        , _aproc(std::move(aproc))
         , _callbacks(callbacks)
     {
         _id_pair.first = node_id_traits::high(_id);
@@ -84,11 +90,13 @@ public:
         _node_callbacks = std::make_shared<node_callbacks<node_id>>();
 
         _node_callbacks->on_channel_established = [this] (node_id id, bool is_gateway) {
-            // Start routes discovery if channel established with gateway
+            // Start routes discovery and initiate alive exchange if channel established with gateway
             if (is_gateway) {
                 _rtab->append_gateway(id);
-                std::vector<char> msg = _rtab->build_route_request();
-                this->enqueue_packet(id, 0, std::move(msg));
+                std::vector<char> rmsg = _rtab->serialize_request();
+                std::vector<char> amsg = _aproc->serialize();
+                this->enqueue_packet(id, 0, std::move(rmsg));
+                this->enqueue_packet(id, 0, std::move(amsg));
             }
 
             // Add direct route
@@ -103,6 +111,10 @@ public:
 
         _node_callbacks->on_bytes_written = [this] (node_id id, std::uint64_t n) {
             _callbacks->on_bytes_written(id, n);
+        };
+
+        _node_callbacks->on_alive_received = [this] (node_id id, alive_info const & ainfo) {
+            process_alive_received(id, ainfo);
         };
 
         _node_callbacks->on_route_received = [this] (node_id id, bool is_response, route_info const & rinfo) {
@@ -210,6 +222,15 @@ private:
         return true;
     }
 
+    void process_alive_received (node_id id, alive_info const & ainfo)
+    {
+        // TODO Process by all node_pools
+
+        if (_is_gateway) {
+            // TODO Process by gateways (retransmit packet)
+        }
+    }
+
     void process_route_received (node_id id, bool is_response, route_info const & rinfo)
     {
         if (is_response) {
@@ -251,7 +272,7 @@ private:
                 }
 
                 // Forward
-                std::vector<char> msg = _rtab->build_route_response(rinfo, false);
+                std::vector<char> msg = _rtab->serialize_response(rinfo, false);
 
                 // This gateway is the first one for request initiator
                 if (index == 0) {
@@ -281,12 +302,12 @@ private:
             }
 
             // Initiate response and transmit it by the reverse route
-            std::vector<char> msg = _rtab->build_route_response(rinfo, true);
+            std::vector<char> msg = _rtab->serialize_response(rinfo, true);
             enqueue_packet(id, 0, std::move(msg));
 
             // Forward request (broadcast) to nearest nodes
             if (_is_gateway) {
-                std::vector<char> msg = _rtab->update_route_request(rinfo);
+                std::vector<char> msg = _rtab->serialize_request(rinfo);
                 auto idx = find_node_index(id);
 
                 PFS__TERMINATE(idx != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");
@@ -451,14 +472,17 @@ public:
         return enqueue(id, priority, false, std::move(data));
     }
 
-    void step (std::chrono::milliseconds millis)
+    /**
+     * @return Number of events occurred.
+     */
+    unsigned int step ()
     {
-        pfs::countdown_timer<std::milli> countdown_timer {millis};
+        unsigned int result = 0;
 
         for (auto & x: _nodes)
-            x->step();
+            result += x->step();
 
-        std::this_thread::sleep_for(countdown_timer.remain());
+        return result;
     }
 };
 

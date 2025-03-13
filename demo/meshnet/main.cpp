@@ -9,6 +9,7 @@
 #include "meshnode.hpp"
 #include "tag.hpp"
 #include <pfs/argvapi.hpp>
+#include <pfs/countdown_timer.hpp>
 #include <pfs/filesystem.hpp>
 #include <pfs/fmt.hpp>
 #include <pfs/integer.hpp>
@@ -201,7 +202,8 @@ int main (int argc, char * argv[])
 
     auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
     auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
-    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, std::move(rtab), callbacks};
+    auto aproc = std::make_unique<alive_processor_t>(*node_id_opt);
+    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, std::move(rtab), std::move(aproc), callbacks};
 
     for (auto & node: nodes) {
         auto node_index = node_pool.add_node<node_t>(node.listener_saddrs);
@@ -211,8 +213,13 @@ int main (int argc, char * argv[])
             node_pool.connect_host(node_index, saddr);
     }
 
-    while (!quit_flag.load())
-        node_pool.step(std::chrono::milliseconds {10});
+    while (!quit_flag.load()) {
+        pfs::countdown_timer<std::milli> countdown_timer {std::chrono::milliseconds {10}};
+        auto n = node_pool.step();
+
+        if (n == 0)
+            std::this_thread::sleep_for(countdown_timer.remain());
+    }
 
     return EXIT_SUCCESS;
 }

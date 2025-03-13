@@ -116,9 +116,12 @@ private:
         return acc;
     }
 
-    void send (std::chrono::milliseconds limit = std::chrono::milliseconds{0}, error * perr = nullptr)
+    /**
+     * @return Number of successful frame sendings.
+     */
+    unsigned int send (error * perr = nullptr)
     {
-        pfs::stopwatch<std::milli> stopwatch;
+        unsigned int result = 0;
 
         do {
             std::vector<char> frame;
@@ -172,13 +175,17 @@ private:
                             _remain_bytes -= res.n;
                             acc.q.shift(res.n);
 
+                            result++;
+
                             if (_on_bytes_written)
                                 _on_bytes_written(acc.id, res.n);
                         }
                         break;
                 }
             }
-        } while (stopwatch.current_count() < limit.count());
+        } while (false);
+
+        return result;
     }
 
 public:
@@ -286,18 +293,17 @@ public:
     }
 
     /**
-     * @resturn Number of sockets waiting for writing.
+     * @return >= 0 - number of events occurred,
+     *          < 0 - error occurred.
      */
-    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0}, error * perr = nullptr)
+    unsigned int step (error * perr = nullptr)
     {
-        pfs::stopwatch<std::milli> stopwatch;
+        auto result = 0;
+        result += send(perr);
+        auto n = WriterPoller::poll(std::chrono::milliseconds{0}, perr);
+        result += n > 0 ? n : 0;
 
-        millis -= std::chrono::milliseconds{stopwatch.current_count()};
-        stopwatch.start();
-        send(millis, perr);
-        millis -= std::chrono::milliseconds{stopwatch.current_count()};
-
-        WriterPoller::poll(millis, perr);
+        return result;
     }
 
     bool empty () const noexcept

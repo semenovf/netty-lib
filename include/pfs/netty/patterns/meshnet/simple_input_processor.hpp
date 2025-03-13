@@ -115,6 +115,11 @@ public:
         this->_node->heartbeat_processor().process(sid, pkt);
     }
 
+    void process (socket_id sid, alive_packet const & pkt)
+    {
+        this->_node->process_alive_info(sid, pkt.ainfo);
+    }
+
     void process (socket_id sid, route_packet const & pkt)
     {
         this->_node->process_route_info(sid, pkt.is_response(), pkt.rinfo);

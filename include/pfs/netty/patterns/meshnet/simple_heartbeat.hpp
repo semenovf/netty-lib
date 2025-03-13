@@ -94,8 +94,10 @@ public:
         return *this;
     }
 
-    void step ()
+    unsigned int step ()
     {
+        unsigned int result = 0;
+
         if (!_q.empty()) {
             auto now = std::chrono::steady_clock::now();
             auto pos = _q.begin();
@@ -113,8 +115,10 @@ public:
                 _tmp.push_back(sid);
             }
 
-            for (auto sid: _tmp)
+            for (auto sid: _tmp) {
                 enqueue(sid);
+                result++;
+            }
 
             _tmp.clear();
         }
@@ -124,6 +128,7 @@ public:
 
             for (auto pos = _limits.begin(); pos != _limits.end();) {
                 if (pos->second <= now) {
+                    result++;
                     auto sid = pos->first;
                     pos = _limits.erase(pos);
                     remove(sid);
@@ -133,6 +138,8 @@ public:
                 }
             }
         }
+
+        return result;
     }
 };
 

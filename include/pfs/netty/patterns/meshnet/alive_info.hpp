@@ -4,32 +4,21 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.02.10 Initial version.
+//      2025.03.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
-#include <vector>
+#include "../../namespace.hpp"
+#include <cstdint>
+#include <utility>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <typename Node>
-class without_message_sender
+struct alive_info
 {
-    using socket_id = typename Node::socket_id;
-
-public:
-    without_message_sender (Node &)
-    {}
-
-public:
-    void send (socket_id, int, bool, char const *, std::size_t)
-    {}
-
-    void send (socket_id, int, bool, std::vector<char> &&)
-    {}
+    std::pair<std::uint64_t, std::uint64_t> id;
 };
 
 }} // namespace patterns::meshnet

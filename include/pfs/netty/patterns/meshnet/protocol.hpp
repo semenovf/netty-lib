@@ -7,6 +7,7 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "alive_info.hpp"
 #include "behind_nat_enum.hpp"
 #include "gateway_enum.hpp"
 #include "route_info.hpp"
@@ -30,7 +31,8 @@ enum class packet_enum
 {
       handshake =  1 /// Handshake phase packet
     , heartbeat =  2 /// Heartbeat loop packet
-    , route     =  3 /// Route discovery packet
+    , alive     =  3 /// Alive packet (periodic)
+    , route     =  4 /// Route discovery packet
     , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message)
     , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message).
 };
@@ -254,6 +256,39 @@ public:
     {
         header::serialize(out);
         out << health_data;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// alive packet
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class alive_packet: public header
+{
+public:
+    alive_info ainfo;
+
+public:
+    alive_packet () noexcept
+        : header(packet_enum::alive, false, 0)
+    {}
+
+    /**
+     * Constructs heartbeat packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
+    template <typename Deserializer>
+    alive_packet (header const & h, Deserializer & in)
+        : header(h)
+    {
+        in >> ainfo.id.first >> ainfo.id.second;
+    }
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        header::serialize(out);
+        out << ainfo.id.first << ainfo.id.second;
     }
 };
 

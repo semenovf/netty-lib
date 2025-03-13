@@ -89,6 +89,17 @@ public:
                         break;
                     }
 
+                    case packet_enum::alive: {
+                        alive_packet pkt {h, in};
+
+                        if (in.commit_transaction())
+                            that->process(sid, pkt);
+                        else
+                            has_more_packets = false;
+
+                        break;
+                    }
+
                     case packet_enum::route: {
                         route_packet pkt {h, in};
 

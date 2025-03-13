@@ -64,8 +64,10 @@ protected:
         _node->enqueue_private(sid, 0, out.data(), out.size());
     }
 
-    void check_expired ()
+    unsigned int check_expired ()
     {
+        unsigned int result = 0;
+
         if (!_cache.empty()) {
             auto now = std::chrono::steady_clock::now();
 
@@ -73,12 +75,15 @@ protected:
                 if (pos->second <= now) { // Time limit exceeded
                     auto sid = pos->first;
                     pos = _cache.erase(pos);
+                    result++;
                     _on_expired(sid);
                 } else {
                     ++pos;
                 }
             }
         }
+
+        return result;
     }
 
 public:
@@ -136,9 +141,9 @@ public:
         }
     }
 
-    void step ()
+    unsigned int step ()
     {
-        check_expired();
+        return check_expired();
     }
 };
 

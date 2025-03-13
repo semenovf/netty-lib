@@ -11,6 +11,7 @@
 #include <pfs/netty/patterns/console_logger.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/without_logger.hpp>
+#include <pfs/netty/patterns/meshnet/alive_processor.hpp>
 #include <pfs/netty/patterns/meshnet/exclusive_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/functional_callbacks.hpp>
 #include <pfs/netty/patterns/meshnet/node.hpp>
@@ -153,7 +154,9 @@ using node_t = priority_meshnet_node_t;
 using routing_table_storage_t = meshnet::routing_table_binary_storage<meshnet::universal_id_traits>;
 using routing_table_t = meshnet::routing_table_persistent<meshnet::universal_id_traits
     , netty::patterns::default_serializer_traits_t, routing_table_storage_t>;
+using alive_processor_t = meshnet::alive_processor<meshnet::universal_id_traits, netty::patterns::default_serializer_traits_t>;
 using node_pool_t = meshnet::node_pool<meshnet::universal_id_traits
     , routing_table_t
+    , alive_processor_t
     , meshnet::node_pool_callbacks<meshnet::universal_id_traits::node_id>
     , netty::patterns::console_logger>;

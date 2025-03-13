@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "alive_info.hpp"
 #include "route_info.hpp"
 #include <cstdint>
 #include <functional>
@@ -31,6 +32,10 @@ struct node_callbacks
     // Notify when data actually sent (written into the socket)
     std::function<void (NodeId, std::uint64_t)> on_bytes_written
         = [] (NodeId, std::uint64_t /*n*/) {};
+
+    // On alive info received
+    std::function<void (NodeId, alive_info const &)> on_alive_received
+        = [] (NodeId, alive_info const &) {};
 
     // On intermediate route info received
     std::function<void (NodeId, bool, route_info const &)> on_route_received

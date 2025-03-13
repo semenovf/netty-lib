@@ -28,18 +28,15 @@ public:
     void add (socket_id) {}
     void remove (socket_id) {}
     void process (socket_id, heartbeat_packet const &) {}
-    void step () {}
+    unsigned int step () { return 0; }
 
     template <typename F>
     without_heartbeat & on_expired (F &&)
     {
         return *this;
     }
-
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-
-

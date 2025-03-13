@@ -7,8 +7,10 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "alive_info.hpp"
 #include "handshake_result.hpp"
 #include "node_interface.hpp"
+#include "route_info.hpp"
 #include "unordered_bimap.hpp"
 #include "../../conn_status.hpp"
 #include "../../connection_refused_reason.hpp"
@@ -20,7 +22,6 @@
 #include "../../reader_pool.hpp"
 #include "../../socket_pool.hpp"
 #include "../../writer_pool.hpp"
-#include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
 #include <chrono>
 #include <memory>
@@ -318,19 +319,20 @@ public:
         this->enqueue(id, priority, false, std::move(data));
     }
 
-    void step (std::chrono::milliseconds millis = std::chrono::milliseconds{0})
+    /**
+     * @return Number of events occurred.
+     */
+    unsigned int step ()
     {
-        pfs::countdown_timer<std::milli> countdown_timer {millis};
+        unsigned int result = 0;
 
-        _listener_pool.step();
-        _connecting_pool.step();
-        _writer_pool.step();
+        result += _listener_pool.step();
+        result += _connecting_pool.step();
+        result += _writer_pool.step();
+        result += _reader_pool.step();
 
-        millis = countdown_timer.remain();
-
-        _reader_pool.step(millis);
-        _handshake_processor.step();
-        _heartbeat_processor.step();
+        result += _handshake_processor.step();
+        result += _heartbeat_processor.step();
 
         // Remove trash
         _connecting_pool.apply_remove();
@@ -339,7 +341,7 @@ public:
         _writer_pool.apply_remove();
         _socket_pool.apply_remove(); // Must be last in the removing sequence
 
-        std::this_thread::sleep_for(countdown_timer.remain());
+        return result;
     }
 
     /**
@@ -498,6 +500,14 @@ private:
         close_socket(sid);
     }
 
+    void process_alive_info (socket_id sid, alive_info const & ainfo)
+    {
+        auto id_ptr = _readers.locate_by_first(sid);
+
+        if (id_ptr != nullptr)
+            _callbacks->on_alive_received(*id_ptr, ainfo);
+    }
+
     void process_route_info (socket_id sid, bool is_response, route_info const & rinfo)
     {
         auto id_ptr = _readers.locate_by_first(sid);
@@ -609,9 +619,9 @@ public: // node_interface
             return Node::has_writer(id);
         }
 
-        void step (std::chrono::milliseconds limit) override
+        unsigned int step () override
         {
-            Node::step(limit);
+            return Node::step();
         }
 
         void enqueue_packet (node_id id, int priority, std::vector<char> && data) override

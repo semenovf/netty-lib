@@ -7,10 +7,10 @@
 //      2025.02.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "protocol.hpp"
-#include "route_info.hpp"
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "protocol.hpp"
+#include "route_info.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/optional.hpp>
 #include <limits>
@@ -111,7 +111,7 @@ public:
         return gwid;
     }
 
-    std::vector<char> build_route_request ()
+    std::vector<char> serialize_request ()
     {
         auto out = serializer_traits::make_serializer();
         route_packet pkt {packet_way_enum::request};
@@ -120,7 +120,17 @@ public:
         return out.take();
     }
 
-    std::vector<char> build_route_response (route_info const & rinfo, bool initial)
+    std::vector<char> serialize_request (route_info const & rinfo)
+    {
+        auto out = serializer_traits::make_serializer();
+        route_packet pkt {packet_way_enum::request};
+        pkt.rinfo = rinfo;
+        pkt.rinfo.route.push_back(_id_pair);
+        pkt.serialize(out);
+        return out.take();
+    }
+
+    std::vector<char> serialize_response (route_info const & rinfo, bool initial)
     {
         auto out = serializer_traits::make_serializer();
         route_packet pkt {packet_way_enum::response};
@@ -129,16 +139,6 @@ public:
         if (initial)
             pkt.rinfo.responder_id = _id_pair;
 
-        pkt.serialize(out);
-        return out.take();
-    }
-
-    std::vector<char> update_route_request (route_info const & rinfo)
-    {
-        auto out = serializer_traits::make_serializer();
-        route_packet pkt {packet_way_enum::request};
-        pkt.rinfo = rinfo;
-        pkt.rinfo.route.push_back(_id_pair);
         pkt.serialize(out);
         return out.take();
     }

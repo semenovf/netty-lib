@@ -52,7 +52,7 @@ protected:
         //         }
         //     }
         // } else {
-        //     if (this->_node.id() > id) { // Server sockey socket is master
+        //     if (this->_node.id() > id) { // Server socket is master
         //         this->_on_completed(id, sid, handshake_result_enum::reader);
         //         this->_on_completed(id, sid, handshake_result_enum::writer);
         //     }

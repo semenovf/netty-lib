@@ -31,11 +31,9 @@ public:
 
     void start (socket_id) {}
     void cancel (socket_id) {}
+    unsigned int step () { return 0; }
 };
 
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-
-
-
