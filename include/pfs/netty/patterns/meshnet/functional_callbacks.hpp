@@ -70,6 +70,12 @@ struct node_pool_callbacks
     // Notify when the channel is destroyed with the remote node
     std::function<void (NodeId)> on_channel_destroyed = [] (NodeId) {};
 
+    // Notify when node alive status changed
+    std::function<void (NodeId)> on_node_alive = [] (NodeId) {};
+
+    // Notify when node alive status changed
+    std::function<void (NodeId)> on_node_expired = [] (NodeId) {};
+
     // Notify when data actually sent (written into the socket)
     std::function<void (NodeId, std::uint64_t)> on_bytes_written
         = [] (NodeId, std::uint64_t /*n*/) {};

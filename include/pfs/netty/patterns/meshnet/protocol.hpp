@@ -7,11 +7,11 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "alive_info.hpp"
 #include "behind_nat_enum.hpp"
 #include "gateway_enum.hpp"
 #include "route_info.hpp"
-#include <pfs/netty/namespace.hpp>
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>

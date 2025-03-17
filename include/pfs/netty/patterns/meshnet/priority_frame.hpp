@@ -7,11 +7,11 @@
 //      2025.02.04 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
+#include "../../namespace.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
-#include <pfs/netty/namespace.hpp>
-#include <pfs/netty/error.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <vector>

@@ -7,9 +7,9 @@
 //      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "handshake_result.hpp"
 #include "protocol.hpp"
-#include <pfs/netty/namespace.hpp>
 #include <chrono>
 #include <functional>
 #include <map>

@@ -7,11 +7,6 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "alive_info.hpp"
-#include "handshake_result.hpp"
-#include "node_interface.hpp"
-#include "route_info.hpp"
-#include "unordered_bimap.hpp"
 #include "../../conn_status.hpp"
 #include "../../connection_refused_reason.hpp"
 #include "../../error.hpp"
@@ -22,6 +17,11 @@
 #include "../../reader_pool.hpp"
 #include "../../socket_pool.hpp"
 #include "../../writer_pool.hpp"
+#include "alive_info.hpp"
+#include "handshake_result.hpp"
+#include "node_interface.hpp"
+#include "route_info.hpp"
+#include "unordered_bimap.hpp"
 #include <pfs/i18n.hpp>
 #include <chrono>
 #include <memory>
@@ -199,7 +199,7 @@ public:
                     this->log_debug(tr::f_("handshake state changed: socket #{} is reader for channel: {}"
                         , sid, node_id_traits::stringify(id)));
                     _readers.insert(sid, id);
-                    _heartbeat_processor.add(sid);
+                    _heartbeat_processor.update(sid);
 
                     // If the writer already set, full virtual connection established with the
                     // neighbor channel.
@@ -212,7 +212,7 @@ public:
                     this->log_debug(tr::f_("handshake state changed: socket #{} is writer for node: {}"
                         , sid, node_id_traits::stringify(id)));
                     _writers.insert(sid, id);
-                    _heartbeat_processor.add(sid);
+                    _heartbeat_processor.update(sid);
 
                     // If the reader already set, channel established with the neighbor node.
                     if (_readers.locate_by_second(id) != nullptr)

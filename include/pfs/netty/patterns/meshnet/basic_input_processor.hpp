@@ -7,11 +7,11 @@
 //      2025.02.05 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
+#include "../../namespace.hpp"
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/utility.hpp>
-#include <pfs/netty/error.hpp>
-#include <pfs/netty/namespace.hpp>
 
 NETTY__NAMESPACE_BEGIN
 

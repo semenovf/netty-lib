@@ -59,7 +59,7 @@ private:
     // True if the node is a gateway
     bool _is_gateway {false};
 
-    // There will rarely be more than two nodes, so vector is a optimal choice
+    // There will rarely be more than dozens nodes, so vector is a optimal choice
     std::vector<node_interface_ptr> _nodes;
 
     // Routing table
@@ -93,19 +93,21 @@ public:
             // Start routes discovery and initiate alive exchange if channel established with gateway
             if (is_gateway) {
                 _rtab->append_gateway(id);
-                std::vector<char> rmsg = _rtab->serialize_request();
-                std::vector<char> amsg = _aproc->serialize();
-                this->enqueue_packet(id, 0, std::move(rmsg));
-                this->enqueue_packet(id, 0, std::move(amsg));
+                std::vector<char> msg = _rtab->serialize_request();
+                this->enqueue_packet(id, 0, std::move(msg));
             }
 
             // Add direct route
             _rtab->add_route(id, node_id{}, 0);
 
+            // Add siblinge node
+            _aproc->add_sibling(id);
+
             _callbacks->on_channel_established(id, is_gateway);
         };
 
         _node_callbacks->on_channel_destroyed = [this] (node_id id) {
+            _aproc->remove_sibling(id);
             _callbacks->on_channel_destroyed(id);
         };
 
@@ -138,6 +140,14 @@ public:
             PFS__TERMINATE(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
             enqueue_packet(receiver_id, priority, std::move(packet));
         };
+
+        _aproc->on_alive([this] (node_id id) {
+            _callbacks->on_node_alive(id);
+        });
+
+        _aproc->on_expired([this] (node_id id) {
+            _callbacks->on_node_expired(id);
+        });
     }
 
     node_pool (node_pool const &) = delete;
@@ -224,10 +234,25 @@ private:
 
     void process_alive_received (node_id id, alive_info const & ainfo)
     {
-        // TODO Process by all node_pools
+        auto initiator_id = node_id_traits::make(ainfo.id.first, ainfo.id.second);
+        auto updated = _aproc->update_if(initiator_id);
 
-        if (_is_gateway) {
-            // TODO Process by gateways (retransmit packet)
+        if (updated && _is_gateway) {
+            // Forward packet to nearest nodes
+            std::vector<char> msg = _aproc->serialize(ainfo);
+
+            // Subnet index from which packet received
+            auto idx = find_node_index(id);
+
+            PFS__TERMINATE(idx != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");
+
+            for (node_index_t i = 0; i < _nodes.size(); i++) {
+                // Exclude subnet
+                if (i + 1 == idx)
+                    continue;
+
+                _nodes[i]->enqueue_broadcast_packet(0, msg.data(), msg.size());
+            }
         }
     }
 
@@ -322,6 +347,20 @@ private:
             }
         }
     }
+
+    void broadcast_alive ()
+    {
+        auto msg = _aproc->serialize();
+
+        if (_rtab->gateway_count() == 1) {
+            enqueue_packet(_rtab->default_gateway(), 0, std::move(msg));
+        } else {
+            _rtab->foreach_gateway([this, & msg] (node_id gwid) {
+                enqueue_packet(gwid, 0, msg.data(), msg.size());
+            });
+        }
+    }
+
 public:
     node_id id () const noexcept
     {
@@ -481,6 +520,18 @@ public:
 
         for (auto & x: _nodes)
             result += x->step();
+
+        // The presence of a gateway is an indication that `alive` packet needs to be sent.
+        if (_rtab->gateway_count() > 0) {
+            // Broadcast `alive` packet
+            if (_aproc->interval_exceeded()) {
+                _aproc->update_notification_time();
+                broadcast_alive();
+            }
+
+            // Check alive expiration
+            _aproc->check_expiration();
+        }
 
         return result;
     }

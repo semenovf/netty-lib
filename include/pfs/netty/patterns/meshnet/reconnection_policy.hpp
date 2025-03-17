@@ -7,7 +7,7 @@
 //      2025.01.27 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
+#include "../../namespace.hpp"
 #include <chrono>
 
 NETTY__NAMESPACE_BEGIN

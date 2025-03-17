@@ -7,8 +7,8 @@
 //      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
-#include <pfs/netty/socket4_addr.hpp>
+#include "../../namespace.hpp"
+#include "../../socket4_addr.hpp"
 
 NETTY__NAMESPACE_BEGIN
 

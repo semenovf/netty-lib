@@ -8,8 +8,8 @@
 //      2025.02.04 It is a part of patterns::meshnet now.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "priority_frame.hpp"
-#include <pfs/netty/namespace.hpp>
 #include <pfs/assert.hpp>
 #include <algorithm>
 #include <array>

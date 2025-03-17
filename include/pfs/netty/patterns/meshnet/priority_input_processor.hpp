@@ -7,11 +7,11 @@
 //      2025.01.22 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "basic_input_processor.hpp"
 #include "priority_frame.hpp"
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/netty/namespace.hpp>
 #include <cstring>
 #include <unordered_map>
 

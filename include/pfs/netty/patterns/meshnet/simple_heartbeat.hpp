@@ -7,8 +7,8 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
 #include "protocol.hpp"
-#include <pfs/netty/namespace.hpp>
 #include <chrono>
 #include <functional>
 #include <set>
@@ -29,8 +29,8 @@ class simple_heartbeat
 
     struct heartbeat_item
     {
-        time_point_type t;
         socket_id sid;
+        time_point_type t;
     };
 
     // Sort by ascending order
@@ -41,8 +41,12 @@ class simple_heartbeat
 
 private:
     Node * _node {nullptr};
+
+    // Expiration timeout
+    std::chrono::seconds _exp_timeout {15};
+
     std::chrono::seconds _interval {5};
-    std::chrono::seconds _timeout {15};
+
     std::set<heartbeat_item> _q;
     std::vector<socket_id> _tmp;
 
@@ -52,22 +56,25 @@ private:
     std::function<void (socket_id)> _on_expired = [] (socket_id) {};
 
 public:
-    simple_heartbeat (Node & node, std::chrono::seconds interval = std::chrono::seconds{5})
+    simple_heartbeat (Node & node
+        , std::chrono::seconds exp_timeout = std::chrono::seconds{15}
+        , std::chrono::seconds interval = std::chrono::seconds{5})
         : _node(& node)
+        , _exp_timeout(exp_timeout)
         , _interval(interval)
     {}
 
 private:
-    void enqueue (socket_id sid)
+    void insert (socket_id sid)
     {
-        _q.insert(heartbeat_item{std::chrono::steady_clock::now() + _interval, sid});
+        _q.insert(heartbeat_item{sid, std::chrono::steady_clock::now() + _interval});
     }
 
 public:
-    void add (socket_id sid)
+    void update (socket_id sid)
     {
         remove(sid);
-        enqueue(sid);
+        insert(sid);
     }
 
     void remove (socket_id sid)
@@ -84,7 +91,7 @@ public:
 
     void process (socket_id sid, heartbeat_packet const & /*pkt*/)
     {
-        _limits[sid] = std::chrono::steady_clock::now() + _timeout;
+        _limits[sid] = std::chrono::steady_clock::now() + _exp_timeout;
     }
 
     template <typename F>
@@ -116,7 +123,7 @@ public:
             }
 
             for (auto sid: _tmp) {
-                enqueue(sid);
+                insert(sid);
                 result++;
             }
 

@@ -7,8 +7,8 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
-#include <pfs/netty/socket4_addr.hpp>
+#include "../../namespace.hpp"
+#include "../../socket4_addr.hpp"
 
 NETTY__NAMESPACE_BEGIN
 
@@ -25,7 +25,7 @@ public:
     without_heartbeat (Node &) {}
 
 public:
-    void add (socket_id) {}
+    void update (socket_id) {}
     void remove (socket_id) {}
     void process (socket_id, heartbeat_packet const &) {}
     unsigned int step () { return 0; }

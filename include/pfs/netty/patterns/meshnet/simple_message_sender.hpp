@@ -7,8 +7,8 @@
 //      2025.02.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "protocol.hpp"
 #include "../../namespace.hpp"
+#include "protocol.hpp"
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN

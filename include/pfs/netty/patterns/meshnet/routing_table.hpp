@@ -60,6 +60,11 @@ public:
     ~routing_table () = default;
 
 public:
+    std::size_t gateway_count () const noexcept
+    {
+        return _gateways.size();
+    }
+
     void append_gateway (node_id id)
     {
         // Check if already exists
@@ -141,6 +146,13 @@ public:
 
         pkt.serialize(out);
         return out.take();
+    }
+
+    template <typename F>
+    void foreach_gateway (F && f)
+    {
+        for (auto const & gwid: _gateways)
+            f(gwid);
     }
 };
 
