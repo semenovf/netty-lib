@@ -29,7 +29,7 @@ namespace reliable_delivery {
 /*
  * Callbacks API:
  *--------------------------------------------------------------------------------------------------
- * class callabcks
+ * class callbacks
  * {
  * public:
  *      void on_payload (std::vector<char> && payload); // Payload handler

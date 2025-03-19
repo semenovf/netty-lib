@@ -10,6 +10,7 @@
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/console_logger.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
+#include <pfs/netty/patterns/universal_id_traits.hpp>
 #include <pfs/netty/patterns/without_logger.hpp>
 #include <pfs/netty/patterns/meshnet/alive_processor.hpp>
 #include <pfs/netty/patterns/meshnet/exclusive_handshake.hpp>
@@ -24,7 +25,6 @@
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/simple_input_processor.hpp>
 #include <pfs/netty/patterns/meshnet/simple_message_sender.hpp>
-#include <pfs/netty/patterns/meshnet/universal_id_traits.hpp>
 #include <pfs/netty/patterns/meshnet/without_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/without_input_processor.hpp>
@@ -45,7 +45,7 @@ using priority_input_processor = meshnet::priority_input_processor<3, Node>;
 // nopriority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 using nopriority_meshnet_node_t = meshnet::node<
-      meshnet::universal_id_traits
+      netty::patterns::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
 
@@ -79,7 +79,7 @@ using nopriority_meshnet_node_t = meshnet::node<
 // priority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 using priority_meshnet_node_t = meshnet::node<
-      meshnet::universal_id_traits
+      netty::patterns::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
 
@@ -114,7 +114,7 @@ using priority_meshnet_node_t = meshnet::node<
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Unusable, for test without_XXX parameters only.
 using bare_meshnet_node_t = meshnet::node<
-      meshnet::universal_id_traits
+      netty::patterns::universal_id_traits
     , netty::posix::tcp_listener
     , netty::posix::tcp_socket
 
@@ -151,12 +151,14 @@ using bare_meshnet_node_t = meshnet::node<
 //using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
-using routing_table_storage_t = meshnet::routing_table_binary_storage<meshnet::universal_id_traits>;
-using routing_table_t = meshnet::routing_table_persistent<meshnet::universal_id_traits
-    , netty::patterns::default_serializer_traits_t, routing_table_storage_t>;
-using alive_processor_t = meshnet::alive_processor<meshnet::universal_id_traits, netty::patterns::default_serializer_traits_t>;
-using node_pool_t = meshnet::node_pool<meshnet::universal_id_traits
+using routing_table_storage_t = meshnet::routing_table_binary_storage<netty::patterns::universal_id_traits>;
+// using routing_table_t = meshnet::routing_table_persistent<netty::patterns::universal_id_traits
+//     , netty::patterns::default_serializer_traits_t, routing_table_storage_t>;
+using routing_table_t = meshnet::routing_table<netty::patterns::universal_id_traits
+    , netty::patterns::default_serializer_traits_t>;
+using alive_processor_t = meshnet::alive_processor<netty::patterns::universal_id_traits, netty::patterns::default_serializer_traits_t>;
+using node_pool_t = meshnet::node_pool<netty::patterns::universal_id_traits
     , routing_table_t
     , alive_processor_t
-    , meshnet::node_pool_callbacks<meshnet::universal_id_traits::node_id>
+    , meshnet::node_pool_callbacks<netty::patterns::universal_id_traits::node_id>
     , netty::patterns::console_logger>;

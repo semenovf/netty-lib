@@ -16,6 +16,7 @@
 #include "pfs/netty/host4_addr.hpp"
 #include "pfs/netty/send_result.hpp"
 #include "pfs/netty/socket4_addr.hpp"
+#include "pfs/c++support.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/log.hpp>
 #include <pfs/stopwatch.hpp>
@@ -29,7 +30,8 @@ namespace netty {
 namespace p2p {
 
 template <typename Backend, typename Serializer = primal_serializer<>>
-class discovery_engine
+class [[deprecated ("Use netty::patterns::discovery::manager instead")]]
+discovery_engine
 {
     // Maximum and minimum transmit interval in seconds
     static constexpr int MAX_TRANSMIT_INTERVAL_SECONDS = 300;

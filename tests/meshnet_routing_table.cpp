@@ -8,12 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-// #include <pfs/assert.hpp>
-// #include <pfs/log.hpp>
 #include <pfs/standard_paths.hpp>
 #include <pfs/lorem/lorem_ipsum.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
-#include <pfs/netty/patterns/meshnet/universal_id_traits.hpp>
+#include <pfs/netty/patterns/universal_id_traits.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table_persistent.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table_binary_storage.hpp>
 #include <memory>
@@ -21,8 +19,8 @@
 using namespace netty::patterns;
 namespace fs = pfs::filesystem;
 
-using routing_table_storage_t = meshnet::routing_table_binary_storage<meshnet::universal_id_traits>;
-using routing_table_t = meshnet::routing_table_persistent<meshnet::universal_id_traits
+using routing_table_storage_t = meshnet::routing_table_binary_storage<netty::patterns::universal_id_traits>;
+using routing_table_t = meshnet::routing_table_persistent<netty::patterns::universal_id_traits
     , netty::patterns::default_serializer_traits_t, routing_table_storage_t>;
 
 TEST_CASE("meshnet routing table") {

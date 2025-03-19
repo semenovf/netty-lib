@@ -11,7 +11,6 @@
 #include "newlib/udt.hpp"
 #include "netty/trace.hpp"
 #include "netty/udt/epoll_poller.hpp"
-#include <pfs/log.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -66,10 +65,10 @@ int connecting_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis
             for (UDTSOCKET u: _rep->writefds) {
                 auto state = UDT::getsockstate(u);
 
-                NETTY__TRACE(LOGD("UDT", "Socket CONNECTED: sock={}; state={} ({})"
+                NETTY__TRACE("[UDT]", "Socket CONNECTED: sock={}; state={} ({})"
                     , u
                     , static_cast<int>(state)
-                    , state == CONNECTED ? tr::_("CONNECTED") : "?"));
+                    , state == CONNECTED ? tr::_("CONNECTED") : "?");
 
                 _rep->_connecting_sockets.erase(u);
 

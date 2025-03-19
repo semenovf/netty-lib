@@ -7,10 +7,9 @@
 //      2023.01.09 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../listener_poller_impl.hpp"
+#include "netty/trace.hpp"
 #include "newlib/udt.hpp"
 #include "netty/udt/epoll_poller.hpp"
-#include "netty/trace.hpp"
-#include <pfs/log.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -33,8 +32,8 @@ int listener_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, 
         for (UDTSOCKET u: _rep->readfds) {
             auto status = UDT::getsockstate(u);
 
-            NETTY__TRACE(LOGD("UDT", "Socket ACCEPTED: listener sock={}; state={}", u
-                , static_cast<int>(status)));
+            NETTY__TRACE("UDT", "Socket ACCEPTED: listener sock={}; state={}", u
+                , static_cast<int>(status));
 
             res++;
 

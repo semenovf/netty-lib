@@ -7,13 +7,11 @@
 //      2024.07.15 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../listener_poller_impl.hpp"
+#include "netty/trace.hpp"
 #include "netty/socket4_addr.hpp"
 #include "netty/enet/enet_poller.hpp"
 #include <pfs/endian.hpp>
 #include <enet/enet.h>
-
-#include <pfs/log.hpp>
-#include "netty/trace.hpp"
 
 NETTY__NAMESPACE_BEGIN
 
@@ -42,7 +40,7 @@ int listener_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, 
                 , ev->peer->address.port
             };
 
-            NETTY__TRACE(LOGD("ENet", "Accepted from: {}", to_string(saddr)));
+            NETTY__TRACE("ENet", "Accepted from: {}", to_string(saddr));
 
             accept(reinterpret_cast<socket_id>(ev->peer)); // <= ENetPeer *
             _rep->pop_event();

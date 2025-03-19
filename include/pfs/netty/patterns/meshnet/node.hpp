@@ -113,7 +113,7 @@ private:
     unordered_bimap<socket_id, node_id> _writers;
 
     // Reconnecting attempts
-    std::map<socket4_addr, unsigned int> _reconn_attempts;
+    std::map<socket4_addr, reconnection_policy> _reconn_policies;
 
 public:
     node (node_id id, bool behind_nat, bool is_gateway, std::shared_ptr<callback_suite> callbacks)
@@ -144,13 +144,11 @@ public:
             _input_processor.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_connected(std::move(sock));
+            _reconn_policies.erase(sock.saddr());
         }).on_connection_refused ([this] (netty::socket4_addr saddr
                 , netty::connection_refused_reason reason) {
             this->log_error(tr::f_("connection refused for socket: {}: reason: {}"
                 , to_string(saddr), to_string(reason)));
-
-            // if (reconnection_policy::timeout() > std::chrono::seconds{0})
-            //     _connecting_pool.connect_timeout(reconnection_policy::timeout(), saddr);
             schedule_reconnection(saddr);
         });
 
@@ -190,13 +188,13 @@ public:
         }).on_completed([this] (node_id id, socket_id sid, bool is_gateway, handshake_result_enum status) {
             switch (status) {
                 case handshake_result_enum::unusable:
-                    this->log_debug(tr::f_("handshake state changed: socket #{} excluded for channel: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} excluded for channel with node: {}"
                         , sid, node_id_traits::stringify(id)));
                     close_socket(sid);
                     break;
 
                 case handshake_result_enum::reader:
-                    this->log_debug(tr::f_("handshake state changed: socket #{} is reader for channel: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} is reader for channel with node: {}"
                         , sid, node_id_traits::stringify(id)));
                     _readers.insert(sid, id);
                     _heartbeat_processor.update(sid);
@@ -209,7 +207,7 @@ public:
                     break;
 
                 case handshake_result_enum::writer:
-                    this->log_debug(tr::f_("handshake state changed: socket #{} is writer for node: {}"
+                    this->log_debug(tr::f_("handshake state changed: socket #{} is writer for channel with node: {}"
                         , sid, node_id_traits::stringify(id)));
                     _writers.insert(sid, id);
                     _heartbeat_processor.update(sid);
@@ -451,42 +449,32 @@ private:
 
     void schedule_reconnection (socket4_addr saddr)
     {
-        if (reconnection_policy::timeout() > std::chrono::seconds{0}) {
-            // bool is_accepted = false;
-            // auto psock = _socket_pool.locate(sid, & is_accepted);
-            auto reconnecting = true;
+        if (!reconnection_policy::supported())
+            return;
 
-            if (reconnecting) {
-                auto pos = _reconn_attempts.find(saddr);
+        auto reconnecting = true;
+        auto pos = _reconn_policies.find(saddr);
 
-                if (pos == _reconn_attempts.end()) {
-                    if (reconnection_policy::attempts() > 0) {
-                        // Take the current attempt into account--------------------------------v
-                        pos = _reconn_attempts.emplace(saddr, reconnection_policy::attempts() - 1).first;
-                    } else {
-                        reconnecting = false;
-                    }
-                } else {
-                    if (pos->second == 0) {
-                        _reconn_attempts.erase(pos);
-                        reconnecting = false;
-                    } else {
-                        --pos->second;
-                    }
-                }
-
-                if (reconnecting) {
-                    this->log_debug(tr::f_("reconnecting to: {} after {} ({} attepts remain)", to_string(saddr)
-                        , reconnection_policy::timeout(), pos->second));
-                    _connecting_pool.connect_timeout(reconnection_policy::timeout(), saddr);
-                }
+        if (pos == _reconn_policies.end()) {
+            pos = _reconn_policies.emplace(saddr, reconnection_policy{}).first;
+        } else {
+            if (!pos->second.required()) {
+                _reconn_policies.erase(pos);
+                reconnecting = false;
+                this->log_debug(tr::f_("stopped reconnection to: {}", to_string(saddr)));
             }
+        }
+
+        if (reconnecting) {
+            auto reconn_timeout = pos->second.fetch_timeout();
+            this->log_debug(tr::f_("reconnecting to: {} after {}", to_string(saddr), reconn_timeout));
+            _connecting_pool.connect_timeout(reconn_timeout, saddr);
         }
     }
 
     void schedule_reconnection (socket_id sid)
     {
-        if (reconnection_policy::timeout() > std::chrono::seconds{0}) {
+        if (reconnection_policy::supported()) {
             bool is_accepted = false;
             auto psock = _socket_pool.locate(sid, & is_accepted);
             auto reconnecting = !is_accepted;

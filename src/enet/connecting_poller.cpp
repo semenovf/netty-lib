@@ -8,13 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "../connecting_poller_impl.hpp"
 #include "netty/socket4_addr.hpp"
+#include "netty/trace.hpp"
 #include "netty/enet/enet_poller.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/endian.hpp>
 #include <enet/enet.h>
-
-#include <pfs/log.hpp>
-#include "netty/trace.hpp"
 
 NETTY__NAMESPACE_BEGIN
 
@@ -43,7 +41,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
                 , ev->peer->address.port
             };
 
-            NETTY__TRACE(LOGD("ENet", "Connected to: {}", to_string(saddr)));
+            NETTY__TRACE("ENet", "Connected to: {}", to_string(saddr));
 
             connected(event.sock);
             _rep->pop_event();
@@ -54,7 +52,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
                 , ev->peer->address.port
             };
 
-            NETTY__TRACE(LOGD("ENet", "Disconnected from: {}", to_string(saddr)));
+            NETTY__TRACE("ENet", "Disconnected from: {}", to_string(saddr));
 
             // Reset the peer's client information
             ev->peer->data = nullptr;

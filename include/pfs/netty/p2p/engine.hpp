@@ -53,7 +53,8 @@ template <
     , typename Serializer       = primal_serializer<>
     , typename FileTransporter  = file_transporter<Serializer>
     , std::uint16_t PACKET_SIZE = packet::MAX_PACKET_SIZE>  // Meets the requirements for reliable and in-order data delivery
-class engine
+class [[depricated ("Use delivery_engine and discovery_engine instead")]]
+engine
 {
     static_assert(PACKET_SIZE <= packet::MAX_PACKET_SIZE
         && PACKET_SIZE > packet::PACKET_HEADER_SIZE, "");

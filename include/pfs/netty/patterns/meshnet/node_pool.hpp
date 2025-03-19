@@ -98,7 +98,7 @@ public:
             }
 
             // Add direct route
-            _rtab->add_route(id, node_id{}, 0);
+            _rtab->add_sibling(id);
 
             // Add siblinge node
             _aproc->add_sibling(id);
@@ -265,12 +265,14 @@ private:
             if (rinfo.initiator_id == _id_pair) {
                 auto hops = pfs::numeric_cast<unsigned int>(rinfo.route.size());
 
-                NETTY__TRACE(
-                    this->log_debug("route complete: responder ID: {}, hops={}"
-                        , node_id_traits::stringify(responder_id), hops);
-                );
+                if (hops == 0) {
+                    _rtab->add_sibling(responder_id);
+                } else {
+                    _rtab->add_route(responder_id, id, hops);
+                }
 
-                _rtab->add_route(responder_id, id, hops);
+                NETTY__TRACE("[node_pool]", "routes dump:\n{}", _rtab->dump_routes(4));
+
                 return;
             }
 
@@ -287,7 +289,7 @@ private:
 
                 // This gateway is the first one for responder
                 if (rinfo.route.size() == 1 || index == rinfo.route.size() - 1) {
-                    _rtab->add_route(responder_id, _id, 0);
+                    _rtab->add_sibling(responder_id);
                 } else {
                     PFS__TERMINATE(rinfo.route.size() > index, "Fix meshnet::node_pool algorithm");
 
@@ -295,6 +297,8 @@ private:
 
                     _rtab->add_route(responder_id, id, hops);
                 }
+
+                NETTY__TRACE("[node_pool]", "routes dump:\n{}", _rtab->dump_routes(4));
 
                 // Forward
                 std::vector<char> msg = _rtab->serialize_response(rinfo, false);
@@ -316,8 +320,7 @@ private:
             if (_is_gateway) {
                 if (rinfo.route.empty()) {
                     // First gateway for the initiator (direct access).
-                    // For direct access no matter the gateway.
-                    _rtab->add_route(initiator_id, _id, 0);
+                    _rtab->add_sibling(initiator_id);
                 } else {
                     _rtab->add_route(initiator_id, id, rinfo.route.size());
                 }
@@ -325,6 +328,8 @@ private:
                 PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
                 _rtab->add_route(initiator_id, id, rinfo.route.size());
             }
+
+            NETTY__TRACE("[node_pool]", "routes dump:\n{}", _rtab->dump_routes(4));
 
             // Initiate response and transmit it by the reverse route
             std::vector<char> msg = _rtab->serialize_response(rinfo, true);

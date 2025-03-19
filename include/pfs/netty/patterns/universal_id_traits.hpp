@@ -7,7 +7,7 @@
 //      2025.01.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
+#include "../namespace.hpp"
 #include <pfs/optional.hpp>
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_hash.hpp>
@@ -18,7 +18,6 @@
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
-namespace meshnet {
 
 struct universal_id_traits
 {
@@ -61,6 +60,6 @@ struct universal_id_traits
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace patterns
 
 NETTY__NAMESPACE_END

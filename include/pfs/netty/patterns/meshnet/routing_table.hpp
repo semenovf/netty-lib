@@ -16,6 +16,7 @@
 #include <limits>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -26,6 +27,7 @@ template <typename NodeIdTraits, typename SerializerTraits>
 class routing_table
 {
 public:
+    using node_id_traits = NodeIdTraits;
     using node_id = typename NodeIdTraits::node_id;
     using serializer_traits = SerializerTraits;
 
@@ -44,6 +46,7 @@ protected:
     // The first gateway is the default one
     std::vector<node_id> _gateways;
     std::unordered_multimap<node_id, route_item> _routes;
+    std::unordered_set<node_id> _sibling_nodes;
 
 public:
     routing_table (node_id id)
@@ -76,6 +79,11 @@ public:
         _gateways.push_back(id);
     }
 
+    void add_sibling (node_id id)
+    {
+        _sibling_nodes.insert(id);
+    }
+
     void add_route (node_id id, node_id gw, unsigned int hops)
     {
         _routes.insert(std::make_pair(id, route_item{gw, hops}));
@@ -91,6 +99,10 @@ public:
 
     node_id gateway_for (node_id id)
     {
+        // Check if direct access
+        if (_sibling_nodes.find(id) != _sibling_nodes.cend())
+            return id;
+
         auto hops = std::numeric_limits<unsigned int>::max();
         auto res = _routes.equal_range(id);
 
@@ -153,6 +165,21 @@ public:
     {
         for (auto const & gwid: _gateways)
             f(gwid);
+    }
+
+    std::string dump_routes (int indent = 0)
+    {
+        std::string result;
+
+        for (auto pos = _sibling_nodes.cbegin(); pos != _sibling_nodes.cend(); ++pos)
+            result += fmt::format("{:{}} <this node> -> {}: direct\n", "", indent, *pos);
+
+        for (auto pos = _routes.cbegin(); pos != _routes.cend(); ++pos) {
+            result += fmt::format("{:{}} <this node> -> {} -> ... -> {}: {} hops\n", "", indent
+                , pos->second.gwid, pos->first, pos->second.hops);
+        }
+
+        return result;
     }
 };
 

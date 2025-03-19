@@ -1,9 +1,5 @@
-/3rdparty/*
-!/3rdparty/README.md
-!/3rdparty/*.cmake
-!/3rdparty/CMakeLists.txt
-
 /2ndparty/
+/3rdparty/
 
 ### KDevelop ###
 *.kdev4

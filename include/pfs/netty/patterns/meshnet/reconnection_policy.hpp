@@ -15,16 +15,36 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-struct reconnection_policy
+class reconnection_policy
 {
-    static std::chrono::seconds timeout ()
+    unsigned int _attempts {0};
+
+public:
+    bool required () const noexcept
     {
+        return _attempts <= 45;
+    }
+
+    std::chrono::seconds fetch_timeout () noexcept
+    {
+        _attempts++;
+
+        if (_attempts > 45)
+            return std::chrono::seconds{0};
+
+        if (_attempts > 15)
+            return std::chrono::seconds{30};
+
+        if (_attempts > 5)
+            return std::chrono::seconds{10};
+
         return std::chrono::seconds{5};
     }
 
-    static unsigned int attempts ()
+public: // static
+    static bool supported () noexcept
     {
-        return 5;
+        return true;
     }
 };
 

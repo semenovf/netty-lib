@@ -67,7 +67,6 @@ modified by
 #include <cassert>
 
 #include "netty/trace.hpp"
-#include <pfs/log.hpp>
 
 using namespace std;
 
@@ -1162,8 +1161,8 @@ int CUDT::sendmsg (const char* data, int len, int msttl, bool inorder)
 
     if ((m_iSndBufSize - m_pSndBuffer->getCurrBufSize()) * m_iPayloadSize < len) {
         if (!m_bSynSending) {
-            NETTY__TRACE(LOGD("UDT", "m_iSndBufSize={}; m_pSndBuffer->getCurrBufSize()={}; m_iPayloadSize={}; len={}"
-                , m_iSndBufSize, m_pSndBuffer->getCurrBufSize(), m_iPayloadSize, len));
+            NETTY__TRACE("UDT", "m_iSndBufSize={}; m_pSndBuffer->getCurrBufSize()={}; m_iPayloadSize={}; len={}"
+                , m_iSndBufSize, m_pSndBuffer->getCurrBufSize(), m_iPayloadSize, len);
             throw CUDTException(6, 1, 0);
         } else {
             // wait here during a blocking sending
@@ -1905,7 +1904,7 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
         if (CSeqNo::seqcmp(ack, CSeqNo::incseq(m_iSndCurrSeqNo)) > 0) {
             //this should not happen: attack or bug
             m_bBroken = true;
-            NETTY__TRACE(LOGD("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__));
+            NETTY__TRACE("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID, __FILE__, __LINE__);
 
             m_iBrokenCounter = 0;
             break;
@@ -2059,8 +2058,8 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
             //this should not happen: attack or bug
             m_bBroken = true;
 
-            NETTY__TRACE(LOGD("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID
-                , __FILE__, __LINE__));
+            NETTY__TRACE("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})", m_SocketID
+                , __FILE__, __LINE__);
 
             m_iBrokenCounter = 0;
             break;
@@ -2118,8 +2117,8 @@ void CUDT::processCtrl(CPacket& ctrlpkt)
 
         m_bBroken = true;
 
-        NETTY__TRACE(LOGD("UDT", "STATUS CHANGED: Socket BROKEN (SHUTDOWN): {} ({}:{})", m_SocketID
-            , __FILE__, __LINE__));
+        NETTY__TRACE("UDT", "STATUS CHANGED: Socket BROKEN (SHUTDOWN): {} ({}:{})", m_SocketID
+            , __FILE__, __LINE__);
 
         m_iBrokenCounter = 60;
 
@@ -2479,7 +2478,7 @@ void CUDT::checkTimers()
             m_bClosing = true;
             m_bBroken = true;
 
-            NETTY__TRACE(LOGD("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})\n"
+            NETTY__TRACE("UDT", "STATUS CHANGED: Socket BROKEN: {} ({}:{})\n"
                 "\t1. m_iEXPCount({}) > m_iEXPMaxCounter({}) = {}\n"
                 "\t2. currtime({}) - m_ullLastRspTime ({}) = {}\n"
                 "\t3. m_ullEXPThreshold({}) * m_ullCPUFrequency({}) = {}\n"
@@ -2490,7 +2489,7 @@ void CUDT::checkTimers()
                 , currtime, m_ullLastRspTime, (currtime - m_ullLastRspTime)
                 , m_ullEXPThreshold, m_ullCPUFrequency, (m_ullEXPThreshold * m_ullCPUFrequency)
                 , (currtime - m_ullLastRspTime > m_ullEXPThreshold * m_ullCPUFrequency)
-                , (a && b)));
+                , (a && b));
 
             m_iBrokenCounter = 30;
 
@@ -2500,8 +2499,8 @@ void CUDT::checkTimers()
             releaseSynch();
 
             // app can call any UDT API to learn the connection_broken error
-            // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID));
-            // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_IN ON *** id: {}", m_SocketID));
+            // NETTY__TRACE("UDT", "*** UDT_EPOLL_OUT ON *** id: {}", m_SocketID);
+            // NETTY__TRACE("UDT", "*** UDT_EPOLL_IN ON *** id: {}", m_SocketID);
             s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN | UDT_EPOLL_OUT | UDT_EPOLL_ERR, true);
 
             CTimer::triggerEvent();
@@ -2546,12 +2545,12 @@ void CUDT::addEPoll(const int eid)
 
     if (((UDT_STREAM == m_iSockType) && (m_pRcvBuffer->getRcvDataSize() > 0))
             || ((UDT_DGRAM == m_iSockType) && (m_pRcvBuffer->getRcvMsgNum() > 0))) {
-        // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID));
+        // NETTY__TRACE("UDT", "*** UDT_EPOLL_IN ON *** eid: {}, id: {}", eid, m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_IN, true);
     }
 
     if (m_iSndBufSize > m_pSndBuffer->getCurrBufSize()) {
-        // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID));
+        // NETTY__TRACE("UDT", "*** UDT_EPOLL_OUT ON *** eid: {}, id: {}", eid, m_SocketID);
         s_UDTUnited.m_EPoll.update_events(m_SocketID, m_sPollID, UDT_EPOLL_OUT, true);
     }
 }
@@ -2562,8 +2561,8 @@ void CUDT::removeEPoll(const int eid)
     // since this happens after the epoll ID has been removed, they cannot be set again
     set<int> remove;
     remove.insert(eid);
-    // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID));
-    // NETTY__TRACE(LOGD("UDT", "*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID));
+    // NETTY__TRACE("UDT", "*** UDT_EPOLL_OUT OFF *** eid: {}, id: {}", eid, m_SocketID);
+    // NETTY__TRACE("UDT", "*** UDT_EPOLL_IN OFF *** eid: {}, id: {}", eid, m_SocketID);
     s_UDTUnited.m_EPoll.update_events(m_SocketID, remove, UDT_EPOLL_IN | UDT_EPOLL_OUT, false);
 
     CGuard::enterCS(s_UDTUnited.m_EPoll.m_EPollLock);

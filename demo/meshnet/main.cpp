@@ -200,8 +200,9 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Channel destroyed with {}", to_string(id));
     };
 
-    auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
-    auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
+    //auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
+    //auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
+    auto rtab = std::make_unique<routing_table_t>(*node_id_opt);
     auto aproc = std::make_unique<alive_processor_t>(*node_id_opt);
     node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, std::move(rtab), std::move(aproc), callbacks};
 

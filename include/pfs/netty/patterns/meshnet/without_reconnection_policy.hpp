@@ -17,14 +17,19 @@ namespace meshnet {
 
 struct without_reconnection_policy
 {
-    static std::chrono::seconds timeout ()
+    static bool supported () noexcept
     {
-        return std::chrono::seconds{0};
+        return false;
     }
 
-    static int attempts ()
+    bool required () noexcept
     {
-        return 0;
+        return false;
+    }
+
+    std::chrono::seconds fetch_timeout () const noexcept
+    {
+        return std::chrono::seconds{0};
     }
 };
 
