@@ -131,7 +131,7 @@ public:
 
         // Sibling node, no need to update
         if (pos != _sibling_nodes.end())
-            return false;
+            return true;
 
         auto now = std::chrono::steady_clock::now();
 

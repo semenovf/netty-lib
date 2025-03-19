@@ -200,6 +200,16 @@ int main (int argc, char * argv[])
         LOGD(TAG, "Channel destroyed with {}", to_string(id));
     };
 
+    // Notify when node alive status changed
+    callbacks->on_node_alive = [] (node_t::node_id id) {
+        LOGD(TAG, "Node alive: {}", to_string(id));
+    };
+
+    // Notify when node alive status changed
+    callbacks->on_node_expired = [] (node_t::node_id id) {
+        LOGD(TAG, "Node expired: {}", to_string(id));
+    };
+
     //auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
     //auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
     auto rtab = std::make_unique<routing_table_t>(*node_id_opt);
