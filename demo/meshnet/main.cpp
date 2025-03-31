@@ -36,6 +36,7 @@ static void sigterm_handler (int /*sig*/)
 
 struct node_item
 {
+    bool behind_nat {false};
     std::vector<netty::socket4_addr> listener_saddrs;
     std::vector<netty::socket4_addr> neighbor_saddrs;
 };
@@ -48,19 +49,19 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} --id=NODE_ID [--nat] [--gw] {{--node --port=PORT... --nb=ADDR:PORT...}}...\n\n"
+        "{0} --id=NODE_ID [--gw] {{--node [--nat] --port=PORT... --nb=ADDR:PORT...}}...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
         "\tPrint this help and exit\n"
         "--id=NODE_ID\n"
         "\tThis node identifier\n\n"
-        "--nat\n"
-        "\tThis node is behind NAT\n\n"
         "--gw\n"
         "\tThis node is a gateway\n\n"
         "--node\n"
         "\tStart node parameters\n\n"
+        "--nat\n"
+        "\tThis node is behind NAT\n\n"
         "--port=PORT...\n"
         "\tRun listeners for node on specified ports\n\n"
         "--nb=ADDR:PORT...\n"
@@ -79,9 +80,21 @@ static void print_usage (pfs::filesystem::path const & programName
 // Check node specilizations
 void dumb ()
 {
-    bare_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<bare_meshnet_node_t::callback_suite>()};
-    nopriority_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
-    priority_meshnet_node_t {pfs::generate_uuid(), false, false, std::make_shared<priority_meshnet_node_t::callback_suite>()};
+    bare_meshnet_node_t::options bare_opts;
+    bare_opts.id = pfs::generate_uuid();
+    bare_opts.is_gateway = false;
+
+    nopriority_meshnet_node_t::options nopriority_opts;
+    nopriority_opts.id = pfs::generate_uuid();
+    nopriority_opts.is_gateway = false;
+
+    priority_meshnet_node_t::options priority_opts;
+    priority_opts.id = pfs::generate_uuid();
+    priority_opts.is_gateway = false;
+
+    bare_meshnet_node_t {std::move(bare_opts), std::make_shared<bare_meshnet_node_t::callback_suite>()};
+    nopriority_meshnet_node_t {std::move(nopriority_opts), std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
+    priority_meshnet_node_t {std::move(priority_opts), std::make_shared<priority_meshnet_node_t::callback_suite>()};
 }
 
 int main (int argc, char * argv[])
@@ -89,9 +102,8 @@ int main (int argc, char * argv[])
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
-    auto behind_nat = netty::patterns::meshnet::behind_nat_enum::no;
-    auto is_gateway = netty::patterns::meshnet::gateway_enum::no;
-    pfs::optional<node_pool_t::node_id> node_id_opt;
+    node_pool_t::options opts;
+    opts.id = pfs::generate_uuid();
     std::vector<node_item> nodes;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
@@ -108,8 +120,7 @@ int main (int argc, char * argv[])
                 return EXIT_SUCCESS;
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
-                    node_id_opt = node_pool_t::node_id_traits::parse(x.arg().data()
-                        , x.arg().size());
+                    auto node_id_opt = pfs::parse_universal_id(x.arg().data(), x.arg().size());
 
                     if (!node_id_opt) {
                         LOGE(TAG, "Bad node identifier");
@@ -118,12 +129,12 @@ int main (int argc, char * argv[])
                 } else {
                     expectedArgError = true;
                 }
-            } else if (x.is_option("nat")) {
-                behind_nat = netty::patterns::meshnet::behind_nat_enum::yes;
             } else if (x.is_option("gw")) {
-                is_gateway = is_gateway = netty::patterns::meshnet::gateway_enum::yes;
+                opts.is_gateway = true;
             } else if (x.is_option("node")) {
                 nodes.emplace_back(); // Emplace back empty item
+            } else if (x.is_option("nat")) {
+                nodes.back().behind_nat = true;
             } else if (x.is_option("port")) {
                 if (x.has_arg()) {
                     std::error_code ec;
@@ -178,11 +189,6 @@ int main (int argc, char * argv[])
         return EXIT_SUCCESS;
     }
 
-    if (!node_id_opt) {
-        LOGE(TAG, "Node identifier must be specified");
-        return EXIT_FAILURE;
-    }
-
     if (nodes.empty()) {
         LOGE(TAG, "No nodes");
         return EXIT_FAILURE;
@@ -191,37 +197,33 @@ int main (int argc, char * argv[])
     netty::startup_guard netty_startup;
     auto callbacks = std::make_shared<node_pool_t::callback_suite>();
 
-    callbacks->on_channel_established = [] (node_t::node_id id, bool is_gateway) {
+    callbacks->on_channel_established = [] (node_t::node_id_rep const & id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
-        LOGD(TAG, "Channel established with {}: {}", node_type, to_string(id));
+        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
     };
 
-    callbacks->on_channel_destroyed = [] (node_t::node_id id) {
-        LOGD(TAG, "Channel destroyed with {}", to_string(id));
-    };
-
-    // Notify when node alive status changed
-    callbacks->on_node_alive = [] (node_t::node_id id) {
-        LOGD(TAG, "Node alive: {}", to_string(id));
+    callbacks->on_channel_destroyed = [] (node_t::node_id_rep const & id) {
+        LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
     };
 
     // Notify when node alive status changed
-    callbacks->on_node_expired = [] (node_t::node_id id) {
-        LOGD(TAG, "Node expired: {}", to_string(id));
+    callbacks->on_node_alive = [] (node_t::node_id_rep const & id) {
+        LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
     };
 
-    //auto routing_table_path = pfs::filesystem::standard_paths::temp_folder() / "meshnet_routing_table.bin";
-    //auto rtab = std::make_unique<routing_table_t>(*node_id_opt, std::make_unique<routing_table_storage_t>(routing_table_path));
-    auto rtab = std::make_unique<routing_table_t>(*node_id_opt);
-    auto aproc = std::make_unique<alive_processor_t>(*node_id_opt);
-    node_pool_t node_pool {*node_id_opt, behind_nat, is_gateway, std::move(rtab), std::move(aproc), callbacks};
+    // Notify when node alive status changed
+    callbacks->on_node_expired = [] (node_t::node_id_rep const & id) {
+        LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
+    };
 
-    for (auto & node: nodes) {
-        auto node_index = node_pool.add_node<node_t>(node.listener_saddrs);
+    node_pool_t node_pool {std::move(opts), callbacks};
+
+    for (auto & item: nodes) {
+        auto node_index = node_pool.add_node<node_t>(item.listener_saddrs);
         node_pool.listen(node_index, 10);
 
-        for (auto const & saddr: node.neighbor_saddrs)
-            node_pool.connect_host(node_index, saddr);
+        for (auto const & saddr: item.neighbor_saddrs)
+            node_pool.connect_host(node_index, saddr, item.behind_nat);
     }
 
     while (!quit_flag.load()) {

@@ -22,16 +22,14 @@ template <typename Derived, typename Node>
 class basic_input_processor
 {
     using socket_id = typename Node::socket_id;
-    using node_id_traits = typename Node::node_id_traits;
-    using node_id = typename Node::node_id;
     using serializer_traits = typename Node::serializer_traits;
 
 protected:
     Node * _node {nullptr};
 
 public:
-    basic_input_processor (Node & node)
-        : _node(& node)
+    basic_input_processor (Node * node)
+        : _node(node)
     {}
 
 public:
@@ -100,6 +98,17 @@ public:
                         break;
                     }
 
+                    case packet_enum::unreach: {
+                        unreachable_packet pkt {h, in};
+
+                        if (in.commit_transaction())
+                            that->process(sid, pkt);
+                        else
+                            has_more_packets = false;
+
+                        break;
+                    }
+
                     case packet_enum::route: {
                         route_packet pkt {h, in};
 
@@ -126,12 +135,10 @@ public:
                         gdata_packet pkt {h, in};
 
                         if (in.commit_transaction()) {
-                            auto receiver_id = node_id_traits::make(pkt.receiver_id);
-
-                            if (receiver_id == _node->id()) {
+                            if (pkt.receiver_id == _node->id_rep()) {
                                 that->process_message_received(sid, priority
-                                    , node_id_traits::make(pkt.sender_id)
-                                    , receiver_id
+                                    , pkt.sender_id
+                                    , pkt.receiver_id
                                     , std::move(pkt.bytes));
                             } else {
                                 // Need to forward the message if the node is a gateway, or discard
@@ -139,8 +146,8 @@ public:
                                 if (_node->is_gateway()) {
                                     auto out = serializer_traits::make_serializer();
                                     pkt.serialize(out);
-                                    that->forward_global_message(priority, node_id_traits::make(pkt.sender_id)
-                                        , receiver_id, out.take());
+                                    that->forward_global_message(priority, pkt.sender_id
+                                        , pkt.receiver_id, out.take());
                                 }
                             }
                         } else {

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "node_id_rep.hpp"
 #include <pfs/optional.hpp>
 #include <cstdint>
 #include <utility>
@@ -21,17 +22,16 @@ namespace meshnet {
 struct route_info
 {
     std::uint64_t utctime {0}; // Send time point in milliseconds since epoch in UTC
-    std::pair<std::uint64_t, std::uint64_t> initiator_id;
-    std::pair<std::uint64_t, std::uint64_t> responder_id; // not used when request
+    node_id_rep initiator_id;
+    node_id_rep responder_id; // not used when request
 
-    // first - high part, second - low part
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> route; // router IDs
+    std::vector<node_id_rep> route; // router IDs
 
 public:
     /**
      * Find gateway index in the route.
      */
-    pfs::optional<std::size_t> gateway_index (std::pair<std::uint64_t, std::uint64_t> const & id) const
+    pfs::optional<std::size_t> gateway_index (node_id_rep const & id) const
     {
         for (std::size_t i = 0; i < route.size(); i++) {
             if (id == route[i])

@@ -16,26 +16,6 @@ NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 
-// Serializer traits must contains:
-//
-// Typedefs:
-// --------------------------
-// SerializerTraits::archive_type
-// SerializerTraits::serializer_type
-// SerializerTraits::deserializer_type
-//
-// Static methods:
-// --------------------------
-// SerializerTraits::serializer_type SerializerTraits::make_serializer(Args &&... args)
-// SerializerTraits::deserializer_type SerializerTraits::make_deserializer(Args &&... args)
-//
-// Serializer requirements:
-// --------------------------
-// SerializerTraits::serializer_type & SerializerTraits::serializer_type::operator << (T const & i)
-//
-// Deserializer requirements:
-// TODO
-
 template <pfs::endian Endianess = pfs::endian::network>
 struct serializer_traits
 {
@@ -56,7 +36,7 @@ struct serializer_traits
     }
 };
 
-using default_serializer_traits_t = serializer_traits<pfs::endian::network>;
+using serializer_traits_t = serializer_traits<pfs::endian::network>;
 
 } // namespace patterns
 

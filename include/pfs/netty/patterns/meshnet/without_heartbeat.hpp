@@ -22,7 +22,7 @@ class without_heartbeat
     using serializer_traits = typename Node::serializer_traits;
 
 public:
-    without_heartbeat (Node &) {}
+    without_heartbeat (Node *) {}
 
 public:
     void update (socket_id) {}

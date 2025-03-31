@@ -94,7 +94,7 @@ using outcome_processor_t = netty::patterns::reliable_delivery::im_outcome_proce
 using reliable_delivery_manager_t = netty::patterns::reliable_delivery::manager<
       income_processor_t
     , outcome_processor_t
-    , netty::patterns::default_serializer_traits_t
+    , netty::patterns::serializer_traits_t
     , callbacks>;
 
 class endpoint

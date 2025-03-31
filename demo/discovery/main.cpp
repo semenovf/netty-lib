@@ -8,11 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 // #include "pfs/fmt.hpp"
 // #include "pfs/integer.hpp"
-#include "pfs/log.hpp"
-#include "pfs/string_view.hpp"
 #include "pfs/netty/startup.hpp"
-#include "pfs/netty/patterns/universal_id_traits.hpp"
 #include "pfs/netty/patterns/discovery/manager.hpp"
+#include <pfs/log.hpp>
+#include <pfs/string_view.hpp>
+#include <pfs/universal_id_traits.hpp>
 #include <cstdlib>
 // #include <vector>
 
@@ -20,7 +20,7 @@ using string_view = pfs::string_view;
 
 // static char const * TAG = "DISCOVERY";
 
-using discovery_manager_t = netty::patterns::discovery::manager<netty::patterns::universal_id_traits>;
+using discovery_manager_t = netty::patterns::discovery::manager<pfs::universal_id_traits>;
 
 // static struct program_context {
 //     std::string program;

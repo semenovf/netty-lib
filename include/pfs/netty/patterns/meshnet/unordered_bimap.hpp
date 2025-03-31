@@ -24,10 +24,17 @@ class unordered_bimap
     std::unordered_map<T2, T1> _m2;
 
 public:
-    void insert (T1 const & key1, T2 const & key2)
+    bool insert (T1 const & key1, T2 const & key2)
     {
-        _m1[key1] = key2;
-        _m2[key2] = key1;
+        auto res1 = _m1.insert({key1, key2});
+        auto res2 = _m2.insert({key2, key1});
+
+        if (res1.second && res2.second)
+            return true;
+
+        _m1.erase(key1);
+        _m2.erase(key2);
+        return false;
     }
 
     /**

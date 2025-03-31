@@ -21,7 +21,7 @@ class without_input_processor
     using socket_id = typename Node::socket_id;
 
 public:
-    without_input_processor (Node &) {}
+    without_input_processor (Node *) {}
 
 public:
     void add (socket_id) {}

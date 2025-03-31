@@ -25,7 +25,6 @@ template <typename Node>
 class simple_input_processor: public basic_input_processor<simple_input_processor<Node>, Node>
 {
     using base_class = basic_input_processor<simple_input_processor<Node>, Node>;
-    using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
 
     friend base_class;
@@ -43,7 +42,7 @@ private:
     bool _frame_ready {false};
 
 public:
-    simple_input_processor (Node & node)
+    simple_input_processor (Node * node)
         : base_class(node)
     {}
 
@@ -120,6 +119,11 @@ public:
         this->_node->process_alive_info(sid, pkt.ainfo);
     }
 
+    void process (socket_id sid, unreachable_packet const & pkt)
+    {
+        this->_node->process_unreachable_info(sid, pkt.uinfo);
+    }
+
     void process (socket_id sid, route_packet const & pkt)
     {
         this->_node->process_route_info(sid, pkt.is_response(), pkt.rinfo);
@@ -130,14 +134,14 @@ public:
         this->_node->process_message_received(sid, priority, std::move(bytes));
     }
 
-    void process_message_received (socket_id sid, int priority, node_id sender_id, node_id receiver_id
-        , std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, node_id_rep const & sender_id
+        , node_id_rep const & receiver_id, std::vector<char> && bytes)
     {
         this->_node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
 
-    void forward_global_message (int priority, node_id sender_id, node_id receiver_id
-        , std::vector<char> && bytes)
+    void forward_global_message (int priority, node_id_rep const & sender_id
+        , node_id_rep const & receiver_id, std::vector<char> && bytes)
     {
         this->_node->forward_global_message(priority, sender_id, receiver_id, std::move(bytes));
     }

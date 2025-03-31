@@ -9,13 +9,13 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "alive_info.hpp"
-#include "behind_nat_enum.hpp"
-#include "gateway_enum.hpp"
+#include "node_id_rep.hpp"
 #include "route_info.hpp"
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
 #include <pfs/time_point.hpp>
+#include <pfs/universal_id_rep.hpp>
 #include <cstdint>
 #include <cstring>
 #include <utility>
@@ -32,7 +32,8 @@ enum class packet_enum
       handshake =  1 /// Handshake phase packet
     , heartbeat =  2 /// Heartbeat loop packet
     , alive     =  3 /// Alive packet (periodic)
-    , route     =  4 /// Route discovery packet
+    , unreach   =  4 /// Node is unreachable packet
+    , route     =  5 /// Route discovery packet
     , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message)
     , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message).
 };
@@ -173,19 +174,20 @@ protected:
 class handshake_packet: public header
 {
 public:
-    std::pair<std::uint64_t, std::uint64_t> id;
+    node_id_rep id_rep;
+    std::string name;
 
 public:
-    handshake_packet (packet_way_enum way, behind_nat_enum behind_nat, gateway_enum is_gateway) noexcept
+    handshake_packet (packet_way_enum way, bool is_gateway, bool behind_nat) noexcept
         : header(packet_enum::handshake, false, 0)
     {
         if (way == packet_way_enum::response)
             enable_f0();
 
-        if (behind_nat == behind_nat_enum::yes)
+        if (is_gateway)
             enable_f1();
 
-        if (is_gateway == gateway_enum::yes)
+        if (behind_nat)
             enable_f2();
     }
 
@@ -197,7 +199,8 @@ public:
     handshake_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> id.first >> id.second;
+        std::uint16_t sz = 0;
+        in >> id_rep.h >> id_rep.l >> sz >> std::make_pair(& name, & sz);
     }
 
 public:
@@ -206,12 +209,12 @@ public:
         return is_f0();
     }
 
-    bool behind_nat () const noexcept
+    bool is_gateway () const noexcept
     {
         return is_f1();
     }
 
-    bool is_gateway () const noexcept
+    bool behind_nat () const noexcept
     {
         return is_f2();
     }
@@ -220,7 +223,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << id.first << id.second;
+        out << id_rep.h << id_rep.l << pfs::numeric_cast<std::uint16_t>(name.size()) << name;
     }
 };
 
@@ -273,14 +276,14 @@ public:
     {}
 
     /**
-     * Constructs heartbeat packet from deserializer with predefined header.
+     * Constructs packet from deserializer with predefined header.
      * Header can be read before from the deserializer.
      */
     template <typename Deserializer>
     alive_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> ainfo.id.first >> ainfo.id.second;
+        in >> ainfo.id.h >> ainfo.id.l;
     }
 
 public:
@@ -288,7 +291,40 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << ainfo.id.first << ainfo.id.second;
+        out << ainfo.id.h << ainfo.id.l;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// alive packet
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class unreachable_packet: public header
+{
+public:
+    unreachable_info uinfo;
+
+public:
+    unreachable_packet () noexcept
+        : header(packet_enum::unreach, false, 0)
+    {}
+
+    /**
+     * Constructs packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
+    template <typename Deserializer>
+    unreachable_packet (header const & h, Deserializer & in)
+        : header(h)
+    {
+        in >> uinfo.id.h >> uinfo.id.l;
+    }
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        header::serialize(out);
+        out << uinfo.id.h << uinfo.id.l;
     }
 };
 
@@ -312,19 +348,18 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> rinfo.utctime >> rinfo.initiator_id.first >> rinfo.initiator_id.second;
+        in >> rinfo.utctime >> rinfo.initiator_id.h >> rinfo.initiator_id.l;
 
         if (is_response())
-            in >> rinfo.responder_id.first >> rinfo.responder_id.second;
+            in >> rinfo.responder_id.h >> rinfo.responder_id.l;
 
         std::uint8_t count = 0;
         in >> count;
 
         for (int i = 0; i < static_cast<int>(count); i++) {
-            std::uint64_t id_high = 0;
-            std::uint64_t id_low = 0;
-            in >> id_high >> id_low;
-            rinfo.route.push_back(std::make_pair(id_high, id_low));
+            node_id_rep id {0, 0};
+            in >> id.h >> id.l;
+            rinfo.route.push_back(id);
         }
     }
 
@@ -343,15 +378,15 @@ public:
         if (!is_response())
             rinfo.utctime = static_cast<std::uint64_t>(pfs::utc_time::now().to_millis().count());
 
-        out << rinfo.utctime << rinfo.initiator_id.first << rinfo.initiator_id.second;
+        out << rinfo.utctime << rinfo.initiator_id.h << rinfo.initiator_id.l;
 
         if (is_response())
-            out << rinfo.responder_id.first << rinfo.responder_id.second;
+            out << rinfo.responder_id.h << rinfo.responder_id.l;
 
         out << pfs::numeric_cast<std::uint8_t>(rinfo.route.size());
 
         for (auto const & id: rinfo.route)
-            out << id.first << id.second;
+            out << id.h << id.l;
     }
 };
 
@@ -416,40 +451,28 @@ public:
 class gdata_packet: public header
 {
 public:
-    std::pair<std::uint64_t, std::uint64_t> sender_id;
-    std::pair<std::uint64_t, std::uint64_t> receiver_id;
+    node_id_rep sender_id;
+    node_id_rep receiver_id;
     std::vector<char> bytes;   // Used by deserializer only
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    gdata_packet (std::pair<std::uint64_t, std::uint64_t> sender_id
-        , std::pair<std::uint64_t, std::uint64_t> receiver_id
-        , bool has_checksum) noexcept
+    gdata_packet (node_id_rep const & sender_id, node_id_rep const & receiver_id, bool has_checksum) noexcept
         : header(packet_enum::gdata, has_checksum, 0)
-        , sender_id(std::move(sender_id))
-        , receiver_id(std::move(receiver_id))
-    {}
-
-    template <typename NodeIdTraits>
-    gdata_packet (typename NodeIdTraits::node_id sender_id
-        , typename NodeIdTraits::node_id receiver_id
-        , bool has_checksum) noexcept
-        : gdata_packet(
-              std::make_pair(NodeIdTraits::high(sender_id), NodeIdTraits::low(sender_id))
-            , std::make_pair(NodeIdTraits::high(receiver_id), NodeIdTraits::low(receiver_id))
-            , has_checksum)
+        , sender_id(sender_id)
+        , receiver_id(receiver_id)
     {}
 
     template <typename Deserializer>
     gdata_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> sender_id.first >> sender_id.second;
+        in >> sender_id.h >> sender_id.l;
 
         if (!in.is_good())
             return;
 
-        in >> receiver_id.first >> receiver_id.second;
+        in >> receiver_id.h >> receiver_id.l;
 
         if (!in.is_good())
             return;
@@ -481,7 +504,7 @@ public:
         _h.length = pfs::numeric_cast<decltype(_h.length)>(len);
 
         header::serialize(out);
-        out << sender_id.first << sender_id.second << receiver_id.first << receiver_id.second;
+        out << sender_id.h << sender_id.l << receiver_id.h << receiver_id.l;
         out << std::make_pair(data, len);
     }
 
@@ -499,7 +522,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << sender_id.first << sender_id.second << receiver_id.first << receiver_id.second;
+        out << sender_id.h << sender_id.l << receiver_id.h << receiver_id.l;
         out << std::make_pair(bytes.data(), bytes.size());
     }
 };

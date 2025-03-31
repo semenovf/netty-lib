@@ -13,5 +13,3 @@
 #   define NETTY__NAMESPACE_BEGIN namespace NETTY__NAMESPACE_NAME {
 #   define NETTY__NAMESPACE_END }
 #endif
-
-

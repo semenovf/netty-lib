@@ -25,16 +25,15 @@ namespace meshnet {
 //
 // The algorithm is similar to heartbeat algorithm
 //
-template <typename NodeIdTraits, typename SerializerTraits>
+template <typename SerializerTraits>
 class alive_processor
 {
-    using node_id = typename NodeIdTraits::node_id;
     using serializer_traits = SerializerTraits;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct alive_item
     {
-        node_id id;
+        node_id_rep id;
         time_point_type exp_time;  // expiration timepoint
         time_point_type looping_threshold; // a value within this variable indicates duplication or looping
     };
@@ -47,7 +46,7 @@ class alive_processor
 
 private:
     // Node ID representation
-    std::pair<std::uint64_t, std::uint64_t> _id_pair;
+    node_id_rep _id;
 
     // Expiration timeout
     std::chrono::seconds _exp_timeout {15}; // default is _interval * 3
@@ -60,25 +59,26 @@ private:
     time_point_type _next_notification_time;
 
     // Direct access nodes. No need to control alive by timeout expiration
-    std::unordered_set<node_id> _sibling_nodes;
+    std::unordered_set<node_id_rep> _sibling_nodes;
 
-    std::set<alive_item> _q;
+    // Non-direct access nodes.
+    std::unordered_set<node_id_rep> _alive_nodes;
 
-    std::function<void (node_id)> _on_alive = [] (node_id) {};
-    std::function<void (node_id)> _on_expired = [] (node_id) {};
+    std::set<alive_item> _alive_items;
+
+    std::function<void (node_id_rep const &)> _on_alive = [] (node_id_rep const &) {};
+    std::function<void (node_id_rep const &)> _on_expired = [] (node_id_rep const &) {};
 
 public:
-    alive_processor (node_id id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
+    alive_processor (node_id_rep const & id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
         , std::chrono::seconds interval = std::chrono::seconds{5}
         , std::chrono::milliseconds looping_interval = std::chrono::milliseconds{2500})
-        : _exp_timeout(exp_timeout)
+        : _id(id)
+        , _exp_timeout(exp_timeout)
         , _interval(interval)
         , _looping_interval(looping_interval)
-    {
-        _id_pair.first = NodeIdTraits::high(id);
-        _id_pair.second = NodeIdTraits::low(id);
-        _next_notification_time = std::chrono::steady_clock::now();
-    }
+        , _next_notification_time(std::chrono::steady_clock::now())
+    {}
 
     alive_processor (alive_processor const &) = delete;
     alive_processor (alive_processor &&) = delete;
@@ -88,10 +88,11 @@ public:
     ~alive_processor () = default;
 
 private:
-    void insert (node_id id)
+    void insert (node_id_rep const & id)
     {
         auto now = std::chrono::steady_clock::now();
-        _q.insert(alive_item{id, now + _exp_timeout, now + _looping_interval});
+        _alive_items.insert(alive_item{id, now + _exp_timeout, now + _looping_interval});
+        _alive_nodes.insert(id);
     }
 
 public:
@@ -109,23 +110,45 @@ public:
         return *this;
     }
 
-    void add_sibling (node_id id)
+    void add_sibling (node_id_rep const & id)
     {
         _sibling_nodes.insert(id);
         _on_alive(id);
     }
 
-    void remove_sibling (node_id id)
+    /**
+     * Expires the node @a id.
+     *
+     * @param id Expired node identifier.
+     *
+     * @details Call this method when need to force node expiration, e.g. when node unreachable
+     *          notification received .
+     */
+    void expire (node_id_rep const & id)
     {
-        auto erased_count = _sibling_nodes.erase(id);
-        PFS__TERMINATE(erased_count == 1, "Fix meshnet::alive_processor algorithm");
-        _on_expired(id);
+        auto count = _sibling_nodes.erase(id);
+
+        if (count == 0) {
+            count = _alive_nodes.erase(id);
+
+            if (count > 0) {
+                for (auto pos = _alive_items.begin(); pos != _alive_items.end(); ++pos) {
+                    if (pos->id == id) {
+                        _alive_items.erase(pos);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (count > 0)
+            _on_expired(id);
     }
 
     /**
      * Updates node's alive info if now time point is less than looping_threshold
      */
-    bool update_if (node_id id)
+    bool update_if (node_id_rep const & id)
     {
         auto pos = _sibling_nodes.find(id);
 
@@ -135,13 +158,16 @@ public:
 
         auto now = std::chrono::steady_clock::now();
 
-        for (auto pos = _q.begin(); pos != _q.end(); ++pos) {
+        for (auto pos = _alive_items.begin(); pos != _alive_items.end(); ++pos) {
             if (pos->id == id) {
                 // Looping or duplication detected
                 if (now < pos->looping_threshold)
                     return false;
 
-                _q.erase(pos);
+                // Erase only from _alive_items to insert new value in insert() method below.
+                // No need to erase from _alive_nodes here.
+                _alive_items.erase(pos);
+
                 insert(id);
                 return true;
             }
@@ -165,30 +191,27 @@ public:
         _next_notification_time = std::chrono::steady_clock::now() + _interval;
     }
 
-    bool is_alive (node_id id) const
+    bool is_alive (node_id_rep const & id) const
     {
         if (_sibling_nodes.find(id) != _sibling_nodes.end())
             return true;
 
-        auto pos = _q.find(id);
+        if (_alive_nodes.find(id) != _alive_nodes.end())
+            return true;
 
-        if (pos == _q.end())
-            return false;
-
-        auto now = std::chrono::steady_clock::now();
-        return pos->t > now;
+        return false;
     }
 
-    std::vector<char> serialize ()
+    std::vector<char> serialize_alive ()
     {
         auto out = serializer_traits::make_serializer();
         alive_packet pkt;
-        pkt.ainfo.id = _id_pair;
+        pkt.ainfo.id = _id;
         pkt.serialize(out);
         return out.take();
     }
 
-    std::vector<char> serialize (alive_info const & ainfo)
+    std::vector<char> serialize_alive (alive_info const & ainfo)
     {
         auto out = serializer_traits::make_serializer();
         alive_packet pkt;
@@ -197,15 +220,34 @@ public:
         return out.take();
     }
 
+    std::vector<char> serialize_unreachable (node_id_rep const & unreachable_id)
+    {
+        auto out = serializer_traits::make_serializer();
+        unreachable_packet pkt;
+        pkt.uinfo.id = unreachable_id;
+        pkt.serialize(out);
+        return out.take();
+    }
+
+    std::vector<char> serialize_unreachable (unreachable_info const & uinfo)
+    {
+        auto out = serializer_traits::make_serializer();
+        unreachable_packet pkt;
+        pkt.uinfo = uinfo;
+        pkt.serialize(out);
+        return out.take();
+    }
+
     void check_expiration ()
     {
-        if (!_q.empty()) {
+        if (!_alive_items.empty()) {
             auto now = std::chrono::steady_clock::now();
-            auto pos = _q.begin();
+            auto pos = _alive_items.begin();
 
-            while (!_q.empty() && pos->exp_time <= now) {
+            while (!_alive_items.empty() && pos->exp_time <= now) {
+                _alive_nodes.erase(pos->id);
                 _on_expired(pos->id);
-                pos = _q.erase(pos);
+                pos = _alive_items.erase(pos);
             }
         }
     }

@@ -56,10 +56,10 @@ private:
     std::function<void (socket_id)> _on_expired = [] (socket_id) {};
 
 public:
-    simple_heartbeat (Node & node
+    simple_heartbeat (Node * node
         , std::chrono::seconds exp_timeout = std::chrono::seconds{15}
         , std::chrono::seconds interval = std::chrono::seconds{5})
-        : _node(& node)
+        : _node(node)
         , _exp_timeout(exp_timeout)
         , _interval(interval)
     {}

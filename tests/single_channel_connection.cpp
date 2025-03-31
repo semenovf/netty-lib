@@ -110,7 +110,7 @@ void worker ()
     writer_pool_t writer_pool;
 
     listener_pool.on_failure([self_port] (netty::error const & err) {
-        LOGE(TAG, "{:04}listener pool failure: {}", self_port, err.what());
+        LOGE(TAG, "{:04}: listener pool failure: {}", self_port, err.what());
     }).on_accepted([& peer_sockets, & reader_pool, self_port] (socket_t && sock) {
         auto sock_id = sock.id();
         LOGD(TAG, "{:04}: socket accepted: id={}: {}", self_port, sock_id, to_string(sock.saddr()));

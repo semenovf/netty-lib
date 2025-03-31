@@ -19,17 +19,16 @@ template <typename Node>
 class without_handshake
 {
     using socket_id = typename Node::socket_id;
-    using serializer_traits = typename Node::serializer_traits;
+    using channel_collection_type = typename Node::channel_collection_type;
 
 public:
-    without_handshake (Node &) {}
+    without_handshake (Node *, channel_collection_type *) {}
 
 public:
     template <typename F> without_handshake & on_expired (F &&) { return *this; }
-    template <typename F> without_handshake & on_failure (F &&) { return *this; }
     template <typename F> without_handshake & on_completed (F &&)  { return *this; }
 
-    void start (socket_id) {}
+    void start (socket_id, bool) {}
     void cancel (socket_id) {}
     unsigned int step () { return 0; }
 };

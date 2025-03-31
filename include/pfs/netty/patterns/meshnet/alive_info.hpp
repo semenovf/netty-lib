@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "node_id_rep.hpp"
 #include <cstdint>
 #include <utility>
 
@@ -18,7 +19,12 @@ namespace meshnet {
 
 struct alive_info
 {
-    std::pair<std::uint64_t, std::uint64_t> id;
+    node_id_rep id;
+};
+
+struct unreachable_info
+{
+    node_id_rep id;
 };
 
 }} // namespace patterns::meshnet

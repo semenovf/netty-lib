@@ -4,25 +4,19 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.02.04 Initial version.
+//      2025.03.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
-#include <string>
+#include "../../namespace.hpp"
+#include <pfs/universal_id_rep.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
+namespace meshnet {
 
-class without_logger
-{
-public:
-    void log_debug (std::string const & msg) {}
-    void log_info (std::string const & msg)  {}
-    void log_warn (std::string const & msg)  {}
-    void log_error (std::string const & msg) {}
-};
+using node_id_rep = pfs::universal_id_rep;
 
-} // namespace patterns
+}} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END

@@ -4,12 +4,12 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.25 Initial version.
+//      2025.03.30 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
 #include "handshake_result.hpp"
 #include "protocol.hpp"
+#include <pfs/assert.hpp>
 #include <chrono>
 #include <functional>
 #include <map>
@@ -21,40 +21,40 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <template <typename> class Derived, typename Node>
+template <typename Node>
 class basic_handshake
 {
 protected:
-    using node_id = typename Node::node_id;
+    using node_id_rep = typename Node::node_id_rep;
     using socket_id = typename Node::socket_id;
-    using node_id_traits = typename Node::node_id_traits;
     using serializer_traits = typename Node::serializer_traits;
     using time_point_type = std::chrono::steady_clock::time_point;
+    using channel_collection_type = typename Node::channel_collection_type;
 
 protected:
     Node * _node {nullptr};
+    channel_collection_type * _channels {nullptr};
     std::map<socket_id, time_point_type> _cache;
-    std::chrono::seconds _timeout {10};
+    std::chrono::seconds _timeout {3};
 
     mutable std::function<void(socket_id)> _on_expired;
-    mutable std::function<void(socket_id, std::string const &)> _on_failure;
-    mutable std::function<void(node_id, socket_id, bool /*is_gateway*/, handshake_result_enum)> _on_completed;
+    mutable std::function<void(node_id_rep const &, socket_id, std::string const & /*name*/
+        , bool /*is_gateway*/, handshake_result_enum res)> _on_completed;
 
-public:
-    basic_handshake (Node & node)
-        : _node(& node)
+protected:
+    basic_handshake (Node * node, channel_collection_type * channels)
+        : _node(node)
+        , _channels(channels)
     {}
 
 protected:
-    void enqueue (socket_id sid, packet_way_enum way)
+    void enqueue (socket_id sid, packet_way_enum way, bool behind_nat)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet pkt {way
-            , (_node->behind_nat() ? behind_nat_enum::yes : behind_nat_enum::no)
-            , (_node->is_gateway() ? gateway_enum::yes : gateway_enum::no)
-        };
+        handshake_packet pkt {way, _node->is_gateway(), behind_nat};
 
-        pkt.id = std::make_pair(node_id_traits::high(_node->id()), node_id_traits::low(_node->id()));
+        pkt.id_rep = _node->id_rep();
+        pkt.name = _node->name();
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
@@ -76,6 +76,7 @@ protected:
                     auto sid = pos->first;
                     pos = _cache.erase(pos);
                     result++;
+                    _channels->close_channel(sid);
                     _on_expired(sid);
                 } else {
                     ++pos;
@@ -88,57 +89,28 @@ protected:
 
 public:
     template <typename F>
-    Derived<Node> & on_expired (F && f)
+    basic_handshake & on_expired (F && f)
     {
         _on_expired = std::forward<F>(f);
-        return *static_cast<Derived<Node> *>(this);
+        return *this;
     }
 
     template <typename F>
-    Derived<Node> & on_failure (F && f)
-    {
-        _on_failure = std::forward<F>(f);
-        return *static_cast<Derived<Node> *>(this);
-    }
-
-    template <typename F>
-    Derived<Node> & on_completed (F && f)
+    basic_handshake & on_completed (F && f)
     {
         _on_completed = std::forward<F>(f);
-        return *static_cast<Derived<Node> *>(this);
+        return *this;
     }
 
-    void start (socket_id sid)
+    void start (socket_id sid, bool behind_nat)
     {
-        enqueue(sid, packet_way_enum::request);
+        enqueue(sid, packet_way_enum::request, behind_nat);
     }
 
     void cancel (socket_id sid)
     {
         auto erased = _cache.erase(sid) > 0;
         (void)erased;
-    }
-
-    void process (socket_id sid, handshake_packet const & pkt)
-    {
-        auto id = node_id_traits::make(pkt.id.first, pkt.id.second);
-
-        // If item not found, it means it is already expired
-        auto pos = _cache.find(sid);
-
-        if (pos != _cache.end()) { // Received response
-            cancel(sid);
-            static_cast<Derived<Node> *>(this)->handshake_ready(sid, id
-                , pkt.is_response(), pkt.behind_nat(), pkt.is_gateway());
-        } else {
-            // Received request from handshake initiator
-            if (!pkt.is_response()) {
-                enqueue(sid, packet_way_enum::response);
-                static_cast<Derived<Node> *>(this)->handshake_ready(sid, id
-                    , pkt.is_response(), pkt.behind_nat(), pkt.is_gateway());
-            }
-            // } else { the socket is already expired }
-        }
     }
 
     unsigned int step ()
