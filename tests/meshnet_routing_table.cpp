@@ -37,9 +37,28 @@
 //                     D0   D1
 //
 
-static constexpr char const * TAG = "meshnet-test";
-
 using namespace netty::patterns;
+
+// Black        0;30     Dark Gray     1;30
+// Brown/Orange 0;33     Yellow        1;33
+// Blue         0;34     Light Blue    1;34
+// Purple       0;35     Light Purple  1;35
+
+#define COLOR(x) "\033[" #x "m"
+#define LGRAY     COLOR(0;37)
+#define GREEN     COLOR(0;32)
+#define LGREEN    COLOR(1;32)
+#define RED       COLOR(0;31)
+#define LRED      COLOR(1;31)
+#define CYAN      COLOR(0;36)
+#define LCYAN     COLOR(1;36)
+#define WHITE     COLOR(1;37)
+#define END_COLOR COLOR(0)
+
+static constexpr char const * TAG = CYAN "meshnet-test" END_COLOR;
+
+static std::atomic_int channels_established_counter {0};
+static std::atomic_int channels_destroyed_counter {0};
 
 namespace common {
     struct item
@@ -58,6 +77,17 @@ namespace common {
 
         for (auto & x: nodes)
             x.second.node_pool->interrupt();
+    }
+
+    inline void sleep (int timeout, std::string const & description = std::string{})
+    {
+        if (description.empty()) {
+            LOGD(TAG, "Waiting for {} seconds", timeout);
+        } else {
+            LOGD(TAG, "{}: waiting for {} seconds", description, timeout);
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds{timeout});
     }
 
     std::shared_ptr<node_pool_t> get_node_pool (std::string const & name)
@@ -126,6 +156,14 @@ namespace common {
         }
     }
 
+    void interrupt_all ()
+    {
+        for (auto & x: nodes) {
+            auto ptr = x.second.node_pool;
+            ptr->interrupt();
+        }
+    }
+
     void join_all ()
     {
         for (auto & x: threads)
@@ -141,29 +179,35 @@ static void create_node_pool (node_pool_t::node_id id, std::string name, std::ui
     opts.is_gateway = is_gateway;
     netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, port};
 
-    auto callbacks = std::make_shared<node_pool_t::callback_suite>();
+    node_pool_t::callback_suite callbacks;
 
-    callbacks->on_channel_established = [name] (node_t::node_id_rep const & id_rep, bool is_gateway) {
+    callbacks.on_error = [] (std::string const & msg) {
+        LOGE(TAG, "{}", msg);
+    };
+
+    callbacks.on_channel_established = [name] (node_t::node_id_rep const & id_rep, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
 
         LOGD(TAG, "{}: Channel established with {}: {}", name, node_type, common::node_name(id_rep));
+        ++channels_established_counter;
     };
 
-    callbacks->on_channel_destroyed = [name] (node_t::node_id_rep const & id_rep) {
+    callbacks.on_channel_destroyed = [name] (node_t::node_id_rep const & id_rep) {
         LOGD(TAG, "{}: Channel destroyed with {}", name, common::node_name(id_rep));
+        ++channels_destroyed_counter;
     };
 
     // Notify when node alive status changed
-    callbacks->on_node_alive = [name] (node_t::node_id_rep const & id_rep) {
+    callbacks.on_node_alive = [name] (node_t::node_id_rep const & id_rep) {
         LOGD(TAG, "{}: Node alive: {}", name, common::node_name(id_rep));
     };
 
     // Notify when node alive status changed
-    callbacks->on_node_expired = [name] (node_t::node_id_rep const & id_rep) {
+    callbacks.on_node_expired = [name] (node_t::node_id_rep const & id_rep) {
         LOGD(TAG, "{}: Node expired: {}", name, common::node_name(id_rep));
     };
 
-    auto node_pool = std::make_shared<node_pool_t>(std::move(opts), callbacks);
+    auto node_pool = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));
     auto node_index = node_pool->add_node<node_t>({listener_saddr});
 
     node_pool->listen(node_index, 10);
@@ -199,5 +243,11 @@ TEST_CASE("meshnet routing table") {
     signal(SIGINT, common::sigterm_handler);
 
     common::run_all();
+
+    common::sleep(2, "Check channels established");
+    CHECK_EQ(channels_established_counter.load(), 8);
+
+    // common::interrupt_all();
+
     common::join_all();
 }

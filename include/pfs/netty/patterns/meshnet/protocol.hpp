@@ -45,31 +45,31 @@ enum class packet_way_enum
     , response
 };
 
-enum class packet_category_enum
-{
-      notification
-    , request
-    , response
-    , reply = response
-};
+// enum class packet_category_enum
+// {
+//       notification
+//     , request
+//     , response
+//     , reply = response
+// };
 
 // Byte 0:
-// ---------------------------
+// +-------------------------+
 // | 7  6  5  4 | 3  2  1  0 |
-// ---------------------------
+// +-------------------------+
 // |    (V)     |     (P)    |
-// ---------------------------
+// +------------+------------+
 // (V) - Packet version (0 - first, 1 - second, etc).
 // (P) - Packet type (see packet_enum).
 //
 // Byte 1:
-// ------------------------------
-// | 7  6  5  4 | 3 | 2 | 1 | 0 |
-// ------------------------------
-// | (reserved) | F2| F1| F0| C |
-// ------------------------------
+// +-------------------------------+
+// | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+// +-------------------------------+
+// | F6| F5| F4| F3| F2| F1| F0| C |
+// +-------------------------------+
 // (C) - Checksum bit (0 - no checksum, 1 - has checksum).
-// (F0), (F1), (F2) - free/reserved bits (can be used by some packets)
+// (F0)-(F6) - free/reserved bits (can be used by some packets)
 
 class header
 {
@@ -135,6 +135,26 @@ public:
         return static_cast<bool>(_h.b1 & 0x08);
     }
 
+    inline bool is_f3 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x10);
+    }
+
+    inline bool is_f4 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x20);
+    }
+
+    inline bool is_f5 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x40);
+    }
+
+    inline bool is_f6 () const noexcept
+    {
+        return static_cast<bool>(_h.b1 & 0x80);
+    }
+
     inline void enable_f0 ()
     {
         _h.b1 |= 0x02;
@@ -148,6 +168,26 @@ public:
     inline void enable_f2 ()
     {
         _h.b1 |= 0x08;
+    }
+
+    inline void enable_f3 ()
+    {
+        _h.b1 |= 0x10;
+    }
+
+    inline void enable_f4 ()
+    {
+        _h.b1 |= 0x20;
+    }
+
+    inline void enable_f5 ()
+    {
+        _h.b1 |= 0x40;
+    }
+
+    inline void enable_f6 ()
+    {
+        _h.b1 |= 0x80;
     }
 
 protected:
@@ -178,17 +218,35 @@ public:
     std::string name;
 
 public:
-    handshake_packet (packet_way_enum way, bool is_gateway, bool behind_nat) noexcept
+    /**
+     * Construct handshake packet for request.
+     */
+    handshake_packet (bool is_gateway, bool behind_nat) noexcept
         : header(packet_enum::handshake, false, 0)
     {
-        if (way == packet_way_enum::response)
-            enable_f0();
+        if (is_gateway)
+            enable_f1();
+
+        if (behind_nat)
+            enable_f2();
+    }
+
+    /**
+     * Construct handshake packet for response.
+     */
+    handshake_packet (bool is_gateway, bool behind_nat, bool accepted) noexcept
+        : header(packet_enum::handshake, false, 0)
+    {
+        enable_f0();
 
         if (is_gateway)
             enable_f1();
 
         if (behind_nat)
             enable_f2();
+
+        if (accepted)
+            enable_f3();
     }
 
     /**
@@ -217,6 +275,11 @@ public:
     bool behind_nat () const noexcept
     {
         return is_f2();
+    }
+
+    bool accepted () const noexcept
+    {
+        return is_f3();
     }
 
     template <typename Serializer>

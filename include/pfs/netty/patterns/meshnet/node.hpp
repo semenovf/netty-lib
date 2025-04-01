@@ -145,12 +145,7 @@ public:
             _name = std::move(opts.name);
 
         _channels.on_close_socket([this] (socket_id sid) {
-            _handshake_processor.cancel(sid);
-            _heartbeat_processor.remove(sid);
-            _input_processor.remove(sid);
-            _reader_pool.remove_later(sid);
-            _writer_pool.remove_later(sid);
-            _socket_pool.remove_later(sid);
+            close_socket(sid);
         });
 
         _listener_pool.on_failure([this] (netty::error const & err) {
@@ -189,7 +184,9 @@ public:
             _channels.close_channel(sid);
         }).on_disconnected([this] (socket_id sid) {
             NETTY__TRACE("[node]", "{}: reader socket disconnected: #{}", _name, sid);
+
             // schedule_reconnection(sid); // FIXME When need reconnection?
+            _channels.close_channel(sid);
         }).on_data_ready([this] (socket_id sid, std::vector<char> && data) {
             _input_processor.process_input(sid, std::move(data));
         }).on_locate_socket([this] (socket_id sid) {
@@ -226,13 +223,13 @@ public:
                     break;
                 }
 
-                case handshake_result_enum::rejected:
-                    _callbacks->on_error(tr::f_("handshake rejected for: {} on socket #{}:"
-                        " channel already established", name, sid));
+                case handshake_result_enum::duplicated:
+                    _callbacks->on_error(tr::f_("node ID duplication with: {}", name));
+                    close_socket(sid);
                     break;
 
-                case handshake_result_enum::duplicated:
-                    _callbacks->on_error(tr::f_("node ID duplication with: {} on socket #{}", name, sid));
+                case handshake_result_enum::reject:
+                    close_socket(sid);
                     break;
 
                 default:
@@ -255,7 +252,10 @@ public:
     node & operator = (node const &) = delete;
     node & operator = (node &&) = delete;
 
-    ~node () {}
+    ~node ()
+    {
+        clear_channels();
+    }
 
 public:
     node_id id () const noexcept
@@ -422,6 +422,14 @@ public:
             _writer_pool.ensure(*sid_ptr, frame_size);
     }
 
+    /**
+     * Close all channels and clear channel collection.
+     */
+    void clear_channels ()
+    {
+        _channels.clear();
+    }
+
 public: // static
     static constexpr int priority_count () noexcept
     {
@@ -429,6 +437,16 @@ public: // static
     }
 
 private:
+    void close_socket (socket_id sid)
+    {
+        _handshake_processor.cancel(sid);
+        _heartbeat_processor.remove(sid);
+        _input_processor.remove(sid);
+        _reader_pool.remove_later(sid);
+        _writer_pool.remove_later(sid);
+        _socket_pool.remove_later(sid);
+    }
+
     void schedule_reconnection (socket4_addr saddr)
     {
         if (!reconnection_policy::supported())
@@ -628,6 +646,11 @@ public: // node_interface
         unsigned int step () override
         {
             return Node::step();
+        }
+
+        void clear_channels () override
+        {
+            Node::clear_channels();
         }
 
         void enqueue_packet (node_id_rep const & id_rep, int priority, std::vector<char> && data) override

@@ -10,8 +10,7 @@
 #include "../../namespace.hpp"
 #include "unordered_bimap.hpp"
 #include <functional>
-
-#include "../../trace.hpp"
+#include <set>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -86,13 +85,11 @@ public:
         socket_id const * writer_sid_ptr = locate_writer(id_rep);
 
         if (reader_sid_ptr != nullptr) {
-            NETTY__TRACE("[channel]", "{}: CLOSE: reader sid={}", *reader_sid_ptr)
             _on_close_socket(*reader_sid_ptr);
         }
 
         if (writer_sid_ptr != nullptr) {
             if (!(reader_sid_ptr != nullptr && *writer_sid_ptr == *reader_sid_ptr)) {
-                NETTY__TRACE("[channel]", "{}: CLOSE: writer sid={}", *writer_sid_ptr)
                 _on_close_socket(*writer_sid_ptr);
             }
         }
@@ -100,11 +97,6 @@ public:
 
     void close_channel (socket_id sid)
     {
-        NETTY__TRACE("[channel]", "CLOSE: sid={}", sid)
-
-        // Close socket unconditionally.
-        _on_close_socket(sid);
-
         node_id_rep const * id_rep_ptr = locate_reader(sid);
 
         if (id_rep_ptr == nullptr)
@@ -115,6 +107,30 @@ public:
             return;
 
         close_channel(*id_rep_ptr);
+    }
+
+    /**
+     * Close all channels and clear collection
+     */
+    void clear ()
+    {
+        // Collect all node identifiers
+        std::set<node_id_rep> tmp;
+
+        if (!_readers.empty())
+            _readers.for_each([& tmp] (node_id_rep const & id_rep, socket_id) {tmp.insert(id_rep);});
+
+        if (!_writers.empty())
+            _writers.for_each([& tmp] (node_id_rep const & id_rep, socket_id) {tmp.insert(id_rep);});
+
+        if (!tmp.empty()) {
+            // Close all channels
+            for (auto const & id_rep: tmp)
+                close_channel(id_rep);
+
+            _readers.clear();
+            _writers.clear();
+        }
     }
 };
 

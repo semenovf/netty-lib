@@ -79,7 +79,8 @@ private:
     }
 
 public:
-    socket_pool () {}
+    socket_pool () = default;
+    ~socket_pool () = default;
 
 public:
     void add_connected (socket_type && sock)
@@ -92,16 +93,16 @@ public:
         add(std::move(sock), kind_enum::accepted);
     }
 
-    void remove_later (socket_id id)
+    void remove_later (socket_id sid)
     {
-        _removable.push_back(id);
+        _removable.push_back(sid);
     }
 
     void apply_remove ()
     {
-        if (!_removable.empty())  {
-            for (auto const & id: _removable) {
-                auto pos = _mapping.find(id);
+        if (!_removable.empty()) {
+            for (auto const & sid: _removable) {
+                auto pos = _mapping.find(sid);
 
                 if (pos != _mapping.end()) {
                     auto index = pos->second;

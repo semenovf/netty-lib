@@ -72,18 +72,18 @@ private:
 
     alive_processor_type _aproc;
 
-    std::shared_ptr<callback_suite> _callbacks;
+    callback_suite _callbacks;
 
     std::shared_ptr<node_callbacks> _node_callbacks;
 
     std::atomic_bool _interrupted {false};
 
 public:
-    node_pool (options && opts, std::shared_ptr<callback_suite> callbacks)
+    node_pool (options && opts, callback_suite && callbacks)
         : _id_rep(node_id_traits::cast(opts.id))
         , _is_gateway(opts.is_gateway)
         , _aproc(node_id_traits::cast(opts.id))
-        , _callbacks(callbacks)
+        , _callbacks(std::move(callbacks))
     {
         if (opts.name.empty())
             _name = node_id_traits::to_string(opts.id);
@@ -93,7 +93,7 @@ public:
         _node_callbacks = std::make_shared<node_callbacks>();
 
         _node_callbacks->on_error = [this] (std::string const & msg) {
-            _callbacks->on_error(msg);
+            _callbacks.on_error(msg);
         };
 
         _node_callbacks->on_channel_established = [this] (node_id_rep const & id_rep, node_index_t index, bool is_gateway) {
@@ -111,7 +111,7 @@ public:
             // Add sibling node as alive
             _aproc.add_sibling(id_rep);
 
-            _callbacks->on_channel_established(id_rep, is_gateway);
+            _callbacks.on_channel_established(id_rep, is_gateway);
         };
 
         _node_callbacks->on_channel_destroyed = [this] (node_id_rep const & id_rep, node_index_t index) {
@@ -125,11 +125,11 @@ public:
 
             _aproc.expire(id_rep);
 
-            _callbacks->on_channel_destroyed(id_rep);
+            _callbacks.on_channel_destroyed(id_rep);
         };
 
         _node_callbacks->on_bytes_written = [this] (node_id_rep const & id_rep, std::uint64_t n) {
-            _callbacks->on_bytes_written(id_rep, n);
+            _callbacks.on_bytes_written(id_rep, n);
         };
 
         _node_callbacks->on_alive_received = [this] (node_id_rep const & id_rep, node_index_t index, alive_info const & ainfo) {
@@ -145,14 +145,14 @@ public:
         };
 
         _node_callbacks->on_domestic_message_received = [this] (node_id_rep const & id_rep, int priority, std::vector<char> && bytes) {
-            _callbacks->on_message_received(id_rep, priority, std::move(bytes));
+            _callbacks.on_message_received(id_rep, priority, std::move(bytes));
         };
 
         _node_callbacks->on_global_message_received = [this] (node_id_rep const & /*id_rep*/, int priority
                 , node_id_rep const & sender_id, node_id_rep const & receiver_id, std::vector<char> && bytes) {
 
             PFS__TERMINATE(_id_rep == receiver_id, "Fix meshnet::node_pool algorithm");
-            _callbacks->on_message_received(sender_id, priority, std::move(bytes));
+            _callbacks.on_message_received(sender_id, priority, std::move(bytes));
         };
 
         _node_callbacks->forward_global_message = [this] (int priority
@@ -163,11 +163,11 @@ public:
         };
 
         _aproc.on_alive([this] (node_id_rep const & id_rep) {
-            _callbacks->on_node_alive(id_rep);
+            _callbacks.on_node_alive(id_rep);
         });
 
         _aproc.on_expired([this] (node_id_rep const & id_rep) {
-            _callbacks->on_node_expired(id_rep);
+            _callbacks.on_node_expired(id_rep);
         });
     }
 
@@ -176,7 +176,10 @@ public:
     node_pool & operator = (node_pool const &) = delete;
     node_pool & operator = (node_pool &&) = delete;
 
-    ~node_pool () = default;
+    ~node_pool ()
+    {
+        clear_all_channels();
+    }
 
 private:
     node_interface_type * locate_node (node_id_rep const & id_rep)
@@ -219,7 +222,7 @@ private:
     node_interface_type * locate_node (node_index_t index)
     {
         if (index < 1 && index > _nodes.size()) {
-            _callbacks->on_error(tr::f_("node index is out of bounds: {}", index));
+            _callbacks.on_error(tr::f_("node index is out of bounds: {}", index));
             return nullptr;
         }
 
@@ -231,7 +234,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            _callbacks->on_error(tr::f_("node not found to send packet: {}", _name));
+            _callbacks.on_error(tr::f_("node not found to send packet: {}", _name));
             return false;
         }
 
@@ -244,7 +247,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            _callbacks->on_error(tr::f_("node not found to send packet: {}", _name));
+            _callbacks.on_error(tr::f_("node not found to send packet: {}", _name));
             return false;
         }
 
@@ -441,6 +444,11 @@ public:
         return node_id_traits::cast(_id_rep);
     }
 
+    std::string name () const noexcept
+    {
+        return _name;
+    }
+
     bool is_gateway () const noexcept
     {
         return _is_gateway;
@@ -538,39 +546,43 @@ public:
     }
 
     /**
-     * Equeues message for delivery to specified node ID @a id.
+     * Equeues message for delivery to specified node ID @a id_rep.
      *
-     * @param id Receiver ID.
+     * @param id_rep Receiver ID.
      * @param priority Message priority.
      * @param force_checksum Calculate checksum before sending.
      * @param data Message content.
      * @param len Length of the message content.
      *
-     * @return @c true if message route found for @a id.
+     * @return @c true if message route found for @a id_rep.
      */
-    bool enqueue (node_id_rep const & id, int priority, bool force_checksum, char const * data, std::size_t len)
+    bool enqueue (node_id_rep const & id_rep, int priority, bool force_checksum, char const * data
+        , std::size_t len)
     {
-        auto ptr = locate_writer(id);
+        auto ptr = locate_writer(id_rep);
 
         if (ptr == nullptr) {
-            _callbacks->on_error(tr::f_("node not found to send message: {}", NodeIdTraits::stringify(id)));
+            _callbacks.on_error(tr::f_("node not found to send message: {}"
+                , node_id_traits::to_string(id_rep)));
             return false;
         }
 
-        ptr->enqueue(id, priority, force_checksum, data, len);
+        ptr->enqueue(id_rep, priority, force_checksum, data, len);
         return true;
     }
 
-    bool enqueue (node_id_rep const & id, int priority, bool force_checksum, std::vector<char> && data)
+    bool enqueue (node_id_rep const & id_rep, int priority, bool force_checksum
+        , std::vector<char> && data)
     {
-        auto ptr = locate_writer(id);
+        auto ptr = locate_writer(id_rep);
 
         if (ptr == nullptr) {
-            _callbacks->on_error(tr::f_("node not found to send message: {}", NodeIdTraits::stringify(id)));
+            _callbacks.on_error(tr::f_("node not found to send message: {}"
+                , node_id_traits::to_string(id_rep)));
             return false;
         }
 
-        ptr->enqueue(id, priority, force_checksum, std::move(data));
+        ptr->enqueue(id_rep, priority, force_checksum, std::move(data));
         return true;
     }
 
@@ -621,12 +633,25 @@ public:
 
     void run (std::chrono::milliseconds loop_interval = std::chrono::milliseconds{10})
     {
+        _interrupted.store(false);
+
         while (!_interrupted) {
             pfs::countdown_timer<std::milli> countdown_timer {loop_interval};
             auto n = step();
 
             if (n == 0)
                 std::this_thread::sleep_for(countdown_timer.remain());
+        }
+    }
+
+    /**
+     * Close all channels for all nodes
+     */
+    void clear_all_channels ()
+    {
+        if (!_nodes.empty()) {
+            for (auto & x: _nodes)
+                x->clear_channels();
         }
     }
 };

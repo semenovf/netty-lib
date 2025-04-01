@@ -24,13 +24,16 @@ namespace meshnet {
 
 struct node_callbacks
 {
-    std::function<void (std::string const &)> on_error = [] (std::string const & msg) { LOGE("[node]", "{}", msg); };
+    std::function<void (std::string const &)> on_error
+        = [] (std::string const & msg) { LOGE("[node]", "{}", msg); };
 
     // Notify when connection established with the remote node
-    std::function<void (node_id_rep const &, node_index_t, bool)> on_channel_established = [] (node_id_rep const &, node_index_t, bool /*is_gateway*/) {};
+    std::function<void (node_id_rep const &, node_index_t, bool)> on_channel_established
+        = [] (node_id_rep const &, node_index_t, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
-    std::function<void (node_id_rep const &, node_index_t)> on_channel_destroyed = [] (node_id_rep const &, node_index_t) {};
+    std::function<void (node_id_rep const &, node_index_t)> on_channel_destroyed
+        = [] (node_id_rep const &, node_index_t) {};
 
     // Notify when data actually sent (written into the socket)
     std::function<void (node_id_rep const &, std::uint64_t)> on_bytes_written
@@ -72,10 +75,12 @@ struct node_callbacks
 
 struct node_pool_callbacks
 {
-    std::function<void (std::string const &)> on_error = [] (std::string const & msg) { LOGE("[node_pool]", "{}", msg); };
+    std::function<void (std::string const &)> on_error
+        = [] (std::string const & msg) { LOGE("[node_pool]", "{}", msg); };
 
     // Notify when connection established with the remote node
-    std::function<void (node_id_rep const &, bool)> on_channel_established = [] (node_id_rep const &, bool /*is_gateway*/) {};
+    std::function<void (node_id_rep const &, bool)> on_channel_established
+        = [] (node_id_rep const &, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     std::function<void (node_id_rep const &)> on_channel_destroyed = [] (node_id_rep const &) {};

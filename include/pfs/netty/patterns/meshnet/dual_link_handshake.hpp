@@ -31,11 +31,6 @@ public:
 public:
     void process (socket_id sid, handshake_packet const & pkt)
     {
-        if (this->_channels->channel_complete_for(pkt.id_rep)) {
-            this->_channels->close_channel(sid);
-            this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::rejected);
-        }
-
         if (pkt.is_response()) {
             auto pos = this->_cache.find(sid);
 

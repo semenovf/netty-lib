@@ -30,7 +30,8 @@ public:
     {}
 
 private:
-    void complete_channel (node_id_rep const & id_rep, socket_id sid, std::string const & name, bool is_gateway)
+    void complete_channel_success (node_id_rep const & id_rep, socket_id sid
+        , std::string const & name, bool is_gateway)
     {
         auto success = this->_channels->insert_reader(id_rep, sid);
         success = success && this->_channels->insert_writer(id_rep, sid);
@@ -50,19 +51,19 @@ public:
                 // Finalize handshake (erase socket from cache)
                 this->cancel(sid);
 
-                // Check Node ID duplication. Requester must be an initiator of the socket closing.
                 if (this->_node->id_rep() == pkt.id_rep) {
-                    this->_channels->close_channel(sid);
-                    this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::duplicated);
+                    // Check Node ID duplication. Requester must be an initiator of the socket closing.
+
+                    this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
+                        , handshake_result_enum::duplicated);
                 } else {
                     // Response received by connected socket (writer)
 
-                    if (pkt.behind_nat()) {
-                        complete_channel(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
+                    if (pkt.accepted()) {
+                        complete_channel_success(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
                     } else {
-                        if (this->_node->id_rep() < pkt.id_rep) {
-                            complete_channel(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
-                        }
+                        this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
+                            , handshake_result_enum::reject);
                     }
                 }
             } else {
@@ -72,13 +73,16 @@ public:
             }
         } else { // Request received
             // Send response
-            this->enqueue(sid, packet_way_enum::response, pkt.behind_nat());
 
             if (pkt.behind_nat()) {
-                complete_channel(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
+                this->enqueue_response(sid, pkt.behind_nat(), true);
+                complete_channel_success(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
             } else {
                 if (this->_node->id_rep() > pkt.id_rep) {
-                    complete_channel(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
+                    this->enqueue_response(sid, pkt.behind_nat(), true);
+                    complete_channel_success(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
+                } else {
+                    this->enqueue_response(sid, pkt.behind_nat(), false);
                 }
             }
         }

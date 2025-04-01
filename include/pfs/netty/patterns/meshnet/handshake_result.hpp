@@ -16,9 +16,9 @@ namespace meshnet {
 
 enum class handshake_result_enum
 {
-      success = 0    // Handshake completed successfully
-    , rejected = 1   // Channel already estabslished
-    , duplicated = 2 // Attempt to establish a connection with a node that has the same identifier
+      success = 0     // Handshake completed successfully
+    , reject = 1      // Used by single link handshakes to signal that socket can be closed
+    , duplicated = 2  // Attempt to establish a connection with a node that has the same identifier
 };
 
 }} // namespace patterns::meshnet

@@ -46,6 +46,7 @@ public:
     virtual void enqueue (node_id_rep const & id, int priority, bool force_checksum, std::vector<char> && data) = 0;
     virtual bool has_writer (node_id_rep const & id) const = 0;
     virtual unsigned int step () = 0;
+    virtual void clear_channels () = 0;
 
     // For internal use only
     virtual void enqueue_packet (node_id_rep const & id, int priority, std::vector<char> && data) = 0;

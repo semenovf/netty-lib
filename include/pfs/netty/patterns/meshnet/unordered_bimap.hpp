@@ -24,6 +24,17 @@ class unordered_bimap
     std::unordered_map<T2, T1> _m2;
 
 public:
+    bool empty () const
+    {
+        return _m1.empty();
+    }
+
+    void clear ()
+    {
+        _m1.clear();
+        _m2.clear();
+    }
+
     bool insert (T1 const & key1, T2 const & key2)
     {
         auto res1 = _m1.insert({key1, key2});
@@ -73,6 +84,13 @@ public:
             _m1.erase(*ptr);
             _m2.erase(key2);
         }
+    }
+
+    template <typename F>
+    void for_each (F && f) const
+    {
+        for (auto const & x: _m1)
+            f(x.first, x.second);
     }
 };
 

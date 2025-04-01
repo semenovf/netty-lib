@@ -195,28 +195,28 @@ int main (int argc, char * argv[])
     }
 
     netty::startup_guard netty_startup;
-    auto callbacks = std::make_shared<node_pool_t::callback_suite>();
+    node_pool_t::callback_suite callbacks;
 
-    callbacks->on_channel_established = [] (node_t::node_id_rep const & id, bool is_gateway) {
+    callbacks.on_channel_established = [] (node_t::node_id_rep const & id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
         LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
     };
 
-    callbacks->on_channel_destroyed = [] (node_t::node_id_rep const & id) {
+    callbacks.on_channel_destroyed = [] (node_t::node_id_rep const & id) {
         LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
     };
 
     // Notify when node alive status changed
-    callbacks->on_node_alive = [] (node_t::node_id_rep const & id) {
+    callbacks.on_node_alive = [] (node_t::node_id_rep const & id) {
         LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
     };
 
     // Notify when node alive status changed
-    callbacks->on_node_expired = [] (node_t::node_id_rep const & id) {
+    callbacks.on_node_expired = [] (node_t::node_id_rep const & id) {
         LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
     };
 
-    node_pool_t node_pool {std::move(opts), callbacks};
+    node_pool_t node_pool {std::move(opts), std::move(callbacks)};
 
     for (auto & item: nodes) {
         auto node_index = node_pool.add_node<node_t>(item.listener_saddrs);

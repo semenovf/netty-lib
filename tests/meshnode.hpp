@@ -19,8 +19,8 @@
 #include <pfs/netty/patterns/meshnet/node_pool.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_processor.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
-#include <pfs/netty/patterns/meshnet/routing_table_binary_storage.hpp>
 #include <pfs/netty/patterns/meshnet/reconnection_policy.hpp>
+#include <pfs/netty/patterns/meshnet/routing_table.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/simple_input_processor.hpp>
 #include <pfs/netty/patterns/meshnet/single_link_handshake.hpp>
@@ -143,7 +143,6 @@ using bare_meshnet_node_t = meshnet::node<
 //using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
-using routing_table_storage_t = meshnet::routing_table_binary_storage;
 using routing_table_t = meshnet::routing_table<netty::patterns::serializer_traits_t>;
 using alive_processor_t = meshnet::alive_processor<netty::patterns::serializer_traits_t>;
 using node_pool_t = meshnet::node_pool<pfs::universal_id_traits

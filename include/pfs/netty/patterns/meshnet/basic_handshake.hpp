@@ -48,18 +48,29 @@ protected:
     {}
 
 protected:
-    void enqueue (socket_id sid, packet_way_enum way, bool behind_nat)
+    void enqueue_request (socket_id sid, bool behind_nat)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet pkt {way, _node->is_gateway(), behind_nat};
+        handshake_packet pkt {_node->is_gateway(), behind_nat};
 
         pkt.id_rep = _node->id_rep();
         pkt.name = _node->name();
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
-        if (way == packet_way_enum::request)
-            _cache[sid] = std::chrono::steady_clock::now() + _timeout;
+        _cache[sid] = std::chrono::steady_clock::now() + _timeout;
+
+        _node->enqueue_private(sid, 0, out.data(), out.size());
+    }
+
+    void enqueue_response (socket_id sid, bool behind_nat, bool accepted)
+    {
+        auto out = serializer_traits::make_serializer();
+        handshake_packet pkt {_node->is_gateway(), behind_nat, accepted};
+
+        pkt.id_rep = _node->id_rep();
+        pkt.name = _node->name();
+        pkt.serialize(out);
 
         _node->enqueue_private(sid, 0, out.data(), out.size());
     }
@@ -104,7 +115,7 @@ public:
 
     void start (socket_id sid, bool behind_nat)
     {
-        enqueue(sid, packet_way_enum::request, behind_nat);
+        enqueue_request(sid, behind_nat);
     }
 
     void cancel (socket_id sid)
