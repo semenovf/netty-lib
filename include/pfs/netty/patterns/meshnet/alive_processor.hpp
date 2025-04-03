@@ -66,11 +66,11 @@ private:
 
     std::set<alive_item> _alive_items;
 
-    std::function<void (node_id_rep const &)> _on_alive = [] (node_id_rep const &) {};
-    std::function<void (node_id_rep const &)> _on_expired = [] (node_id_rep const &) {};
+    std::function<void (node_id_rep)> _on_alive = [] (node_id_rep) {};
+    std::function<void (node_id_rep)> _on_expired = [] (node_id_rep) {};
 
 public:
-    alive_processor (node_id_rep const & id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
+    alive_processor (node_id_rep id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
         , std::chrono::seconds interval = std::chrono::seconds{5}
         , std::chrono::milliseconds looping_interval = std::chrono::milliseconds{2500})
         : _id(id)
@@ -88,7 +88,7 @@ public:
     ~alive_processor () = default;
 
 private:
-    void insert (node_id_rep const & id)
+    void insert (node_id_rep id)
     {
         auto now = std::chrono::steady_clock::now();
         _alive_items.insert(alive_item{id, now + _exp_timeout, now + _looping_interval});
@@ -110,7 +110,7 @@ public:
         return *this;
     }
 
-    void add_sibling (node_id_rep const & id)
+    void add_sibling (node_id_rep id)
     {
         _sibling_nodes.insert(id);
         _on_alive(id);
@@ -124,7 +124,7 @@ public:
      * @details Call this method when need to force node expiration, e.g. when node unreachable
      *          notification received .
      */
-    void expire (node_id_rep const & id)
+    void expire (node_id_rep id)
     {
         auto count = _sibling_nodes.erase(id);
 
@@ -148,7 +148,7 @@ public:
     /**
      * Updates node's alive info if now time point is less than looping_threshold
      */
-    bool update_if (node_id_rep const & id)
+    bool update_if (node_id_rep id)
     {
         auto pos = _sibling_nodes.find(id);
 
@@ -191,7 +191,7 @@ public:
         _next_notification_time = std::chrono::steady_clock::now() + _interval;
     }
 
-    bool is_alive (node_id_rep const & id) const
+    bool is_alive (node_id_rep id) const
     {
         if (_sibling_nodes.find(id) != _sibling_nodes.end())
             return true;
@@ -220,7 +220,7 @@ public:
         return out.take();
     }
 
-    std::vector<char> serialize_unreachable (node_id_rep const & unreachable_id)
+    std::vector<char> serialize_unreachable (node_id_rep unreachable_id)
     {
         auto out = serializer_traits::make_serializer();
         unreachable_packet pkt;

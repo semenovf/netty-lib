@@ -44,7 +44,7 @@ public:
         return *this;
     }
 
-    socket_id const * locate_reader (node_id_rep const & id_rep) const
+    socket_id const * locate_reader (node_id_rep id_rep) const
     {
         return _readers.locate_by_first(id_rep);
     }
@@ -54,7 +54,7 @@ public:
         return _readers.locate_by_second(sid);
     }
 
-    socket_id const * locate_writer (node_id_rep const & id_rep) const
+    socket_id const * locate_writer (node_id_rep id_rep) const
     {
         return _writers.locate_by_first(id_rep);
     }
@@ -64,22 +64,22 @@ public:
         return _writers.locate_by_second(sid);
     }
 
-    bool insert_reader (node_id_rep const & id_rep, socket_id sid)
+    bool insert_reader (node_id_rep id_rep, socket_id sid)
     {
         return _readers.insert(id_rep, sid);
     }
 
-    bool insert_writer (node_id_rep const & id_rep, socket_id sid)
+    bool insert_writer (node_id_rep id_rep, socket_id sid)
     {
         return _writers.insert(id_rep, sid);
     }
 
-    bool channel_complete_for (node_id_rep const & id_rep) const
+    bool channel_complete_for (node_id_rep id_rep) const
     {
         return locate_writer(id_rep) != nullptr && locate_reader(id_rep) != nullptr;
     }
 
-    void close_channel (node_id_rep const & id_rep)
+    void close_channel (node_id_rep id_rep)
     {
         socket_id const * reader_sid_ptr = locate_reader(id_rep);
         socket_id const * writer_sid_ptr = locate_writer(id_rep);
@@ -118,10 +118,10 @@ public:
         std::set<node_id_rep> tmp;
 
         if (!_readers.empty())
-            _readers.for_each([& tmp] (node_id_rep const & id_rep, socket_id) {tmp.insert(id_rep);});
+            _readers.for_each([& tmp] (node_id_rep id_rep, socket_id) {tmp.insert(id_rep);});
 
         if (!_writers.empty())
-            _writers.for_each([& tmp] (node_id_rep const & id_rep, socket_id) {tmp.insert(id_rep);});
+            _writers.for_each([& tmp] (node_id_rep id_rep, socket_id) {tmp.insert(id_rep);});
 
         if (!tmp.empty()) {
             // Close all channels
@@ -131,6 +131,13 @@ public:
             _readers.clear();
             _writers.clear();
         }
+    }
+
+    template <typename F>
+    void for_each_writer (F && f)
+    {
+        if (!_writers.empty())
+            _writers.for_each(std::forward<F>(f));
     }
 };
 

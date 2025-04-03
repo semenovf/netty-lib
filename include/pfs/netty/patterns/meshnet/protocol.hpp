@@ -520,7 +520,7 @@ public:
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    gdata_packet (node_id_rep const & sender_id, node_id_rep const & receiver_id, bool has_checksum) noexcept
+    gdata_packet (node_id_rep sender_id, node_id_rep receiver_id, bool has_checksum) noexcept
         : header(packet_enum::gdata, has_checksum, 0)
         , sender_id(sender_id)
         , receiver_id(receiver_id)

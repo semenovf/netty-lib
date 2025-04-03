@@ -134,14 +134,14 @@ public:
         this->_node->process_message_received(sid, priority, std::move(bytes));
     }
 
-    void process_message_received (socket_id sid, int priority, node_id_rep const & sender_id
-        , node_id_rep const & receiver_id, std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, node_id_rep sender_id
+        , node_id_rep receiver_id, std::vector<char> && bytes)
     {
         this->_node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
 
-    void forward_global_message (int priority, node_id_rep const & sender_id
-        , node_id_rep const & receiver_id, std::vector<char> && bytes)
+    void forward_global_message (int priority, node_id_rep sender_id
+        , node_id_rep receiver_id, std::vector<char> && bytes)
     {
         this->_node->forward_global_message(priority, sender_id, receiver_id, std::move(bytes));
     }

@@ -210,7 +210,7 @@ public:
 
         _handshake_processor.on_expired([this] (socket_id sid) {
             NETTY__TRACE("[node]", "{}: handshake expired for socket: #{}", _name, sid);
-        }).on_completed([this] (node_id_rep const & id_rep, socket_id sid, std::string const & name
+        }).on_completed([this] (node_id_rep id_rep, socket_id sid, std::string const & name
                 , bool is_gateway, handshake_result_enum status) {
             switch (status) {
                 case handshake_result_enum::success: {
@@ -263,7 +263,7 @@ public:
         return node_id_traits::cast(_id_rep);
     }
 
-    node_id_rep const & id_rep () const noexcept
+    node_id_rep id_rep () const noexcept
     {
         return _id_rep;
     }
@@ -336,7 +336,7 @@ public:
         _listener_pool.listen(backlog);
     }
 
-    void enqueue (node_id_rep const & id_rep, int priority, bool force_checksum
+    void enqueue (node_id_rep id_rep, int priority, bool force_checksum
         , char const * data, std::size_t len)
     {
         auto sid_ptr = _channels.locate_writer(id_rep);
@@ -352,7 +352,7 @@ public:
         }
     }
 
-    void enqueue (node_id_rep const & id_rep, int priority, bool force_checksum
+    void enqueue (node_id_rep id_rep, int priority, bool force_checksum
         , std::vector<char> && data)
     {
         auto sid_ptr = _channels.locate_writer(id_rep);
@@ -368,12 +368,12 @@ public:
         }
     }
 
-    void enqueue (node_id_rep const & id_rep, int priority, char const * data, std::size_t len)
+    void enqueue (node_id_rep id_rep, int priority, char const * data, std::size_t len)
     {
         this->enqueue(id_rep, priority, false, data, len);
     }
 
-    void enqueue (node_id_rep const & id_rep, int priority, std::vector<char> && data)
+    void enqueue (node_id_rep id_rep, int priority, std::vector<char> && data)
     {
         this->enqueue(id_rep, priority, false, std::move(data));
     }
@@ -406,7 +406,7 @@ public:
     /**
      * Checks if this channel has direct writer to specified node by @a id.
      */
-    bool has_writer (node_id_rep const & id_rep) const
+    bool has_writer (node_id_rep id_rep) const
     {
         return _channels.locate_writer(id_rep) != nullptr;
     }
@@ -414,7 +414,7 @@ public:
     /**
      * Sets frame size for exchange with node specified by identifier @a id.
      */
-    void set_frame_size (node_id_rep const & id, std::uint16_t frame_size)
+    void set_frame_size (node_id_rep id, std::uint16_t frame_size)
     {
         auto sid_ptr = _channels.locate(id);
 
@@ -521,8 +521,8 @@ private:
             _callbacks->on_domestic_message_received(*id_ptr, priority, std::move(bytes));
     }
 
-    void process_message_received (socket_id sid, int priority, node_id_rep const & sender_id
-        , node_id_rep const & receiver_id, std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, node_id_rep sender_id
+        , node_id_rep receiver_id, std::vector<char> && bytes)
     {
         auto id_ptr = _channels.locate_reader(sid);
 
@@ -535,8 +535,8 @@ private:
         }
     }
 
-    void forward_global_message (int priority, node_id_rep const & sender_id
-        , node_id_rep const & receiver_id, std::vector<char> && packet)
+    void forward_global_message (int priority, node_id_rep sender_id
+        , node_id_rep receiver_id, std::vector<char> && packet)
     {
         _callbacks->forward_global_message(priority, sender_id, receiver_id, std::move(packet));
     }
@@ -562,9 +562,20 @@ public: // Below methods are for internal use only
         _writer_pool.enqueue(sid, priority, std::move(data));
     }
 
-    void enqueue_broadcast_private (int priority, char const * data, std::size_t len)
+    void enqueue_broadcast_packet (int priority, char const * data, std::size_t len)
     {
-        _writer_pool.enqueue_broadcast(priority, data, len);
+        _channels.for_each_writer([this, priority, data, len] (node_id_rep, socket_id sid) {
+            _writer_pool.enqueue(sid, priority, data, len);
+        });
+    }
+
+    void enqueue_forward_packet (node_id_rep sender_id_rep, int priority
+        , char const * data, std::size_t len)
+    {
+        _channels.for_each_writer([this, sender_id_rep, priority, data, len] (node_id_rep id_rep, socket_id sid) {
+            if (id_rep != sender_id_rep)
+                _writer_pool.enqueue(sid, priority, data, len);
+        });
     }
 
 public: // node_interface
@@ -626,19 +637,19 @@ public: // node_interface
             Node::listen(backlog);
         }
 
-        void enqueue (node_id_rep const & id, int priority, bool force_checksum, char const * data
+        void enqueue (node_id_rep id, int priority, bool force_checksum, char const * data
             , std::size_t len) override
         {
             Node::enqueue(id, priority, force_checksum, data, len);
         }
 
-        void enqueue (node_id_rep const & id, int priority, bool force_checksum
+        void enqueue (node_id_rep id, int priority, bool force_checksum
             , std::vector<char> && data) override
         {
             Node::enqueue(id, priority, force_checksum, std::move(data));
         }
 
-        bool has_writer (node_id_rep const & id_rep) const override
+        bool has_writer (node_id_rep id_rep) const override
         {
             return Node::has_writer(id_rep);
         }
@@ -653,7 +664,7 @@ public: // node_interface
             Node::clear_channels();
         }
 
-        void enqueue_packet (node_id_rep const & id_rep, int priority, std::vector<char> && data) override
+        void enqueue_packet (node_id_rep id_rep, int priority, std::vector<char> && data) override
         {
             auto sid_ptr = Node::_channels.locate_writer(id_rep);
 
@@ -665,7 +676,8 @@ public: // node_interface
             }
         }
 
-        void enqueue_packet (node_id_rep const & id_rep, int priority, char const * data, std::size_t len) override
+        void enqueue_packet (node_id_rep id_rep, int priority, char const * data
+            , std::size_t len) override
         {
             auto sid_ptr = Node::_channels.locate_writer(id_rep);
 
@@ -679,7 +691,13 @@ public: // node_interface
 
         void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) override
         {
-            Node::enqueue_broadcast_private(priority, data, len);
+            Node::enqueue_broadcast_packet(priority, data, len);
+        }
+
+        void enqueue_forward_packet (node_id_rep sender_id_rep, int priority
+            , char const * data, std::size_t len) override
+        {
+            Node::enqueue_forward_packet(sender_id_rep, priority, data, len);
         }
     };
 

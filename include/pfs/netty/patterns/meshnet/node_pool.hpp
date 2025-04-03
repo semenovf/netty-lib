@@ -96,77 +96,86 @@ public:
             _callbacks.on_error(msg);
         };
 
-        _node_callbacks->on_channel_established = [this] (node_id_rep const & id_rep, node_index_t index, bool is_gateway) {
+        _node_callbacks->on_channel_established = [this] (node_id_rep id_rep
+                , node_index_t index, bool is_gateway) {
+            // Add direct route
+            auto route_added = _rtab.add_sibling(id_rep);
+
+            // Add sibling node as alive
+            _aproc.add_sibling(id_rep);
+
             // Start routes discovery and initiate alive exchange if channel established with gateway
             if (is_gateway) {
-                _rtab.append_gateway(id_rep);
+                _rtab.add_gateway(id_rep);
 
                 std::vector<char> msg = _rtab.serialize_request(_id_rep);
                 this->enqueue_packet(id_rep, 0, std::move(msg));
             }
 
-            // Add direct route
-            _rtab.add_sibling(id_rep);
-
-            // Add sibling node as alive
-            _aproc.add_sibling(id_rep);
-
             _callbacks.on_channel_established(id_rep, is_gateway);
+
+            if (route_added)
+                _callbacks.on_route_ready(id_rep, 0);
         };
 
-        _node_callbacks->on_channel_destroyed = [this] (node_id_rep const & id_rep, node_index_t index) {
+        _node_callbacks->on_channel_destroyed = [this] (node_id_rep id_rep, node_index_t /*index*/) {
             _rtab.remove_sibling(id_rep);
 
-            if (_is_gateway) {
-                // Broadcast unreachable packet
-                std::vector<char> msg = _aproc.serialize_unreachable(id_rep);
-                retransmit_packet(index, std::move(msg));
-            }
+            // FIXME
+            // if (_is_gateway) {
+            //     // Broadcast unreachable packet
+            //     std::vector<char> msg = _aproc.serialize_unreachable(id_rep);
+            //     forward_packet(std::move(msg));
+            // }
 
             _aproc.expire(id_rep);
 
             _callbacks.on_channel_destroyed(id_rep);
         };
 
-        _node_callbacks->on_bytes_written = [this] (node_id_rep const & id_rep, std::uint64_t n) {
+        _node_callbacks->on_bytes_written = [this] (node_id_rep id_rep, std::uint64_t n) {
             _callbacks.on_bytes_written(id_rep, n);
         };
 
-        _node_callbacks->on_alive_received = [this] (node_id_rep const & id_rep, node_index_t index, alive_info const & ainfo) {
+        _node_callbacks->on_alive_received = [this] (node_id_rep id_rep, node_index_t index
+                , alive_info const & ainfo) {
             process_alive_received(id_rep, index, ainfo);
         };
 
-        _node_callbacks->on_unreachable_received = [this] (node_id_rep const & id_rep, node_index_t index, unreachable_info const & uinfo) {
+        _node_callbacks->on_unreachable_received = [this] (node_id_rep id_rep
+                , node_index_t index, unreachable_info const & uinfo) {
             process_unreachable_received(id_rep, index, uinfo);
         };
 
-        _node_callbacks->on_route_received = [this] (node_id_rep const & id_rep, node_index_t index, bool is_response, route_info const & rinfo) {
+        _node_callbacks->on_route_received = [this] (node_id_rep id_rep, node_index_t index
+                , bool is_response, route_info const & rinfo) {
             process_route_received(id_rep, index, is_response, rinfo);
         };
 
-        _node_callbacks->on_domestic_message_received = [this] (node_id_rep const & id_rep, int priority, std::vector<char> && bytes) {
+        _node_callbacks->on_domestic_message_received = [this] (node_id_rep id_rep
+                , int priority, std::vector<char> && bytes) {
             _callbacks.on_message_received(id_rep, priority, std::move(bytes));
         };
 
-        _node_callbacks->on_global_message_received = [this] (node_id_rep const & /*id_rep*/, int priority
-                , node_id_rep const & sender_id, node_id_rep const & receiver_id, std::vector<char> && bytes) {
-
+        _node_callbacks->on_global_message_received = [this] (node_id_rep /*id_rep*/
+                , int priority, node_id_rep sender_id, node_id_rep receiver_id
+                , std::vector<char> && bytes) {
             PFS__TERMINATE(_id_rep == receiver_id, "Fix meshnet::node_pool algorithm");
             _callbacks.on_message_received(sender_id, priority, std::move(bytes));
         };
 
         _node_callbacks->forward_global_message = [this] (int priority
-                , node_id_rep const & /*sender_id*/, node_id_rep const & receiver_id, std::vector<char> && packet) {
-
+                , node_id_rep /*sender_id*/, node_id_rep receiver_id
+                , std::vector<char> && packet) {
             PFS__TERMINATE(_id_rep != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
             enqueue_packet(receiver_id, priority, std::move(packet));
         };
 
-        _aproc.on_alive([this] (node_id_rep const & id_rep) {
+        _aproc.on_alive([this] (node_id_rep id_rep) {
             _callbacks.on_node_alive(id_rep);
         });
 
-        _aproc.on_expired([this] (node_id_rep const & id_rep) {
+        _aproc.on_expired([this] (node_id_rep id_rep) {
             _callbacks.on_node_expired(id_rep);
         });
     }
@@ -182,7 +191,7 @@ public:
     }
 
 private:
-    node_interface_type * locate_node (node_id_rep const & id_rep)
+    node_interface_type * locate_node (node_id_rep id_rep)
     {
         if (_nodes[0]->id_rep() == id_rep)
             return & *_nodes[0];
@@ -196,7 +205,7 @@ private:
         return nullptr;
     }
 
-    node_interface_type * locate_writer (node_id_rep const & id_rep)
+    node_interface_type * locate_writer (node_id_rep id_rep)
     {
         if (_nodes.empty())
             return nullptr;
@@ -229,7 +238,7 @@ private:
         return & *_nodes[index - 1];
     }
 
-    bool enqueue_packet (node_id_rep const & id, int priority, std::vector<char> && data)
+    bool enqueue_packet (node_id_rep id, int priority, std::vector<char> && data)
     {
         auto ptr = locate_writer(id);
 
@@ -242,7 +251,7 @@ private:
         return true;
     }
 
-    bool enqueue_packet (node_id_rep const & id, int priority, char const * data, std::size_t len)
+    bool enqueue_packet (node_id_rep id, int priority, char const * data, std::size_t len)
     {
         auto ptr = locate_writer(id);
 
@@ -255,7 +264,7 @@ private:
         return true;
     }
 
-    void process_alive_received (node_id_rep const & /*id*/, node_index_t idx, alive_info const & ainfo)
+    void process_alive_received (node_id_rep id_rep, node_index_t idx, alive_info const & ainfo)
     {
         auto initiator_id = ainfo.id;
         auto updated = _aproc.update_if(initiator_id);
@@ -263,11 +272,11 @@ private:
         if (updated && _is_gateway) {
             // Forward packet to nearest nodes
             std::vector<char> msg = _aproc.serialize_alive(ainfo);
-            retransmit_packet(idx, std::move(msg));
+            forward_packet(id_rep, std::move(msg));
         }
     }
 
-    void process_unreachable_received (node_id_rep const & id, node_index_t idx, unreachable_info const & uinfo)
+    void process_unreachable_received (node_id_rep id, node_index_t idx, unreachable_info const & uinfo)
     {
         // FIXME
         // auto addressee_id = uinfo.id;
@@ -278,36 +287,33 @@ private:
         // if (_is_gateway) {
         //     // Forward packet to nearest nodes
         //     std::vector<char> msg = _aproc.serialize_unreachable(uinfo);
-        //     retransmit_packet(idx, std::move(msg));
+        //     forward_packet(idx, std::move(msg));
         // } else {
         //     _aproc.expire(addressee_id);
         // }
     }
 
-    void process_route_received (node_id_rep const & id, node_index_t idx, bool is_response
+    void process_route_received (node_id_rep id_rep, node_index_t idx, bool is_response
         , route_info const & rinfo)
     {
+        bool new_route_added = false;
+        std::uint16_t hops = 0;
+        node_id_rep dest_id_rep {};
+
         if (is_response) {
-            auto responder_id = rinfo.responder_id;
+            dest_id_rep = rinfo.responder_id;
+            hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // Initiator node received response - add route to the routing table.
             if (rinfo.initiator_id == _id_rep) {
-                auto hops = pfs::numeric_cast<unsigned int>(rinfo.route.size());
+                if (hops == 0)
+                    new_route_added = _rtab.add_sibling(dest_id_rep);
+                else
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::direct);
+            } else if (_is_gateway) {
+                // Add route to responder to routing table and forward response.
 
-                if (hops == 0) {
-                    _rtab.add_sibling(responder_id);
-                } else {
-                    _rtab.add_route(responder_id, rinfo, route_order_enum::reverse);
-                }
-
-                NETTY__TRACE("[node_pool]", "routes dump:\n{}", dump_routes(4));
-
-                return;
-            }
-
-            // Add route to responder to routing table and forward response.
-            if (_is_gateway) {
-                PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
+                PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
 
                 // Find this gateway
                 auto opt_index = rinfo.gateway_index(_id_rep);
@@ -317,81 +323,75 @@ private:
                 auto index = *opt_index;
 
                 // This gateway is the first one for responder
-                if (rinfo.route.size() == 1 || index == rinfo.route.size() - 1) {
-                    _rtab.add_sibling(responder_id);
+                if (index == rinfo.route.size() - 1) {
+                    // NOTE. There are no known cases when this will happen, as the sibling node has
+                    // already been added previously. But let it be for insurance purposes.
+                    new_route_added = _rtab.add_sibling(dest_id_rep);
                 } else {
-                    PFS__TERMINATE(rinfo.route.size() > index, "Fix meshnet::node_pool algorithm");
-
-                    _rtab.add_route(responder_id, rinfo, route_order_enum::reverse);
+                    new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo, route_order_enum::direct);
 
                     // Receiving a route response is an indication that the responder is active.
-                    _aproc.update_if(responder_id);
+                    _aproc.update_if(dest_id_rep);
                 }
 
-                NETTY__TRACE("[node_pool]", "routes dump:\n{}", dump_routes(4));
-
-                // Forward
+                // Serialize response and send to previous gateway (if index > 0)
+                // or to the initiator node
                 std::vector<char> msg = _rtab.serialize_response(rinfo);
 
-                // This gateway is the first one for request initiator
-                if (index == 0) {
-                    auto addressee_id = rinfo.initiator_id;
-                    enqueue_packet(addressee_id, 0, std::move(msg));
-                } else {
+                if (index > 0) {
                     auto addressee_id = rinfo.route[index - 1];
                     enqueue_packet(addressee_id, 0, std::move(msg));
+                } else {
+                    auto addressee_id = rinfo.initiator_id;
+                    enqueue_packet(addressee_id, 0, std::move(msg));
                 }
+            } else {
+                PFS__TERMINATE(false, "Fix meshnet::node_pool algorithm");
             }
         } else { // Request
-            auto initiator_id = rinfo.initiator_id;
+            dest_id_rep = rinfo.initiator_id;
+            hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // Add record to the routing table about the route to the initiator
             if (_is_gateway) {
-                if (rinfo.route.empty()) {
-                    // First gateway for the initiator (direct access).
-                    _rtab.add_sibling(initiator_id);
-                } else {
-                    _rtab.add_route(initiator_id, rinfo, route_order_enum::direct);
-                }
+                if (hops == 0)
+                    new_route_added = _rtab.add_sibling(dest_id_rep);
+                else
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
             } else {
-                PFS__TERMINATE(!rinfo.route.empty(), "Fix meshnet::node_pool algorithm");
-                _rtab.add_route(initiator_id, rinfo, route_order_enum::direct);
+                PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
+                new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
             }
-
-            NETTY__TRACE("[node_pool]", "routes dump:\n{}", dump_routes(4));
 
             // Initiate response and transmit it by the reverse route
-            std::vector<char> msg = _rtab.serialize_response(id, rinfo);
-            enqueue_packet(id, 0, std::move(msg));
+            std::vector<char> msg = _rtab.serialize_response(_id_rep, rinfo);
+            enqueue_packet(id_rep, 0, std::move(msg));
 
-            // Forward request (broadcast) to nearest nodes
+            // Forward request to nearest nodes if this gateway is not present in the received route
+            // to prevent cycling.
             if (_is_gateway) {
-                std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
-                retransmit_packet(idx, std::move(msg));
+                auto opt_index = rinfo.gateway_index(_id_rep);
+
+                if (!opt_index) {
+                    std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
+                    forward_packet(id_rep, std::move(msg));
+                }
             }
         }
+
+        if (new_route_added)
+            _callbacks.on_route_ready(dest_id_rep, hops);
     }
 
     /**
-     * Forward packet (broadcast) to nearest nodes excluding nodes connected to the one with
-     * index @a excluded_index.
+     * Forward packet to nearest nodes excluding node identified by @a sender_id_rep.
      *
-     * @param excluded_index Node index from which packet received.
      * @param data Serialized packet.
      */
-    void retransmit_packet (node_index_t excluded_index, std::vector<char> && data)
+    void forward_packet (node_id_rep sender_id_rep, std::vector<char> && data)
     {
-        // auto idx = find_node_index(sender_id);
-
-        PFS__TERMINATE(excluded_index != INVALID_NODE_INDEX, "Fix meshnet::node_pool algorithm");
-
-        for (node_index_t i = 0; i < _nodes.size(); i++) {
-            // Exclude node
-            if (i + 1 == excluded_index)
-                continue;
-
-            _nodes[i]->enqueue_broadcast_packet(0, data.data(), data.size());
-        }
+        for (node_index_t i = 0; i < _nodes.size(); i++)
+            _nodes[i]->enqueue_forward_packet(sender_id_rep, 0, data.data(), data.size());
     }
 
     /**
@@ -399,42 +399,17 @@ private:
      */
     void broadcast_alive ()
     {
-        auto msg = _aproc.serialize_alive();
-
-        _rtab.foreach_gateway([this, & msg] (node_id_rep const & gwid) {
-            if (_aproc.is_alive(gwid))
-                enqueue_packet(gwid, 0, msg.data(), msg.size());
-        });
+        // FIXME UNCOMMENT
+        // auto msg = _aproc.serialize_alive();
+        //
+        // _rtab.foreach_gateway([this, & msg] (node_id_rep gwid) {
+        //     if (_aproc.is_alive(gwid))
+        //         enqueue_packet(gwid, 0, msg.data(), msg.size());
+        // });
     }
-
-#if NETTY__TRACE_ENABLED
-    std::string dump_routes (int indent = 0)
-    {
-        std::string result;
-
-        _rtab.foreach_route([this, & result, indent] (node_id_rep const & dest, node_id_rep const & gwid, unsigned int hops) {
-            auto node_ptr = locate_node(dest);
-
-            PFS__ASSERT(node_ptr != nullptr, "");
-
-            if (hops == 0) {
-                result += fmt::format("{:{}} <this node> -> {}: direct\n", "", indent, node_ptr->name());
-            } else {
-                auto gw_ptr = locate_node(gwid);
-
-                PFS__ASSERT(gw_ptr != nullptr, "");
-
-                result += fmt::format("{:{}} <this node> -> {} -> ... -> {}: {} hops\n", "", indent
-                    , gw_ptr->name(), node_ptr->name(), hops);
-            }
-        });
-
-        return result;
-    }
-#endif
 
 public:
-    node_id_rep const & id_rep () const noexcept
+    node_id_rep id_rep () const noexcept
     {
         return _id_rep;
     }
@@ -556,7 +531,7 @@ public:
      *
      * @return @c true if message route found for @a id_rep.
      */
-    bool enqueue (node_id_rep const & id_rep, int priority, bool force_checksum, char const * data
+    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum, char const * data
         , std::size_t len)
     {
         auto ptr = locate_writer(id_rep);
@@ -571,7 +546,7 @@ public:
         return true;
     }
 
-    bool enqueue (node_id_rep const & id_rep, int priority, bool force_checksum
+    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum
         , std::vector<char> && data)
     {
         auto ptr = locate_writer(id_rep);
@@ -596,12 +571,12 @@ public:
      *
      * @return @c true if message route found for @a id.
      */
-    bool enqueue (node_id_rep const & id, int priority, char const * data, std::size_t len)
+    bool enqueue (node_id_rep id, int priority, char const * data, std::size_t len)
     {
         return enqueue(id, priority, false, data, len);
     }
 
-    bool enqueue (node_id_rep const & id, int priority, std::vector<char> && data)
+    bool enqueue (node_id_rep id, int priority, std::vector<char> && data)
     {
         return enqueue(id, priority, false, std::move(data));
     }

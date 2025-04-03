@@ -10,6 +10,7 @@
 #include "../../namespace.hpp"
 #include "node_id_rep.hpp"
 #include <pfs/optional.hpp>
+#include <algorithm>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -31,7 +32,7 @@ public:
     /**
      * Find gateway index in the route.
      */
-    pfs::optional<std::size_t> gateway_index (node_id_rep const & id) const
+    pfs::optional<std::size_t> gateway_index (node_id_rep id) const
     {
         for (std::size_t i = 0; i < route.size(); i++) {
             if (id == route[i])
@@ -39,6 +40,13 @@ public:
         }
 
         return pfs::nullopt;
+    }
+
+    std::vector<node_id_rep> reverse_route () const
+    {
+        std::vector<node_id_rep> reversed_route(route.size());
+        std::reverse_copy(route.begin(), route.end(), reversed_route.begin());
+        return reversed_route;
     }
 };
 

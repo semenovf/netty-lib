@@ -30,7 +30,7 @@ public:
     {}
 
 private:
-    void complete_channel_success (node_id_rep const & id_rep, socket_id sid
+    void complete_channel_success (node_id_rep id_rep, socket_id sid
         , std::string const & name, bool is_gateway)
     {
         auto success = this->_channels->insert_reader(id_rep, sid);

@@ -38,7 +38,7 @@ protected:
     std::chrono::seconds _timeout {3};
 
     mutable std::function<void(socket_id)> _on_expired;
-    mutable std::function<void(node_id_rep const &, socket_id, std::string const & /*name*/
+    mutable std::function<void(node_id_rep, socket_id, std::string const & /*name*/
         , bool /*is_gateway*/, handshake_result_enum res)> _on_completed;
 
 protected:
