@@ -68,12 +68,12 @@
 //                      |   |
 //                     D0   D1
 //
-#define ITERATION_COUNT 1 //10
+#define ITERATION_COUNT 10
 
-#define TEST_SCHEME_1_ENABLED 0
-#define TEST_SCHEME_2_ENABLED 0
-#define TEST_SCHEME_3_ENABLED 0
-#define TEST_SCHEME_4_ENABLED 0
+#define TEST_SCHEME_1_ENABLED 1
+#define TEST_SCHEME_2_ENABLED 1
+#define TEST_SCHEME_3_ENABLED 1
+#define TEST_SCHEME_4_ENABLED 1
 #define TEST_SCHEME_5_ENABLED 1
 
 using namespace netty::patterns;
@@ -97,6 +97,7 @@ using namespace netty::patterns;
 
 static constexpr char const * TAG = CYAN "meshnet-test" END_COLOR;
 
+using stub_matrix_type = pfs::synchronized<boolean_matrix2<1>>;
 static pfs::synchronized<boolean_matrix2<3>> s_route_matrix_1;
 static pfs::synchronized<boolean_matrix2<5>> s_route_matrix_2;
 static pfs::synchronized<boolean_matrix2<4>> s_route_matrix_3;
@@ -252,9 +253,10 @@ namespace tools {
             fmt::print("[{:^3}]", caption[i]);
 
             for (std::size_t j = 0; j < m.columns(); j++) {
-                if (i == j)
+                if (i == j) {
                     fmt::print("[XXX]");
-                else if (m.test(i, j))
+                    REQUIRE(!m.test(i, j));
+                } else if (m.test(i, j))
                     fmt::print("[{:^3}]", '+');
                 else
                     fmt::print("[   ]");
@@ -268,7 +270,7 @@ namespace tools {
 
 template <typename RouteMatrix>
 static void create_node_pool (node_pool_t::node_id id, std::string name, std::uint16_t port
-    , bool is_gateway, std::size_t serial_number, RouteMatrix & route_matrix)
+    , bool is_gateway, std::size_t serial_number, RouteMatrix * route_matrix)
 {
     node_pool_t::options opts;
     opts.id = id;
@@ -305,7 +307,7 @@ static void create_node_pool (node_pool_t::node_id id, std::string name, std::ui
     };
 
     // Notify when node alive status changed
-    callbacks.on_route_ready = [id, name, & route_matrix] (node_t::node_id_rep dest, std::uint16_t hops) {
+    callbacks.on_route_ready = [id, name, route_matrix] (node_t::node_id_rep dest, std::uint16_t hops) {
         if (hops == 0) {
             // Gateway is this node when direct access
             LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "direct access" END_COLOR ")"
@@ -326,7 +328,8 @@ static void create_node_pool (node_pool_t::node_id id, std::string name, std::ui
         auto row = this_ctx->serial_number;
         auto col = dest_ctx->serial_number;
 
-        route_matrix.wlock()->set(row, col, true);
+        if (route_matrix != nullptr)
+            route_matrix->wlock()->set(row, col, true);
     };
 
     auto node_pool = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));
@@ -338,24 +341,24 @@ static void create_node_pool (node_pool_t::node_id id, std::string name, std::ui
     tools::nodes.insert({std::move(name), {node_pool, port, serial_number}});
 }
 
-// TEST_CASE("duplication") {
-//     START_TEST_MESSAGE
-//
-//     netty::startup_guard netty_startup;
-//
-//     create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, 0);
-//     create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", 4201, false, 1);
-//
-//     tools::connect_host(1, "A0", "A0_dup");
-//
-//     tools::run_all();
-//     tools::sleep(1, "Check channels established");
-//     tools::interrupt_all();
-//     tools::join_all();
-//     tools::clear();
-//
-//     END_TEST_MESSAGE
-// }
+TEST_CASE("duplication") {
+    START_TEST_MESSAGE
+
+    netty::startup_guard netty_startup;
+
+    create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, 0, nullptr);
+    create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", 4201, false, 1, nullptr);
+
+    tools::connect_host(1, "A0", "A0_dup");
+
+    tools::run_all();
+    tools::sleep(1, "Check channels established");
+    tools::interrupt_all();
+    tools::join_all();
+    tools::clear();
+
+    END_TEST_MESSAGE
+}
 
 #if TEST_SCHEME_1_ENABLED
 TEST_CASE("scheme 1") {
@@ -370,11 +373,11 @@ TEST_CASE("scheme 1") {
         std::size_t serial_number = 0;
 
         // Create gateways
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, s_route_matrix_1);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & s_route_matrix_1);
 
         // Create regular nodes
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, s_route_matrix_1);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, s_route_matrix_1);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & s_route_matrix_1);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & s_route_matrix_1);
 
         REQUIRE_EQ(serial_number, s_route_matrix_1.rlock()->rows());
 
@@ -413,13 +416,13 @@ TEST_CASE("scheme 2") {
         std::size_t serial_number = 0;
 
         // Create gateways
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, s_route_matrix_2);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & s_route_matrix_2);
 
         // Create regular nodes
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, s_route_matrix_2);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, s_route_matrix_2);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, s_route_matrix_2);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, s_route_matrix_2);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & s_route_matrix_2);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & s_route_matrix_2);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & s_route_matrix_2);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & s_route_matrix_2);
 
         REQUIRE_EQ(serial_number, s_route_matrix_2.rlock()->rows());
 
@@ -444,7 +447,7 @@ TEST_CASE("scheme 2") {
         tools::print_matrix2(*s_route_matrix_2.rlock(), {"a", "A0", "A1", "B0", "B1" });
 
         REQUIRE_EQ(tools::channels_established_counter.load(), 12);
-        REQUIRE_EQ(s_route_matrix_2.rlock()->count(), 30);
+        REQUIRE_EQ(s_route_matrix_2.rlock()->count(), 20);
 
         tools::clear();
 
@@ -466,12 +469,12 @@ TEST_CASE("scheme 3") {
         std::size_t serial_number = 0;
 
         // Create gateways
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, s_route_matrix_3);
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, s_route_matrix_3);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & s_route_matrix_3);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & s_route_matrix_3);
 
         // Create regular nodes
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, s_route_matrix_3);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, s_route_matrix_3);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & s_route_matrix_3);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & s_route_matrix_3);
 
         REQUIRE_EQ(serial_number, s_route_matrix_3.rlock()->rows());
 
@@ -514,14 +517,14 @@ TEST_CASE("scheme 4") {
         std::size_t serial_number = 0;
 
         // Create gateways
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, s_route_matrix_4);
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, s_route_matrix_4);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & s_route_matrix_4);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & s_route_matrix_4);
 
         // Create regular nodes
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, s_route_matrix_4);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, s_route_matrix_4);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, s_route_matrix_4);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, s_route_matrix_4);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & s_route_matrix_4);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & s_route_matrix_4);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & s_route_matrix_4);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & s_route_matrix_4);
 
         REQUIRE_EQ(serial_number, s_route_matrix_4.rlock()->rows());
 
@@ -572,20 +575,20 @@ TEST_CASE("scheme 5") {
         std::size_t serial_number = 0;
 
         // Create gateways
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", 4230, true, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", 4240, true, serial_number++, s_route_matrix_5);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", 4230, true, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", 4240, true, serial_number++, & s_route_matrix_5);
 
         // Create regular nodes
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", 4231, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", 4232, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", 4241, false, serial_number++, s_route_matrix_5);
-        create_node_pool("01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", 4242, false, serial_number++, s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", 4231, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", 4232, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", 4241, false, serial_number++, & s_route_matrix_5);
+        create_node_pool("01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", 4242, false, serial_number++, & s_route_matrix_5);
 
         REQUIRE_EQ(serial_number, s_route_matrix_5.rlock()->rows());
 
@@ -635,8 +638,8 @@ TEST_CASE("scheme 5") {
         tools::print_matrix2(*s_route_matrix_5.rlock(), {"a", "b", "c", "d"
             , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"});
 
-        // CHECK_EQ(channels_established_counter.load(), 14);
-        // CHECK_EQ(s_route_matrix.rlock()->count(), 30);
+        REQUIRE_EQ(tools::channels_established_counter.load(), 34);
+        REQUIRE_EQ(s_route_matrix_5.rlock()->count(), 132);
 
         tools::clear();
 

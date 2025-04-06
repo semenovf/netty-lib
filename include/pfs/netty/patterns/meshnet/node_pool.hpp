@@ -110,7 +110,7 @@ public:
                 // Send available routes to connected gateway on behalf of destination (according to
                 // routing table) nodes.
                 if (_is_gateway) {
-                    // TODO need to send all known routes
+                    // TODO Should all known routes be sent or only sibling nodes are sufficient?
 
                     _rtab.foreach_sibling_node([this, id_rep] (node_id_rep initiator_id) {
                         if (initiator_id != id_rep) {
@@ -325,37 +325,40 @@ private:
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
 
-                PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
+                // If there is no loop
+                if (_id_rep != dest_id_rep) {
+                    PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
 
-                // Find this gateway
-                auto opt_index = rinfo.gateway_index(_id_rep);
+                    // Find this gateway
+                    auto opt_index = rinfo.gateway_index(_id_rep);
 
-                PFS__TERMINATE(opt_index, "Fix meshnet::node_pool algorithm");
+                    PFS__TERMINATE(opt_index, "Fix meshnet::node_pool algorithm");
 
-                auto index = *opt_index;
+                    auto index = *opt_index;
 
-                // This gateway is the first one for responder
-                if (index == rinfo.route.size() - 1) {
-                    // NOTE. There are no known cases when this will happen, as the sibling node has
-                    // already been added previously. But let it be for insurance purposes.
-                    new_route_added = _rtab.add_sibling(dest_id_rep);
-                } else {
-                    new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo, route_order_enum::direct);
+                    // This gateway is the first one for responder
+                    if (index == rinfo.route.size() - 1) {
+                        // NOTE. There are no known cases when this will happen, as the sibling node has
+                        // already been added previously. But let it be for insurance purposes.
+                        new_route_added = _rtab.add_sibling(dest_id_rep);
+                    } else {
+                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo, route_order_enum::direct);
 
-                    // Receiving a route response is an indication that the responder is active.
-                    _aproc.update_if(dest_id_rep);
-                }
+                        // Receiving a route response is an indication that the responder is active.
+                        _aproc.update_if(dest_id_rep);
+                    }
 
-                // Serialize response and send to previous gateway (if index > 0)
-                // or to the initiator node
-                std::vector<char> msg = _rtab.serialize_response(rinfo);
+                    // Serialize response and send to previous gateway (if index > 0)
+                    // or to the initiator node
+                    std::vector<char> msg = _rtab.serialize_response(rinfo);
 
-                if (index > 0) {
-                    auto addressee_id = rinfo.route[index - 1];
-                    enqueue_packet(addressee_id, 0, std::move(msg));
-                } else {
-                    auto addressee_id = rinfo.initiator_id;
-                    enqueue_packet(addressee_id, 0, std::move(msg));
+                    if (index > 0) {
+                        auto addressee_id = rinfo.route[index - 1];
+                        enqueue_packet(addressee_id, 0, std::move(msg));
+                    } else {
+                        auto addressee_id = rinfo.initiator_id;
+                        enqueue_packet(addressee_id, 0, std::move(msg));
+                    }
                 }
             } else {
                 PFS__TERMINATE(false, "Fix meshnet::node_pool algorithm");
@@ -364,35 +367,40 @@ private:
             dest_id_rep = rinfo.initiator_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
-            // Add record to the routing table about the route to the initiator
-            if (_is_gateway) {
-                if (hops == 0)
-                    new_route_added = _rtab.add_sibling(dest_id_rep);
-                else
+            // If there is no loop
+            if (_id_rep != dest_id_rep) {
+                // Add record to the routing table about the route to the initiator
+                if (_is_gateway) {
+                    if (hops == 0)
+                        new_route_added = _rtab.add_sibling(dest_id_rep);
+                    else
+                        new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
+                } else {
+                    PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
                     new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
-            } else {
-                PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
-                new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
-            }
+                }
 
-            // Initiate response and transmit it by the reverse route
-            std::vector<char> msg = _rtab.serialize_response(_id_rep, rinfo);
-            enqueue_packet(id_rep, 0, std::move(msg));
+                // Initiate response and transmit it by the reverse route
+                std::vector<char> msg = _rtab.serialize_response(_id_rep, rinfo);
+                enqueue_packet(id_rep, 0, std::move(msg));
 
-            // Forward request to nearest nodes if this gateway is not present in the received route
-            // to prevent cycling.
-            if (_is_gateway) {
-                auto opt_index = rinfo.gateway_index(_id_rep);
+                // Forward request to nearest nodes if this gateway is not present in the received route
+                // to prevent cycling.
+                if (_is_gateway) {
+                    auto opt_index = rinfo.gateway_index(_id_rep);
 
-                if (!opt_index) {
-                    std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
-                    forward_packet(id_rep, std::move(msg));
+                    if (!opt_index) {
+                        std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
+                        forward_packet(id_rep, std::move(msg));
+                    }
                 }
             }
         }
 
-        if (new_route_added)
+        if (new_route_added) {
+            PFS__TERMINATE(_id_rep != dest_id_rep, "Fix meshnet::node_pool algorithm");
             _callbacks.on_route_ready(dest_id_rep, hops);
+        }
     }
 
     /**
