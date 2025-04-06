@@ -716,17 +716,17 @@ POST_CONNECT:
 
     // Prepare all data structures
     try {
-        m_pSndBuffer = pfs::make_unique<CSndBuffer>(32, m_iPayloadSize);
-        m_pRcvBuffer = pfs::make_unique<CRcvBuffer>(&(m_pRcvQueue->m_UnitQueue)
+        m_pSndBuffer = std::make_unique<CSndBuffer>(32, m_iPayloadSize);
+        m_pRcvBuffer = std::make_unique<CRcvBuffer>(&(m_pRcvQueue->m_UnitQueue)
                        , m_iRcvBufSize);
 
         // after introducing lite ACK, the sndlosslist may not be cleared in time,
         // so it requires twice space.
-        m_pSndLossList   = pfs::make_unique<CSndLossList>(m_iFlowWindowSize * 2);
-        m_pRcvLossList   = pfs::make_unique<CRcvLossList>(m_iFlightFlagSize);
-        m_pACKWindow     = pfs::make_unique<CACKWindow>(1024);
-        m_pSndTimeWindow = pfs::make_unique<CPktTimeWindow>();
-        m_pRcvTimeWindow = pfs::make_unique<CPktTimeWindow>(16, 64);
+        m_pSndLossList   = std::make_unique<CSndLossList>(m_iFlowWindowSize * 2);
+        m_pRcvLossList   = std::make_unique<CRcvLossList>(m_iFlightFlagSize);
+        m_pACKWindow     = std::make_unique<CACKWindow>(1024);
+        m_pSndTimeWindow = std::make_unique<CPktTimeWindow>();
+        m_pRcvTimeWindow = std::make_unique<CPktTimeWindow>(16, 64);
     } catch (...) {
         //LOG_TRACE_3("*** CONNECT *** CUDTException(3, 2, 0): m_iID={}", response.m_iID);
         throw CUDTException(3, 2, 0);
@@ -816,13 +816,13 @@ void CUDT::connect(const sockaddr* peer, CHandShake* hs)
 
     // Prepare all structures
     try {
-        m_pSndBuffer     = pfs::make_unique<CSndBuffer>(32, m_iPayloadSize);
-        m_pRcvBuffer     = pfs::make_unique<CRcvBuffer>(&(m_pRcvQueue->m_UnitQueue), m_iRcvBufSize);
-        m_pSndLossList   = pfs::make_unique<CSndLossList>(m_iFlowWindowSize * 2);
-        m_pRcvLossList   = pfs::make_unique<CRcvLossList>(m_iFlightFlagSize);
-        m_pACKWindow     = pfs::make_unique<CACKWindow>(1024);
-        m_pSndTimeWindow = pfs::make_unique<CPktTimeWindow>();
-        m_pRcvTimeWindow = pfs::make_unique<CPktTimeWindow>(16, 64);
+        m_pSndBuffer     = std::make_unique<CSndBuffer>(32, m_iPayloadSize);
+        m_pRcvBuffer     = std::make_unique<CRcvBuffer>(&(m_pRcvQueue->m_UnitQueue), m_iRcvBufSize);
+        m_pSndLossList   = std::make_unique<CSndLossList>(m_iFlowWindowSize * 2);
+        m_pRcvLossList   = std::make_unique<CRcvLossList>(m_iFlightFlagSize);
+        m_pACKWindow     = std::make_unique<CACKWindow>(1024);
+        m_pSndTimeWindow = std::make_unique<CPktTimeWindow>();
+        m_pRcvTimeWindow = std::make_unique<CPktTimeWindow>(16, 64);
     } catch (...) {
         throw CUDTException(3, 2, 0);
     }

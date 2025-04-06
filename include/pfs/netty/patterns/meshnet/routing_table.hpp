@@ -29,6 +29,7 @@ class routing_table
 {
     using serializer_traits = SerializerTraits;
     using route_index_type = int;
+    using route_map_type = std::unordered_multimap<node_id_rep, route_index_type>;
 
 private:
     std::unordered_set<node_id_rep> _sibling_nodes;
@@ -37,7 +38,7 @@ private:
     std::vector<route> _routes;
 
     // Used to determine the route to send message.
-    std::unordered_multimap<node_id_rep, route_index_type> _route_map;
+    route_map_type _route_map;
 
 public:
     routing_table () = default;
@@ -73,9 +74,31 @@ private:
 
             _route_map.insert({dest, index});
             return true;
+        } else {
+            // Check if record for destination node already exists
+            auto res = _route_map.equal_range(dest);
+
+            if (res.first != res.second) {
+                // Check if route to destination already exists
+                for (auto pos = res.first; pos != res.second; ++pos) {
+                    auto & tmp = _routes[pos->second];
+
+                    // Already exists
+                    if (tmp.equals_to(tmp))
+                        return false;
+                }
+            }
+
+            _route_map.insert({dest, index});
+            return true;
         }
 
         return false;
+    }
+
+    bool is_sibling (node_id_rep id_rep) const
+    {
+        return _sibling_nodes.find(id_rep) != _sibling_nodes.end();
     }
 
 public:
@@ -108,6 +131,9 @@ public:
      */
     bool add_sibling (node_id_rep id_rep)
     {
+        // Remove all non-direct routes between sibling nodes
+        _route_map.erase(id_rep);
+
         auto res = _sibling_nodes.insert(id_rep);
         return res.second;
     }
@@ -124,6 +150,9 @@ public:
      */
     bool add_route (node_id_rep dest, route_info const & rinfo, route_order_enum order)
     {
+        if (is_sibling(dest))
+            return false;
+
         route r;
 
         if (order == route_order_enum::reverse) {
@@ -142,6 +171,9 @@ public:
     bool add_subroute (node_id_rep dest, node_id_rep gw, route_info const & rinfo
         , route_order_enum order)
     {
+        if (is_sibling(dest))
+            return false;
+
         if (order == route_order_enum::reverse) {
             auto rr = rinfo.reverse_route();
 
@@ -170,29 +202,28 @@ public:
         if (_sibling_nodes.find(id_rep) != _sibling_nodes.cend())
             return id_rep;
 
-        // FIXME
+        auto min_hops = std::numeric_limits<std::size_t>::max();
+        auto res = _route_map.equal_range(id_rep);
 
-        // auto hops = std::numeric_limits<unsigned int>::max();
-        // auto res = _routes.equal_range(id);
-        //
-        // // If range not found return default gateway
-        // if (res.first == res.second)
-        //     return default_gateway();
-        //
-        // pfs::optional<node_id_rep> opt_gwid;
-        //
-        // for (auto pos = res.first; pos != res.second; ++pos) {
-        //     PFS__TERMINATE(pos->second.hops > 0, "Fix meshnet::routing_table algorithm");
-        //
-        //     if (hops > pos->second.hops && !pos->second.unreachable) {
-        //         hops = pos->second.hops;
-        //         opt_gwid = pos->second.gwid;
-        //     }
-        // }
-        //
-        // return opt_gwid;
+        // Not found
+        if (res.first == res.second)
+            return pfs::nullopt;
 
-        return pfs::nullopt;
+        pfs::optional<node_id_rep> opt_gwid;
+
+        for (auto pos = res.first; pos != res.second; ++pos) {
+            auto & r = _routes[pos->second];
+            auto hops = r.hops();
+
+            PFS__TERMINATE(hops > 0, "Fix meshnet::routing_table algorithm");
+
+            if (min_hops > hops && r.good()) {
+                min_hops = hops;
+                opt_gwid = r.gateway();
+            }
+        }
+
+        return opt_gwid;
     }
 
     template <typename F>
@@ -200,6 +231,13 @@ public:
     {
         for (auto const & gwid: _gateways)
             f(gwid);
+    }
+
+    template <typename F>
+    void foreach_sibling_node (F && f)
+    {
+        for (auto const & x: _sibling_nodes)
+            f(x);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////

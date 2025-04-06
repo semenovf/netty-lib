@@ -22,7 +22,6 @@ namespace meshnet {
 
 struct route_info
 {
-    std::uint64_t utctime {0}; // Send time point in milliseconds since epoch in UTC
     node_id_rep initiator_id;
     node_id_rep responder_id; // not used when request
 
@@ -32,10 +31,10 @@ public:
     /**
      * Find gateway index in the route.
      */
-    pfs::optional<std::size_t> gateway_index (node_id_rep id) const
+    pfs::optional<std::size_t> gateway_index (node_id_rep gw) const
     {
         for (std::size_t i = 0; i < route.size(); i++) {
-            if (id == route[i])
+            if (gw == route[i])
                 return i;
         }
 

@@ -49,7 +49,8 @@ written by
 #include "ccc.hpp"
 #include "cache.hpp"
 #include "queue.hpp"
-#include "pfs/memory.hpp"
+#include <cstdint>
+#include <memory>
 
 enum UDTSockType {UDT_STREAM = 1, UDT_DGRAM};
 

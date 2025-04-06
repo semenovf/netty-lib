@@ -14,7 +14,6 @@
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
-#include <pfs/time_point.hpp>
 #include <pfs/universal_id_rep.hpp>
 #include <cstdint>
 #include <cstring>
@@ -411,7 +410,7 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> rinfo.utctime >> rinfo.initiator_id.h >> rinfo.initiator_id.l;
+        in >> rinfo.initiator_id.h >> rinfo.initiator_id.l;
 
         if (is_response())
             in >> rinfo.responder_id.h >> rinfo.responder_id.l;
@@ -437,11 +436,7 @@ public:
     {
         header::serialize(out);
 
-        // For response utctime must be set from request
-        if (!is_response())
-            rinfo.utctime = static_cast<std::uint64_t>(pfs::utc_time::now().to_millis().count());
-
-        out << rinfo.utctime << rinfo.initiator_id.h << rinfo.initiator_id.l;
+        out << rinfo.initiator_id.h << rinfo.initiator_id.l;
 
         if (is_response())
             out << rinfo.responder_id.h << rinfo.responder_id.l;

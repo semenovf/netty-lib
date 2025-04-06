@@ -67,15 +67,10 @@ private:
     // There will rarely be more than dozens nodes, so vector is a optimal choice
     std::vector<node_interface_ptr> _nodes;
 
-    // Routing table
     routing_table_type _rtab;
-
     alive_processor_type _aproc;
-
     callback_suite _callbacks;
-
     std::shared_ptr<node_callbacks> _node_callbacks;
-
     std::atomic_bool _interrupted {false};
 
 public:
@@ -97,19 +92,35 @@ public:
         };
 
         _node_callbacks->on_channel_established = [this] (node_id_rep id_rep
-                , node_index_t index, bool is_gateway) {
+                , node_index_t /*index*/, bool is_gateway) {
             // Add direct route
             auto route_added = _rtab.add_sibling(id_rep);
 
             // Add sibling node as alive
             _aproc.add_sibling(id_rep);
 
-            // Start routes discovery and initiate alive exchange if channel established with gateway
+            // Start routes discovery and initiate alive exchange if channel established
+            // with gateway
             if (is_gateway) {
                 _rtab.add_gateway(id_rep);
 
                 std::vector<char> msg = _rtab.serialize_request(_id_rep);
                 this->enqueue_packet(id_rep, 0, std::move(msg));
+
+                // Send available routes to connected gateway on behalf of destination (according to
+                // routing table) nodes.
+                if (_is_gateway) {
+                    // TODO need to send all known routes
+
+                    _rtab.foreach_sibling_node([this, id_rep] (node_id_rep initiator_id) {
+                        if (initiator_id != id_rep) {
+                            route_info rinfo;
+                            rinfo.initiator_id = initiator_id;
+                            std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
+                            this->enqueue_packet(id_rep, 0, std::move(msg));
+                        }
+                    });
+                }
             }
 
             _callbacks.on_channel_established(id_rep, is_gateway);
@@ -306,10 +317,11 @@ private:
 
             // Initiator node received response - add route to the routing table.
             if (rinfo.initiator_id == _id_rep) {
-                if (hops == 0)
+                if (hops == 0) {
                     new_route_added = _rtab.add_sibling(dest_id_rep);
-                else
+                } else {
                     new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::direct);
+                }
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
 

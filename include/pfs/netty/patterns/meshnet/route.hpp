@@ -10,6 +10,7 @@
 #include "../../namespace.hpp"
 #include "node_id_rep.hpp"
 #include "route_info.hpp"
+#include <pfs/assert.hpp>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -29,6 +30,16 @@ public:
     route_segment (node_id_rep a, node_id_rep b): _a(a), _b(b) {}
 
 public:
+    node_id_rep first () const noexcept
+    {
+        return _a;
+    }
+
+    node_id_rep second () const noexcept
+    {
+        return _b;
+    }
+
     bool contains (node_id_rep id) const noexcept
     {
         return _a == id || _b == id;
@@ -62,28 +73,6 @@ private:
     bool _good {true};
 
 public:
-    // route (route_info const & rinfo, route_order_enum order)
-    // {
-    //     auto count = rinfo.route.size();
-    //
-    //     if (count == 1) { // Only one gateway: segment is `a-a`
-    //         segment_item item {route_segment {rinfo.route[0], rinfo.route[0]}, true};
-    //         _route.push_back(std::move(item));
-    //     } else if (count > 1) { // count - 1 segments: segment is `a-b`
-    //         if (order == route_order_enum::direct) {
-    //             for (int i = 1; i < count; i++) {
-    //                 segment_item item {route_segment {rinfo.route[i - 1], rinfo.route[i]}, true};
-    //                 _route.push_back(std::move(item));
-    //             }
-    //         } else {
-    //             for (int i = count - 1; i > 0; i--) {
-    //                 segment_item item {route_segment {rinfo.route[i], rinfo.route[i - 1]}, true};
-    //                 _route.push_back(std::move(item));
-    //             }
-    //         }
-    //     }
-    // }
-
     template <typename It>
     route (It first, It last)
     {
@@ -182,6 +171,58 @@ public:
             return _route[i].connected;
 
         return false;
+    }
+
+    /**
+     * Convert route with segments to route as the chain of nodes (as represented by route_info::route)
+     */
+    std::vector<node_id_rep> convert () const
+    {
+        if (_route.empty())
+            return std::vector<node_id_rep>{};
+
+        std::vector<node_id_rep> result;
+
+        if (_route.size() == 1) {
+            PFS__TERMINATE(_route[0].rseg.first() == _route[0].rseg.second()
+                , "Fix meshnet::route algorithm");
+            result.push_back(_route[0].rseg.first());
+        } else {
+            result.push_back(_route.front().rseg.first());
+
+            for (int i = 1; i < _route.size() - 1; i++) {
+                PFS__TERMINATE(_route[i - 1].rseg.second() == _route[i].rseg.first()
+                    , "Fix meshnet::route algorithm");
+
+                result.push_back(_route[i].rseg.first());
+            }
+
+            result.push_back(_route.back().rseg.second());
+        }
+
+        return result;
+    }
+
+    /**
+     * Returns first node in the first segment. It is a gateway.
+     */
+    node_id_rep gateway () const
+    {
+        PFS__TERMINATE(!_route.empty(), "Fix meshnet::route algorithm");
+        return _route[0].rseg.first();
+    }
+
+    std::size_t size () const noexcept
+    {
+        return _route.size();
+    }
+
+    /**
+     * Synonym for size().
+     */
+    std::size_t hops () const noexcept
+    {
+        return _route.size();
     }
 };
 
