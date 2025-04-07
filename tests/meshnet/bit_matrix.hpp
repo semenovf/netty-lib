@@ -10,12 +10,12 @@
 #include <bitset>
 
 template <std::size_t Rows, std::size_t Cols = Rows>
-class boolean_matrix2
+class bit_matrix
 {
     std::array<std::bitset<Cols>, Rows> _m;
 
 public:
-    boolean_matrix2 () = default;
+    bit_matrix () = default;
 
 public:
     static constexpr std::size_t rows () noexcept
@@ -51,7 +51,7 @@ public:
     /**
      * Sets all cells to true.
      */
-    boolean_matrix2 & set ()
+    bit_matrix & set ()
     {
         for (auto & row: _m)
             row.set();
@@ -64,7 +64,7 @@ public:
      *
      *  @throws std::out_of_range if @a row or @a col or both does not correspond to a valid cell.
      */
-    boolean_matrix2 & set (std::size_t row, std::size_t col, bool value = true)
+    bit_matrix & set (std::size_t row, std::size_t col, bool value = true)
     {
         _m.at(row).set(col, value);
         return *this;
@@ -73,7 +73,7 @@ public:
     /**
      * Sets all cells to false.
      */
-    boolean_matrix2 & reset ()
+    bit_matrix & reset ()
     {
         for (auto & row: _m)
             row.reset();
@@ -86,7 +86,7 @@ public:
      *
      *  @throws std::out_of_range if @a row or @a col or both does not correspond to a valid cell.
      */
-    boolean_matrix2 & reset (std::size_t row, std::size_t col)
+    bit_matrix & reset (std::size_t row, std::size_t col)
     {
         _m.at(row).reset(col);
         return *this;
