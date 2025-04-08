@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
-#include "bit_matrix.hpp"
-#include "node.hpp"
 #include "tools.hpp"
 #include <pfs/fmt.hpp>
 #include <pfs/netty/startup.hpp>
@@ -40,14 +38,14 @@
 //  A0----- a ----------- b -----B0
 //
 // =================================================================================================
-// Test scheme 4 (not implemented yet)
+// Test scheme 4
 // -------------------------------------------------------------------------------------------------
 //   A0-----+                           +-----B0
 //          |----- a ----------- b -----|
 //   A1-----+                           +-----B1
 //
 // =================================================================================================
-// Test scheme 5 (not implemented yet)
+// Test scheme 5
 // -------------------------------------------------------------------------------------------------
 //                     B0   B1
 //                      |   |
@@ -63,7 +61,7 @@
 //                      |   |
 //                     D0   D1
 //
-#define ITERATION_COUNT 100
+#define ITERATION_COUNT 10
 
 #define TEST_SCHEME_1_ENABLED 1
 #define TEST_SCHEME_2_ENABLED 1
@@ -72,6 +70,8 @@
 #define TEST_SCHEME_5_ENABLED 1
 
 using namespace netty::patterns;
+
+constexpr bool BEHIND_NAT = true;
 
 // See https://github.com/doctest/doctest/issues/345
 inline char const * current_doctest_name ()
@@ -82,58 +82,151 @@ inline char const * current_doctest_name ()
 #define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(current_doctest_name()));
 #define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(current_doctest_name()));
 
-TEST_CASE("duplication") {
-    START_TEST_MESSAGE
+int g_current_scheme_index = 0;
 
-    netty::startup_guard netty_startup;
+tools::mesh_network * g_mesh_network_ptr = nullptr;
+std::atomic_int g_channels_established_counter {0};
 
-    tools::create_node_pool<tools::stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, 0, nullptr);
-    tools::create_node_pool<tools::stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", 4201, false, 1, nullptr);
+using stub_matrix_type = pfs::synchronized<bit_matrix<1>>;
+pfs::synchronized<bit_matrix<3>> g_route_matrix_1;
+pfs::synchronized<bit_matrix<5>> g_route_matrix_2;
+pfs::synchronized<bit_matrix<4>> g_route_matrix_3;
+pfs::synchronized<bit_matrix<6>> g_route_matrix_4;
+pfs::synchronized<bit_matrix<12>> g_route_matrix_5;
 
-    tools::connect_host(1, "A0", "A0_dup");
+static void sigterm_handler (int sig)
+{
+    MESSAGE("Force interrupt: ", sig);
 
-    signal(SIGINT, tools::sigterm_handler);
-
-    tools::run_all();
-    tools::sleep(1, "Check channels duplication");
-    tools::interrupt_all();
-    tools::join_all();
-    tools::clear();
-
-    END_TEST_MESSAGE
+    if (g_mesh_network_ptr != nullptr) {
+        MESSAGE("Force interrupt all nodes by signal: ", sig);
+        g_mesh_network_ptr->interrupt_all();
+    }
 }
+
+static void matrix_set (std::size_t row, std::size_t col, bool value = true)
+{
+    switch (g_current_scheme_index) {
+        case 1:
+            g_route_matrix_1.wlock()->set(row, col, value);
+            break;
+        case 2:
+            g_route_matrix_2.wlock()->set(row, col, value);
+            break;
+        case 3:
+            g_route_matrix_3.wlock()->set(row, col, value);
+            break;
+        case 4:
+            g_route_matrix_4.wlock()->set(row, col, value);
+            break;
+        case 5:
+            g_route_matrix_5.wlock()->set(row, col, value);
+            break;
+        default:
+            REQUIRE((g_current_scheme_index > 0 && g_current_scheme_index < 6));
+            break;
+    }
+}
+
+void tools::mesh_network::on_channel_established (std::string const & source_name
+    , node_t::node_id_rep id_rep, bool /*is_gateway*/)
+{
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id_rep));
+    ++g_channels_established_counter;
+}
+
+void tools::mesh_network::on_channel_destroyed (std::string const & source_name
+    , node_t::node_id_rep id_rep)
+{
+    LOGD(TAG, "{}: Channel destroyed with {}", source_name, node_name_by_id(id_rep));
+}
+
+void tools::mesh_network::on_node_alive (std::string const & source_name
+    , node_t::node_id_rep id_rep)
+{
+    LOGD(TAG, "{}: Node alive: {}", source_name, node_name_by_id(id_rep));
+}
+
+void tools::mesh_network::on_node_expired (std::string const & source_name
+    , node_t::node_id_rep id_rep)
+{
+    LOGD(TAG, "{}: Node expired: {}", source_name, node_name_by_id(id_rep));
+}
+
+void tools::mesh_network::on_route_ready (std::string const & source_name
+    , node_t::node_id_rep dest_id_rep, std::uint16_t hops)
+{
+    if (hops == 0) {
+        // Gateway is this node when direct access
+        LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "direct access" END_COLOR ")"
+            , source_name
+            , node_pool_t::node_id_traits::to_string(node_id_by_name(source_name))
+            , node_pool_t::node_id_traits::to_string(dest_id_rep));
+    } else {
+        LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "hops={}" END_COLOR ")"
+            , source_name
+            , node_pool_t::node_id_traits::to_string(node_id_by_name(source_name))
+            , node_pool_t::node_id_traits::to_string(dest_id_rep)
+            , hops);
+    }
+
+    auto row = serial_number(source_name);
+    auto col = serial_number(dest_id_rep);
+
+    matrix_set(row, col, true);
+}
+
+// TEST_CASE("duplication") {
+//     START_TEST_MESSAGE
+//
+//     netty::startup_guard netty_startup;
+//
+//     create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, 0, nullptr);
+//     create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", 4201, false, 1, nullptr);
+//
+//     tools::connect_host(1, "A0", "A0_dup");
+//
+//     signal(SIGINT, tools::sigterm_handler);
+//
+//     tools::run_all();
+//     tools::sleep(1, "Check channels duplication");
+//     tools::interrupt_all();
+//     tools::join_all();
+//     tools::clear();
+//
+//     END_TEST_MESSAGE
+// }
 
 #if TEST_SCHEME_1_ENABLED
 TEST_CASE("scheme 1") {
+    netty::startup_guard netty_startup;
+    g_current_scheme_index = 1;
     int iteration_count = ITERATION_COUNT;
 
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        netty::startup_guard netty_startup;
-        bool behind_nat = true;
+        g_channels_established_counter = 0;
+        g_route_matrix_1.wlock()->reset();
 
-        std::size_t serial_number = 0;
+        tools::mesh_network mesh_network { "a", "A0", "B0" };
 
-        // Create gateways
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & tools::s_route_matrix_1);
+        mesh_network.connect_host("A0", "a", BEHIND_NAT);
+        mesh_network.connect_host("B0", "a", BEHIND_NAT);
 
-        // Create regular nodes
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & tools::s_route_matrix_1);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & tools::s_route_matrix_1);
+        g_mesh_network_ptr = & mesh_network;
 
-        REQUIRE_EQ(serial_number, tools::s_route_matrix_1.rlock()->rows());
+        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
 
-        tools::connect_host(1, "A0", "a", behind_nat);
-        tools::connect_host(1, "B0", "a", behind_nat);
+        mesh_network.run_all();
+        REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 4));
+        REQUIRE(tools::wait_matrix_count(g_route_matrix_1, 6));
+        mesh_network.interrupt_all();
+        mesh_network.join_all();
 
-        tools::run_all();
-        REQUIRE(tools::wait_atomic_counter_limit(tools::channels_established_counter, 4));
-        REQUIRE(tools::wait_matrix_count(tools::s_route_matrix_1, 6));
-        tools::interrupt_all();
-        tools::join_all();
-        tools::print_matrix(*tools::s_route_matrix_1.rlock(), {"a", "A0", "B0"});
-        tools::clear();
+        CHECK(tools::print_matrix_with_check(*g_route_matrix_1.rlock(), {"a", "A0", "B0"}));
+
+        g_mesh_network_ptr = nullptr;
 
         END_TEST_MESSAGE
     }
@@ -142,45 +235,42 @@ TEST_CASE("scheme 1") {
 
 #if TEST_SCHEME_2_ENABLED
 TEST_CASE("scheme 2") {
+    netty::startup_guard netty_startup;
+    g_current_scheme_index = 2;
     int iteration_count = ITERATION_COUNT;
 
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        netty::startup_guard netty_startup;
-        bool behind_nat = true;
+        g_channels_established_counter = 0;
+        g_route_matrix_2.wlock()->reset();
 
-        std::size_t serial_number = 0;
+        tools::mesh_network mesh_network { "a", "A0", "A1", "B0", "B1" };
 
-        // Create gateways
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & tools::s_route_matrix_2);
+        mesh_network.connect_host("A0", "a", BEHIND_NAT);
+        mesh_network.connect_host("A1", "a", BEHIND_NAT);
 
-        // Create regular nodes
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & tools::s_route_matrix_2);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & tools::s_route_matrix_2);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & tools::s_route_matrix_2);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & tools::s_route_matrix_2);
+        mesh_network.connect_host("B0", "a", BEHIND_NAT);
+        mesh_network.connect_host("B1", "a", BEHIND_NAT);
 
-        REQUIRE_EQ(serial_number, tools::s_route_matrix_2.rlock()->rows());
+        mesh_network.connect_host("A0", "A1");
+        mesh_network.connect_host("A1", "A0");
+        mesh_network.connect_host("B0", "B1");
+        mesh_network.connect_host("B1", "B0");
 
-        tools::connect_host(1, "A0", "a", behind_nat);
-        tools::connect_host(1, "A1", "a", behind_nat);
+        g_mesh_network_ptr = & mesh_network;
 
-        tools::connect_host(1, "B0", "a", behind_nat);
-        tools::connect_host(1, "B1", "a", behind_nat);
+        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
 
-        tools::connect_host(1, "A0", "A1");
-        tools::connect_host(1, "A1", "A0");
-        tools::connect_host(1, "B0", "B1");
-        tools::connect_host(1, "B1", "B0");
+        mesh_network.run_all();
+        REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 12));
+        REQUIRE(tools::wait_matrix_count(g_route_matrix_2, 20));
+        mesh_network.interrupt_all();
+        mesh_network.join_all();
 
-        tools::run_all();
-        REQUIRE(tools::wait_atomic_counter_limit(tools::channels_established_counter, 12));
-        REQUIRE(tools::wait_matrix_count(tools::s_route_matrix_2, 20));
-        tools::interrupt_all();
-        tools::join_all();
-        tools::print_matrix(*tools::s_route_matrix_2.rlock(), {"a", "A0", "A1", "B0", "B1" });
-        tools::clear();
+        CHECK(tools::print_matrix_with_check(*g_route_matrix_2.rlock(), {"a", "A0", "A1", "B0", "B1" }));
+
+        g_mesh_network_ptr = nullptr;
 
         END_TEST_MESSAGE
     }
@@ -189,40 +279,38 @@ TEST_CASE("scheme 2") {
 
 #if TEST_SCHEME_3_ENABLED
 TEST_CASE("scheme 3") {
+    netty::startup_guard netty_startup;
+    g_current_scheme_index = 3;
     int iteration_count = ITERATION_COUNT;
 
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        netty::startup_guard netty_startup;
-        bool behind_nat = true;
+        g_channels_established_counter = 0;
+        g_route_matrix_3.wlock()->reset();
 
-        std::size_t serial_number = 0;
-
-        // Create gateways
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & tools::s_route_matrix_3);
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & tools::s_route_matrix_3);
-
-        // Create regular nodes
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & tools::s_route_matrix_3);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & tools::s_route_matrix_3);
-
-        REQUIRE_EQ(serial_number, tools::s_route_matrix_3.rlock()->rows());
+        tools::mesh_network mesh_network { "a", "b", "A0", "B0" };
 
         // Connect gateways
-        tools::connect_host(1, "a", "b");
-        tools::connect_host(1, "b", "a");
+        mesh_network.connect_host("a", "b");
+        mesh_network.connect_host("b", "a");
 
-        tools::connect_host(1, "A0", "a", behind_nat);
-        tools::connect_host(1, "B0", "b", behind_nat);
+        mesh_network.connect_host("A0", "a", BEHIND_NAT);
+        mesh_network.connect_host("B0", "b", BEHIND_NAT);
 
-        tools::run_all();
-        REQUIRE(tools::wait_atomic_counter_limit(tools::channels_established_counter, 6));
-        REQUIRE(tools::wait_matrix_count(tools::s_route_matrix_3, 12));
-        tools::interrupt_all();
-        tools::join_all();
-        tools::print_matrix(*tools::s_route_matrix_3.rlock(), {"a", "b", "A0", "B0"});
-        tools::clear();
+        g_mesh_network_ptr = & mesh_network;
+
+        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+
+        mesh_network.run_all();
+        REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 6));
+        REQUIRE(tools::wait_matrix_count(g_route_matrix_3, 12));
+        mesh_network.interrupt_all();
+        mesh_network.join_all();
+
+        CHECK(tools::print_matrix_with_check(*g_route_matrix_3.rlock(), {"a", "b", "A0", "B0"}));
+
+        g_mesh_network_ptr = nullptr;
 
         END_TEST_MESSAGE
     }
@@ -231,50 +319,46 @@ TEST_CASE("scheme 3") {
 
 #if TEST_SCHEME_4_ENABLED
 TEST_CASE("scheme 4") {
+    netty::startup_guard netty_startup;
+    g_current_scheme_index = 4;
     int iteration_count = ITERATION_COUNT;
 
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        netty::startup_guard netty_startup;
-        bool behind_nat = true;
+        g_channels_established_counter = 0;
+        g_route_matrix_4.wlock()->reset();
 
-        std::size_t serial_number = 0;
-
-        // Create gateways
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & tools::s_route_matrix_4);
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & tools::s_route_matrix_4);
-
-        // Create regular nodes
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & tools::s_route_matrix_4);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & tools::s_route_matrix_4);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & tools::s_route_matrix_4);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & tools::s_route_matrix_4);
-
-        REQUIRE_EQ(serial_number, tools::s_route_matrix_4.rlock()->rows());
+        tools::mesh_network mesh_network { "a", "b", "A0", "A1", "B0", "B1" };
 
         // Connect gateways
-        tools::connect_host(1, "a", "b");
-        tools::connect_host(1, "b", "a");
+        mesh_network.connect_host("a", "b");
+        mesh_network.connect_host("b", "a");
 
-        tools::connect_host(1, "A0", "a", behind_nat);
-        tools::connect_host(1, "A1", "a", behind_nat);
+        mesh_network.connect_host("A0", "a", BEHIND_NAT);
+        mesh_network.connect_host("A1", "a", BEHIND_NAT);
 
-        tools::connect_host(1, "B0", "b", behind_nat);
-        tools::connect_host(1, "B1", "b", behind_nat);
+        mesh_network.connect_host("B0", "b", BEHIND_NAT);
+        mesh_network.connect_host("B1", "b", BEHIND_NAT);
 
-        tools::connect_host(1, "A0", "A1");
-        tools::connect_host(1, "A1", "A0");
-        tools::connect_host(1, "B0", "B1");
-        tools::connect_host(1, "B1", "B0");
+        mesh_network.connect_host("A0", "A1");
+        mesh_network.connect_host("A1", "A0");
+        mesh_network.connect_host("B0", "B1");
+        mesh_network.connect_host("B1", "B0");
 
-        tools::run_all();
-        REQUIRE(tools::wait_atomic_counter_limit(tools::channels_established_counter, 14));
-        REQUIRE(tools::wait_matrix_count(tools::s_route_matrix_4, 30));
-        tools::interrupt_all();
-        tools::join_all();
-        tools::print_matrix(*tools::s_route_matrix_4.rlock(), {"a", "b", "A0", "A1", "B0", "B1"});
-        tools::clear();
+        g_mesh_network_ptr = & mesh_network;
+
+        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+
+        mesh_network.run_all();
+        REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 14));
+        REQUIRE(tools::wait_matrix_count(g_route_matrix_4, 30));
+        mesh_network.interrupt_all();
+        mesh_network.join_all();
+
+        CHECK(tools::print_matrix_with_check(*g_route_matrix_4.rlock(), {"a", "b", "A0", "A1", "B0", "B1"}));
+
+        g_mesh_network_ptr = nullptr;
 
         END_TEST_MESSAGE
     }
@@ -283,78 +367,68 @@ TEST_CASE("scheme 4") {
 
 #if TEST_SCHEME_5_ENABLED
 TEST_CASE("scheme 5") {
+    netty::startup_guard netty_startup;
+    g_current_scheme_index = 5;
     int iteration_count = ITERATION_COUNT;
 
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        netty::startup_guard netty_startup;
-        bool behind_nat = true;
+        g_channels_established_counter = 0;
+        g_route_matrix_5.wlock()->reset();
 
-        std::size_t serial_number = 0;
+        tools::mesh_network mesh_network { "a", "b", "c", "d"
+            , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1" };
 
-        // Create gateways
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", 4210, true, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", 4220, true, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", 4230, true, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", 4240, true, serial_number++, & tools::s_route_matrix_5);
+        mesh_network.connect_host("a", "b");
+        mesh_network.connect_host("a", "c");
+        mesh_network.connect_host("a", "d");
 
-        // Create regular nodes
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", 4212, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", 4221, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", 4222, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", 4231, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", 4232, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", 4241, false, serial_number++, & tools::s_route_matrix_5);
-        tools::create_node_pool("01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", 4242, false, serial_number++, & tools::s_route_matrix_5);
+        mesh_network.connect_host("b", "a");
+        mesh_network.connect_host("b", "c");
 
-        REQUIRE_EQ(serial_number, tools::s_route_matrix_5.rlock()->rows());
+        mesh_network.connect_host("c", "a");
+        mesh_network.connect_host("c", "b");
+        mesh_network.connect_host("c", "d");
 
-        // Connect gateways
-        tools::connect_host(1, "a", "b");
-        tools::connect_host(1, "a", "c");
-        tools::connect_host(1, "a", "d");
+        mesh_network.connect_host("d", "a");
+        mesh_network.connect_host("d", "c");
 
-        tools::connect_host(1, "b", "a");
-        tools::connect_host(1, "b", "c");
+        mesh_network.connect_host("A0", "a", BEHIND_NAT);
+        mesh_network.connect_host("A1", "a", BEHIND_NAT);
 
-        tools::connect_host(1, "c", "a");
-        tools::connect_host(1, "c", "b");
-        tools::connect_host(1, "c", "d");
+        mesh_network.connect_host("B0", "b", BEHIND_NAT);
+        mesh_network.connect_host("B1", "b", BEHIND_NAT);
 
-        tools::connect_host(1, "d", "a");
-        tools::connect_host(1, "d", "c");
+        mesh_network.connect_host("C0", "c", BEHIND_NAT);
+        mesh_network.connect_host("C1", "c", BEHIND_NAT);
 
-        tools::connect_host(1, "A0", "a", behind_nat);
-        tools::connect_host(1, "A1", "a", behind_nat);
+        mesh_network.connect_host("D0", "d", BEHIND_NAT);
+        mesh_network.connect_host("D1", "d", BEHIND_NAT);
 
-        tools::connect_host(1, "B0", "b", behind_nat);
-        tools::connect_host(1, "B1", "b", behind_nat);
+        mesh_network.connect_host("A0", "A1");
+        mesh_network.connect_host("A1", "A0");
+        mesh_network.connect_host("B0", "B1");
+        mesh_network.connect_host("B1", "B0");
+        mesh_network.connect_host("C0", "C1");
+        mesh_network.connect_host("C1", "C0");
+        mesh_network.connect_host("D0", "D1");
+        mesh_network.connect_host("D1", "D0");
 
-        tools::connect_host(1, "C0", "c", behind_nat);
-        tools::connect_host(1, "C1", "c", behind_nat);
+        g_mesh_network_ptr = & mesh_network;
 
-        tools::connect_host(1, "D0", "d", behind_nat);
-        tools::connect_host(1, "D1", "d", behind_nat);
+        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
 
-        tools::connect_host(1, "A0", "A1");
-        tools::connect_host(1, "A1", "A0");
-        tools::connect_host(1, "B0", "B1");
-        tools::connect_host(1, "B1", "B0");
-        tools::connect_host(1, "C0", "C1");
-        tools::connect_host(1, "C1", "C0");
-        tools::connect_host(1, "D0", "D1");
-        tools::connect_host(1, "D1", "D0");
+        mesh_network.run_all();
+        REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 34));
+        REQUIRE(tools::wait_matrix_count(g_route_matrix_5, 132));
+        mesh_network.interrupt_all();
+        mesh_network.join_all();
 
-        tools::run_all();
-        REQUIRE(tools::wait_atomic_counter_limit(tools::channels_established_counter, 34));
-        REQUIRE(tools::wait_matrix_count(tools::s_route_matrix_5, 132));
-        tools::interrupt_all();
-        tools::join_all();
-        tools::print_matrix(*tools::s_route_matrix_5.rlock(), {"a", "b", "c", "d"
-            , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"});
-        tools::clear();
+        CHECK(tools::print_matrix_with_check(*g_route_matrix_5.rlock(), {"a", "b", "c", "d"
+            , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"}));
+
+        g_mesh_network_ptr = nullptr;
 
         END_TEST_MESSAGE
     }

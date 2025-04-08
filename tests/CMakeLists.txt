@@ -28,9 +28,12 @@ else()
     message(STATUS "Fetching lorem complete")
 endif()
 
+####################################################################################################
+# Common netty tests
+####################################################################################################
+
 set(TESTS
     inet4_addr
-
     reliable_delivery_manager)
 
 foreach (target ${TESTS})
@@ -39,10 +42,20 @@ foreach (target ${TESTS})
     add_test(NAME ${target} COMMAND ${target})
 endforeach()
 
-add_executable(meshnet_routing_table meshnet/routing_table.cpp)
-target_link_libraries(meshnet_routing_table PRIVATE pfs::netty)
-add_test(NAME meshnet_routing_table COMMAND meshnet_routing_table)
+####################################################################################################
+# Meshnet tests
+####################################################################################################
+add_executable(meshnet-routing-table-tests meshnet/routing_table.cpp)
+target_link_libraries(meshnet-routing-table-tests PRIVATE pfs::netty)
+add_test(NAME meshnet-routing-table-tests COMMAND meshnet_routing_table)
 
+add_executable(meshnet-messaging-tests meshnet/messaging.cpp)
+target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty)
+add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
+
+####################################################################################################
+# Channel connection tests
+####################################################################################################
 get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
 get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)
 get_target_property(_epoll_enabled netty NETTY__EPOLL_ENABLED)

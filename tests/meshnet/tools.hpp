@@ -7,20 +7,29 @@
 //      2025.03.11 Initial version.
 //      2025.04.07 Moved to tools.hpp.
 ////////////////////////////////////////////////////////////////////////////////
+#include "bit_matrix.hpp"
+#include "node.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
+#include <pfs/fmt.hpp>
+#include <pfs/log.hpp>
 #include <pfs/synchronized.hpp>
-#include <pfs/universal_id_hash.hpp>
+#include <pfs/netty/socket4_addr.hpp>
 #include <atomic>
+#include <cstdint>
 #include <chrono>
+#include <thread>
 #include <unordered_map>
 #include <vector>
-
-// Black        0;30     Dark Gray     1;30
-// Blue         0;34     Light Blue    1;34
-// Purple       0;35     Light Purple  1;35
+#include <signal.h>
 
 #define COLOR(x) "\033[" #x "m"
+#define BALCK     COLOR(0;30)
+#define DGRAY     COLOR(1;30)
+#define BLUE      COLOR(0;34)
+#define LBLUE     COLOR(1;34)
+#define PURPLE    COLOR(0;35)
+#define LPURPLE   COLOR(1;35)
 #define LGRAY     COLOR(0;37)
 #define GREEN     COLOR(0;32)
 #define LGREEN    COLOR(1;32)
@@ -36,138 +45,234 @@
 static constexpr char const * TAG = CYAN "meshnet-test" END_COLOR;
 
 namespace tools {
-    struct context
+
+inline void sleep (int timeout, std::string const & description = std::string{})
+{
+    if (description.empty()) {
+        LOGD(TAG, "Waiting for {} seconds", timeout);
+    } else {
+        LOGD(TAG, "{}: waiting for {} seconds", description, timeout);
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds{timeout});
+}
+
+template <typename AtomicCounter>
+bool wait_atomic_counter (AtomicCounter & counter
+    , typename AtomicCounter::value_type limit
+    , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+{
+    pfs::countdown_timer<std::milli> timer {timelimit};
+
+    while (counter.load() < limit && timer.remain_count() > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+
+    return !(counter.load() < limit);
+}
+
+template <typename SyncRouteMatrix>
+bool wait_matrix_count (SyncRouteMatrix & safe_matrix, std::size_t limit
+, std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+{
+    pfs::countdown_timer<std::milli> timer {timelimit};
+
+    while (safe_matrix.rlock()->count() < limit && timer.remain_count() > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+
+    return !(safe_matrix.rlock()->count() < limit);
+}
+
+class signal_guard
+{
+    int sig {0};
+    sighandler_t old_handler;
+
+public:
+    signal_guard (int sig, sighandler_t handler)
+        : sig(sig)
     {
-        std::shared_ptr<node_pool_t> node_pool;
+        old_handler = signal(sig, handler);
+    }
+
+    ~signal_guard ()
+    {
+        signal(sig, old_handler);
+    }
+};
+
+class mesh_network;
+
+class node_pool_dictionary
+{
+public:
+    struct entry
+    {
+        node_pool_t::options opts;
         std::uint16_t port;
+    };
+
+private:
+    std::unordered_map<std::string, entry> _data;
+
+public:
+    node_pool_dictionary (std::initializer_list<entry> init)
+    {
+        for (auto && x: init)
+            _data.insert({x.opts.name, std::move(x)});
+    }
+
+public:
+    entry const * locate (std::string const & name) const
+    {
+        auto pos = _data.find(name);
+        PFS__ASSERT(pos != _data.end(), "");
+        return & pos->second;
+    }
+
+    entry const * locate (node_pool_t::node_id id) const
+    {
+        entry const * ptr = nullptr;
+
+        for (auto const & x: _data) {
+            if (x.second.opts.id == id) {
+                ptr = & x.second;
+                break;
+            }
+        }
+
+        PFS__ASSERT(ptr != nullptr, "");
+        return ptr;
+    }
+
+    entry const * locate (node_pool_t::node_id_rep id_rep) const
+    {
+        return locate(node_pool_t::node_id_traits::cast(id_rep));
+    }
+
+    std::shared_ptr<node_pool_t>
+    create_node_pool (std::string const & name, mesh_network * this_net) const;
+};
+
+constexpr bool GATEWAY_FLAG = true;
+constexpr bool REGULAR_NODE_FLAG = false;
+
+class mesh_network
+{
+private:
+    struct context {
+        std::shared_ptr<node_pool_t> np_ptr;
         std::size_t serial_number; // Serial number used in matrix to check tests results
     };
 
-    pfs::synchronized<std::unordered_map<node_pool_t::node_id, std::string>> name_dictionary;
-    std::unordered_map<std::string, context> nodes;
-    std::vector<std::thread> threads;
-    std::atomic_int channels_established_counter {0};
-    std::atomic_int channels_destroyed_counter {0};
+private:
+    node_pool_dictionary _np_dictionary;
+    std::unordered_map<std::string, context> _node_pools;
+    std::vector<std::thread> _threads;
 
-    using stub_matrix_type = pfs::synchronized<bit_matrix<1>>;
-    pfs::synchronized<bit_matrix<3>> s_route_matrix_1;
-    pfs::synchronized<bit_matrix<5>> s_route_matrix_2;
-    pfs::synchronized<bit_matrix<4>> s_route_matrix_3;
-    pfs::synchronized<bit_matrix<6>> s_route_matrix_4;
-    pfs::synchronized<bit_matrix<12>> s_route_matrix_5;
+public:
+    void on_channel_established (std::string const & source_name, node_t::node_id_rep id_rep
+        , bool is_gateway);
+    void on_channel_destroyed (std::string const & source_name, node_t::node_id_rep id_rep);
+    void on_node_alive (std::string const & source_name, node_t::node_id_rep id_rep);
+    void on_node_expired (std::string const & source_name, node_t::node_id_rep id_rep);
+    void on_route_ready (std::string const & source_name, node_t::node_id_rep dest_id_rep
+        , std::uint16_t hops);
 
-    void clear ()
+public:
+    mesh_network (std::initializer_list<std::string> np_names)
+        : _np_dictionary {
+            // Gateways
+              { {"01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", GATEWAY_FLAG}, 4210 }
+            , { {"01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", GATEWAY_FLAG}, 4220 }
+            , { {"01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", GATEWAY_FLAG}, 4230 }
+            , { {"01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", GATEWAY_FLAG}, 4240 }
+
+            // Regular nodes
+            , { {"01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", REGULAR_NODE_FLAG}, 4211 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", REGULAR_NODE_FLAG}, 4212 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", REGULAR_NODE_FLAG}, 4221 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", REGULAR_NODE_FLAG}, 4222 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", REGULAR_NODE_FLAG}, 4231 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", REGULAR_NODE_FLAG}, 4232 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", REGULAR_NODE_FLAG}, 4241 }
+            , { {"01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", REGULAR_NODE_FLAG}, 4242 }
+        }
     {
-        name_dictionary.wlock()->clear();
-        nodes.clear();
-        threads.clear();
-        channels_established_counter = 0;
-        channels_destroyed_counter = 0;
-        s_route_matrix_1.wlock()->reset();
-        s_route_matrix_2.wlock()->reset();
-        s_route_matrix_3.wlock()->reset();
-        s_route_matrix_4.wlock()->reset();
-        s_route_matrix_5.wlock()->reset();
+        std::size_t seria_number = 0;
+
+        for (auto const & name: np_names) {
+            auto np_ptr = _np_dictionary.create_node_pool(name, this);
+            PFS__ASSERT(np_ptr != nullptr, "");
+            _node_pools.insert({name, {np_ptr, seria_number++}});
+        }
     }
 
-    void sigterm_handler (int sig)
+private:
+    context * locate (std::string const & name)
     {
-        MESSAGE("Force interrupt all nodes by signal: ", sig);
-
-        for (auto & x: nodes)
-            x.second.node_pool->interrupt();
+        auto pos = _node_pools.find(name);
+        PFS__ASSERT(pos != _node_pools.end(), "");
+        return & pos->second;
     }
 
-    inline void sleep (int timeout, std::string const & description = std::string{})
+    context * locate (node_pool_t::node_id_rep id_rep)
     {
-        if (description.empty()) {
-            LOGD(TAG, "Waiting for {} seconds", timeout);
-        } else {
-            LOGD(TAG, "{}: waiting for {} seconds", description, timeout);
+        context * ptr = nullptr;
+
+        for (auto & x: _node_pools) {
+            if (x.second.np_ptr->id_rep() == id_rep) {
+                ptr = & x.second;
+                break;
+            }
         }
 
-        std::this_thread::sleep_for(std::chrono::seconds{timeout});
+        PFS__ASSERT(ptr != nullptr, "");
+        return ptr;
     }
 
-    template <typename AtomicCounter>
-    bool wait_atomic_counter_limit (AtomicCounter & counter
-        , typename AtomicCounter::value_type limit
-        , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+public:
+    std::string node_name_by_id (node_pool_t::node_id_rep id_rep)
     {
-        pfs::countdown_timer<std::milli> timer {timelimit};
-
-        while (counter.load() < limit && timer.remain_count() > 0)
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
-
-        return !(counter.load() < limit);
+        return _np_dictionary.locate(id_rep)->opts.name;
     }
 
-    template <typename RouteMatrix>
-    bool wait_matrix_count (RouteMatrix & m, std::size_t limit
-        , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+    std::string node_name_by_id (node_pool_t::node_id id)
     {
-        pfs::countdown_timer<std::milli> timer {timelimit};
-
-        while (m.rlock()->count() < limit && timer.remain_count() > 0)
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
-
-        return !(m.rlock()->count() < limit);
+        return _np_dictionary.locate(id)->opts.name;
     }
 
-    std::string node_name (node_pool_t::node_id const & id)
+    node_pool_t::node_id node_id_by_name (std::string const & name)
     {
-        return name_dictionary.rlock()->at(id);
+        return locate(name)->np_ptr->id();
     }
 
-    std::string node_name (node_pool_t::node_id_rep id_rep)
+    std::size_t serial_number (node_pool_t::node_id_rep id_rep)
     {
-        return node_name(node_pool_t::node_id_traits::cast(id_rep));
+        return locate(id_rep)->serial_number;
     }
 
-    context * get_context (std::string const & name)
+    std::size_t serial_number (std::string const & name)
     {
-        auto pos = nodes.find(name);
-
-        if (pos != nodes.end())
-            return & pos->second;
-
-        PFS__TERMINATE(false, fmt::format("context not found by name: {}", name).c_str());
-        return nullptr;
+        return locate(name)->serial_number;
     }
 
-    context * get_context (node_pool_t::node_id_rep id_rep)
+    void connect_host (std::string const & initiator_name, std::string const & target_name
+        , bool behind_nat = false)
     {
-        return get_context(node_name(id_rep));
-    }
+        meshnet::node_index_t index = 1;
+        auto initiator_ctx = locate(initiator_name);
+        auto target_entry_ptr = _np_dictionary.locate(target_name);
 
-    context * get_context (node_pool_t::node_id id)
-    {
-        return get_context(node_name(id));
-    }
-
-    void connect_host (meshnet::node_index_t index, std::string const & initiator_name
-        , std::string const & target_name, bool behind_nat = false)
-    {
-        auto initiator_ctx = get_context(initiator_name);
-        auto target_ctx    = get_context(target_name);
-
-        netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_ctx->port};
-        initiator_ctx->node_pool->connect_host(index, target_saddr, behind_nat);
-    }
-
-    void connect_host (meshnet::node_index_t index, std::string const & initiator_name
-        , netty::socket4_addr const & target_saddr, bool behind_nat = false)
-    {
-        auto initiator_ctx = get_context(initiator_name);
-        initiator_ctx->node_pool->connect_host(index, target_saddr, behind_nat);
+        netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_entry_ptr->port};
+        initiator_ctx->np_ptr->connect_host(index, target_saddr, behind_nat);
     }
 
     void run_all ()
     {
-        for (auto & x: nodes) {
-            auto ptr = x.second.node_pool;
+        for (auto & x: _node_pools) {
+            auto ptr = x.second.np_ptr;
 
-            threads.emplace_back([ptr] () {
+            _threads.emplace_back([ptr] () {
                 ptr->run();
             });
         }
@@ -175,121 +280,104 @@ namespace tools {
 
     void interrupt (std::string const & name)
     {
-        auto pctx = get_context(name);
-        pctx->node_pool->interrupt();
+        auto ptr = locate(name);
+        PFS__ASSERT(ptr != nullptr, "");
+        ptr->np_ptr->interrupt();
     }
 
     void interrupt_all ()
     {
-        for (auto & x: nodes) {
-            auto ptr = x.second.node_pool;
-            ptr->interrupt();
-        }
+        for (auto & x: _node_pools)
+            x.second.np_ptr->interrupt();
     }
 
     void join_all ()
     {
-        for (auto & x: threads)
-            x.join();
+        for (auto & t: _threads)
+            t.join();
     }
+};
 
-    template <typename RouteMatrix>
-    void print_matrix (RouteMatrix & m, std::vector<char const *> caption)
-    {
-        fmt::print("[   ]");
 
-        for (std::size_t j = 0; j < m.columns(); j++)
-            fmt::print("[{:^3}]", caption[j]);
+std::shared_ptr<node_pool_t>
+node_pool_dictionary::create_node_pool (std::string const & name, mesh_network * this_meshnet) const
+{
+    auto const * p = locate(name);
+
+    if (p == nullptr)
+        return std::shared_ptr<node_pool_t>{};
+
+    node_pool_t::options opts = p->opts;
+    netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, p->port};
+
+    node_pool_t::callback_suite callbacks;
+
+    callbacks.on_error = [] (std::string const & errstr) {
+        LOGE(TAG, "{}", errstr);
+    };
+
+    callbacks.on_channel_established = [this_meshnet, name] (node_t::node_id_rep id_rep, bool is_gateway) {
+        this_meshnet->on_channel_established(name, id_rep, is_gateway);
+    };
+
+    callbacks.on_channel_destroyed = [this_meshnet, name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_channel_destroyed(name, id_rep);
+    };
+
+    callbacks.on_node_alive = [this_meshnet, name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_node_alive(name, id_rep);
+    };
+
+    callbacks.on_node_expired = [this_meshnet, name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_node_expired(name, id_rep);
+    };
+
+    // Notify when node alive status changed
+    callbacks.on_route_ready = [this_meshnet, name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
+        this_meshnet->on_route_ready(name, dest_id_rep, hops);
+    };
+
+    auto ptr = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));
+    auto index = ptr->add_node<node_t>({listener_saddr});
+
+    ptr->listen(index, 10);
+    return ptr;
+}
+
+template <typename RouteMatrix>
+bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption)
+{
+    bool success = true;
+    fmt::print("[   ]");
+
+    for (std::size_t j = 0; j < m.columns(); j++)
+        fmt::print("[{:^3}]", caption[j]);
+
+    fmt::println("");
+
+    for (std::size_t i = 0; i < m.rows(); i++) {
+        fmt::print("[{:^3}]", caption[i]);
+
+        for (std::size_t j = 0; j < m.columns(); j++) {
+            if (i == j) {
+
+
+                if (m.test(i, j)) {
+                    fmt::print("[!!!]");
+                    success = false;
+                } else {
+                    fmt::print("[---]");
+                }
+            } else if (m.test(i, j))
+                fmt::print("[{:^3}]", '+');
+            else
+                fmt::print("[   ]");
+        }
 
         fmt::println("");
-
-        for (std::size_t i = 0; i < m.rows(); i++) {
-            fmt::print("[{:^3}]", caption[i]);
-
-            for (std::size_t j = 0; j < m.columns(); j++) {
-                if (i == j) {
-                    fmt::print("[XXX]");
-                    REQUIRE(!m.test(i, j));
-                } else if (m.test(i, j))
-                    fmt::print("[{:^3}]", '+');
-                else
-                    fmt::print("[   ]");
-            }
-
-            fmt::println("");
-        }
     }
 
-    template <typename RouteMatrix>
-    void create_node_pool (node_pool_t::node_id id, std::string name, std::uint16_t port
-        , bool is_gateway, std::size_t serial_number, RouteMatrix * route_matrix)
-    {
-        node_pool_t::options opts;
-        opts.id = id;
-        opts.name = name;
-        opts.is_gateway = is_gateway;
-        netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, port};
+    return success;
+}
 
-        node_pool_t::callback_suite callbacks;
-
-        callbacks.on_error = [] (std::string const & msg) {
-            LOGE(TAG, "{}", msg);
-        };
-
-        callbacks.on_channel_established = [name] (node_t::node_id_rep id_rep, bool is_gateway) {
-            auto node_type = is_gateway ? "gateway node" : "regular node";
-
-            LOGD(TAG, "{}: Channel established with {}: {}", name, node_type, tools::node_name(id_rep));
-            ++tools::channels_established_counter;
-        };
-
-        callbacks.on_channel_destroyed = [name] (node_t::node_id_rep id_rep) {
-            LOGD(TAG, "{}: Channel destroyed with {}", name, tools::node_name(id_rep));
-            ++tools::channels_destroyed_counter;
-        };
-
-        // Notify when node alive status changed
-        callbacks.on_node_alive = [name] (node_t::node_id_rep id_rep) {
-            LOGD(TAG, "{}: Node alive: {}", name, tools::node_name(id_rep));
-        };
-
-        // Notify when node alive status changed
-        callbacks.on_node_expired = [name] (node_t::node_id_rep id_rep) {
-            LOGD(TAG, "{}: Node expired: {}", name, tools::node_name(id_rep));
-        };
-
-        // Notify when node alive status changed
-        callbacks.on_route_ready = [id, name, route_matrix] (node_t::node_id_rep dest, std::uint16_t hops) {
-            if (hops == 0) {
-                // Gateway is this node when direct access
-                LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "direct access" END_COLOR ")"
-                , name
-                , node_pool_t::node_id_traits::to_string(id)
-                , node_pool_t::node_id_traits::to_string(dest));
-            } else {
-                LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "hops={}" END_COLOR ")"
-                , name
-                , node_pool_t::node_id_traits::to_string(id)
-                , node_pool_t::node_id_traits::to_string(dest)
-                , hops);
-            }
-
-            auto this_ctx = tools::get_context(id);
-            auto dest_ctx = tools::get_context(dest);
-
-            auto row = this_ctx->serial_number;
-            auto col = dest_ctx->serial_number;
-
-            if (route_matrix != nullptr)
-                route_matrix->wlock()->set(row, col, true);
-        };
-
-        auto node_pool = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));
-        auto node_index = node_pool->add_node<node_t>({listener_saddr});
-
-        node_pool->listen(node_index, 10);
-
-        tools::name_dictionary.wlock()->insert({node_pool->id(), name});
-        tools::nodes.insert({std::move(name), {node_pool, port, serial_number}});
-    }
 } // namespace tools
