@@ -28,6 +28,7 @@
 #include <pfs/i18n.hpp>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -44,6 +45,7 @@ template <typename ChannelCollection
     , typename ReaderPoller
     , typename WriterPoller
     , typename WriterQueue
+    , typename WriterMutex
     , typename SerializerTraits
     , typename ReconnectionPolicy
     , template <typename> class HandshakeProcessor
@@ -67,6 +69,7 @@ private:
         , ReaderPoller
         , WriterPoller
         , WriterQueue
+        , WriterMutex
         , SerializerTraits
         , ReconnectionPolicy
         , HandshakeProcessor
@@ -81,6 +84,7 @@ private:
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
+    using writer_mutex_type = WriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
 
@@ -129,6 +133,9 @@ private:
 
     // Make sense when node is a part of node_pool.
     node_index_t _index {INVALID_NODE_INDEX};
+
+    // Writer mutex to protect sending
+    writer_mutex_type _writer_mtx;
 
 public:
     node (options && opts, std::shared_ptr<CallbackSuite> callbacks)
@@ -339,6 +346,8 @@ public:
     void enqueue (node_id_rep id_rep, int priority, bool force_checksum
         , char const * data, std::size_t len)
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
         auto sid_ptr = _channels.locate_writer(id_rep);
 
         if (sid_ptr != nullptr) {
@@ -355,6 +364,8 @@ public:
     void enqueue (node_id_rep id_rep, int priority, bool force_checksum
         , std::vector<char> && data)
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
         auto sid_ptr = _channels.locate_writer(id_rep);
 
         if (sid_ptr != nullptr) {
@@ -379,10 +390,71 @@ public:
     }
 
     /**
+     * Enqueue serialized packet to send.
+     */
+    void enqueue_packet (node_id_rep id_rep, int priority, std::vector<char> && data)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        auto sid_ptr = _channels.locate_writer(id_rep);
+
+        if (sid_ptr != nullptr) {
+            enqueue_private(*sid_ptr, priority, std::move(data));
+        } else {
+            _callbacks->on_error(tr::f_("channel for send packet not found: {}"
+                , node_id_traits::to_string(id_rep)));
+        }
+    }
+
+    /**
+     * Enqueue serialized packet to send.
+     */
+    void enqueue_packet (node_id_rep id_rep, int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        auto sid_ptr = _channels.locate_writer(id_rep);
+
+        if (sid_ptr != nullptr) {
+            enqueue_private(*sid_ptr, priority, data, len);
+        } else {
+            _callbacks->on_error(tr::f_("channel for send packet not found: {}"
+                , node_id_traits::to_string(id_rep)));
+        }
+    }
+
+    /**
+     * Enqueue serialized packet to broadcast send.
+     */
+    void enqueue_broadcast_packet (int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        _channels.for_each_writer([this, priority, data, len] (node_id_rep, socket_id sid) {
+            _writer_pool.enqueue(sid, priority, data, len);
+        });
+    }
+
+    /**
+     * Enqueue serialized packet to forward it excluding sender.
+     */
+    void enqueue_forward_packet (node_id_rep sender_id_rep, int priority
+        , char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        _channels.for_each_writer([this, sender_id_rep, priority, data, len] (node_id_rep id_rep, socket_id sid) {
+            if (id_rep != sender_id_rep)
+                _writer_pool.enqueue(sid, priority, data, len);
+        });
+    }
+
+    /**
      * @return Number of events occurred.
      */
     unsigned int step ()
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
         unsigned int result = 0;
 
         result += _listener_pool.step();
@@ -562,22 +634,6 @@ public: // Below methods are for internal use only
         _writer_pool.enqueue(sid, priority, std::move(data));
     }
 
-    void enqueue_broadcast_packet (int priority, char const * data, std::size_t len)
-    {
-        _channels.for_each_writer([this, priority, data, len] (node_id_rep, socket_id sid) {
-            _writer_pool.enqueue(sid, priority, data, len);
-        });
-    }
-
-    void enqueue_forward_packet (node_id_rep sender_id_rep, int priority
-        , char const * data, std::size_t len)
-    {
-        _channels.for_each_writer([this, sender_id_rep, priority, data, len] (node_id_rep id_rep, socket_id sid) {
-            if (id_rep != sender_id_rep)
-                _writer_pool.enqueue(sid, priority, data, len);
-        });
-    }
-
 public: // node_interface
     template <class Node>
     class node_interface_impl: public node_interface<node_id_traits>
@@ -666,27 +722,12 @@ public: // node_interface
 
         void enqueue_packet (node_id_rep id_rep, int priority, std::vector<char> && data) override
         {
-            auto sid_ptr = Node::_channels.locate_writer(id_rep);
-
-            if (sid_ptr != nullptr) {
-                Node::enqueue_private(*sid_ptr, priority, std::move(data));
-            } else {
-                Node::_callbacks->on_error(tr::f_("channel for send packet not found: {}"
-                    , node_id_traits::to_string(id_rep)));
-            }
+            Node::enqueue_packet(id_rep, priority, std::move(data));
         }
 
-        void enqueue_packet (node_id_rep id_rep, int priority, char const * data
-            , std::size_t len) override
+        void enqueue_packet (node_id_rep id_rep, int priority, char const * data, std::size_t len) override
         {
-            auto sid_ptr = Node::_channels.locate_writer(id_rep);
-
-            if (sid_ptr != nullptr) {
-                Node::enqueue_private(*sid_ptr, priority, data, len);
-            } else {
-                Node::_callbacks->on_error(tr::f_("channel for send packet not found: {}"
-                    , node_id_traits::to_string(id_rep)));
-            }
+            Node::enqueue_packet(id_rep, priority, data, len);
         }
 
         void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) override
@@ -694,8 +735,8 @@ public: // node_interface
             Node::enqueue_broadcast_packet(priority, data, len);
         }
 
-        void enqueue_forward_packet (node_id_rep sender_id_rep, int priority
-            , char const * data, std::size_t len) override
+        void enqueue_forward_packet (node_id_rep sender_id_rep, int priority, char const * data
+            , std::size_t len) override
         {
             Node::enqueue_forward_packet(sender_id_rep, priority, data, len);
         }

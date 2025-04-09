@@ -22,6 +22,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -34,6 +35,7 @@ namespace meshnet {
 template <typename NodeIdTraits
     , typename RoutingTable
     , typename AliveProcessor
+    , typename WriterMutex
     , typename CallbackSuite>
 class node_pool
 {
@@ -41,6 +43,7 @@ class node_pool
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
     using alive_processor_type = AliveProcessor;
+    using writer_mutex_type = WriterMutex;
 
 public:
     using node_id_traits = NodeIdTraits;
@@ -72,6 +75,9 @@ private:
     callback_suite _callbacks;
     std::shared_ptr<node_callbacks> _node_callbacks;
     std::atomic_bool _interrupted {false};
+
+    // Writer mutex to protect sending
+    writer_mutex_type _writer_mtx;
 
 public:
     node_pool (options && opts, callback_suite && callbacks)
@@ -554,6 +560,8 @@ public:
     bool enqueue (node_id_rep id_rep, int priority, bool force_checksum, char const * data
         , std::size_t len)
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
         auto ptr = locate_writer(id_rep);
 
         if (ptr == nullptr) {
@@ -566,9 +574,10 @@ public:
         return true;
     }
 
-    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum
-        , std::vector<char> && data)
+    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum, std::vector<char> && data)
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
         auto ptr = locate_writer(id_rep);
 
         if (ptr == nullptr) {
@@ -606,6 +615,8 @@ public:
      */
     unsigned int step ()
     {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
         unsigned int result = 0;
 
         for (auto & x: _nodes)

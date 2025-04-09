@@ -50,7 +50,7 @@ target_link_libraries(meshnet-routing-table-tests PRIVATE pfs::netty)
 add_test(NAME meshnet-routing-table-tests COMMAND meshnet_routing_table)
 
 add_executable(meshnet-messaging-tests meshnet/messaging.cpp)
-target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty)
+target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
 
 ####################################################################################################

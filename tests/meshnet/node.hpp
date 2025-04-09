@@ -7,6 +7,7 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include <pfs/fake_mutex.hpp>
 #include <pfs/universal_id_traits.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
@@ -66,6 +67,7 @@ using nopriority_meshnet_node_t = meshnet::node<
     , netty::writer_select_poller_t
 #endif
     , netty::writer_queue
+    , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
     , meshnet::reconnection_policy
     , meshnet::single_link_handshake // dual_link_handshake
@@ -97,6 +99,7 @@ using priority_meshnet_node_t = meshnet::node<
     , netty::writer_select_poller_t
 #endif
     , priority_writer_queue_t
+    , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
     , meshnet::reconnection_policy
     , meshnet::single_link_handshake // dual_link_handshake
@@ -129,6 +132,7 @@ using bare_meshnet_node_t = meshnet::node<
     , netty::writer_select_poller_t
 #endif
     , netty::writer_queue
+    , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
     , meshnet::without_reconnection_policy
     , meshnet::without_handshake
@@ -148,4 +152,5 @@ using alive_processor_t = meshnet::alive_processor<netty::patterns::serializer_t
 using node_pool_t = meshnet::node_pool<pfs::universal_id_traits
     , routing_table_t
     , alive_processor_t
+    , std::mutex
     , meshnet::node_pool_callbacks>;

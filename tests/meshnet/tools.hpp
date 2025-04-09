@@ -109,6 +109,7 @@ public:
     {
         node_pool_t::options opts;
         std::uint16_t port;
+        node_pool_t::node_id_rep id_rep;
     };
 
 private:
@@ -117,8 +118,12 @@ private:
 public:
     node_pool_dictionary (std::initializer_list<entry> init)
     {
-        for (auto && x: init)
-            _data.insert({x.opts.name, std::move(x)});
+        for (auto && x: init) {
+            auto res = _data.insert({x.opts.name, std::move(x)});
+            PFS__ASSERT(res.second, "");
+            auto & ent = res.first->second;
+            ent.id_rep = node_pool_t::node_id_traits::cast(ent.opts.id);
+        }
     }
 
 public:
@@ -243,7 +248,14 @@ public:
 
     node_pool_t::node_id node_id_by_name (std::string const & name)
     {
-        return locate(name)->np_ptr->id();
+        // return locate(name)->np_ptr->id();
+        return _np_dictionary.locate(name)->opts.id;
+    }
+
+    node_pool_t::node_id_rep node_id_rep_by_name (std::string const & name)
+    {
+        // return node_pool_t::node_id_traits::cast(locate(name)->np_ptr->id());
+        return _np_dictionary.locate(name)->id_rep;
     }
 
     std::size_t serial_number (node_pool_t::node_id_rep id_rep)
@@ -265,6 +277,15 @@ public:
 
         netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_entry_ptr->port};
         initiator_ctx->np_ptr->connect_host(index, target_saddr, behind_nat);
+    }
+
+    void send (std::string const & src, std::string const & dest, std::string const & text)
+    {
+        int priority = 1;
+        auto sender_ctx = locate(src);
+        auto receiver_id_rep = node_id_rep_by_name(dest);
+
+        sender_ctx->np_ptr->enqueue(receiver_id_rep, priority, text.data(), text.size());
     }
 
     void run_all ()
