@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "node_id_rep.hpp"
+#include "gateway_chain.hpp"
 #include "route_info.hpp"
 #include <pfs/assert.hpp>
 #include <vector>
@@ -20,6 +20,9 @@ namespace meshnet {
 
 enum class route_order_enum { direct, reverse };
 
+/**
+ * @deprecated
+ */
 class route_segment
 {
 private:
@@ -57,8 +60,12 @@ public:
     }
 };
 
+/**
+ * @deprecated
+ */
 class route
 {
+private:
     struct segment_item
     {
         route_segment rseg;
@@ -176,12 +183,12 @@ public:
     /**
      * Convert route with segments to route as the chain of nodes (as represented by route_info::route)
      */
-    std::vector<node_id_rep> convert () const
+    gateway_chain_t convert () const
     {
         if (_route.empty())
-            return std::vector<node_id_rep>{};
+            return gateway_chain_t{};
 
-        std::vector<node_id_rep> result;
+        gateway_chain_t result;
 
         if (_route.size() == 1) {
             PFS__TERMINATE(_route[0].rseg.first() == _route[0].rseg.second()

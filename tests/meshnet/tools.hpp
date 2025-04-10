@@ -182,6 +182,8 @@ public:
     void on_node_expired (std::string const & source_name, node_t::node_id_rep id_rep);
     void on_route_ready (std::string const & source_name, node_t::node_id_rep dest_id_rep
         , std::uint16_t hops);
+    void on_message_received (std::string const & receiver_name, node_t::node_id_rep sender_id_rep
+        , int priority, std::vector<char> && bytes);
 
 public:
     mesh_network (std::initializer_list<std::string> np_names)
@@ -356,6 +358,11 @@ node_pool_dictionary::create_node_pool (std::string const & name, mesh_network *
     // Notify when node alive status changed
     callbacks.on_route_ready = [this_meshnet, name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
         this_meshnet->on_route_ready(name, dest_id_rep, hops);
+    };
+
+    callbacks.on_message_received = [this_meshnet, name] (node_t::node_id_rep sender_id_rep
+            , int priority, std::vector<char> && bytes) {
+        this_meshnet->on_message_received(name, sender_id_rep, priority, std::move(bytes));
     };
 
     auto ptr = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));

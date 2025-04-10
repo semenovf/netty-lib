@@ -153,6 +153,10 @@ void tools::mesh_network::on_node_expired (std::string const & source_name
     LOGD(TAG, "{}: Node expired: {}", source_name, node_name_by_id(id_rep));
 }
 
+void tools::mesh_network::on_message_received (std::string const & /*receiver_name*/
+    , node_t::node_id_rep /*sender_id_rep*/, int /*priority*/, std::vector<char> && /*bytes*/)
+{};
+
 void tools::mesh_network::on_route_ready (std::string const & source_name
     , node_t::node_id_rep dest_id_rep, std::uint16_t hops)
 {

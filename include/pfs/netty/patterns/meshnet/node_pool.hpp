@@ -316,17 +316,19 @@ private:
         bool new_route_added = false;
         std::uint16_t hops = 0;
         node_id_rep dest_id_rep {};
+        auto route_order = route_order_enum::direct;
 
         if (is_response) {
             dest_id_rep = rinfo.responder_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
+            route_order = route_order_enum::direct;
 
             // Initiator node received response - add route to the routing table.
             if (rinfo.initiator_id == _id_rep) {
                 if (hops == 0) {
                     new_route_added = _rtab.add_sibling(dest_id_rep);
                 } else {
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::direct);
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
                 }
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
@@ -348,7 +350,7 @@ private:
                         // already been added previously. But let it be for insurance purposes.
                         new_route_added = _rtab.add_sibling(dest_id_rep);
                     } else {
-                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo, route_order_enum::direct);
+                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo.route, route_order);
 
                         // Receiving a route response is an indication that the responder is active.
                         _aproc.update_if(dest_id_rep);
@@ -372,6 +374,7 @@ private:
         } else { // Request
             dest_id_rep = rinfo.initiator_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
+            route_order = route_order_enum::reverse;
 
             // If there is no loop
             if (_id_rep != dest_id_rep) {
@@ -380,10 +383,10 @@ private:
                     if (hops == 0)
                         new_route_added = _rtab.add_sibling(dest_id_rep);
                     else
-                        new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
+                        new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
                 } else {
                     PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo, route_order_enum::reverse);
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
                 }
 
                 // Initiate response and transmit it by the reverse route
@@ -405,6 +408,14 @@ private:
 
         if (new_route_added) {
             PFS__TERMINATE(_id_rep != dest_id_rep, "Fix meshnet::node_pool algorithm");
+#if NETTY__TRACE_ENABLED
+            auto gw_chain_opt = _rtab.gateway_chain_for(dest_id_rep);
+            PFS__TERMINATE(!!gw_chain_opt, "Fix meshnet::node_pool algorithm");
+            NETTY__TRACE("[node_pool]", "Route added: {}->{}: {}"
+                , node_id_traits::to_string(_id_rep)
+                , node_id_traits::to_string(dest_id_rep)
+                , to_string(*gw_chain_opt));
+#endif
             _callbacks.on_route_ready(dest_id_rep, hops);
         }
     }
@@ -433,6 +444,25 @@ private:
         //         enqueue_packet(gwid, 0, msg.data(), msg.size());
         // });
     }
+
+#if NETTY__TRACE_ENABLED
+    inline std::string to_string (gateway_chain_t const & gw_chain)
+    {
+        if (gw_chain.empty())
+            return std::string{};
+
+        std::string result;
+
+        result += node_id_traits::to_string(gw_chain[0]);
+
+        for (std::size_t i = 1; i < gw_chain.size(); i++) {
+            result += "->";
+            result += node_id_traits::to_string(gw_chain[i]);
+        }
+
+        return result;
+    }
+#endif
 
 public:
     node_id_rep id_rep () const noexcept

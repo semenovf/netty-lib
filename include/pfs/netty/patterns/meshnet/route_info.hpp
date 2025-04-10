@@ -8,10 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "node_id_rep.hpp"
+#include "gateway_chain.hpp"
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -25,7 +26,7 @@ struct route_info
     node_id_rep initiator_id;
     node_id_rep responder_id; // not used when request
 
-    std::vector<node_id_rep> route; // router IDs
+    gateway_chain_t route;
 
 public:
     /**
@@ -39,13 +40,6 @@ public:
         }
 
         return pfs::nullopt;
-    }
-
-    std::vector<node_id_rep> reverse_route () const
-    {
-        std::vector<node_id_rep> reversed_route(route.size());
-        std::reverse_copy(route.begin(), route.end(), reversed_route.begin());
-        return reversed_route;
     }
 };
 

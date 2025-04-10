@@ -13,11 +13,13 @@
 #include "node_id_rep.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
-#include "route.hpp"
 #include <pfs/i18n.hpp>
+#include <pfs/universal_id_hash.hpp>
+#include <limits>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -28,14 +30,16 @@ template <typename SerializerTraits>
 class routing_table
 {
     using serializer_traits = SerializerTraits;
-    using route_index_type = int;
-    using route_map_type = std::unordered_multimap<node_id_rep, route_index_type>;
+    using route_map_type = std::unordered_multimap<node_id_rep, std::size_t>;
+
+public:
+    using gateway_chain_type = gateway_chain_t;
 
 private:
     std::unordered_set<node_id_rep> _sibling_nodes;
 
     std::vector<node_id_rep> _gateways;
-    std::vector<route> _routes;
+    std::vector<gateway_chain_type> _routes;
 
     // Used to determine the route to send message.
     route_map_type _route_map;
@@ -50,46 +54,80 @@ public:
     ~routing_table () = default;
 
 private:
-    int find_route (route const & r) const
+    std::pair<bool, std::size_t> find_route (gateway_chain_type const & r) const
     {
-        for (int i = 0; i < _routes.size(); i++) {
-            if (r.equals_to(_routes[i]))
-                return i;
+        for (std::size_t i = 0; i < _routes.size(); i++) {
+            if (r == _routes[i])
+                return std::make_pair(true, i);
         }
 
-        return -1;
+        return std::make_pair(false, std::size_t{0});
     }
 
-    template <typename It>
-    bool add_route (node_id_rep dest, It first, It last)
+    /**
+     * Find route for node @a id_rep with minimim hops (number of gateways).
+     */
+    std::pair<bool, std::size_t> find_route_for (node_id_rep id_rep)
     {
-        route r {first, last};
-
-        auto index = find_route(r);
+        auto min_hops = std::numeric_limits<std::size_t>::max();
+        auto res = _route_map.equal_range(id_rep);
 
         // Not found
-        if (index < 0) {
-            _routes.push_back(std::move(r));
-            index = static_cast<int>(_routes.size() - 1);
+        if (res.first == res.second)
+            return std::make_pair(false, std::size_t{0});
 
-            _route_map.insert({dest, index});
+        std::size_t index = 0;
+
+        for (auto pos = res.first; pos != res.second; ++pos) {
+            auto & r = _routes[pos->second];
+            auto hops = r.size();
+
+            PFS__TERMINATE(hops > 0, "Fix meshnet::routing_table algorithm");
+
+            if (min_hops > hops /*&& r.good()*/) { // FIXME Need the recognition of unreachable routes
+                min_hops = hops;
+                index = pos->second;
+            }
+        }
+
+        // Not found
+        if (min_hops == std::numeric_limits<std::size_t>::max())
+            return std::make_pair(false, std::size_t{0});;
+
+        // Found
+        return std::make_pair(true, index);
+    }
+
+    bool add_route (node_id_rep dest_id_rep, gateway_chain_t gw_chain)
+    {
+        PFS__TERMINATE(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
+
+        auto res = find_route(gw_chain);
+
+        // Not found
+        if (!res.first) {
+            _routes.push_back(std::move(gw_chain));
+            auto index = _routes.size() - 1;
+
+            _route_map.insert({dest_id_rep, index});
             return true;
         } else {
             // Check if record for destination node already exists
-            auto res = _route_map.equal_range(dest);
+            auto range = _route_map.equal_range(dest_id_rep);
 
-            if (res.first != res.second) {
+            if (range.first != range.second) {
                 // Check if route to destination already exists
-                for (auto pos = res.first; pos != res.second; ++pos) {
+                for (auto pos = range.first; pos != range.second; ++pos) {
                     auto & tmp = _routes[pos->second];
 
                     // Already exists
-                    if (tmp.equals_to(tmp))
+                    if (tmp == gw_chain)
                         return false;
                 }
             }
 
-            _route_map.insert({dest, index});
+            auto index = res.second;
+            _route_map.insert({dest_id_rep, index});
             return true;
         }
 
@@ -148,19 +186,17 @@ public:
      *
      * @return @c true if new route added or @c false if route already exists
      */
-    bool add_route (node_id_rep dest, route_info const & rinfo, route_order_enum order)
+    bool add_route (node_id_rep dest, gateway_chain_type const & gw_chain, route_order_enum order)
     {
         if (is_sibling(dest))
             return false;
 
-        route r;
-
         if (order == route_order_enum::reverse) {
-            auto rr = rinfo.reverse_route();
-            return add_route(dest, rr.cbegin(), rr.cend());
+            auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
+            return add_route(dest, std::move(reversed_gw_chain));
         }
 
-        return add_route(dest, rinfo.route.cbegin(), rinfo.route.cend());
+        return add_route(dest, gw_chain);
     }
 
     /**
@@ -168,62 +204,26 @@ public:
      *
      * @return @c true if new route added or @c false if route already exists
      */
-    bool add_subroute (node_id_rep dest, node_id_rep gw, route_info const & rinfo
+    bool add_subroute (node_id_rep dest, node_id_rep gw, gateway_chain_type const & gw_chain
         , route_order_enum order)
     {
         if (is_sibling(dest))
             return false;
 
         if (order == route_order_enum::reverse) {
-            auto rr = rinfo.reverse_route();
+            auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
+            auto pos = std::find(reversed_gw_chain.cbegin(), reversed_gw_chain.cend(), gw);
 
-            auto pos = std::find(rr.cbegin(), rr.cend(), gw);
+            PFS__TERMINATE(pos != reversed_gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-            PFS__TERMINATE(pos != rr.cend(), "Fix meshnet::routing_table algorithm");
-
-            return add_route(dest, ++pos, rr.cend());
+            return add_route(dest, gateway_chain_t(++pos, reversed_gw_chain.cend()));
         }
 
-        auto pos = std::find(rinfo.route.cbegin(), rinfo.route.cend(), gw);
+        auto pos = std::find(gw_chain.cbegin(), gw_chain.cend(), gw);
 
-        PFS__TERMINATE(pos != rinfo.route.cend(), "Fix meshnet::routing_table algorithm");
+        PFS__TERMINATE(pos != gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-        return add_route(dest, ++pos, rinfo.route.end());
-    }
-
-    /**
-     * Searches gateway for destination node @a id.
-     *
-     * @details Preference is given to a route with a low value of hops and its reachability.
-     */
-    pfs::optional<node_id_rep> gateway_for (node_id_rep id_rep)
-    {
-        // Check if direct access
-        if (_sibling_nodes.find(id_rep) != _sibling_nodes.cend())
-            return id_rep;
-
-        auto min_hops = std::numeric_limits<std::size_t>::max();
-        auto res = _route_map.equal_range(id_rep);
-
-        // Not found
-        if (res.first == res.second)
-            return pfs::nullopt;
-
-        pfs::optional<node_id_rep> opt_gwid;
-
-        for (auto pos = res.first; pos != res.second; ++pos) {
-            auto & r = _routes[pos->second];
-            auto hops = r.hops();
-
-            PFS__TERMINATE(hops > 0, "Fix meshnet::routing_table algorithm");
-
-            if (min_hops > hops && r.good()) {
-                min_hops = hops;
-                opt_gwid = r.gateway();
-            }
-        }
-
-        return opt_gwid;
+        return add_route(dest, gateway_chain_t(++pos, gw_chain.cend()));
     }
 
     template <typename F>
@@ -238,6 +238,37 @@ public:
     {
         for (auto const & x: _sibling_nodes)
             f(x);
+    }
+
+    /**
+     * Searches gateway for destination node @a id.
+     *
+     * @details Preference is given to a route with a low value of hops and its reachability.
+     */
+    pfs::optional<node_id_rep> gateway_for (node_id_rep id_rep)
+    {
+        if (is_sibling(id_rep))
+            return id_rep;
+
+        auto res = find_route_for(id_rep);
+
+        if (!res.first)
+            return pfs::nullopt;
+
+        auto & gw_chain = _routes[res.second];
+
+        // Return first gateway in the chain
+        return gw_chain[0];
+    }
+
+    pfs::optional<gateway_chain_type> gateway_chain_for (node_id_rep id_rep)
+    {
+        auto res = find_route_for(id_rep);
+
+        if (!res.first)
+            return pfs::nullopt;
+
+        return _routes[res.second];
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////

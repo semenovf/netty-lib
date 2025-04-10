@@ -99,6 +99,12 @@ void tools::mesh_network::on_route_ready (std::string const & source_name
     g_route_matrix.wlock()->set(row, col, true);
 }
 
+void tools::mesh_network::on_message_received (std::string const & receiver_name
+    , node_t::node_id_rep sender_id_rep, int priority, std::vector<char> && bytes)
+{
+    LOGD(TAG, "Message received by {} from {}", receiver_name, node_name_by_id(sender_id_rep));
+};
+
 TEST_CASE("messaging") {
 
     netty::startup_guard netty_startup;
@@ -159,13 +165,12 @@ TEST_CASE("messaging") {
     auto text = random_text();
     mesh_network.send("A0", "B1", text);
 
-    tools::sleep(2);
-    mesh_network.interrupt_all();
+    // tools::sleep(2);
+    // mesh_network.interrupt_all();
 
     mesh_network.join_all();
 
-
     g_mesh_network_ptr = nullptr;
 
-    fmt::println(random_text());
+    // fmt::println(random_text());
 }
