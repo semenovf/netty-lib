@@ -68,7 +68,7 @@ struct node_callbacks
     std::function<void (int // priority
         , node_id_rep // sender ID
         , node_id_rep // receiver ID
-        , std::vector<char> &&)> forward_global_message
+        , std::vector<char> &&)> forward_global_packet
         = [] (int /*priority*/, node_id_rep /*sender_id*/, node_id_rep /*receiver_id*/
             , std::vector<char> && /*packet*/) {};
 };

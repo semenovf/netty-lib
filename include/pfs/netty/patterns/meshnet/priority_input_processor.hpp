@@ -30,7 +30,7 @@ class priority_input_processor: public basic_input_processor<priority_input_proc
 
     struct account
     {
-        socket_id sid;
+        socket_id sid {Node::socket_type::kINVALID_SOCKET};
         std::array<std::vector<char>, N> priority_buffers; // Buffers to accumulate raw data
         int current_priority {-1};
         std::vector<char> tmp; // Intermediate buffer
@@ -158,10 +158,10 @@ public:
         this->_node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
 
-    void forward_global_message (int priority, node_id_rep sender_id
+    void forward_global_packet (int priority, node_id_rep sender_id
         , node_id_rep receiver_id, std::vector<char> && bytes)
     {
-        this->_node->forward_global_message(priority, sender_id, receiver_id, std::move(bytes));
+        this->_node->forward_global_packet(priority, sender_id, receiver_id, std::move(bytes));
     }
 };
 

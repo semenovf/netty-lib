@@ -146,7 +146,7 @@ public:
                                 if (_node->is_gateway()) {
                                     auto out = serializer_traits::make_serializer();
                                     pkt.serialize(out);
-                                    that->forward_global_message(priority, pkt.sender_id
+                                    that->forward_global_packet(priority, pkt.sender_id
                                         , pkt.receiver_id, out.take());
                                 }
                             }

@@ -51,7 +51,6 @@ void foreach_interface (std::function<void(network_interface const &)> visitor, 
             pfs::throw_or(perr, error {
                   make_error_code(pfs::errc::system_error)
                 , tr::_("not enough memory")
-                , pfs::system_error_text()
             });
 
             return;

@@ -181,11 +181,25 @@ public:
             _callbacks.on_message_received(sender_id, priority, std::move(bytes));
         };
 
-        _node_callbacks->forward_global_message = [this] (int priority
-                , node_id_rep /*sender_id*/, node_id_rep receiver_id
+        _node_callbacks->forward_global_packet = [this] (int priority
+                , node_id_rep sender_id_rep, node_id_rep receiver_id_rep
                 , std::vector<char> && packet) {
-            PFS__TERMINATE(_id_rep != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
-            enqueue_packet(receiver_id, priority, std::move(packet));
+            PFS__TERMINATE(_id_rep != receiver_id_rep && _is_gateway, "Fix meshnet::node_pool algorithm");
+
+            node_id_rep gw_id_rep;
+            auto ptr = locate_writer(receiver_id_rep, & gw_id_rep);
+
+            if (ptr == nullptr) {
+                _callbacks.on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
+                    , node_id_traits::to_string(sender_id_rep)
+                    , node_id_traits::to_string(receiver_id_rep)));
+
+                // TODO Handle unreachable
+
+                return;
+            }
+
+            ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
         };
 
         _aproc.on_alive([this] (node_id_rep id_rep) {
@@ -222,7 +236,7 @@ private:
         return nullptr;
     }
 
-    node_interface_type * locate_writer (node_id_rep id_rep)
+    node_interface_type * locate_writer (node_id_rep id_rep, node_id_rep * gw_id_rep = nullptr)
     {
         if (_nodes.empty())
             return nullptr;
@@ -232,6 +246,9 @@ private:
         // No route or it is unreachable
         if (!gwid_opt)
             return nullptr;
+
+        if (gw_id_rep != nullptr)
+            *gw_id_rep = *gwid_opt;
 
         if (_nodes[0]->has_writer(*gwid_opt))
             return & *_nodes[0];
@@ -592,7 +609,8 @@ public:
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
-        auto ptr = locate_writer(id_rep);
+        node_id_rep gw_id_rep;
+        auto ptr = locate_writer(id_rep, & gw_id_rep);
 
         if (ptr == nullptr) {
             _callbacks.on_error(tr::f_("node not found to send message: {}"
@@ -600,7 +618,8 @@ public:
             return false;
         }
 
-        ptr->enqueue(id_rep, priority, force_checksum, data, len);
+        auto packet = _rtab.serialize_message(_id_rep, gw_id_rep, id_rep, force_checksum, data, len);
+        ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
         return true;
     }
 
@@ -608,7 +627,8 @@ public:
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
-        auto ptr = locate_writer(id_rep);
+        node_id_rep gw_id_rep;
+        auto ptr = locate_writer(id_rep, & gw_id_rep);
 
         if (ptr == nullptr) {
             _callbacks.on_error(tr::f_("node not found to send message: {}"
@@ -616,7 +636,9 @@ public:
             return false;
         }
 
-        ptr->enqueue(id_rep, priority, force_checksum, std::move(data));
+        auto packet = _rtab.serialize_message(_id_rep, gw_id_rep, id_rep, force_checksum
+            , data.data(), data.size());
+        ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
         return true;
     }
 

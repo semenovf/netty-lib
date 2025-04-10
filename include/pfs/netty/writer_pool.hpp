@@ -38,7 +38,7 @@ public:
 private:
     struct account
     {
-        socket_id id;
+        socket_id id {socket_type::kINVALID_SOCKET};
         bool writable {false};   // Socket is writable
         std::uint16_t frame_size {default_frame_size()}; // Initial value is default MTU size
         WriterQueue q; // Output queue

@@ -31,7 +31,7 @@ public:
 private:
     struct account
     {
-        socket_id id;
+        socket_id id {socket_type::kINVALID_SOCKET};
         std::uint16_t frame_size {1500}; // Initial value is default MTU size
     };
 

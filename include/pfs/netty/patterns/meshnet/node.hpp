@@ -174,11 +174,11 @@ public:
             if (_behind_nat.find(sock.saddr()) != _behind_nat.end())
                 behind_nat = true;
 
+            _reconn_policies.erase(sock.saddr());
             _handshake_processor.start(sock.id(), behind_nat);
             _input_processor.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_connected(std::move(sock));
-            _reconn_policies.erase(sock.saddr());
         }).on_connection_refused ([this] (netty::socket4_addr saddr
                 , netty::connection_refused_reason reason) {
             _callbacks->on_error(tr::f_("connection refused for socket: {}: reason: {}"
@@ -607,10 +607,10 @@ private:
         }
     }
 
-    void forward_global_message (int priority, node_id_rep sender_id
+    void forward_global_packet (int priority, node_id_rep sender_id
         , node_id_rep receiver_id, std::vector<char> && packet)
     {
-        _callbacks->forward_global_message(priority, sender_id, receiver_id, std::move(packet));
+        _callbacks->forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
     }
 
     HandshakeProcessor<node> & handshake_processor ()
@@ -639,6 +639,9 @@ public: // node_interface
     class node_interface_impl: public node_interface<node_id_traits>
         , protected Node
     {
+        using node_id = typename Node::node_id;
+        using node_id_rep = typename Node::node_id_rep;
+
     public:
         template <typename ...Args>
         node_interface_impl (Args &&... args)

@@ -37,7 +37,6 @@ inline error notify_addr_change (HANDLE * h, OVERLAPPED * o)
             return error {
                   make_error_code(pfs::errc::system_error)
                 , tr::_("NotifyAddrChange failure")
-                , pfs::system_error_text()
             };
         }
     }
@@ -76,8 +75,7 @@ PMIB_IPADDRTABLE get_ip_addr_table (error * perr)
     if (rc != NO_ERROR) { 
         pfs::throw_or(perr, error {
               make_error_code(pfs::errc::system_error)
-            , tr::_("GetIpAddrTable failure")
-            , pfs::system_error_text(static_cast<int>(rc))
+            , tr::f_("GetIpAddrTable failure: {}", pfs::system_error_text(static_cast<int>(rc)))
         });
 
         FREE(ip_addr_table);
@@ -112,6 +110,12 @@ public:
     OVERLAPPED overlap;
     HANDLE handle {nullptr};
     MIB_IPADDRTABLE * ip_addr_table {nullptr};
+
+public:
+    impl ()
+    {
+        std::memset(& overlap, 0, sizeof(overlap));
+    }
 };
 
 netlink_monitor::netlink_monitor (error * perr)
@@ -154,8 +158,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
             if (success != TRUE) {
                 on_failure(netty::error {
                       make_error_code(pfs::errc::system_error)
-                    , tr::_("WSAResetEvent failure")
-                    , pfs::system_error_text()
+                    , tr::_("WSAResetEvent failure: {}", pfs::system_error_text())
                 });
 
                 n = -1;
@@ -239,8 +242,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
         case WAIT_ABANDONED:
             pfs::throw_or(perr, error {
                   make_error_code(pfs::errc::system_error)
-                , tr::_("WaitForSingleObject abandoned")
-                , pfs::system_error_text()
+                , tr::f_("WaitForSingleObject abandoned: {}", pfs::system_error_text())
             });
             n = -1;
             break;
@@ -248,8 +250,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
         case WAIT_FAILED:
             pfs::throw_or(perr, error {
                   make_error_code(pfs::errc::system_error)
-                , tr::_("WaitForSingleObject failed")
-                , pfs::system_error_text()
+                , tr::f_("WaitForSingleObject failed: {}", pfs::system_error_text())
             });
 
             n = -1;
@@ -258,8 +259,7 @@ int netlink_monitor::poll (std::chrono::milliseconds millis, error * perr)
         default:
             pfs::throw_or(perr, error {
                   pfs::make_error_code(pfs::errc::unexpected_error)
-                , tr::_("WaitForSingleObject")
-                , tr::f_("returned unexpected value: {:x}", rc)
+                , tr::f_("WaitForSingleObject: {}", tr::f_("returned unexpected value: {:x}", rc))
             });
 
             n = -1;

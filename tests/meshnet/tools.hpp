@@ -23,13 +23,18 @@
 #include <vector>
 #include <signal.h>
 
-#define COLOR(x) "\033[" #x "m"
-#define BALCK     COLOR(0;30)
+#if _MSC_VER
+#   define COLOR(x)
+#else
+#   define COLOR(x) "\033[" #x "m"
+#endif
+
+#define BLACK     COLOR(0;30)
 #define DGRAY     COLOR(1;30)
 #define BLUE      COLOR(0;34)
 #define LBLUE     COLOR(1;34)
-#define PURPLE    COLOR(0;35)
-#define LPURPLE   COLOR(1;35)
+#define MAGENTA   COLOR(0;35)
+#define LMAGENTA  COLOR(1;35)
 #define LGRAY     COLOR(0;37)
 #define GREEN     COLOR(0;32)
 #define LGREEN    COLOR(1;32)
@@ -81,6 +86,10 @@ bool wait_matrix_count (SyncRouteMatrix & safe_matrix, std::size_t limit
 
     return !(safe_matrix.rlock()->count() < limit);
 }
+
+#if _MSC_VER
+using sighandler_t = void (*) (int);
+#endif
 
 class signal_guard
 {

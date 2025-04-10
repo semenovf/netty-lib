@@ -42,6 +42,8 @@ using namespace netty::patterns;
 tools::mesh_network * g_mesh_network_ptr = nullptr;
 std::atomic_int g_channels_established_counter {0};
 pfs::synchronized<bit_matrix<12>> g_route_matrix;
+pfs::synchronized<bit_matrix<12>> g_message_matrix;
+std::string g_text;
 
 static void sigterm_handler (int sig)
 {
@@ -103,6 +105,16 @@ void tools::mesh_network::on_message_received (std::string const & receiver_name
     , node_t::node_id_rep sender_id_rep, int priority, std::vector<char> && bytes)
 {
     LOGD(TAG, "Message received by {} from {}", receiver_name, node_name_by_id(sender_id_rep));
+    
+    std::string text(bytes.data(), bytes.size());
+
+    REQUIRE_EQ(text, g_text);
+
+    fmt::println(text);
+
+    auto row = serial_number(sender_id_rep);
+    auto col = serial_number(receiver_name);
+    g_message_matrix.wlock()->set(row, col, true);
 };
 
 TEST_CASE("messaging") {
@@ -114,6 +126,7 @@ TEST_CASE("messaging") {
     };
 
     constexpr bool BEHIND_NAT = true;
+    g_text = random_text();
 
     // Connect gateways
     mesh_network.connect_host("a", "b");
@@ -162,15 +175,12 @@ TEST_CASE("messaging") {
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "d"
         , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"}));
 
-    auto text = random_text();
-    mesh_network.send("A0", "B1", text);
+    mesh_network.send("A0", "B1", g_text);
 
-    // tools::sleep(2);
-    // mesh_network.interrupt_all();
+    REQUIRE(tools::wait_matrix_count(g_message_matrix, 1));
 
+    mesh_network.interrupt_all();
     mesh_network.join_all();
 
     g_mesh_network_ptr = nullptr;
-
-    // fmt::println(random_text());
 }

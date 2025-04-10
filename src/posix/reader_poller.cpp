@@ -78,7 +78,7 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                     // The message was too large to fit into the specified buffer and was truncated.
                     // Is not an error. Process this error as normal result.
                     if (lastWsaError == WSAEMSGSIZE) {
-                        ready_read(fd);
+                        on_ready_read(fd);
                     } else {
 #endif
                         if (errno == ECONNRESET) {

@@ -71,11 +71,11 @@ class priority_writer_queue
     struct item
     {
         std::queue<chunk> q;
-        int frame_counter;
+        int frame_counter {0};
     };
 
 private:
-    std::array<item, N> _qpool;   // queue pool
+    std::array<item, N> _qpool;    // queue pool
     int _priority_index {0};       // queue pool index (same as priority value)
     std::uint64_t _total_size {0}; // total data size excluding _frame.size()
     std::vector<char> _frame;      // current sending frame
@@ -199,7 +199,7 @@ public:
         frame_size = (std::min)(b.size() + priority_frame::header_size(), frame_size);
 
         priority_frame{_priority_index}.serialize(_frame, b.data(), frame_size);
-        b.erase(b.begin(), b.begin() + frame_size - priority_frame::header_size());
+        b.erase(b.begin(), b.begin() + (frame_size - priority_frame::header_size()));
 
         PFS__ASSERT(_total_size >= frame_size - priority_frame::header_size(), "");
 

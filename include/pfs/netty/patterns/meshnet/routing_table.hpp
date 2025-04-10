@@ -275,7 +275,7 @@ public:
     // Serialization methods
     ////////////////////////////////////////////////////////////////////////////////////////////////
     /**
-     * Serialize initial request
+     * Serializes initial request
      */
     std::vector<char> serialize_request (node_id_rep initiator_id)
     {
@@ -287,7 +287,7 @@ public:
     }
 
     /**
-     * Serialize request to forward.
+     * Serializes request to forward.
      */
     std::vector<char> serialize_request (node_id_rep gwid, route_info const & rinfo)
     {
@@ -300,7 +300,7 @@ public:
     }
 
     /**
-     * Serialize initial response
+     * Serializes initial response
      */
     std::vector<char> serialize_response (node_id_rep responder_id, route_info const & rinfo)
     {
@@ -313,7 +313,7 @@ public:
     }
 
     /**
-     * Serialize response to forward.
+     * Serializes response to forward.
      */
     std::vector<char> serialize_response (route_info const & rinfo)
     {
@@ -321,6 +321,28 @@ public:
         route_packet pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.serialize(out);
+        return out.take();
+    }
+
+    /**
+     * Serializes initial custom message.
+     */
+    std::vector<char> serialize_message (node_id_rep sender_id_rep, node_id_rep gw_id_rep
+        , node_id_rep receiver_id_rep, bool force_checksum, char const * data, std::size_t len )
+    {
+        // Enough space for packet header -------------------v
+        auto out = serializer_traits::make_serializer(len + 64);
+
+        // Domestic exchange
+        if (gw_id_rep == receiver_id_rep) {
+            ddata_packet pkt {force_checksum};
+            pkt.serialize(out, data, len);
+            return out.take();
+        }
+
+        // Intersegment exchange
+        gdata_packet pkt {sender_id_rep, receiver_id_rep, force_checksum};
+        pkt.serialize(out, data, len);
         return out.take();
     }
 };
