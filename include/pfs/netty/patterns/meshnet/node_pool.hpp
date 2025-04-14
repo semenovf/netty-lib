@@ -140,6 +140,10 @@ public:
             _callbacks.on_channel_destroyed(id_rep);
         };
 
+        _node_callbacks->on_duplicated = [this] (node_id_rep id_rep, node_index_t, std::string const & name, socket4_addr saddr) {
+            _callbacks.on_duplicated(id_rep, name, saddr);
+        };
+
         _node_callbacks->on_bytes_written = [this] (node_id_rep id_rep, std::uint64_t n) {
             _callbacks.on_bytes_written(id_rep, n);
         };

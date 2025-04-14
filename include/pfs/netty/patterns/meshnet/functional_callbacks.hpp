@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../socket4_addr.hpp"
 #include "alive_info.hpp"
 #include "node_index.hpp"
 #include "route_info.hpp"
@@ -34,6 +35,10 @@ struct node_callbacks
     // Notify when the channel is destroyed with the remote node
     std::function<void (node_id_rep, node_index_t)> on_channel_destroyed
         = [] (node_id_rep, node_index_t) {};
+
+    // Notify when a node with identical ID is detected
+    std::function<void (node_id_rep, node_index_t, std::string const &, socket4_addr)> on_duplicated
+        = [] (node_id_rep, node_index_t, std::string const & /*name*/, socket4_addr) {};
 
     // Notify when data actually sent (written into the socket)
     std::function<void (node_id_rep, std::uint64_t)> on_bytes_written
@@ -84,6 +89,10 @@ struct node_pool_callbacks
 
     // Notify when the channel is destroyed with the remote node
     std::function<void (node_id_rep)> on_channel_destroyed = [] (node_id_rep) {};
+
+    // Notify when a node with identical ID is detected
+    std::function<void (node_id_rep, std::string const &, socket4_addr)> on_duplicated
+        = [] (node_id_rep, std::string const & /*name*/, socket4_addr) {};
 
     // Notify when node alive status changed
     std::function<void (node_id_rep)> on_node_alive = [] (node_id_rep) {};

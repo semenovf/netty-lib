@@ -187,6 +187,9 @@ public:
     void on_channel_established (std::string const & source_name, node_t::node_id_rep id_rep
         , bool is_gateway);
     void on_channel_destroyed (std::string const & source_name, node_t::node_id_rep id_rep);
+    void on_duplicated (std::string const & source_name, node_t::node_id_rep id_rep
+    , std::string const & name, netty::socket4_addr saddr);
+
     void on_node_alive (std::string const & source_name, node_t::node_id_rep id_rep);
     void on_node_expired (std::string const & source_name, node_t::node_id_rep id_rep);
     void on_route_ready (std::string const & source_name, node_t::node_id_rep dest_id_rep
@@ -212,6 +215,9 @@ public:
             , { {"01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", REGULAR_NODE_FLAG}, 4232 }
             , { {"01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", REGULAR_NODE_FLAG}, 4241 }
             , { {"01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", REGULAR_NODE_FLAG}, 4242 }
+
+            // For test duplication
+            , { {"01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", REGULAR_NODE_FLAG}, 4213 }
         }
     {
         std::size_t seria_number = 0;
@@ -380,9 +386,9 @@ public:
 
 
 std::unique_ptr<node_pool_t>
-node_pool_dictionary::create_node_pool (std::string const & name, mesh_network * this_meshnet) const
+node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_network * this_meshnet) const
 {
-    auto const * p = locate(name);
+    auto const * p = locate(source_name);
 
     if (p == nullptr)
         return nullptr; //std::unique_ptr<node_pool_t>{};
@@ -396,30 +402,35 @@ node_pool_dictionary::create_node_pool (std::string const & name, mesh_network *
         LOGE(TAG, "{}", errstr);
     };
 
-    callbacks.on_channel_established = [this_meshnet, name] (node_t::node_id_rep id_rep, bool is_gateway) {
-        this_meshnet->on_channel_established(name, id_rep, is_gateway);
+    callbacks.on_channel_established = [this_meshnet, source_name] (node_t::node_id_rep id_rep, bool is_gateway) {
+        this_meshnet->on_channel_established(source_name, id_rep, is_gateway);
     };
 
-    callbacks.on_channel_destroyed = [this_meshnet, name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_channel_destroyed(name, id_rep);
+    callbacks.on_channel_destroyed = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_channel_destroyed(source_name, id_rep);
     };
 
-    callbacks.on_node_alive = [this_meshnet, name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_node_alive(name, id_rep);
+    callbacks.on_duplicated = [this_meshnet, source_name] (node_t::node_id_rep id_rep
+            , std::string const & name, netty::socket4_addr saddr) {
+        this_meshnet->on_duplicated(source_name, id_rep, name, saddr);
     };
 
-    callbacks.on_node_expired = [this_meshnet, name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_node_expired(name, id_rep);
+    callbacks.on_node_alive = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_node_alive(source_name, id_rep);
+    };
+
+    callbacks.on_node_expired = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+        this_meshnet->on_node_expired(source_name, id_rep);
     };
 
     // Notify when node alive status changed
-    callbacks.on_route_ready = [this_meshnet, name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
-        this_meshnet->on_route_ready(name, dest_id_rep, hops);
+    callbacks.on_route_ready = [this_meshnet, source_name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
+        this_meshnet->on_route_ready(source_name, dest_id_rep, hops);
     };
 
-    callbacks.on_message_received = [this_meshnet, name] (node_t::node_id_rep sender_id_rep
+    callbacks.on_message_received = [this_meshnet, source_name] (node_t::node_id_rep sender_id_rep
             , int priority, std::vector<char> && bytes) {
-        this_meshnet->on_message_received(name, sender_id_rep, priority, std::move(bytes));
+        this_meshnet->on_message_received(source_name, sender_id_rep, priority, std::move(bytes));
     };
 
     auto ptr = std::make_unique<node_pool_t>(std::move(opts), std::move(callbacks));

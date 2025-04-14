@@ -77,6 +77,10 @@ void tools::mesh_network::on_channel_destroyed (std::string const & /*source_nam
     , node_t::node_id_rep /*id_rep*/)
 {}
 
+void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id_rep
+    , std::string const &, netty::socket4_addr)
+{};
+
 void tools::mesh_network::on_node_alive (std::string const & /*source_name*/
     , node_t::node_id_rep /*id_rep*/)
 {}
@@ -109,7 +113,7 @@ void tools::mesh_network::on_message_received (std::string const & receiver_name
     auto row = serial_number(sender_id_rep);
     auto col = serial_number(receiver_name);
     g_message_matrix.wlock()->set(row, col, true);
-};
+}
 
 TEST_CASE("unreachable") {
     netty::startup_guard netty_startup;

@@ -87,7 +87,6 @@ int g_current_scheme_index = 0;
 tools::mesh_network * g_mesh_network_ptr = nullptr;
 std::atomic_int g_channels_established_counter {0};
 
-using stub_matrix_type = pfs::synchronized<bit_matrix<1>>;
 pfs::synchronized<bit_matrix<3>> g_route_matrix_1;
 pfs::synchronized<bit_matrix<5>> g_route_matrix_2;
 pfs::synchronized<bit_matrix<4>> g_route_matrix_3;
@@ -141,6 +140,10 @@ void tools::mesh_network::on_channel_destroyed (std::string const & source_name
     LOGD(TAG, "{}: Channel destroyed with {}", source_name, node_name_by_id(id_rep));
 }
 
+void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id_rep
+    , std::string const &, netty::socket4_addr)
+{};
+
 void tools::mesh_network::on_node_alive (std::string const & source_name
     , node_t::node_id_rep id_rep)
 {
@@ -155,7 +158,7 @@ void tools::mesh_network::on_node_expired (std::string const & source_name
 
 void tools::mesh_network::on_message_received (std::string const & /*receiver_name*/
     , node_t::node_id_rep /*sender_id_rep*/, int /*priority*/, std::vector<char> && /*bytes*/)
-{};
+{}
 
 void tools::mesh_network::on_route_ready (std::string const & source_name
     , node_t::node_id_rep dest_id_rep, std::uint16_t hops)
@@ -179,27 +182,6 @@ void tools::mesh_network::on_route_ready (std::string const & source_name
 
     matrix_set(row, col, true);
 }
-
-// TEST_CASE("duplication") {
-//     START_TEST_MESSAGE
-//
-//     netty::startup_guard netty_startup;
-//
-//     create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", 4211, false, 0, nullptr);
-//     create_node_pool<stub_matrix_type>("01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", 4201, false, 1, nullptr);
-//
-//     tools::connect_host(1, "A0", "A0_dup");
-//
-//     signal(SIGINT, tools::sigterm_handler);
-//
-//     tools::run_all();
-//     tools::sleep(1, "Check channels duplication");
-//     tools::interrupt_all();
-//     tools::join_all();
-//     tools::clear();
-//
-//     END_TEST_MESSAGE
-// }
 
 #if TEST_SCHEME_1_ENABLED
 TEST_CASE("scheme 1") {

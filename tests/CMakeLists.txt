@@ -45,6 +45,10 @@ endforeach()
 ####################################################################################################
 # Meshnet tests
 ####################################################################################################
+add_executable(meshnet-duplication-tests meshnet/duplication.cpp)
+target_link_libraries(meshnet-duplication-tests PRIVATE pfs::netty)
+add_test(NAME meshnet-duplication-tests COMMAND meshnet_duplication)
+
 add_executable(meshnet-routing-table-tests meshnet/routing_table.cpp)
 target_link_libraries(meshnet-routing-table-tests PRIVATE pfs::netty)
 add_test(NAME meshnet-routing-table-tests COMMAND meshnet_routing_table)

@@ -230,10 +230,15 @@ public:
                     break;
                 }
 
-                case handshake_result_enum::duplicated:
-                    _callbacks->on_error(tr::f_("node ID duplication with: {}", name));
+                case handshake_result_enum::duplicated: {
+                    auto psock = _socket_pool.locate(sid);
+                    PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
+
+                    _callbacks->on_duplicated(id_rep, _index, name, psock->saddr());
+
                     close_socket(sid);
                     break;
+                }
 
                 case handshake_result_enum::reject:
                     close_socket(sid);
