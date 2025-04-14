@@ -136,6 +136,11 @@ public:
         return _addr;
     }
 
+    std::uint32_t to_ip4 () const noexcept
+    {
+        return _addr;
+    }
+
 public: // static
     /**
      * Parses IPv4 address from string.
