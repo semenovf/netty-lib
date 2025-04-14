@@ -220,11 +220,17 @@ public:
         return out.take();
     }
 
-    std::vector<char> serialize_unreachable (node_id_rep unreachable_id)
+    /**
+     * Serializes initial custom message.
+     */
+    std::vector<char> serialize_unreachable (node_id_rep gw_id_rep, node_id_rep sender_id_rep
+        , node_id_rep receiver_id_rep)
     {
         auto out = serializer_traits::make_serializer();
         unreachable_packet pkt;
-        pkt.uinfo.id = unreachable_id;
+        pkt.uinfo.gw_id = gw_id_rep;
+        pkt.uinfo.sender_id = sender_id_rep;
+        pkt.uinfo.receiver_id = receiver_id_rep;
         pkt.serialize(out);
         return out.take();
     }

@@ -24,7 +24,9 @@ struct alive_info
 
 struct unreachable_info
 {
-    node_id_rep id;
+    node_id_rep gw_id;       // Last gateway
+    node_id_rep sender_id;   // Sender node
+    node_id_rep receiver_id; // Unreachable node
 };
 
 }} // namespace patterns::meshnet

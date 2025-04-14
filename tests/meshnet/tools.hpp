@@ -18,8 +18,8 @@
 #include <atomic>
 #include <cstdint>
 #include <chrono>
+#include <map>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 #include <signal.h>
 
@@ -122,7 +122,7 @@ public:
     };
 
 private:
-    std::unordered_map<std::string, entry> _data;
+    std::map<std::string, entry> _data;
 
 public:
     node_pool_dictionary (std::initializer_list<entry> init)
@@ -163,7 +163,7 @@ public:
         return locate(node_pool_t::node_id_traits::cast(id_rep));
     }
 
-    std::shared_ptr<node_pool_t>
+    std::unique_ptr<node_pool_t>
     create_node_pool (std::string const & name, mesh_network * this_net) const;
 };
 
@@ -174,14 +174,14 @@ class mesh_network
 {
 private:
     struct context {
-        std::shared_ptr<node_pool_t> np_ptr;
+        std::unique_ptr<node_pool_t> np_ptr;
         std::size_t serial_number; // Serial number used in matrix to check tests results
     };
 
 private:
     node_pool_dictionary _np_dictionary;
-    std::unordered_map<std::string, context> _node_pools;
-    std::vector<std::thread> _threads;
+    std::map<std::string, context> _node_pools;
+    std::map<node_pool_t *, std::thread> _threads;
 
 public:
     void on_channel_established (std::string const & source_name, node_t::node_id_rep id_rep
@@ -219,7 +219,7 @@ public:
         for (auto const & name: np_names) {
             auto np_ptr = _np_dictionary.create_node_pool(name, this);
             PFS__ASSERT(np_ptr != nullptr, "");
-            _node_pools.insert({name, {np_ptr, seria_number++}});
+            _node_pools.insert({name, context{std::move(np_ptr), seria_number++}});
         }
     }
 
@@ -302,12 +302,58 @@ public:
     void run_all ()
     {
         for (auto & x: _node_pools) {
-            auto ptr = x.second.np_ptr;
+            auto ptr = & *x.second.np_ptr;
+            std::thread th {
+                [ptr] () {
+                    LOGD(TAG, "{}: thread started", ptr->name());
+                    ptr->run();
+                    LOGD(TAG, "{}: thread finished", ptr->name());
+                }
+            };
 
-            _threads.emplace_back([ptr] () {
-                ptr->run();
-            });
+            _threads.insert({ptr, std::move(th)});
         }
+    }
+
+    /**
+     * Interrupt thread associated with node pool named by @a name and destroy these node pool.
+     */
+    void destroy (std::string const & name)
+    {
+        auto ctx_ptr = locate(name);
+
+        PFS__ASSERT(ctx_ptr != nullptr, "");
+
+        ctx_ptr->np_ptr->interrupt();
+        auto ptr = & *ctx_ptr->np_ptr;
+
+        auto pos = _threads.find(ptr);
+
+        PFS__ASSERT(pos != _threads.end(), "");
+
+        pos->second.join();
+
+        _threads.erase(pos);
+        _node_pools.erase(name);
+    }
+
+    void print_routing_table (std::string const & name)
+    {
+#if NETTY__TRACE_ENABLED
+        auto ptr = locate(name);
+        PFS__ASSERT(ptr != nullptr, "");
+
+        auto routes = ptr->np_ptr->dump_routing_table();
+
+        LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
+        LOGD(TAG, "│Routes for: {}", name);
+
+        for (auto const & x: routes) {
+            LOGD(TAG, "│    └──── {}", x);
+        }
+
+        LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
+#endif
     }
 
     void interrupt (std::string const & name)
@@ -325,19 +371,21 @@ public:
 
     void join_all ()
     {
-        for (auto & t: _threads)
-            t.join();
+        for (auto & t: _threads) {
+            if (t.second.joinable())
+                t.second.join();
+        }
     }
 };
 
 
-std::shared_ptr<node_pool_t>
+std::unique_ptr<node_pool_t>
 node_pool_dictionary::create_node_pool (std::string const & name, mesh_network * this_meshnet) const
 {
     auto const * p = locate(name);
 
     if (p == nullptr)
-        return std::shared_ptr<node_pool_t>{};
+        return nullptr; //std::unique_ptr<node_pool_t>{};
 
     node_pool_t::options opts = p->opts;
     netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, p->port};
@@ -374,7 +422,7 @@ node_pool_dictionary::create_node_pool (std::string const & name, mesh_network *
         this_meshnet->on_message_received(name, sender_id_rep, priority, std::move(bytes));
     };
 
-    auto ptr = std::make_shared<node_pool_t>(std::move(opts), std::move(callbacks));
+    auto ptr = std::make_unique<node_pool_t>(std::move(opts), std::move(callbacks));
     auto index = ptr->add_node<node_t>({listener_saddr});
 
     ptr->listen(index, 10);

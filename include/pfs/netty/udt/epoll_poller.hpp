@@ -7,8 +7,8 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/error.hpp>
-#include <pfs/netty/chrono.hpp>
+#include "../error.hpp"
+#include "../chrono.hpp"
 #include <map>
 #include <set>
 

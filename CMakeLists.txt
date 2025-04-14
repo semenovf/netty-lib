@@ -48,6 +48,8 @@ if (NOT _library_output_directory)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 endif()
 
+add_subdirectory(3rdparty)
+add_subdirectory(2ndparty)
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)

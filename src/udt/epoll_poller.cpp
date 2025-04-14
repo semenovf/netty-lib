@@ -7,8 +7,8 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "newlib/udt.hpp"
+#include "netty/udt/epoll_poller.hpp"
 #include "pfs/i18n.hpp"
-#include "pfs/netty/udt/epoll_poller.hpp"
 #include <set>
 
 namespace netty {
@@ -21,7 +21,8 @@ epoll_poller::epoll_poller (bool oread, bool owrite)
     eid = UDT::epoll_create();
 
     if (eid < 0) {
-        throw error {tr::f_("UDT epoll_poller: create failure: {}", UDT::getlasterror_desc())};
+        throw error { make_error_code(pfs::errc::backend_error)
+            , tr::f_("UDT epoll_poller: create failure: {}", UDT::getlasterror_desc())};
     }
 }
 
@@ -46,10 +47,8 @@ void epoll_poller::add_socket (socket_id sock, error * perr)
     auto rc = UDT::epoll_add_usock(eid, sock, & events);
 
     if (rc == UDT::ERROR) {
-        pfs::throw_or(perr, error {
-            tr::f_("UDT epoll_poller: add socket ({}) failure: {}", sock, UDT::getlasterror_desc())
-        });
-
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::f_("UDT epoll_poller: add socket ({}) failure: {}", sock, UDT::getlasterror_desc()));
         return;
     }
 
@@ -74,9 +73,8 @@ void epoll_poller::remove_socket (socket_id sock, error * perr)
     auto rc = UDT::epoll_remove_usock(eid, sock);
 
     if (rc == UDT::ERROR) {
-        pfs::throw_or(perr, error {
-            tr::f_("UDT epoll_poller: delete failure: {}", UDT::getlasterror_desc())
-        });
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::f_("UDT epoll_poller: delete failure: {}", UDT::getlasterror_desc()));
 
         return;
     }
@@ -84,9 +82,8 @@ void epoll_poller::remove_socket (socket_id sock, error * perr)
     --counter;
 
     if (counter < 0) {
-        pfs::throw_or(perr, error {
-            tr::_("UDT epoll_poller: counter management not consistent")
-        });
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::_("UDT epoll_poller: counter management not consistent"));
     }
 }
 
@@ -120,10 +117,8 @@ int epoll_poller::poll (int eid, std::set<UDTSOCKET> * readfds
         if (ec == UDT::ERRORINFO::ETIMEOUT) {
             n = 0;
         } else {
-            pfs::throw_or(perr, error {
-                tr::f_("UDT epoll_poller: poll failure: {}", UDT::getlasterror_desc())
-            });
-
+            pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+                , tr::f_("UDT epoll_poller: poll failure: {}", UDT::getlasterror_desc()));
             return n;
         }
     }

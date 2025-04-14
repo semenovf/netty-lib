@@ -14,7 +14,7 @@
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include <pfs/i18n.hpp>
-#include <pfs/universal_id_hash.hpp>
+#include <algorithm>
 #include <limits>
 #include <vector>
 #include <unordered_map>
@@ -98,7 +98,7 @@ private:
         return std::make_pair(true, index);
     }
 
-    bool add_route (node_id_rep dest_id_rep, gateway_chain_t gw_chain)
+    bool add_route_helper (node_id_rep dest_id_rep, gateway_chain_t gw_chain)
     {
         PFS__TERMINATE(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
 
@@ -186,17 +186,17 @@ public:
      *
      * @return @c true if new route added or @c false if route already exists
      */
-    bool add_route (node_id_rep dest, gateway_chain_type const & gw_chain, route_order_enum order)
+    bool add_route (node_id_rep dest, gateway_chain_type const & gw_chain, bool reverse_order = false)
     {
         if (is_sibling(dest))
             return false;
 
-        if (order == route_order_enum::reverse) {
+        if (reverse_order) {
             auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
-            return add_route(dest, std::move(reversed_gw_chain));
+            return add_route_helper(dest, std::move(reversed_gw_chain));
         }
 
-        return add_route(dest, gw_chain);
+        return add_route_helper(dest, gw_chain);
     }
 
     /**
@@ -205,39 +205,76 @@ public:
      * @return @c true if new route added or @c false if route already exists
      */
     bool add_subroute (node_id_rep dest, node_id_rep gw, gateway_chain_type const & gw_chain
-        , route_order_enum order)
+        , bool reverse_order = false)
     {
         if (is_sibling(dest))
             return false;
 
-        if (order == route_order_enum::reverse) {
+        if (reverse_order) {
             auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
             auto pos = std::find(reversed_gw_chain.cbegin(), reversed_gw_chain.cend(), gw);
 
             PFS__TERMINATE(pos != reversed_gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-            return add_route(dest, gateway_chain_t(++pos, reversed_gw_chain.cend()));
+            return add_route_helper(dest, gateway_chain_t(++pos, reversed_gw_chain.cend()));
         }
 
         auto pos = std::find(gw_chain.cbegin(), gw_chain.cend(), gw);
 
         PFS__TERMINATE(pos != gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-        return add_route(dest, gateway_chain_t(++pos, gw_chain.cend()));
+        return add_route_helper(dest, gateway_chain_t(++pos, gw_chain.cend()));
+    }
+
+    void remove_route (node_id_rep dest_id_rep, node_id_rep gw_id_rep)
+    {
+        auto res = _route_map.equal_range(dest_id_rep);
+
+        // Not found
+        if (res.first == res.second)
+            return;
+
+        for (auto pos = res.first; pos != res.second; ) {
+            auto & r = _routes[pos->second];
+            auto gw_pos = std::find(r.begin(), r.end(), gw_id_rep);
+
+            if (gw_pos != r.end()) {
+                pos = _route_map.erase(pos);
+            } else {
+                ++pos;
+            }
+        }
     }
 
     template <typename F>
-    void foreach_gateway (F && f)
+    void foreach_gateway (F && f) const
     {
         for (auto const & gwid: _gateways)
             f(gwid);
     }
 
     template <typename F>
-    void foreach_sibling_node (F && f)
+    void foreach_sibling_node (F && f) const
     {
         for (auto const & x: _sibling_nodes)
             f(x);
+    }
+
+    /**
+     * Iterate over all routes, include sibling nodes.
+     *
+     * @param f Invokable object with signature void (node_id_rep dest, gateway_chain_t const &)
+     */
+    template <typename F>
+    void foreach_route (F && f) const
+    {
+        for (auto const & x: _sibling_nodes)
+            f(x, gateway_chain_type{x});
+
+        for (auto const & x: _route_map) {
+            auto index = x.second;
+            f(x.first, _routes.at(index));
+        }
     }
 
     /**

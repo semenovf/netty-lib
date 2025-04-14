@@ -53,6 +53,10 @@ add_executable(meshnet-messaging-tests meshnet/messaging.cpp)
 target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
 
+add_executable(meshnet-unreachable-tests meshnet/unreachable.cpp)
+target_link_libraries(meshnet-unreachable-tests PRIVATE pfs::netty pfs::lorem)
+add_test(NAME meshnet-unreachable-tests COMMAND meshnet-unreachable-tests)
+
 ####################################################################################################
 # Channel connection tests
 ####################################################################################################

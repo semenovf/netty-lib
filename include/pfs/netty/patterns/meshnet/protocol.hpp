@@ -44,14 +44,6 @@ enum class packet_way_enum
     , response
 };
 
-// enum class packet_category_enum
-// {
-//       notification
-//     , request
-//     , response
-//     , reply = response
-// };
-
 // Byte 0:
 // +-------------------------+
 // | 7  6  5  4 | 3  2  1  0 |
@@ -378,7 +370,9 @@ public:
     unreachable_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> uinfo.id.h >> uinfo.id.l;
+        in >> uinfo.gw_id.h >> uinfo.gw_id.l
+            >> uinfo.sender_id.h >> uinfo.sender_id.l
+            >> uinfo.receiver_id.h >> uinfo.receiver_id.l;
     }
 
 public:
@@ -386,7 +380,9 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << uinfo.id.h << uinfo.id.l;
+        out << uinfo.gw_id.h << uinfo.gw_id.l
+            << uinfo.sender_id.h << uinfo.sender_id.l
+            << uinfo.receiver_id.h << uinfo.receiver_id.l;
     }
 };
 

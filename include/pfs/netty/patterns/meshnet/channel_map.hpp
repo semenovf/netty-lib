@@ -86,12 +86,15 @@ public:
 
         if (reader_sid_ptr != nullptr) {
             _on_close_socket(*reader_sid_ptr);
+            _readers.erase_by_first(id_rep);
         }
 
         if (writer_sid_ptr != nullptr) {
             if (!(reader_sid_ptr != nullptr && *writer_sid_ptr == *reader_sid_ptr)) {
                 _on_close_socket(*writer_sid_ptr);
             }
+
+            _writers.erase_by_first(id_rep);
         }
     }
 
@@ -102,7 +105,7 @@ public:
         if (id_rep_ptr == nullptr)
             id_rep_ptr = locate_writer(sid);
 
-        // No writer no reader not found
+        // Neither the writer nor the reader were found.
         if (id_rep_ptr == nullptr)
             return;
 

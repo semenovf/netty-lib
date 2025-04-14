@@ -81,7 +81,10 @@ int enet_poller::poll_helper (ENetHost * host, std::chrono::milliseconds millis,
     // For now believe that the error is not fatal
     if (rc < 0) {
         if (perr) {
-            *perr = error {tr::_("ENet poll (enet_host_service) error")};
+            *perr = error {
+                  make_error_code(pfs::errc::backend_error)
+                , tr::_("ENet poll (enet_host_service) error")
+            };
         }
 
         return rc;

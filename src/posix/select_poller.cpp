@@ -176,7 +176,8 @@ int select_poller::poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds
             // Is not a critical error, ignore it
         } else {
 #endif
-            pfs::throw_or(perr, error {tr::f_("select failure: {}", pfs::system_error_text())});
+            pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+                , tr::f_("select failure: {}", pfs::system_error_text()));
             return n;
         }
     }

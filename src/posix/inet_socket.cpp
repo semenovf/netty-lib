@@ -186,7 +186,7 @@ socket4_addr inet_socket::saddr () const noexcept
 inline bool inet_socket::check_socket_descriptor (socket_id sock, error * perr)
 {
     if (sock == inet_socket::kINVALID_SOCKET) {
-        pfs::throw_or(perr, error { 
+        pfs::throw_or(perr, error {
               make_error_code(std::errc::invalid_argument)
             , tr::_("bad socket descriptor")
         });
@@ -215,9 +215,8 @@ bool inet_socket::bind (socket_id sock, socket4_addr const & saddr, error * perr
         , sizeof(addr_in4));
 
     if (rc != 0) {
-        pfs::throw_or(perr, error {
-            tr::f_("bind name to socket failure: {}: {}", to_string(saddr), pfs::system_error_text())
-        });
+        pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+            , tr::f_("bind name to socket failure: {}: {}", to_string(saddr), pfs::system_error_text()));
 
         return false;
     }
@@ -250,11 +249,10 @@ bool inet_socket::set_nonblocking (socket_id sock, bool enable, error * perr)
 
     if (rc < 0) {
 #endif
-        pfs::throw_or(perr, error {
-            tr::f_("set socket to {} mode failure: {}"
+        pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+            , tr::f_("set socket to {} mode failure: {}"
                 , enable ? tr::_("nonblocking") : tr::_("blocking")
-                , pfs::system_error_text())
-        });
+                , pfs::system_error_text()));
 
         return false;
     }
@@ -269,9 +267,8 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
 
 #if _MSC_VER
     // No "direct" way to determine mode of the socket.
-    pfs::throw_or(perr, error {
-        tr::f_("unable to determine socket mode on Windows: {}", pfs::system_error_text())
-    });
+    pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+        tr::f_("unable to determine socket mode on Windows: {}", pfs::system_error_text()));
 
     return false;
 #else
@@ -281,7 +278,8 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
         return rc & O_NONBLOCK;
 
     if (rc < 0) {
-        pfs::throw_or(perr, error {tr::f_("get socket flags failure: {}", pfs::system_error_text())});
+        pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+            , tr::f_("get socket flags failure: {}", pfs::system_error_text()));
     }
 
     return false;
@@ -377,7 +375,8 @@ int inet_socket::recv (char * data, int len, error * perr)
 #endif
             n = 0;
         } else {
-            pfs::throw_or(perr, error { tr::f_("receive data failure: {}", pfs::system_error_text())});
+            pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+                , tr::f_("receive data failure: {}", pfs::system_error_text()));
             return n;
         }
     }
@@ -410,7 +409,8 @@ int inet_socket::recv_from (char * data, int len, socket4_addr * saddr, error * 
 #endif
             n = 0;
         } else {
-            pfs::throw_or(perr, error {tr::f_("receive data failure: {}", pfs::system_error_text())});
+            pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+                , tr::f_("receive data failure: {}", pfs::system_error_text()));
             return n;
         }
     }
@@ -468,7 +468,8 @@ send_result inet_socket::send (char const * data, int len, error * perr)
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
             return send_result{send_status::again, 0};
 #endif
-        pfs::throw_or(perr, error {tr::f_("send failure: {}", pfs::system_error_text())});
+        pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+            , tr::f_("send failure: {}", pfs::system_error_text()));
         return send_result{send_status::failure, 0};
     }
 
@@ -519,10 +520,8 @@ send_result inet_socket::send_to (socket4_addr const & saddr, char const * data,
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
             return send_result{send_status::again, 0};
 #endif
-        pfs::throw_or(perr, error {
-              tr::f_("send to socket failure: {}: {}", to_string(saddr)
-                , pfs::system_error_text())
-        });
+        pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+            , tr::f_("send to socket failure: {}: {}", to_string(saddr), pfs::system_error_text()));
 
         return send_result{send_status::failure, 0};
     }

@@ -12,7 +12,6 @@
 #include "functional_callbacks.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
-#include "route.hpp"
 #include "route_info.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
@@ -137,16 +136,7 @@ public:
 
         _node_callbacks->on_channel_destroyed = [this] (node_id_rep id_rep, node_index_t /*index*/) {
             _rtab.remove_sibling(id_rep);
-
-            // FIXME
-            // if (_is_gateway) {
-            //     // Broadcast unreachable packet
-            //     std::vector<char> msg = _aproc.serialize_unreachable(id_rep);
-            //     forward_packet(std::move(msg));
-            // }
-
             _aproc.expire(id_rep);
-
             _callbacks.on_channel_destroyed(id_rep);
         };
 
@@ -189,17 +179,30 @@ public:
             node_id_rep gw_id_rep;
             auto ptr = locate_writer(receiver_id_rep, & gw_id_rep);
 
-            if (ptr == nullptr) {
-                _callbacks.on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
-                    , node_id_traits::to_string(sender_id_rep)
-                    , node_id_traits::to_string(receiver_id_rep)));
-
-                // TODO Handle unreachable
-
+            if (ptr != nullptr) {
+                ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
                 return;
             }
 
-            ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
+            // Notify sender about unreachable destination
+            _callbacks.on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
+                , node_id_traits::to_string(sender_id_rep)
+                , node_id_traits::to_string(receiver_id_rep)));
+
+            std::vector<char> unreach_pkt = _aproc.serialize_unreachable(_id_rep
+                , sender_id_rep, receiver_id_rep);
+
+            ptr = locate_writer(sender_id_rep, & gw_id_rep);
+
+            if (ptr != nullptr) {
+                ptr->enqueue_packet(gw_id_rep, 0, std::move(unreach_pkt));
+                return;
+            } else {
+                // Stuck. Nothing can be done.
+                _callbacks.on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
+                    , node_id_traits::to_string(sender_id_rep)
+                    , node_id_traits::to_string(receiver_id_rep)));
+            }
         };
 
         _aproc.on_alive([this] (node_id_rep id_rep) {
@@ -298,7 +301,7 @@ private:
         return true;
     }
 
-    void process_alive_received (node_id_rep id_rep, node_index_t idx, alive_info const & ainfo)
+    void process_alive_received (node_id_rep id_rep, node_index_t /*idx*/, alive_info const & ainfo)
     {
         auto initiator_id = ainfo.id;
         auto updated = _aproc.update_if(initiator_id);
@@ -310,21 +313,41 @@ private:
         }
     }
 
-    void process_unreachable_received (node_id_rep id, node_index_t idx, unreachable_info const & uinfo)
+    void process_unreachable_received (node_id_rep id_rep, node_index_t /*idx*/, unreachable_info const & uinfo)
     {
-        // FIXME
-        // auto addressee_id = uinfo.id;
+        // Receiver cannot be reached through the specified gateway.
+        // Disable all routes containing the specified gateway.
+        _rtab.remove_route(uinfo.receiver_id, uinfo.gw_id);
+
+        // Try alternative route.
         //
-        // // Disable route to `uinfo.id` through `id`.
-        // _rtab.enabled_route(addressee_id, id, false);
-        //
-        // if (_is_gateway) {
-        //     // Forward packet to nearest nodes
-        //     std::vector<char> msg = _aproc.serialize_unreachable(uinfo);
-        //     forward_packet(idx, std::move(msg));
-        // } else {
-        //     _aproc.expire(addressee_id);
-        // }
+        // Since there is no information on which route the packet came, we will forward it to
+        // the nearest gateway/node.
+        node_id_rep gw_id_rep;
+        auto ptr = locate_writer(uinfo.sender_id, & gw_id_rep);
+
+        if (ptr != nullptr) {
+            NETTY__TRACE("[node_pool]", "UNREACHABLE RECEIVED: FORWARD TO: {}"
+                , node_id_traits::to_string(gw_id_rep));
+
+            // Need an example when such situation could happen.
+            PFS__TERMINATE(gw_id_rep != id_rep, "Fix meshnet::node_pool algorithm");
+
+            std::vector<char> msg = _aproc.serialize_unreachable(uinfo);
+            ptr->enqueue_packet(gw_id_rep, 0, std::move(msg));
+            return;
+        } else {
+            // Sender is me and there are no alternative routes
+            if (uinfo.sender_id == _id_rep) {
+                // Expire receiver
+                _aproc.expire(uinfo.receiver_id);
+            } else {
+                // Stuck. Nothing can be done.
+                _callbacks.on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
+                    , node_id_traits::to_string(uinfo.sender_id)
+                    , node_id_traits::to_string(uinfo.receiver_id)));
+            }
+        }
     }
 
     void process_route_received (node_id_rep id_rep, node_index_t idx, bool is_response
@@ -333,19 +356,18 @@ private:
         bool new_route_added = false;
         std::uint16_t hops = 0;
         node_id_rep dest_id_rep {};
-        auto route_order = route_order_enum::direct;
+        bool reverse_order = true;
 
         if (is_response) {
             dest_id_rep = rinfo.responder_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
-            route_order = route_order_enum::direct;
 
             // Initiator node received response - add route to the routing table.
             if (rinfo.initiator_id == _id_rep) {
                 if (hops == 0) {
                     new_route_added = _rtab.add_sibling(dest_id_rep);
                 } else {
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route);
                 }
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
@@ -367,7 +389,7 @@ private:
                         // already been added previously. But let it be for insurance purposes.
                         new_route_added = _rtab.add_sibling(dest_id_rep);
                     } else {
-                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo.route, route_order);
+                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo.route);
 
                         // Receiving a route response is an indication that the responder is active.
                         _aproc.update_if(dest_id_rep);
@@ -391,7 +413,6 @@ private:
         } else { // Request
             dest_id_rep = rinfo.initiator_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
-            route_order = route_order_enum::reverse;
 
             // If there is no loop
             if (_id_rep != dest_id_rep) {
@@ -400,10 +421,10 @@ private:
                     if (hops == 0)
                         new_route_added = _rtab.add_sibling(dest_id_rep);
                     else
-                        new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
+                        new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, reverse_order);
                 } else {
                     PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, route_order);
+                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, reverse_order);
                 }
 
                 // Initiate response and transmit it by the reverse route
@@ -453,17 +474,16 @@ private:
      */
     void broadcast_alive ()
     {
-        // FIXME UNCOMMENT
-        // auto msg = _aproc.serialize_alive();
-        //
-        // _rtab.foreach_gateway([this, & msg] (node_id_rep gwid) {
-        //     if (_aproc.is_alive(gwid))
-        //         enqueue_packet(gwid, 0, msg.data(), msg.size());
-        // });
+        auto msg = _aproc.serialize_alive();
+
+        _rtab.foreach_gateway([this, & msg] (node_id_rep gwid) {
+            if (_aproc.is_alive(gwid))
+                enqueue_packet(gwid, 0, msg.data(), msg.size());
+        });
     }
 
 #if NETTY__TRACE_ENABLED
-    inline std::string to_string (gateway_chain_t const & gw_chain)
+    std::string to_string (gateway_chain_t const & gw_chain) const
     {
         if (gw_chain.empty())
             return std::string{};
@@ -712,6 +732,26 @@ public:
                 x->clear_channels();
         }
     }
+
+#if NETTY__TRACE_ENABLED
+    /**
+     * Dump routing table as string vector.
+     *
+     * @return Vector containing strings in format:
+     *         "<destination node>: <gateway chain>"
+     */
+    std::vector<std::string> dump_routing_table () const
+    {
+        std::vector<std::string> result;
+
+        _rtab.foreach_route([this, & result] (node_id_rep dest_id_rep, gateway_chain_t const & gw_chain) {
+            result.push_back(fmt::format("{}: {}"
+                , node_id_traits::to_string(dest_id_rep), this->to_string(gw_chain)));
+        });
+
+        return result;
+    }
+#endif
 };
 
 }} // namespace patterns::meshnet

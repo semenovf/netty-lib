@@ -38,10 +38,8 @@ udt_listener::udt_listener (socket4_addr const & saddr, int mtu, int exp_max_cou
         , sizeof(addr_in4));
 
     if (rc == UDT::ERROR) {
-        pfs::throw_or(perr, error {
-            tr::f_("bind name to socket failure: {}: {}", to_string(saddr), UDT::getlasterror_desc())
-        });
-
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::f_("bind name to socket failure: {}: {}", to_string(saddr), UDT::getlasterror_desc()));
         return;
     }
 
@@ -65,10 +63,8 @@ bool udt_listener::listen (int backlog, error * perr)
     auto rc = UDT::listen(_socket, backlog);
 
     if (rc == UDT::ERROR) {
-        pfs::throw_or(perr, error {
-            tr::f_("listen failure: {}", UDT::getlasterror_desc())
-        });
-
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::f_("listen failure: {}", UDT::getlasterror_desc()));
         return false;
     }
 
@@ -116,13 +112,12 @@ udt_socket udt_listener::accept_nonblocking (listener_id listener_sock, error * 
 
             return udt_socket{u, socket4_addr{addr, port}};
         } else {
-            pfs::throw_or(perr, error {
-                tr::_("socket accept failure: unsupported sockaddr family"
-                  " (AF_INET supported only)")
-            });
+            pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+                , tr::_("socket accept failure: unsupported sockaddr family (AF_INET supported only)"));
         }
     } else {
-        pfs::throw_or(perr, error {tr::f_("socket accept failure: {}", UDT::getlasterror_desc())});
+        pfs::throw_or(perr, make_error_code(pfs::errc::backend_error)
+            , tr::f_("socket accept failure: {}", UDT::getlasterror_desc()));
     }
 
     return udt_socket{};

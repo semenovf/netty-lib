@@ -18,6 +18,9 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+/**
+ * @deprecated
+ */
 enum class route_order_enum { direct, reverse };
 
 /**
