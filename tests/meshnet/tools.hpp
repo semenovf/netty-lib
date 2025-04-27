@@ -7,107 +7,22 @@
 //      2025.03.11 Initial version.
 //      2025.04.07 Moved to tools.hpp.
 ////////////////////////////////////////////////////////////////////////////////
-#include "bit_matrix.hpp"
-#include "node.hpp"
+#include "../colorize.hpp"
+
+#ifndef TAG_DEFINED
+#   define TAG_DEFINED 1
+static constexpr char const * TAG = CYAN "meshnet-test" END_COLOR;
+#endif
+
+#include "../tools.hpp"
+#include "transport.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/countdown_timer.hpp>
-#include <pfs/fmt.hpp>
-#include <pfs/log.hpp>
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/socket4_addr.hpp>
-#include <atomic>
-#include <cstdint>
-#include <chrono>
 #include <map>
-#include <thread>
 #include <vector>
-#include <signal.h>
-
-#if _MSC_VER
-#   define COLOR(x)
-#else
-#   define COLOR(x) "\033[" #x "m"
-#endif
-
-#define BLACK     COLOR(0;30)
-#define DGRAY     COLOR(1;30)
-#define BLUE      COLOR(0;34)
-#define LBLUE     COLOR(1;34)
-#define MAGENTA   COLOR(0;35)
-#define LMAGENTA  COLOR(1;35)
-#define LGRAY     COLOR(0;37)
-#define GREEN     COLOR(0;32)
-#define LGREEN    COLOR(1;32)
-#define RED       COLOR(0;31)
-#define LRED      COLOR(1;31)
-#define CYAN      COLOR(0;36)
-#define LCYAN     COLOR(1;36)
-#define WHITE     COLOR(1;37)
-#define ORANGE    COLOR(0;33)
-#define YELLOW    COLOR(1;33)
-#define END_COLOR COLOR(0)
-
-static constexpr char const * TAG = CYAN "meshnet-test" END_COLOR;
 
 namespace tools {
-
-inline void sleep (int timeout, std::string const & description = std::string{})
-{
-    if (description.empty()) {
-        LOGD(TAG, "Waiting for {} seconds", timeout);
-    } else {
-        LOGD(TAG, "{}: waiting for {} seconds", description, timeout);
-    }
-
-    std::this_thread::sleep_for(std::chrono::seconds{timeout});
-}
-
-template <typename AtomicCounter>
-bool wait_atomic_counter (AtomicCounter & counter
-    , typename AtomicCounter::value_type limit
-    , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
-{
-    pfs::countdown_timer<std::milli> timer {timelimit};
-
-    while (counter.load() < limit && timer.remain_count() > 0)
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
-
-    return !(counter.load() < limit);
-}
-
-template <typename SyncRouteMatrix>
-bool wait_matrix_count (SyncRouteMatrix & safe_matrix, std::size_t limit
-, std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
-{
-    pfs::countdown_timer<std::milli> timer {timelimit};
-
-    while (safe_matrix.rlock()->count() < limit && timer.remain_count() > 0)
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
-
-    return !(safe_matrix.rlock()->count() < limit);
-}
-
-#if _MSC_VER
-using sighandler_t = void (*) (int);
-#endif
-
-class signal_guard
-{
-    int sig {0};
-    sighandler_t old_handler;
-
-public:
-    signal_guard (int sig, sighandler_t handler)
-        : sig(sig)
-    {
-        old_handler = signal(sig, handler);
-    }
-
-    ~signal_guard ()
-    {
-        signal(sig, old_handler);
-    }
-};
 
 class mesh_network;
 
@@ -170,15 +85,20 @@ public:
 constexpr bool GATEWAY_FLAG = true;
 constexpr bool REGULAR_NODE_FLAG = false;
 
+class mesh_network_delivery;
+
 class mesh_network
 {
-private:
+protected:
     struct context {
         std::unique_ptr<node_pool_t> np_ptr;
         std::size_t serial_number; // Serial number used in matrix to check tests results
     };
 
-private:
+protected:
+    // Used by delivery tests
+    mesh_network_delivery * _meshnet_delivery_ptr {nullptr};
+
     node_pool_dictionary _np_dictionary;
     std::map<std::string, context> _node_pools;
     std::map<node_pool_t *, std::thread> _threads;
@@ -229,7 +149,7 @@ public:
         }
     }
 
-private:
+protected:
     context * locate (std::string const & name)
     {
         auto pos = _node_pools.find(name);
@@ -288,7 +208,7 @@ public:
     void connect_host (std::string const & initiator_name, std::string const & target_name
         , bool behind_nat = false)
     {
-        meshnet::node_index_t index = 1;
+        meshnet_ns::node_index_t index = 1;
         auto initiator_ctx = locate(initiator_name);
         auto target_entry_ptr = _np_dictionary.locate(target_name);
 
@@ -382,8 +302,15 @@ public:
                 t.second.join();
         }
     }
-};
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Delivery manager tests requirements
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    node_pool_t & transport (std::string const & name)
+    {
+        return *locate(name)->np_ptr;
+    }
+};
 
 std::unique_ptr<node_pool_t>
 node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_network * this_meshnet) const
@@ -391,7 +318,7 @@ node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_ne
     auto const * p = locate(source_name);
 
     if (p == nullptr)
-        return nullptr; //std::unique_ptr<node_pool_t>{};
+        return nullptr;
 
     node_pool_t::options opts = p->opts;
     netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, p->port};

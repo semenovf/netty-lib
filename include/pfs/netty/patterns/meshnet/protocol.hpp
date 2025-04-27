@@ -249,7 +249,7 @@ public:
         : header(h)
     {
         std::uint16_t sz = 0;
-        in >> id_rep.h >> id_rep.l >> sz >> std::make_pair(& name, & sz);
+        in >> id_rep.h >> id_rep.l >> std::make_pair(& sz, & name);
     }
 
 public:
@@ -462,7 +462,7 @@ public:
     ddata_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> std::make_pair(& bytes, & _h.length);
+        in >> std::make_pair(& bytes, std::cref(_h.length));
 
         if (!in.is_good()) {
             bytes.clear();
@@ -507,7 +507,7 @@ class gdata_packet: public header
 public:
     node_id_rep sender_id;
     node_id_rep receiver_id;
-    std::vector<char> bytes;   // Used by deserializer only
+    std::vector<char> bytes;   // Used by deserializer only and when need to forward message.
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
@@ -531,7 +531,7 @@ public:
         if (!in.is_good())
             return;
 
-        in >> std::make_pair(& bytes, & _h.length);
+        in >> std::make_pair(& bytes, std::cref(_h.length));
 
         if (!in.is_good()) {
             bytes.clear();

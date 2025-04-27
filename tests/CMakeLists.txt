@@ -13,28 +13,11 @@
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
-if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/lorem/.git)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/lorem 2ndparty/lorem)
-else()
-    set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
-    message(STATUS "Fetching lorem ...")
-    include(FetchContent)
-    FetchContent_Declare(lorem
-        GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
-        GIT_TAG master
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/lorem
-        SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/lorem)
-    FetchContent_MakeAvailable(lorem)
-    message(STATUS "Fetching lorem complete")
-endif()
-
 ####################################################################################################
 # Common netty tests
 ####################################################################################################
 
-set(TESTS
-    inet4_addr
-    reliable_delivery_manager)
+set(TESTS inet4_addr)
 
 foreach (target ${TESTS})
     add_executable(${target} ${target}.cpp)
@@ -60,6 +43,13 @@ add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
 add_executable(meshnet-unreachable-tests meshnet/unreachable.cpp)
 target_link_libraries(meshnet-unreachable-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-unreachable-tests COMMAND meshnet-unreachable-tests)
+
+####################################################################################################
+# Delivery tests
+####################################################################################################
+add_executable(delivery-manager-tests delivery/manager.cpp)
+target_link_libraries(delivery-manager-tests PRIVATE pfs::netty pfs::lorem)
+add_test(NAME delivery-manager-tests COMMAND delivery-manager-tests)
 
 ####################################################################################################
 # Channel connection tests

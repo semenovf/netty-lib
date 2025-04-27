@@ -67,7 +67,7 @@ private:
     /**
      * Find route for node @a id_rep with minimim hops (number of gateways).
      */
-    std::pair<bool, std::size_t> find_route_for (node_id_rep id_rep)
+    std::pair<bool, std::size_t> find_route_for (node_id_rep id_rep) const
     {
         auto min_hops = std::numeric_limits<std::size_t>::max();
         auto res = _route_map.equal_range(id_rep);
@@ -282,7 +282,7 @@ public:
      *
      * @details Preference is given to a route with a low value of hops and its reachability.
      */
-    pfs::optional<node_id_rep> gateway_for (node_id_rep id_rep)
+    pfs::optional<node_id_rep> gateway_for (node_id_rep id_rep) const
     {
         if (is_sibling(id_rep))
             return id_rep;

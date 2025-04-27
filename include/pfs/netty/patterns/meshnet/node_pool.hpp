@@ -34,7 +34,7 @@ namespace meshnet {
 template <typename NodeIdTraits
     , typename RoutingTable
     , typename AliveProcessor
-    , typename WriterMutex
+    , typename RecursiveWriterMutex
     , typename CallbackSuite>
 class node_pool
 {
@@ -42,12 +42,13 @@ class node_pool
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
     using alive_processor_type = AliveProcessor;
-    using writer_mutex_type = WriterMutex;
+    using writer_mutex_type = RecursiveWriterMutex;
 
 public:
     using node_id_traits = NodeIdTraits;
     using node_id_rep = typename NodeIdTraits::rep_type;
     using node_id = typename NodeIdTraits::type;
+    using address_type = node_id;
     using callback_suite = CallbackSuite;
 
     struct options
@@ -140,7 +141,8 @@ public:
             _callbacks.on_channel_destroyed(id_rep);
         };
 
-        _node_callbacks->on_duplicated = [this] (node_id_rep id_rep, node_index_t, std::string const & name, socket4_addr saddr) {
+        _node_callbacks->on_duplicated = [this] (node_id_rep id_rep, node_index_t
+                , std::string const & name, socket4_addr saddr) {
             _callbacks.on_duplicated(id_rep, name, saddr);
         };
 
@@ -531,6 +533,11 @@ public:
         _interrupted = true;
     }
 
+    bool interrupted () const noexcept
+    {
+        return _interrupted.load();
+    }
+
     /**
      * Adds new node to the pool with specified listeners.
      */
@@ -618,7 +625,7 @@ public:
     }
 
     /**
-     * Equeues message for delivery to specified node ID @a id_rep.
+     * Enqueues message for delivery to specified node ID @a id_rep.
      *
      * @param id_rep Receiver ID.
      * @param priority Message priority.
@@ -667,7 +674,7 @@ public:
     }
 
     /**
-     * Equeues message for delivery to specified node ID @a id.
+     * Enqueues message for delivery to specified node ID @a id.
      *
      * @param id Receiver ID.
      * @param priority Message priority.
@@ -684,6 +691,26 @@ public:
     bool enqueue (node_id_rep id, int priority, std::vector<char> && data)
     {
         return enqueue(id, priority, false, std::move(data));
+    }
+
+    bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
+    {
+        return enqueue(node_id_traits::cast(id), priority, force_checksum, data, len);
+    }
+
+    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    {
+        return enqueue(node_id_traits::cast(id), priority, force_checksum, std::move(data));
+    }
+
+    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
+    {
+        return enqueue(node_id_traits::cast(id), priority, data, len);
+    }
+
+    bool enqueue (node_id id, int priority, std::vector<char> && data)
+    {
+        return enqueue(node_id_traits::cast(id), priority, std::move(data));
     }
 
     /**
@@ -735,6 +762,22 @@ public:
             for (auto & x: _nodes)
                 x->clear_channels();
         }
+    }
+
+    bool is_reachable (node_id_rep id_rep) const
+    {
+        auto gwid_opt = _rtab.gateway_for(id_rep);
+
+        // No route or it is unreachable
+        if (!gwid_opt)
+            return false;
+
+        return true;
+    }
+
+    bool is_reachable (node_id id) const
+    {
+        return is_reachable(node_id_traits::cast(id));
     }
 
 #if NETTY__TRACE_ENABLED

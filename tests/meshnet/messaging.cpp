@@ -9,7 +9,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
 #include "tools.hpp"
-#include <pfs/emitter.hpp>
 #include <pfs/lorem/lorem_ipsum.hpp>
 #include <pfs/netty/startup.hpp>
 

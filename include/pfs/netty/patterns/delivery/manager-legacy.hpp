@@ -18,9 +18,6 @@
 #include <functional>
 #include <vector>
 
-// FIXME REMOVE
-#include <pfs/log.hpp>
-
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -89,9 +86,6 @@ public:
         pkt.serialize(out, data, length);
         auto msg = out.take();
         _outproc->cache(sid, msg.data(), msg.size());
-
-        LOGD(_name.c_str(), "SND: PAYLOAD: sid={}", sid);
-
         return msg;
     }
 
@@ -103,9 +97,6 @@ public:
         auto out = serializer_traits::make_serializer();
         report_packet pkt{};
         pkt.serialize(out, data, length);
-
-        LOGD(_name.c_str(), "SND: REPORT");
-
         return out.take();
     }
 
@@ -117,9 +108,6 @@ public:
         auto out = serializer_traits::make_serializer();
         ack_packet pkt{sid};
         pkt.serialize(out);
-
-        LOGD(_name.c_str(), "SND: ACK: sid={}", sid);
-
         return out.take();
     }
 
@@ -128,9 +116,6 @@ public:
         auto out = serializer_traits::make_serializer();
         nack_packet pkt{sid};
         pkt.serialize(out);
-
-        LOGD(_name.c_str(), "SND: NACK: sid={}", sid);
-
         return out.take();
     }
 
@@ -139,9 +124,6 @@ public:
         auto out = serializer_traits::make_serializer();
         again_packet pkt{sid};
         pkt.serialize(out);
-
-        LOGD(_name.c_str(), "SND: AGAIN: sid={}", sid);
-
         return out.take();
     }
 
@@ -151,9 +133,6 @@ public:
 
         for (auto const & sid: missed) {
             again_packet pkt{sid};
-
-            LOGD(_name.c_str(), "SND: GROUP AGAIN: sid={}", sid);
-
             pkt.serialize(out);
         }
 
@@ -180,8 +159,6 @@ public:
                             break;
 
                         if (_inproc->payload_expected(h.id())) {
-                            LOGD(_name.c_str(), "RCV: PAYLOAD: ACK: sid={}", h.id());
-
                             // Send prepared `ack` packet
                             _callbacks.dispatch(ack(h.id()));
 
@@ -191,12 +168,8 @@ public:
                             // Update (increment to next value) committed serial ID
                             _inproc->commit(h.id());
                         } else if (_inproc->payload_duplicated(h.id())) {
-                            LOGD(_name.c_str(), "RCV: PAYLOAD: NACK: sid={}", h.id());
-
                             _callbacks.dispatch(nack(h.id()));
                         } else {
-                            LOGD(_name.c_str(), "RCV: PAYLOAD: AGAIN: sid={}", h.id());
-
                             // Previous payloads are lost.
                             // Cache current payload.
                             _inproc->cache(h.id(), std::move(pkt.bytes));
@@ -210,8 +183,6 @@ public:
                     }
 
                     case packet_enum::report: {
-                        LOGD(_name.c_str(), "RCV: REPORT");
-
                         report_packet pkt {h, in};
 
                         if (in.commit_transaction())
@@ -221,8 +192,6 @@ public:
                     }
 
                     case packet_enum::ack: {
-                        LOGD(_name.c_str(), "RCV: ACK: sid={}", h.id());
-
                         ack_packet pkt {h, in};
 
                         if (in.commit_transaction())
@@ -232,7 +201,6 @@ public:
                     }
 
                     case packet_enum::nack: {
-                        LOGD(_name.c_str(), "RCV: NACK: sid={}", h.id());
                         nack_packet pkt {h, in};
 
                         // The processing is the same as for `ack`
@@ -243,8 +211,6 @@ public:
                     }
 
                     case packet_enum::again: {
-                        LOGD(_name.c_str(), "RCV: AGAIN: sid={}", h.id());
-
                         ack_packet pkt {h, in};
 
                         if (in.commit_transaction()) {

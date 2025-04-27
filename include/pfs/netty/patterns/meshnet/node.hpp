@@ -45,7 +45,7 @@ template <typename ChannelCollection
     , typename ReaderPoller
     , typename WriterPoller
     , typename WriterQueue
-    , typename WriterMutex
+    , typename RecursiveWriterMutex
     , typename SerializerTraits
     , typename ReconnectionPolicy
     , template <typename> class HandshakeProcessor
@@ -69,7 +69,7 @@ private:
         , ReaderPoller
         , WriterPoller
         , WriterQueue
-        , WriterMutex
+        , RecursiveWriterMutex
         , SerializerTraits
         , ReconnectionPolicy
         , HandshakeProcessor
@@ -84,7 +84,7 @@ private:
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
-    using writer_mutex_type = WriterMutex;
+    using writer_mutex_type = RecursiveWriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
 
