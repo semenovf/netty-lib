@@ -10,6 +10,7 @@
 #include "../../namespace.hpp"
 #include "protocol.hpp"
 #include "serial_number.hpp"
+#include <chrono>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -21,12 +22,16 @@ namespace delivery {
 
 class multipart_tracker
 {
-    std::string _msgid; // Serialized message ID (for message only)
+    using clock_type = std::chrono::steady_clock;
+    using time_point_type = clock_type::time_point;
+
+private:
+    std::string _msgid; // Serialized message ID (for message only, empty for report)
     int _priority {0};
     bool _force_checksum {false};
 
     std::uint32_t _part_size {0};
-    serial_number _initial_sn {0};
+    serial_number _first_sn {0};
     serial_number _last_sn {0};
 
     // NOTE std::variant can be used here
@@ -34,24 +39,35 @@ class multipart_tracker
     std::vector<char> _dynamic_payload;
     std::pair<char const *, std::size_t> _static_payload {nullptr, 0};
 
+    std::vector<bool> _parts_acked;              // Parts acknowledged
+    std::vector<time_point_type> _parts_expired; // Expiration time for parts
+    std::size_t _remain_parts {0};               // Number of unacknowledged parts
+    std::size_t _recent_index {0};               // Index of the first not acquired part
+
+    std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
+
 public:
     /**
      *  Constructs tracker for report message.
      */
     multipart_tracker (int priority, bool force_checksum, std::uint32_t part_size
-        , serial_number initial_sn, std::vector<char> && msg)
+        , serial_number first_sn, std::vector<char> && msg)
         : _priority(priority)
         , _force_checksum(force_checksum)
         , _part_size(part_size)
-        , _initial_sn(initial_sn)
+        , _first_sn(first_sn)
         , _is_static(false)
         , _dynamic_payload(std::move(msg))
     {
         // part_count = 1 + size() / part_size
-        // last_sn    = initial_sn + part_count - 1
-        //            = initial_sn + (1 + size() / part_size) - 1
-        //            = initial_sn + size() / part_size
-        _last_sn = _initial_sn + size() / _part_size;
+        // last_sn    = first_sn + part_count - 1
+        //            = first_sn + (1 + size() / part_size) - 1
+        //            = first_sn + size() / part_size
+        _last_sn = _first_sn + size() / _part_size;
+
+        _remain_parts = _last_sn - _first_sn + 1;
+        _parts_acked.resize(_remain_parts, false);
+        _parts_expired.resize(_remain_parts);
     }
 
     /**
@@ -59,11 +75,11 @@ public:
      * is transmitted.
      */
     multipart_tracker (int priority, bool force_checksum, std::uint32_t part_size
-        , serial_number initial_sn, char const * msg, std::size_t length)
+        , serial_number first_sn, char const * msg, std::size_t length)
         : _priority(priority)
         , _force_checksum(force_checksum)
         , _part_size(part_size)
-        , _initial_sn(initial_sn)
+        , _first_sn(first_sn)
         , _is_static(true)
         , _static_payload(msg, length)
     {}
@@ -72,10 +88,12 @@ public:
      *  Constructs tracker for regular message.
      */
     multipart_tracker (std::string && msgid, int priority, bool force_checksum
-        , std::uint32_t part_size, serial_number initial_sn, std::vector<char> && msg)
-        : multipart_tracker(priority, force_checksum, part_size, initial_sn, std::move(msg))
+        , std::uint32_t part_size, serial_number first_sn, std::vector<char> && msg
+        , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
+        : multipart_tracker(priority, force_checksum, part_size, first_sn, std::move(msg))
     {
         _msgid = std::move(msgid);
+        _exp_timeout = exp_timeout;
     }
 
     /**
@@ -83,17 +101,19 @@ public:
      * is transmitted.
      */
     multipart_tracker (std::string && msgid, int priority, bool force_checksum
-        , std::uint32_t part_size, serial_number initial_sn, char const * msg, std::size_t length)
-        : multipart_tracker(priority, force_checksum, part_size, initial_sn, msg, length)
+        , std::uint32_t part_size, serial_number first_sn, char const * msg, std::size_t length
+        , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
+        : multipart_tracker(priority, force_checksum, part_size, first_sn, msg, length)
     {
         _msgid = std::move(msgid);
+        _exp_timeout = exp_timeout;
     }
 
-private: // static
-    static std::pair<char const *, std::size_t> invalid_part ()
-    {
-        return std::make_pair<char const *, std::size_t>(nullptr, 0);
-    }
+// private: // static
+//     static std::pair<char const *, std::size_t> invalid_part ()
+//     {
+//         return std::make_pair<char const *, std::size_t>(nullptr, 0);
+//     }
 
 private:
     std::size_t size () const noexcept
@@ -101,30 +121,20 @@ private:
         return _is_static ? _static_payload.second : _dynamic_payload.size();
     }
 
-    /**
-     * Get part by serial number @a sn
-     */
-    std::pair<char const *, std::size_t> part (serial_number sn) const
+public:
+    std::string const & msgid () const noexcept
     {
-        // Check bounds
-        if (sn < _initial_sn || sn > _last_sn)
-            return invalid_part();
-
-        auto part_index = sn - _initial_sn;
-        char const * begin = _is_static
-            ? _static_payload.first
-            : _dynamic_payload.data();
-
-        return std::make_pair(begin + part_index * _part_size, _part_size);
+        return _msgid;
     }
 
-public:
-    /**
-     * Returns the serial number of message first part.
-     */
-    serial_number initial_sn () const noexcept
+    int priority () const noexcept
     {
-        return _initial_sn;
+        return _priority;
+    }
+
+    bool force_checksum () const noexcept
+    {
+        return _force_checksum;
     }
 
     /**
@@ -135,25 +145,88 @@ public:
         return _last_sn;
     }
 
-    template <typename Serializer>
-    void serialize (Serializer & out, serial_number sn) const
+    bool is_report () const noexcept
     {
-        PFS__TERMINATE(sn >= _initial_sn && sn <= _last_sn, "Fix meshnet::multipart_tracker algorithm");
+        return _msgid.empty();
+    }
 
-        auto part_data = part(sn);
+    void acknowledge (serial_number sn)
+    {
+        auto index = sn - _first_sn;
+        PFS__TERMINATE(index >= 0 && index < _parts_acked.size()
+            , "Fix meshnet::multipart_tracker algorithm");
 
-        if (sn == _initial_sn) { // First part
+        if (!_parts_acked[index]) {
+            PFS__TERMINATE(_remain_parts > 0, "Fix meshnet::multipart_tracker algorithm");
+            _parts_acked[index] = true;
+            _remain_parts--;
+        }
+    }
+
+    bool is_complete () const noexcept
+    {
+        return _remain_parts == 0;
+    }
+
+    /**
+     * Returns @c true if part acquired.
+     */
+    template <typename Serializer>
+    bool acquire_part (Serializer & out)
+    {
+        // Message sending completed
+        if (_remain_parts == 0)
+            return false;
+
+        auto part_size = _part_size;
+        std::size_t index = 0;
+        bool found = false;
+
+        // First acquire untouched parts (not acquired before).
+        // First part.
+        if (_recent_index < _parts_acked.size()) {
+            index = _recent_index++;
+            found = true;
+        } else {
+            if (!is_report()) {
+                // Find first expired part.
+                for (std::size_t i = 0; i < _recent_index; i++) {
+                    if (!_parts_acked[i] && _parts_expired[i] <= clock_type::now()) {
+                        index = i;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!found)
+            return false;
+
+        // Last part, get tail part size.
+        if (index == _parts_acked.size() - 1)
+            part_size = size() - _part_size * index;
+
+        char const * begin = _is_static ? _static_payload.first : _dynamic_payload.data();
+        auto sn = _first_sn + index;
+
+        PFS__TERMINATE(sn >= _first_sn && sn <= _last_sn, "Fix meshnet::multipart_tracker algorithm");
+
+        if (index == 0) { // First part
             message_packet pkt {sn};
-            pkt.msgid = _msgid;
+            pkt.msgid = _msgid; // Empty string if report
             pkt.total_size = pfs::numeric_cast<std::uint64_t>(size());
             pkt.part_size  = _part_size;
-            pkt.initial_sn = _initial_sn;
             pkt.last_sn    = _last_sn;
-            pkt.serialize(out, part_data);
+            pkt.serialize(out, begin + _part_size * index,  part_size);
         } else {
             part_packet pkt {sn};
-            pkt.serialize(out, part_data);
+            pkt.serialize(out, begin + _part_size * index,  part_size);
         }
+
+        _parts_expired[index] = clock_type::now() + _exp_timeout;
+
+        return true;
     }
 
 public: // static
@@ -162,10 +235,10 @@ public: // static
      * specified serial number @a sn.
      */
     template <typename ForwardIt>
-    static ForwardIt find (serial_number sn, ForwardIt begin, ForwardIt end)
+    static ForwardIt find (ForwardIt begin, ForwardIt end, serial_number sn)
     {
         for (auto pos = begin; pos != end; ++pos) {
-            if (sn >= pos->_initial_sn && sn <= pos->_last_sn)
+            if (sn >= pos->_first_sn && sn <= pos->_last_sn)
                 return pos;
         }
 

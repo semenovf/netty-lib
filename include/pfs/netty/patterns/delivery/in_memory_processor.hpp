@@ -20,6 +20,9 @@
 #include <utility>
 #include <vector>
 
+// FIXME REMOVE
+#include <pfs/log.hpp>
+
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -38,8 +41,8 @@ class im_incoming_processor
 
     struct account
     {
-        message_id msgid;
-        serial_number initial_sn {0};
+        pfs::optional<message_id> msgid_opt; // Valid for regular message
+        serial_number first_sn {0};
         serial_number last_sn {0};
     };
 
@@ -60,8 +63,8 @@ private:
     //    last income message SN (recent_sn)
     //
 
-    // serial_number _committed_sn {0}; // Last serial number of the last committed income message
-    serial_number _expected_sn {0};    // Last income message part serial number
+    serial_number _committed_sn {0}; // Last serial number of the last committed income message
+    serial_number _expected_sn {0};  // Expected income message part serial number
 
     std::deque<account> _window;
 
@@ -71,37 +74,11 @@ public:
     im_incoming_processor ()
     {}
 
-private:
-    // /**
-    //  * New message part received.
-    //  */
-    // bool is_part (serial_number sn) const noexcept
-    // {
-    //     return sn > _recent_sn;
-    // }
-    //
-    // /**
-    //  * Message has already been received completely or specified by @a sn part only.
-    //  */
-    // bool is_acknowledged (serial_number sn) const noexcept
-    // {
-    //     if (sn <= _committed_sn)
-    //         return true;
-    //
-    //     for (auto const & acc: _window) {
-    //         if (acc.sn == sn) {
-    //             if (acc.acked)
-    //                 return true;
-    //             break;
-    //         }
-    //     }
-    //
-    //     return false;
-    // }
-
 public:
-    template <typename OnSend, typename OnReady>
-    void process_packet (std::vector<char> && data, OnSend && on_send, OnReady && on_ready)
+    template <typename OnSend, typename OnReady, typename OnMessageReceived
+        , typename OnAcknowledged>
+    void process_packet (std::vector<char> && data, OnSend && on_send, OnReady && on_ready
+        , OnMessageReceived && on_message_received, OnAcknowledged && on_acknowledged)
     {
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
@@ -142,92 +119,66 @@ public:
                         if (!msgid_opt)
                             break;
 
+                        multipart_assembler * assembler = nullptr;
+                        auto pos = _assemblers.find(*msgid_opt);
 
+                        // Already exists, check credentials equality.
+                        if (pos != _assemblers.end()) {
+                            assembler = & pos->second;
 
+                            auto success = assembler->is_equal_credentials(pkt.total_size
+                                , pkt.part_size, pkt.sn(), pkt.last_sn);
 
-                        // // New message part received (first part)
-                        // if (is_part(h.sn())) {
-                        //     auto pos = _assemblers.find(*msgid_opt);
-                        //
-                        //     // May be message ID duplication
-                        //     PFS__TERMINATE(pos == _assemblers.end(), "Fix meshnet::im_incoming_processor algorithm");
-                        //
-                        //     auto res = _assemblers.insert({*msgid_opt, multipart_assembler{
-                        //         pkt.total_size, pkt.part_size, pkt.initial_sn, pkt.last_sn}});
-                        //
-                        //     PFS__ASSERT(res.second, "Unexpected error or not enough memory");
-                        //
-                        //     pos = res.first;
-                        //
-                        //     auto & ma = pos->second;
-                        //     ma.emplace_part(pkt.sn(), std::move(part));
-                        //
-                        //
-                        //     // TODO Process message credentials and first part
-                        //     // TODO Send ACK packet
-                        // } else if (is_acknowledged(h.sn())) {
-                        //     // TODO Send ACK packet
-                        // } else {
-                        //     // TODO Send NACK packets
-                        // }
+                            // What needs to be done? Erase old data and start again? In such case
+                            // the sender must be notified to start transmitting the message again.
+                            // Do we need a new packet type or should we consider this an unexpected
+                            // situation? Let's consider this an unexpected situation for now.
+                            PFS__TERMINATE(success, "Fix meshnet::im_incoming_processor algorithm");
+                        }
 
+                        if (assembler == nullptr) {
+                            auto res = _assemblers.emplace(*msgid_opt, multipart_assembler{
+                                pkt.total_size, pkt.part_size, pkt.sn(), pkt.last_sn});
 
+                            PFS__ASSERT(res.second, "");
 
-                        // OLD CODE BELOW
+                            assembler = & res.first->second;
+                        }
 
+                        assembler->emplace_part(pkt.sn(), std::move(part));
 
-    //                     if (_inproc->payload_expected(h.id())) {
-    //                         LOGD(_name.c_str(), "RCV: PAYLOAD: ACK: sid={}", h.id());
-    //
-    //                         // Send prepared `ack` packet
-    //                         _callbacks.dispatch(ack(h.id()));
-    //
-    //                         // Process payload
-    //                         _callbacks.on_payload(std::move(pkt.bytes));
-    //
-    //                         // Update (increment to next value) committed serial ID
-    //                         _inproc->commit(h.id());
-    //                     } else if (_inproc->payload_duplicated(h.id())) {
-    //                         LOGD(_name.c_str(), "RCV: PAYLOAD: NACK: sid={}", h.id());
-    //
-    //                         _callbacks.dispatch(nack(h.id()));
-    //                     } else {
-    //                         LOGD(_name.c_str(), "RCV: PAYLOAD: AGAIN: sid={}", h.id());
-    //
-    //                         // Previous payloads are lost.
-    //                         // Cache current payload.
-    //                         _inproc->cache(h.id(), std::move(pkt.bytes));
-    //
-    //                         // Obtain list of missed serial IDs
-    //                         auto missed = _inproc->missed(h.id());
-    //                         _callbacks.dispatch(again(missed));
-    //                     }
+                        // ACK for regular message only
+                        if (h.type() == packet_enum::message) {
+                            // Send ACK packet
+                            auto out = serializer_traits::make_serializer();
+                            ack_packet ack_pkt {pkt.sn()};
+                            ack_pkt.serialize(out);
+                            on_send(out.take());
+                        }
+
+                        // Single part message/report
+                        if (assembler->is_complete()) {
+                            on_message_received(assembler->payload());
+                            _committed_sn = assembler->last_sn();
+                            _assemblers.erase(*msgid_opt);
+                        } else {
+                            _window.push_back(account{msgid_opt, pkt.sn(), pkt.last_sn});
+                        }
 
                         break;
                     }
 
-    //                 case packet_enum::report: {
-    //                     LOGD(_name.c_str(), "RCV: REPORT");
-    //
-    //                     report_packet pkt {h, in};
-    //
-    //                     if (in.commit_transaction())
-    //                         _callbacks.on_report(std::move(pkt.bytes));
-    //
-    //                     break;
-    //                 }
-    //
-    //                 case packet_enum::ack: {
-    //                     LOGD(_name.c_str(), "RCV: ACK: sid={}", h.id());
-    //
-    //                     ack_packet pkt {h, in};
-    //
-    //                     if (in.commit_transaction())
-    //                         _outproc->ack(h.id());
-    //
-    //                     break;
-    //                 }
-    //
+                    case packet_enum::ack: {
+                        ack_packet pkt {h, in};
+
+                        if (!in.commit_transaction())
+                            break;
+
+                        on_acknowledged(pkt.sn());
+
+                        break;
+                    }
+
     //                 case packet_enum::nack: {
     //                     LOGD(_name.c_str(), "RCV: NACK: sid={}", h.id());
     //                     nack_packet pkt {h, in};
@@ -281,21 +232,10 @@ class im_outgoing_processor
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
-    struct account
-    {
-        serial_number sn;
-        time_point_type exp_time;
-
-        account (serial_number sn, time_point_type exp_time)
-            : sn(sn)
-            , exp_time(exp_time)
-        {}
-    };
-
 private:
     // Bounds for sliding window
     //
-    // last acknowledged serial ID (ack_sn)
+    // last acknowledged serial number (ack_sn)
     //           |
     //           |   Window
     //           | |<------>|
@@ -307,7 +247,7 @@ private:
     //                    |
     //    last outcome message serial ID (recent_sn)
     //
-    // recent_sn = ack_sn + window_size
+    // ack_sn = recent_sn - window_size
     //
 
     // SYN packet expiration time
@@ -317,96 +257,23 @@ private:
     bool _synchronized {false};
 
     serial_number _recent_sn {0}; // Serial number of the last message part
-
     std::uint32_t _part_size {0};   // Message portion size
-    std::uint16_t _window_size {1}; // Window size for outgoing message parts
-
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
-    // Window to track outgoing message/report parts (need access to random element)
-    std::deque<account> _window;
-
-    // Queue for outgoing messages/reports (need access to random element)
+    // Window/queue to track outgoing message/report parts (need access to random element)
     std::deque<multipart_tracker> _q;
 
 public:
     im_outgoing_processor (std::uint32_t part_size = 2048U // 32767U // FIXME Small value for test purposes
-        , std::uint16_t window_size = 1
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
         : _part_size(part_size)
-        , _window_size(window_size)
         , _exp_timeout(exp_timeout)
     {}
 
-public:
-    bool is_synchronized () const noexcept
-    {
-        return _synchronized;
-    }
-
-    void set_synchronized (bool value) noexcept
-    {
-        _synchronized = value;
-    }
-
+private:
     bool syn_expired () const noexcept
     {
         return _exp_syn <= clock_type::now();
-    }
-
-    /**
-     * Enqueues regular message.
-     */
-    bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> && msg)
-    {
-        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
-            , _part_size, ++_recent_sn, std::move(msg));
-        auto & mt = _q.front();
-        _recent_sn = mt.last_sn();
-        return true;
-    }
-
-    /**
-     * Enqueues regular message.
-     */
-    bool enqueue_static_message (message_id msgid, int priority, bool force_checksum
-        , char const * msg, std::size_t length)
-    {
-        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
-            , _part_size, ++_recent_sn, msg, length);
-        auto & mt = _q.front();
-        _recent_sn = mt.last_sn();
-        return true;
-    }
-
-    /**
-     * Enqueues report message.
-     */
-    bool enqueue_report (int priority, bool force_checksum, std::vector<char> && msg)
-    {
-        _q.emplace_back(priority, force_checksum, _part_size, ++_recent_sn, std::move(msg));
-        auto & mt = _q.front();
-        _recent_sn = mt.last_sn();
-        return true;
-    }
-
-    /**
-     * Enqueues report message.
-     */
-    bool enqueue_static_report (int priority, bool force_checksum, char const * msg, std::size_t length)
-    {
-        _q.emplace_back(priority, force_checksum, _part_size, ++_recent_sn, msg, length);
-        auto & mt = _q.front();
-        _recent_sn = mt.last_sn();
-        return true;
-    }
-
-    /**
-     * Checks whether no message part to transmit.
-     */
-    bool empty () const
-    {
-        return _q.empty() && _window.empty();
     }
 
     std::vector<char> acquire_syn_packet ()
@@ -419,106 +286,183 @@ public:
         return out.take();
     }
 
-    /**
-     * Acquires message/report part to send.
-     *
-     * @note Use in combination with can_acquire().
-     */
-    std::vector<char> acquire_part (int * priority, bool * force_checksum)
+public:
+    void set_synchronized (bool value) noexcept
     {
-        // First search expired part.
-        for (auto const & acc: _window) {
-            // Found
-            if (acc.exp_time <= clock_type::now()) {
-                auto pos = multipart_tracker::find(acc.sn, _q.begin(), _q.end());
-
-                PFS__TERMINATE(pos != _q.end(), "Fix meshnet::im_outgoing_processor algorithm");
-
-                auto out = serializer_traits::make_serializer();
-                pos->serialize(out, acc.sn);
-                return out.take();
-            }
-        }
-
-        // No data
-        if (_q.empty())
-            return std::vector<char>{};
-
-        // Window is full
-        if (_window.size() >= _window_size)
-            return std::vector<char>{};
-
-        // Acquire new part
-        //
-        // Search message that contains serial number of the last part from window incrementing
-        // by one - next part to transmit.
-        serial_number sn = 0;
-
-        if (!_window.empty()) {
-            auto const & acc = _window.back();
-            sn = acc.sn + 1;
-        } else {
-            sn = _q.front().initial_sn();
-        }
-
-        auto pos = multipart_tracker::find(sn, _q.begin(), _q.end());
-
-        PFS__TERMINATE(pos != _q.end(), "Fix meshnet::im_outgoing_processor algorithm");
-
-        _window.emplace_back(sn, clock_type::now() + _exp_timeout);
-
-        auto out = serializer_traits::make_serializer();
-        pos->serialize(out, sn);
-        return out.take();
+        _synchronized = value;
     }
 
-    // // void ack (serial_id sid)
-    // // {
-    // //     PFS__ASSERT(sid == _ack_sid + 1, "");
-    // //     _cache.erase(_cache.begin());
-    // //     ++_ack_sid;
-    // //     PFS__ASSERT(_recent_sid >= _ack_sid, "");
-    // // }
-    // //
-    // // std::vector<char> payload (serial_id sid)
-    // // {
-    // //     PFS__ASSERT(_ack_sid < _recent_sid, "");
-    // //     PFS__ASSERT(sid <= _recent_sid, "");
-    // //     PFS__ASSERT(sid > _ack_sid, "");
-    // //
-    // //     auto index = sid - _ack_sid - 1;
-    // //
-    // //     PFS__ASSERT(!_cache[index].payload.empty(), "");
-    // //
-    // //     return _cache[index].payload;
-    // // }
-    // //
-    // // bool has_waiting () const
-    // // {
-    // //     return !_cache.empty();
-    // // }
-    // //
-    // // /**
-    // //  * @param f Invokable with signature `void (std::vector<char>)`.
-    // //  */
-    // // template <typename F>
-    // // void foreach_waiting (F && f)
-    // // {
-    // //     if (_cache.empty())
-    // //         return;
-    // //
-    // //     auto now = clock_type::now();
-    // //
-    // //     if (_oldest_exp_time > now)
-    // //         return;
-    // //
-    // //     for (auto const & acc: _cache) {
-    // //         if (acc.exp_time < now) {
-    // //             _oldest_exp_time = (std::min)(_oldest_exp_time, acc.exp_time);
-    // //             f(acc.payload);
-    // //         }
-    // //     }
-    // // }
+    /**
+     * Enqueues regular message.
+     */
+    bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> && msg)
+    {
+        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
+            , _part_size, ++_recent_sn, std::move(msg), _exp_timeout);
+        auto & mt = _q.back();
+        _recent_sn = mt.last_sn();
+        return true;
+    }
+
+    /**
+     * Enqueues regular message.
+     */
+    bool enqueue_static_message (message_id msgid, int priority, bool force_checksum
+        , char const * msg, std::size_t length)
+    {
+        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
+            , _part_size, ++_recent_sn, msg, length, _exp_timeout);
+        auto & mt = _q.back();
+        _recent_sn = mt.last_sn();
+        return true;
+    }
+
+    /**
+     * Enqueues the report.
+     */
+    bool enqueue_report (int priority, bool force_checksum, std::vector<char> && msg)
+    {
+        _q.emplace_back(priority, force_checksum, _part_size, ++_recent_sn, std::move(msg));
+        auto & mt = _q.back();
+        _recent_sn = mt.last_sn();
+        return true;
+    }
+
+    /**
+     * Enqueues the report.
+     */
+    bool enqueue_static_report (int priority, bool force_checksum, char const * msg, std::size_t length)
+    {
+        _q.emplace_back(priority, force_checksum, _part_size, ++_recent_sn, msg, length);
+        auto & mt = _q.back();
+        _recent_sn = mt.last_sn();
+        return true;
+    }
+
+    /**
+     * Checks whether no messages to transmit.
+     */
+    bool empty () const
+    {
+        return _q.empty();
+    }
+
+    /**
+     */
+    template <typename OnSend, typename OnDispatched>
+    unsigned int step (OnSend && on_send, OnDispatched && on_dispatched)
+    {
+        unsigned int n = 0;
+
+        // Send SYN packet to synchronize serial numbers
+        if (!_synchronized) {
+            if (syn_expired()) {
+                int priority = 0; // High priority
+                bool force_checksum = false; // No need checksum
+
+                auto syn_packet = acquire_syn_packet();
+                on_send(priority, force_checksum, std::move(syn_packet));
+                n++;
+            }
+
+            return n;
+        }
+
+        if (_q.empty())
+            return n;
+
+        // Check complete messages
+        auto & mt = _q.front();
+
+        while (mt.is_complete()) {
+            if (!mt.is_report()) {
+                auto msgid_opt = message_id_traits::parse(mt.msgid());
+
+                if (msgid_opt)
+                    on_dispatched(*msgid_opt);
+            }
+
+            _q.pop_front();
+            n++;
+
+            if (_q.empty())
+                break;
+
+            mt = _q.front();
+        }
+
+        if (_q.empty())
+            return n;
+
+        // Try to acquire next part of the current sending message
+        mt = _q.front();
+
+        auto out = serializer_traits::make_serializer();
+
+        if (mt.acquire_part(out)) {
+            on_send(mt.priority(), mt.force_checksum(), out.take());
+            n++;
+        }
+
+        return n;
+    }
+
+    // std::vector<char> acquire_part (int * priority, bool * force_checksum)
+    // {
+    //
+    //     // First search expired part.
+    //     for (auto & mt: _q) {
+    //         // Found
+    //         if (!acc.acked && acc.exp_time <= clock_type::now()) {
+    //             acc.exp_time = clock_type::now() + _exp_timeout;
+    //             auto pos = multipart_tracker::find(acc.sn, _q.begin(), _q.end());
+    //
+    //             PFS__TERMINATE(pos != _q.end(), "Fix meshnet::im_outgoing_processor algorithm");
+    //
+    //             auto out = serializer_traits::make_serializer();
+    //             pos->serialize(out, acc.sn);
+    //             return out.take();
+    //         }
+    //     }
+    //
+    //     // No data
+    //     if (_q.empty())
+    //         return std::vector<char>{};
+    //
+    //     // Window is full
+    //     if (_window.size() >= _window_size)
+    //         return std::vector<char>{};
+    //
+    //     // Acquire new part
+    //     //
+    //     // Search message that contains serial number of the last part from window incrementing
+    //     // by one - next part to transmit.
+    //     serial_number sn = 0;
+    //
+    //     if (!_window.empty()) {
+    //         auto const & acc = _window.back();
+    //         sn = acc.sn + 1;
+    //     } else {
+    //         sn = _q.front().first_sn();
+    //     }
+    //
+    //     auto pos = multipart_tracker::find(sn, _q.begin(), _q.end());
+    //
+    //     PFS__TERMINATE(pos != _q.end(), "Fix meshnet::im_outgoing_processor algorithm");
+    //
+    //     _window.emplace_back(sn, clock_type::now() + _exp_timeout);
+    //
+    //     auto out = serializer_traits::make_serializer();
+    //     pos->serialize(out, sn);
+    //     return out.take();
+    // }
+
+    void acknowledge (serial_number sn)
+    {
+        auto pos = multipart_tracker::find(_q.begin(), _q.end(), sn);
+        PFS__TERMINATE(pos != _q.end(), "Fix meshnet::im_outgoing_processor algorithm");
+        pos->acknowledge(sn);
+    }
 };
 
 }} // namespace patterns::delivery

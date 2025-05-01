@@ -30,6 +30,7 @@ using namespace netty::patterns;
 tools::mesh_network_delivery * g_mesh_network_ptr = nullptr;
 std::atomic_int g_channels_established_counter {0};
 std::atomic_int g_syn_completed_counter {0};
+std::atomic_int g_messaged_dispatched_counter {0};
 pfs::synchronized<bit_matrix<5>> g_route_matrix;
 // pfs::synchronized<bit_matrix<12>> g_message_matrix;
 // std::string g_text;
@@ -122,9 +123,24 @@ TEST_CASE("sync delivery") {
     tools::mesh_network_delivery mesh_network { "a", "b", "c", "A0", "C0" };
 
     tools::delivery_manager_t::callback_suite callbacks;
+
     callbacks.on_receiver_ready = [& mesh_network] (tools::delivery_manager_t::address_type addr) {
         LOGD(TAG, "Receiver ready: {}", mesh_network.node_name_by_id(addr));
         g_syn_completed_counter++;
+    };
+
+    callbacks.on_message_received = [& mesh_network] (tools::delivery_manager_t::address_type addr
+            , std::vector<char> && msg) {
+        LOGD(TAG, "Message received from {}: {} bytes", mesh_network.node_name_by_id(addr)
+            , msg.size());
+    };
+
+    callbacks.on_message_dispatched = [& mesh_network] (tools::delivery_manager_t::address_type addr
+            , tools::delivery_manager_t::message_id msgid) {
+        LOGD(TAG, "Message dispatched {}: {}", mesh_network.node_name_by_id(addr)
+            , tools::delivery_manager_t::message_id_traits::to_string(msgid));
+
+        g_messaged_dispatched_counter++;
     };
 
     mesh_network.tie_delivery_manager("A0", tools::delivery_manager_t::callback_suite{callbacks});
@@ -153,14 +169,11 @@ TEST_CASE("sync delivery") {
     CHECK(tools::wait_matrix_count(g_route_matrix, 20));
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
 
-    mesh_network.start_syn("A0", "C0");
+    mesh_network.send("A0", "C0", "Hello C0 from A0");
+    REQUIRE(tools::wait_atomic_counter(g_syn_completed_counter, 1));
 
-    // REQUIRE(tools::wait_atomic_counter(g_syn_completed_counter, 1));
-
-    // mesh_network.send("A0", "C0", "Hello C0 from A0");
-
-    tools::sleep(2, "Message sent");
-//     REQUIRE(tools::wait_matrix_count(g_message_matrix, 9));
+    // tools::sleep(5, "Message sent");
+    REQUIRE(tools::wait_atomic_counter(g_messaged_dispatched_counter, 1));
 
     mesh_network.interrupt_all();
     mesh_network.join_all();

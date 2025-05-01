@@ -166,14 +166,13 @@ public:
     std::string msgid;            // For regular message only
     std::uint64_t total_size {0}; // Message/report total size
     std::uint32_t part_size {0};
-    serial_number initial_sn {0};
     serial_number last_sn {0};
 
 public:
-    message_packet (serial_number sn) noexcept
+    message_packet (serial_number initial_sn) noexcept
         : header(packet_enum::message, 0)
     {
-        _h.sn = sn;
+        _h.sn = initial_sn;
     }
 
     /**
@@ -189,7 +188,7 @@ public:
             in >> std::make_pair(& msgid_size, & msgid);
         }
 
-        in >> total_size >> part_size >> initial_sn >> last_sn;
+        in >> total_size >> part_size >> last_sn;
 
         std::uint32_t size = 0;
         in >> std::make_pair(& size, & bytes);
@@ -211,16 +210,10 @@ public:
             out << msgid_size << msgid;
         }
 
-        out << total_size << part_size << initial_sn << last_sn;
+        out << total_size << part_size << last_sn;
 
         auto size  = pfs::numeric_cast<std::uint32_t>(len);
         out << size << std::make_pair(data, len);
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out, std::pair<char const *, std::size_t> data)
-    {
-        serialize(out, data.first, data.second);
     }
 };
 
@@ -271,31 +264,31 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // ack_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// class ack_packet: public header
-// {
-// public:
-//     ack_packet (serial_number sn) noexcept
-//         : header(packet_enum::ack, 0)
-//     {
-//         _h.sn = sn;
-//     }
-//
-//     /**
-//      * Constructs `ack` packet from deserializer with predefined header.
-//      * Header can be read before from the deserializer.
-//      */
-//     template <typename Deserializer>
-//     ack_packet (header const & h, Deserializer & in)
-//         : header(h)
-//     {}
-//
-// public:
-//     template <typename Serializer>
-//     void serialize (Serializer & out)
-//     {
-//         header::serialize(out);
-//     }
-// };
+class ack_packet: public header
+{
+public:
+    ack_packet (serial_number sn) noexcept
+        : header(packet_enum::ack, 0)
+    {
+        _h.sn = sn;
+    }
+
+    /**
+     * Constructs `ack` packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
+    template <typename Deserializer>
+    ack_packet (header const & h, Deserializer & in)
+        : header(h)
+    {}
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        header::serialize(out);
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // nak_packet

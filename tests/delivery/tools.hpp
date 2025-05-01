@@ -34,7 +34,7 @@ using incoming_processor_t = delivery_ns::im_incoming_processor<message_id_trait
     , netty::patterns::serializer_traits_t>;
 using outgoing_processor_t = delivery_ns::im_outgoing_processor<message_id_traits
     , netty::patterns::serializer_traits_t>;
-using callbacks_t = delivery_ns::delivery_callbacks<delivery_transport_t::node_id>;
+using callbacks_t = delivery_ns::delivery_callbacks<delivery_transport_t::node_id, message_id_traits::type>;
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id_traits
     , incoming_processor_t, outgoing_processor_t, std::mutex, callbacks_t>;
 
@@ -82,11 +82,6 @@ public:
         , bool behind_nat = false)
     {
         mesh_network::connect_host(initiator_name, target_name, behind_nat);
-    }
-
-    void start_syn (std::string const & src, std::string const & dest)
-    {
-        delivery_manager(src)->start_syn(node_id_by_name(dest));
     }
 
     void send (std::string const & src, std::string const & dest, std::string const & text)
