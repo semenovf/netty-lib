@@ -18,8 +18,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <pfs/log.hpp>
-
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -107,24 +105,6 @@ private:
         return & res.first->second;
     }
 
-    // FIXME REMOVE
-    // /**
-    //  * Must be call before any message sending to synchronize outgoing serial number.
-    //  */
-    // bool start_syn_private (address_type addr)
-    // {
-    //     if (!_transport->is_reachable(addr))
-    //         return false;
-    //
-    //     int priority = 0; // High priority
-    //     bool force_checksum = false; // No need checksum
-    //
-    //     auto outproc = ensure_outproc(addr);
-    //     auto syn_packet = outproc->acquire_syn_packet();
-    //     auto success = _transport->enqueue(addr, priority, force_checksum, std::move(syn_packet));
-    //     return success;
-    // }
-
 public:
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
         , std::vector<char> && msg)
@@ -144,8 +124,8 @@ public:
         return enqueue_message(addr, msgid, priority, std::vector<char>(msg, msg + length));
     }
 
-    bool enqueue_static_message (address_type addr, message_id msgid, int priority, bool force_checksum
-        , char const * msg, std::size_t length)
+    bool enqueue_static_message (address_type addr, message_id msgid, int priority
+        , bool force_checksum, char const * msg, std::size_t length)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -156,16 +136,28 @@ public:
         return outproc->enqueue_static_message(msgid, priority, msg, length);
     }
 
-    bool enqueue_report (address_type addr, int priority, char const * data, std::size_t length)
+    bool enqueue_report (address_type addr, int priority, bool force_checksum, char const * data
+        , std::size_t length)
     {
-        // TODO Imlement
-        return false;
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        if (!_transport->is_reachable(addr))
+            return false;
+
+        auto report = outgoing_processor_type::serialize_report(data, length);
+        return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
-    bool enqueue_report (address_type addr, std::vector<char> && data)
+    bool enqueue_report (address_type addr, int priority, bool force_checksum
+        , std::vector<char> && data)
     {
-        // TODO Imlement
-        return false;
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        if (!_transport->is_reachable(addr))
+            return false;
+
+        auto report = outgoing_processor_type::serialize_report(std::move(data));
+        return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
     void process_packet (address_type sender_addr, std::vector<char> && data)
@@ -176,7 +168,7 @@ public:
         auto on_send = [this, sender_addr] (std::vector<char> && data) { // On send
             // See start_syn()
             int priority = 0; // High priority
-            bool force_checksum = false; // No need checksum
+            bool force_checksum = true; // Need checksum
 
             // Enqueue result is not important. In the worst case, the request will
             // be repeated.
@@ -190,18 +182,23 @@ public:
             _callbacks.on_receiver_ready(sender_addr);
         };
 
-        auto on_message_received = [this, sender_addr] (std::vector<char> && msg) {
-            _callbacks.on_message_received(sender_addr, std::move(msg));
-        };
-
         auto on_acknowledged = [this, sender_addr] (serial_number sn) {
             auto outproc = ensure_outproc(sender_addr);
             outproc->acknowledge(sn);
         };
 
+        auto on_again = [this, sender_addr] (serial_number sn) {
+            auto outproc = ensure_outproc(sender_addr);
+            outproc->again(sn);
+        };
+
+        auto on_report_received = [this, sender_addr] (std::vector<char> && report) {
+            _callbacks.on_report_received(sender_addr, std::move(report));
+        };
+
         auto inproc = ensure_inproc(sender_addr);
         inproc->process_packet(std::move(data), std::move(on_send), std::move(on_ready)
-            , std::move(on_message_received), std::move(on_acknowledged));
+            , std::move(on_acknowledged), std::move(on_again), std::move(on_report_received));
     }
 
     void interrupt ()
@@ -238,6 +235,17 @@ public:
             };
 
             n += outproc.step(std::move(on_send), std::move(on_dispatched));
+        }
+
+        for (auto & x: _inprocs) {
+            auto & addr = x.first;
+            auto & inporoc = x.second;
+
+            auto on_message_received = [this, addr] (std::vector<char> && msg) {
+                _callbacks.on_message_received(addr, std::move(msg));
+            };
+
+            n += inporoc.step(std::move(on_message_received));
         }
 
         n += _transport->step();

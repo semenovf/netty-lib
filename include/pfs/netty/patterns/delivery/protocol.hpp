@@ -28,20 +28,20 @@ enum class packet_enum: std::uint8_t
       syn = 1
         /// Packet used to set initial value for serial number (synchronization packet).
 
-    , message = 2
-        /// Initial regular message part with acknowledgement required.
-
-    , report = 3
-        /// Initial report message part without need acknowledgement.
-
-    , part = 4
-        /// Regular message or report part.
-
-    , ack = 5
+    , ack = 2
         /// Regular message receive acknowledgement.
 
-    , nak = 6
+    , nak = 3
         /// Request the retransmission of regular message.
+
+    , message = 4
+        /// Initial regular message part with acknowledgement required.
+
+    , part = 5
+        /// Regular message part.
+
+    , report = 6
+        /// Report (message without need acknowledgement).
 };
 
 enum class syn_way_enum: std::uint8_t
@@ -61,7 +61,7 @@ enum class syn_way_enum: std::uint8_t
 // (V) - Packet version (0 - first, 1 - second, etc).
 // (P) - Packet type (see packet_enum).
 //
-// Bytes 0..7: (SN) - Message serial number (short message identifier while transmitting).
+// Bytes 0..7: (SN) - Regular message part serial number.
 
 class header
 {
@@ -163,8 +163,8 @@ public:
 class message_packet: public header
 {
 public:
-    std::string msgid;            // For regular message only
-    std::uint64_t total_size {0}; // Message/report total size
+    std::string msgid;
+    std::uint64_t total_size {0};
     std::uint32_t part_size {0};
     serial_number last_sn {0};
 
@@ -183,11 +183,8 @@ public:
     message_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
         : header(h)
     {
-        if (type() == packet_enum::message) {
-            std::uint16_t msgid_size = 0;
-            in >> std::make_pair(& msgid_size, & msgid);
-        }
-
+        std::uint16_t msgid_size = 0;
+        in >> std::make_pair(& msgid_size, & msgid);
         in >> total_size >> part_size >> last_sn;
 
         std::uint32_t size = 0;
@@ -205,14 +202,11 @@ public:
     {
         header::serialize(out);
 
-        if (type() == packet_enum::message) {
-            auto msgid_size = pfs::numeric_cast<std::uint16_t>(msgid.size());
-            out << msgid_size << msgid;
-        }
-
+        auto msgid_size = pfs::numeric_cast<std::uint16_t>(msgid.size());
+        out << msgid_size << msgid;
         out << total_size << part_size << last_sn;
 
-        auto size  = pfs::numeric_cast<std::uint32_t>(len);
+        auto size = pfs::numeric_cast<std::uint32_t>(len);
         out << size << std::make_pair(data, len);
     }
 };
@@ -229,21 +223,18 @@ public:
         _h.sn = sn;
     }
 
-    // /**
-    //  * Constructs `payload` packet from deserializer with predefined header.
-    //  * Header can be read before from the deserializer.
-    //  */
-    // template <typename Deserializer>
-    // message_packet (header const & h, Deserializer & in)
-    //     : header(h)
-    // {
-    //     in >> std::make_pair(& bytes, & _h.length);
-    //
-    //     if (!in.is_good()) {
-    //         bytes.clear();
-    //         return;
-    //     }
-    // }
+    template <typename Deserializer>
+    part_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+        : header(h)
+    {
+        std::uint32_t size = 0;
+        in >> std::make_pair(& size, & bytes);
+
+        if (!in.is_good()) {
+            bytes.clear();
+            return;
+        }
+    }
 
 public:
     template <typename Serializer>
@@ -252,12 +243,6 @@ public:
         header::serialize(out);
         auto part_size  = pfs::numeric_cast<std::uint32_t>(len);
         out << part_size << std::make_pair(data, len);
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out, std::pair<char const *, std::size_t> data)
-    {
-        serialize(out, data.first, data.second);
     }
 };
 
@@ -273,10 +258,6 @@ public:
         _h.sn = sn;
     }
 
-    /**
-     * Constructs `ack` packet from deserializer with predefined header.
-     * Header can be read before from the deserializer.
-     */
     template <typename Deserializer>
     ack_packet (header const & h, Deserializer & in)
         : header(h)
@@ -293,60 +274,64 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // nak_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// class nak_packet: public header
-// {
-// public:
-//     nak_packet (serial_number sn) noexcept
-//         : header(packet_enum::nack, 0)
-//     {
-//         _h.sn = sn;
-//     }
-//
-//     /**
-//      * Constructs `ack` packet from deserializer with predefined header.
-//      * Header can be read before from the deserializer.
-//      */
-//     template <typename Deserializer>
-//     nack_packet (header const & h, Deserializer & in)
-//         : header(h)
-//     {}
-//
-// public:
-//     template <typename Serializer>
-//     void serialize (Serializer & out)
-//     {
-//         header::serialize(out);
-//     }
-// };
+class nak_packet: public header
+{
+public:
+    nak_packet (serial_number sn) noexcept
+        : header(packet_enum::nak, 0)
+    {
+        _h.sn = sn;
+    }
 
-// ////////////////////////////////////////////////////////////////////////////////////////////////////
-// // again_packet
-// ////////////////////////////////////////////////////////////////////////////////////////////////////
-// class again_packet: public header
-// {
-// public:
-//     again_packet (serial_number sn) noexcept
-//         : header(packet_enum::again, 0)
-//     {
-//         _h.sn = sn;
-//     }
-//
-//     /**
-//      * Constructs `ack` packet from deserializer with predefined header.
-//      * Header can be read before from the deserializer.
-//      */
-//     template <typename Deserializer>
-//     again_packet (header const & h, Deserializer & in)
-//         : header(h)
-//     {}
-//
-// public:
-//     template <typename Serializer>
-//     void serialize (Serializer & out)
-//     {
-//         header::serialize(out);
-//     }
-// };
+    template <typename Deserializer>
+    nak_packet (header const & h, Deserializer & in)
+        : header(h)
+    {}
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out)
+    {
+        header::serialize(out);
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// report_packet
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class report_packet: public header
+{
+public:
+    report_packet () noexcept
+        : header(packet_enum::report, 0)
+    {}
+
+    /**
+     * Constructs `payload` packet from deserializer with predefined header.
+     * Header can be read before from the deserializer.
+     */
+    template <typename Deserializer>
+    report_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+        : header(h)
+    {
+        std::uint32_t size = 0;
+        in >> std::make_pair(& size, & bytes);
+
+        if (!in.is_good()) {
+            bytes.clear();
+            return;
+        }
+    }
+
+public:
+    template <typename Serializer>
+    void serialize (Serializer & out, char const * data, std::size_t len)
+    {
+        header::serialize(out);
+        auto size  = pfs::numeric_cast<std::uint32_t>(len);
+        out << size << std::make_pair(data, len);
+    }
+};
 
 }} // namespace patterns::delivery
 

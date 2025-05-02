@@ -30,6 +30,8 @@ struct delivery_callbacks
     std::function<void (AddressType, MessageId)> on_message_dispatched
         = [] (AddressType, MessageId) {};
 
+    std::function<void (AddressType, std::vector<char> &&)> on_report_received
+        = [] (AddressType, std::vector<char> &&) {};
 };
 
 }} // namespace patterns::delivery

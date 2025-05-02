@@ -21,6 +21,7 @@ namespace delivery {
 
 class multipart_assembler
 {
+    std::string _msgid; // Serialized message ID
     std::uint32_t _part_size {0};
     serial_number _first_sn {0};
     serial_number _last_sn {0};
@@ -33,9 +34,10 @@ public:
     /**
      *  Constructs multipart message assembler.
      */
-    multipart_assembler (std::uint64_t total_size, std::uint32_t part_size
+    multipart_assembler (std::string && msgid, std::uint64_t total_size, std::uint32_t part_size
         , serial_number first_sn, serial_number last_sn)
-        : _part_size(part_size)
+        : _msgid(std::move(msgid))
+        , _part_size(part_size)
         , _first_sn(first_sn)
         , _last_sn(last_sn)
     {
@@ -67,18 +69,14 @@ public:
         _parts_received[index] = true;
     }
 
-    bool is_equal_credentials (std::uint64_t total_size, std::uint32_t part_size
-        , serial_number first_sn, serial_number last_sn) const noexcept
-    {
-        return _payload.size() == total_size
-            && _part_size == part_size
-            && _first_sn == first_sn
-            && _last_sn == last_sn;
-    }
-
     bool is_complete () const noexcept
     {
         return _remain_parts == 0;
+    }
+
+    serial_number first_sn () const noexcept
+    {
+        return _first_sn;
     }
 
     serial_number last_sn () const noexcept

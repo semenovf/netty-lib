@@ -94,6 +94,16 @@ public:
             , force_checksum, std::vector<char>{text.begin(), text.end()});
     }
 
+    void send_report (std::string const & src, std::string const & dest, std::string const & text)
+    {
+        int priority = 1;
+        bool force_checksum = false;
+        message_id_traits::type msgid = pfs::generate_uuid();
+
+        delivery_manager(src)->enqueue_report(node_id_by_name(dest), priority, force_checksum
+            , std::vector<char>{text.begin(), text.end()});
+    }
+
     void run_all ()
     {
         for (auto & x: _node_pools) {
