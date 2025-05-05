@@ -24,8 +24,9 @@ struct delivery_callbacks
         = [] (std::string const & msg) { LOGE("[delivery]", "{}", msg); };
 
     std::function<void (AddressType)> on_receiver_ready = [] (AddressType) {};
-    std::function<void (AddressType, std::vector<char> &&)> on_message_received
-        = [] (AddressType, std::vector<char> &&) {};
+
+    std::function<void (AddressType, MessageId, std::vector<char> &&)> on_message_received
+        = [] (AddressType, MessageId, std::vector<char> &&) {};
 
     std::function<void (AddressType, MessageId)> on_message_dispatched
         = [] (AddressType, MessageId) {};

@@ -105,7 +105,7 @@ void tools::mesh_network::on_message_received (std::string const & receiver_name
 
     auto pdm = _meshnet_delivery_ptr->delivery_manager(receiver_name);
 
-    pdm->process_packet(node_pool_t::node_id_traits::cast(sender_id_rep), std::move(bytes));
+    pdm->process_packet(node_pool_t::node_id_traits::cast(sender_id_rep), priority, std::move(bytes));
 
     // std::string text(bytes.data(), bytes.size());
     //
@@ -131,9 +131,9 @@ TEST_CASE("sync delivery") {
     };
 
     callbacks.on_message_received = [& mesh_network] (tools::delivery_manager_t::address_type addr
-            , std::vector<char> && msg) {
-        LOGD(TAG, "Message received from {}: {} bytes", mesh_network.node_name_by_id(addr)
-            , msg.size());
+            , tools::delivery_manager_t::message_id msgid, std::vector<char> && msg) {
+        LOGD(TAG, "Message received from {}: {}: {} bytes", mesh_network.node_name_by_id(addr)
+            , tools::delivery_manager_t::message_id_traits::to_string(msgid), msg.size());
     };
 
     callbacks.on_message_dispatched = [& mesh_network] (tools::delivery_manager_t::address_type addr

@@ -11,6 +11,7 @@
 #include "multipart_assembler.hpp"
 #include "multipart_tracker.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/utility.hpp>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -203,7 +204,17 @@ public:
             auto & a = _assemblers.front();
 
             if (a.is_complete()) {
-                on_message_received(a.payload());
+                auto msgid_opt = message_id_traits::parse(a.msgid());
+
+                // Bad message ID received
+                if (!msgid_opt) {
+                    throw error {
+                          make_error_code(pfs::errc::unexpected_error)
+                        , tr::f_("bad message ID received")
+                    };
+                }
+
+                on_message_received(*msgid_opt, a.payload());
                 _assemblers.pop_front();
                 n++;
             } else {

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -121,7 +122,7 @@ public:
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
         , char const * msg, std::size_t length)
     {
-        return enqueue_message(addr, msgid, priority, std::vector<char>(msg, msg + length));
+        return enqueue_message(addr, msgid, priority, force_checksum, std::vector<char>(msg, msg + length));
     }
 
     bool enqueue_static_message (address_type addr, message_id msgid, int priority
@@ -133,7 +134,7 @@ public:
             return false;
 
         auto outproc = ensure_outproc(addr);
-        return outproc->enqueue_static_message(msgid, priority, msg, length);
+        return outproc->enqueue_static_message(msgid, priority, force_checksum, msg, length);
     }
 
     bool enqueue_report (address_type addr, int priority, bool force_checksum, char const * data
@@ -160,7 +161,7 @@ public:
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
-    void process_packet (address_type sender_addr, std::vector<char> && data)
+    void process_packet (address_type sender_addr, int /*priority*/, std::vector<char> && data)
     {
         PFS__ASSERT(data.size() > 0, "");
 
@@ -241,8 +242,8 @@ public:
             auto & addr = x.first;
             auto & inporoc = x.second;
 
-            auto on_message_received = [this, addr] (std::vector<char> && msg) {
-                _callbacks.on_message_received(addr, std::move(msg));
+            auto on_message_received = [this, addr] (message_id msgid, std::vector<char> && msg) {
+                _callbacks.on_message_received(addr, msgid, std::move(msg));
             };
 
             n += inporoc.step(std::move(on_message_received));

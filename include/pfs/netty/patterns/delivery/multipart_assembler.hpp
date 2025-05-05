@@ -49,6 +49,11 @@ public:
     }
 
 public:
+    std::string const & msgid () const noexcept
+    {
+        return _msgid;
+    }
+
     void emplace_part (serial_number sn, std::vector<char> && part, bool replace = false)
     {
         PFS__TERMINATE(sn >= _first_sn && sn <= _last_sn, "Unexpected error");
