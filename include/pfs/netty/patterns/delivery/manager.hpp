@@ -30,15 +30,15 @@ namespace delivery {
  */
 template <typename Transport
     , typename MessageIdTraits
-    , typename IncomingProcessor
-    , typename OutgoingProcessor
+    , typename IncomingController
+    , typename OutgoingController
     , typename WriterMutex
     , typename CallbackSuite>
 class manager
 {
     using transport_type = Transport;
-    using incoming_processor_type = IncomingProcessor;
-    using outgoing_processor_type = OutgoingProcessor;
+    using incoming_controller_type = IncomingController;
+    using outgoing_controller_type = OutgoingController;
 
 public:
     using address_type = typename transport_type::address_type;
@@ -51,10 +51,10 @@ private:
     transport_type * _transport {nullptr};
 
     // Processors to handle incoming messages.
-    std::unordered_map<address_type, incoming_processor_type> _inprocs;
+    std::unordered_map<address_type, incoming_controller_type> _icontrollers;
 
-    // Processors to track outgoing messages.
-    std::unordered_map<address_type, outgoing_processor_type> _outprocs;
+    // Controllers to track outgoing messages.
+    std::unordered_map<address_type, outgoing_controller_type> _ocontrollers;
 
     callback_suite _callbacks;
 
@@ -76,30 +76,30 @@ public:
     ~manager () {}
 
 private:
-    incoming_processor_type * ensure_inproc (address_type addr)
+    incoming_controller_type * ensure_incoming_controller (address_type addr)
     {
         PFS__ASSERT(_transport != nullptr, "");
 
-        auto pos = _inprocs.find(addr);
+        auto pos = _icontrollers.find(addr);
 
-        if (pos != _inprocs.end())
+        if (pos != _icontrollers.end())
             return & pos->second;
 
-        auto res = _inprocs.emplace(addr, incoming_processor_type{});
+        auto res = _icontrollers.emplace(addr, incoming_controller_type{});
 
         PFS__ASSERT(res.second, "");
 
         return & res.first->second;
     }
 
-    outgoing_processor_type * ensure_outproc (address_type addr)
+    outgoing_controller_type * ensure_outgoing_controller (address_type addr)
     {
-        auto pos = _outprocs.find(addr);
+        auto pos = _ocontrollers.find(addr);
 
-        if (pos != _outprocs.end())
+        if (pos != _ocontrollers.end())
             return & pos->second;
 
-        auto res = _outprocs.insert({addr, outgoing_processor_type{}});
+        auto res = _ocontrollers.insert({addr, outgoing_controller_type{}});
 
         PFS__ASSERT(res.second, "");
 
@@ -115,8 +115,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto outproc = ensure_outproc(addr);
-        return outproc->enqueue_message(msgid, priority, force_checksum, std::move(msg));
+        auto outc = ensure_outgoing_controller(addr);
+        return outc->enqueue_message(msgid, priority, force_checksum, std::move(msg));
     }
 
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
@@ -133,8 +133,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto outproc = ensure_outproc(addr);
-        return outproc->enqueue_static_message(msgid, priority, force_checksum, msg, length);
+        auto outc = ensure_outgoing_controller(addr);
+        return outc->enqueue_static_message(msgid, priority, force_checksum, msg, length);
     }
 
     bool enqueue_report (address_type addr, int priority, bool force_checksum, char const * data
@@ -145,7 +145,7 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto report = outgoing_processor_type::serialize_report(data, length);
+        auto report = outgoing_controller_type::serialize_report(data, length);
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
@@ -157,7 +157,7 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto report = outgoing_processor_type::serialize_report(std::move(data));
+        auto report = outgoing_controller_type::serialize_report(std::move(data));
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
@@ -178,27 +178,27 @@ public:
         };
 
         auto on_ready = [this, sender_addr] () { // On ready
-            auto outproc = ensure_outproc(sender_addr);
-            outproc->set_synchronized(true);
+            auto outc = ensure_outgoing_controller(sender_addr);
+            outc->set_synchronized(true);
             _callbacks.on_receiver_ready(sender_addr);
         };
 
         auto on_acknowledged = [this, sender_addr] (serial_number sn) {
-            auto outproc = ensure_outproc(sender_addr);
-            outproc->acknowledge(sn);
+            auto outc = ensure_outgoing_controller(sender_addr);
+            outc->acknowledge(sn);
         };
 
         auto on_again = [this, sender_addr] (serial_number sn) {
-            auto outproc = ensure_outproc(sender_addr);
-            outproc->again(sn);
+            auto outc = ensure_outgoing_controller(sender_addr);
+            outc->again(sn);
         };
 
         auto on_report_received = [this, sender_addr] (std::vector<char> && report) {
             _callbacks.on_report_received(sender_addr, std::move(report));
         };
 
-        auto inproc = ensure_inproc(sender_addr);
-        inproc->process_packet(std::move(data), std::move(on_send), std::move(on_ready)
+        auto inpc = ensure_incoming_controller(sender_addr);
+        inpc->process_packet(std::move(data), std::move(on_send), std::move(on_ready)
             , std::move(on_acknowledged), std::move(on_again), std::move(on_report_received));
     }
 
@@ -221,9 +221,9 @@ public:
 
         unsigned int n = 0;
 
-        for (auto & x: _outprocs) {
+        for (auto & x: _ocontrollers) {
             auto & addr = x.first;
-            auto & outproc = x.second;
+            auto & outc = x.second;
 
             auto on_send = [this, addr] (int priority, bool force_checksum, std::vector<char> && data) {
                 // Enqueue result is not important. In the worst case, data will be retransmitted.
@@ -235,18 +235,18 @@ public:
                 _callbacks.on_message_dispatched(addr, msgid);
             };
 
-            n += outproc.step(std::move(on_send), std::move(on_dispatched));
+            n += outc.step(std::move(on_send), std::move(on_dispatched));
         }
 
-        for (auto & x: _inprocs) {
+        for (auto & x: _icontrollers) {
             auto & addr = x.first;
-            auto & inporoc = x.second;
+            auto & inpc = x.second;
 
             auto on_message_received = [this, addr] (message_id msgid, std::vector<char> && msg) {
                 _callbacks.on_message_received(addr, msgid, std::move(msg));
             };
 
-            n += inporoc.step(std::move(on_message_received));
+            n += inpc.step(std::move(on_message_received));
         }
 
         n += _transport->step();

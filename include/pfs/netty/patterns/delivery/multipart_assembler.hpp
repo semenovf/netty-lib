@@ -7,9 +7,11 @@
 //      2025.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "protocol.hpp"
 #include "serial_number.hpp"
+#include <pfs/assert.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -41,7 +43,12 @@ public:
         , _first_sn(first_sn)
         , _last_sn(last_sn)
     {
-        PFS__TERMINATE(_last_sn >= _first_sn, "Bad serial number bounds");
+        if (_last_sn < _first_sn) {
+            throw error {
+                  make_error_code(std::errc::invalid_argument)
+                , "bad serial number bounds"
+            };
+        }
 
         _remain_parts = _last_sn - _first_sn + 1;
         _payload.resize(total_size);
@@ -56,8 +63,19 @@ public:
 
     void emplace_part (serial_number sn, std::vector<char> && part, bool replace = false)
     {
-        PFS__TERMINATE(sn >= _first_sn && sn <= _last_sn, "Unexpected error");
-        PFS__TERMINATE(part.size() <= _part_size, "Unexpected error");
+        if (!(sn >= _first_sn && sn <= _last_sn)) {
+            throw error {
+                  make_error_code(std::errc::invalid_argument)
+                , "serial number is out of bounds"
+            };
+        }
+
+        if (part.size() > _part_size) {
+            throw error {
+                  make_error_code(std::errc::invalid_argument)
+                , "part size too big"
+            };
+        }
 
         std::size_t index = sn - _first_sn;
 
@@ -66,7 +84,7 @@ public:
             if (!replace)
                 return;
         } else {
-            PFS__TERMINATE(_remain_parts > 0, "Unexpected error");
+            PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
             _remain_parts--;
         }
 

@@ -17,8 +17,9 @@ static constexpr char const * TAG = CYAN "delivery-test" END_COLOR;
 #include <pfs/universal_id_hash.hpp>
 #include <pfs/universal_id_traits.hpp>
 #include <pfs/netty/patterns/delivery/functional_callbacks.hpp>
-#include <pfs/netty/patterns/delivery/in_memory_processor.hpp>
+#include <pfs/netty/patterns/delivery/incoming_controller.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
+#include <pfs/netty/patterns/delivery/outgoing_controller.hpp>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -30,13 +31,13 @@ namespace delivery_ns = netty::patterns::delivery;
 
 using delivery_transport_t = node_pool_t;
 using message_id_traits = pfs::universal_id_traits;
-using incoming_processor_t = delivery_ns::im_incoming_processor<message_id_traits
+using incoming_controller_t = delivery_ns::incoming_controller<message_id_traits
     , netty::patterns::serializer_traits_t>;
-using outgoing_processor_t = delivery_ns::im_outgoing_processor<message_id_traits
+using outgoing_controller_t = delivery_ns::outgoing_controller<message_id_traits
     , netty::patterns::serializer_traits_t>;
 using callbacks_t = delivery_ns::delivery_callbacks<delivery_transport_t::node_id, message_id_traits::type>;
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id_traits
-    , incoming_processor_t, outgoing_processor_t, std::mutex, callbacks_t>;
+    , incoming_controller_t, outgoing_controller_t, std::mutex, callbacks_t>;
 
 class mesh_network_delivery: protected mesh_network
 {

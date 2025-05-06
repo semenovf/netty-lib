@@ -9,7 +9,6 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "../../trace.hpp"
-#include "functional_callbacks.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
 #include "route_info.hpp"

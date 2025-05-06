@@ -7,9 +7,11 @@
 //      2025.04.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "protocol.hpp"
 #include "serial_number.hpp"
+#include <pfs/assert.hpp>
 #include <chrono>
 #include <cstdint>
 #include <utility>
@@ -127,11 +129,12 @@ public:
     void acknowledge (serial_number sn)
     {
         auto index = sn - _first_sn;
-        PFS__TERMINATE(index >= 0 && index < _parts_acked.size()
-            , "Fix meshnet::multipart_tracker algorithm");
+
+        PFS__THROW_UNEXPECTED(index >= 0 && index < _parts_acked.size()
+            , "Fix delivery::multipart_tracker algorithm");
 
         if (!_parts_acked[index]) {
-            PFS__TERMINATE(_remain_parts > 0, "Fix meshnet::multipart_tracker algorithm");
+            PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_tracker algorithm");
             _parts_acked[index] = true;
             _remain_parts--;
         }
@@ -150,7 +153,13 @@ public:
     template <typename Serializer>
     bool acquire_part (Serializer & out, serial_number sn)
     {
-        PFS__TERMINATE(sn >= _first_sn && sn <= _last_sn, "Fix meshnet::multipart_tracker algorithm");
+        if (!sn >= _first_sn && sn <= _last_sn) {
+            throw error {
+                  make_error_code(std::errc::invalid_argument)
+                , "serial number is out of bounds"
+            };
+        }
+
         std::size_t index = sn - _first_sn;
         char const * begin = _is_static ? _static_payload.first : _dynamic_payload.data();
 
