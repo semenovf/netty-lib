@@ -5,6 +5,8 @@
 //
 // Changelog:
 //      2025.02.05 Initial version.
+//      2025.05.07 Renamed from basic_input_processor.hpp to basic_input_controller.hpp.
+//                 Class `basic_input_processor` renamed to `basic_input_controller`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../error.hpp"
@@ -19,7 +21,7 @@ namespace patterns {
 namespace meshnet {
 
 template <typename Derived, typename Node>
-class basic_input_processor
+class basic_input_controller
 {
     using socket_id = typename Node::socket_id;
     using serializer_traits = typename Node::serializer_traits;
@@ -28,7 +30,7 @@ protected:
     Node * _node {nullptr};
 
 public:
-    basic_input_processor (Node * node)
+    basic_input_controller (Node * node)
         : _node(node)
     {}
 

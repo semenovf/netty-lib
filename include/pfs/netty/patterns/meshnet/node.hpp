@@ -7,15 +7,17 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "../../conn_status.hpp"
 #include "../../connection_refused_reason.hpp"
 #include "../../error.hpp"
-#include "../../namespace.hpp"
 #include "../../socket4_addr.hpp"
 #include "../../connecting_pool.hpp"
 #include "../../listener_pool.hpp"
 #include "../../reader_pool.hpp"
 #include "../../socket_pool.hpp"
+#include "../../tag.hpp"
 #include "../../trace.hpp"
 #include "../../writer_pool.hpp"
 #include "alive_info.hpp"
@@ -26,6 +28,7 @@
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -38,6 +41,35 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+/**
+ * Mesh network node.
+ *
+ * @details Usage example:
+ *
+ * @code
+ *
+ * // Typedef specialization.
+ * using node_t = netty::patterns::meshnet::node<...>;
+ *
+ * node_t::node_id id = <Node-ID>;
+ * std::string name = <Node-Name>;
+ * bool is_gateway = <true | false>;
+ *
+ * // Define instance
+ * node_t node { id, std::move(name), is_gateway };
+ *
+ * // Assign callbacks
+ * node.on_error = ...;
+ * node.on_channel_established = ...;
+ * node.on_channel_destroyed = ...;
+ * ...
+ *
+ * // Run node loop
+ * while (! interrupted)
+ *     node.step();
+ *
+ * @endcode
+ */
 template <typename ChannelCollection
     , typename Listener
     , typename ConnectingPoller
@@ -48,15 +80,14 @@ template <typename ChannelCollection
     , typename RecursiveWriterMutex
     , typename SerializerTraits
     , typename ReconnectionPolicy
-    , template <typename> class HandshakeProcessor
-    , template <typename> class HeartbeatProcessor
-    , template <typename> class InputProcessor
-    , typename CallbackSuite>
+    , template <typename> class HandshakeController
+    , template <typename> class HeartbeatController
+    , template <typename> class InputController>
 class node
 {
-    friend class HandshakeProcessor<node>;
-    friend class HeartbeatProcessor<node>;
-    friend /*class */InputProcessor<node>;
+    friend class HandshakeController<node>;
+    friend class HeartbeatController<node>;
+    friend /*class */InputController<node>;
 
 public:
     using channel_collection_type = ChannelCollection;
@@ -72,10 +103,9 @@ private:
         , RecursiveWriterMutex
         , SerializerTraits
         , ReconnectionPolicy
-        , HandshakeProcessor
-        , HeartbeatProcessor
-        , InputProcessor
-        , CallbackSuite>;
+        , HandshakeController
+        , HeartbeatController
+        , InputController>;
 
     using listener_type = Listener;
     using socket_type = typename channel_collection_type::socket_type;
@@ -94,14 +124,6 @@ public:
     using node_id_traits = typename channel_collection_type::node_id_traits;
     using node_id = typename node_id_traits::type;
     using node_id_rep = typename node_id_traits::rep_type;
-    using callback_suite = CallbackSuite;
-
-    struct options
-    {
-        node_id id;
-        std::string name;
-        bool is_gateway {false};
-    };
 
 private:
     // Unique node identifier
@@ -121,10 +143,9 @@ private:
     // True if the node is a part of gateway
     bool _is_gateway {false};
 
-    HandshakeProcessor<node> _handshake_processor;
-    HeartbeatProcessor<node> _heartbeat_processor;
-    InputProcessor<node> _input_processor;
-    std::shared_ptr<CallbackSuite> _callbacks;
+    HandshakeController<node> _handshake_controller;
+    HeartbeatController<node> _heartbeat_controller;
+    InputController<node> _input_controller;
 
     std::map<socket4_addr, reconnection_policy> _reconn_policies;
 
@@ -137,37 +158,87 @@ private:
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
 
-public:
-    node (options && opts, std::shared_ptr<CallbackSuite> callbacks)
-        : _id_rep(node_id_traits::cast(opts.id))
-        , _is_gateway(opts.is_gateway)
-        , _handshake_processor(this, & _channels)
-        , _heartbeat_processor(this)
-        , _input_processor(this)
-        , _callbacks(callbacks)
-    {
-        if (opts.name.empty())
-            _name = node_id_traits::to_string(opts.id);
-        else
-            _name = std::move(opts.name);
+public: // callbacks
+    mutable callback_t<void (std::string const &)> on_error
+        = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
-        _channels.on_close_socket([this] (socket_id sid) {
-            close_socket(sid);
-        });
+    // Notify when connection established with the remote node
+    mutable callback_t<void (node_id_rep, node_index_t, bool)> on_channel_established
+        = [] (node_id_rep, node_index_t, bool /*is_gateway*/) {};
+
+    // Notify when the channel is destroyed with the remote node
+    mutable callback_t<void (node_id_rep, node_index_t)> on_channel_destroyed
+        = [] (node_id_rep, node_index_t) {};
+
+    // Notify when a node with identical ID is detected
+    mutable callback_t<void (node_id_rep, node_index_t, std::string const &, socket4_addr)> on_duplicated
+        = [] (node_id_rep, node_index_t, std::string const & /*name*/, socket4_addr) {};
+
+    // Notify when data actually sent (written into the socket)
+    mutable callback_t<void (node_id_rep, std::uint64_t)> on_bytes_written
+        = [] (node_id_rep, std::uint64_t /*n*/) {};
+
+    // On alive info received
+    mutable callback_t<void (node_id_rep, node_index_t, alive_info const &)> on_alive_received
+        = [] (node_id_rep, node_index_t, alive_info const &) {};
+
+    // On unreachable node received
+    mutable callback_t<void (node_id_rep, node_index_t, unreachable_info const &)> on_unreachable_received
+        = [] (node_id_rep, node_index_t, unreachable_info const &) {};
+
+    // On intermediate route info received
+    mutable callback_t<void (node_id_rep, node_index_t, bool, route_info const &)> on_route_received
+        = [] (node_id_rep, node_index_t, bool /*is_response*/, route_info const &) {};
+
+    // On domestic message received
+    mutable callback_t<void (node_id_rep, int, std::vector<char>)> on_domestic_message_received
+        = [] (node_id_rep, int /*priority*/, std::vector<char> /*bytes*/) {};
+
+    // On global (intersubnet) message received
+    mutable callback_t<void (node_id_rep // last transmitter node
+        , int // priority
+        , node_id_rep // sender ID
+        , node_id_rep // receiver ID
+        , std::vector<char>)> on_global_message_received
+        = [] (node_id_rep, int /*priority*/, node_id_rep /*sender_id*/
+            , node_id_rep /*receiver_id*/, std::vector<char> /*bytes*/) {};
+
+    // On global (intersubnet) message received
+    mutable callback_t<void (int // priority
+        , node_id_rep // sender ID
+        , node_id_rep // receiver ID
+        , std::vector<char>)> on_forward_global_packet
+        = [] (int /*priority*/, node_id_rep /*sender_id*/, node_id_rep /*receiver_id*/
+            , std::vector<char> /*packet*/) {};
+
+public:
+    node (node_id id, std::string name, bool is_gateway = false)
+        : _id_rep(node_id_traits::cast(id))
+        , _is_gateway(is_gateway)
+        , _handshake_controller(this, & _channels)
+        , _heartbeat_controller(this)
+        , _input_controller(this)
+    {
+        if (name.empty())
+            _name = node_id_traits::to_string(id);
+        else
+            _name = std::move(name);
+
+        _channels.on_close_socket = [this] (socket_id sid) { close_socket(sid); };
 
         _listener_pool.on_failure([this] (netty::error const & err) {
-            _callbacks->on_error(tr::f_("listener pool failure: {}", err.what()));
+            this->on_error(tr::f_("listener pool failure: {}", err.what()));
         }).on_accepted([this] (socket_type && sock) {
-            NETTY__TRACE("[node]", "{}: socket accepted: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
-            _input_processor.add(sock.id());
+            NETTY__TRACE(TAG, "{}: socket accepted: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
+            _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_accepted(std::move(sock));
         });
 
         _connecting_pool.on_failure([this] (netty::error const & err) {
-            _callbacks->on_error(tr::f_("connecting pool failure: {}", err.what()));
+            this->on_error(tr::f_("connecting pool failure: {}", err.what()));
         }).on_connected([this] (socket_type && sock) {
-            NETTY__TRACE("[node]", "{}: socket connected: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
+            NETTY__TRACE(TAG, "{}: socket connected: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
 
             bool behind_nat = false;
 
@@ -175,48 +246,56 @@ public:
                 behind_nat = true;
 
             _reconn_policies.erase(sock.saddr());
-            _handshake_processor.start(sock.id(), behind_nat);
-            _input_processor.add(sock.id());
+            _handshake_controller.start(sock.id(), behind_nat);
+            _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_connected(std::move(sock));
         }).on_connection_refused ([this] (netty::socket4_addr saddr
                 , netty::connection_refused_reason reason) {
-            _callbacks->on_error(tr::f_("connection refused for socket: {}: reason: {}"
+            this->on_error(tr::f_("connection refused for socket: {}: reason: {}"
                 , to_string(saddr), to_string(reason)));
             schedule_reconnection(saddr);
         });
 
         _reader_pool.on_failure([this] (socket_id sid, netty::error const & err) {
-            _callbacks->on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
-            _channels.close_channel(sid);
+            this->on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
+
+            auto id_rep_opt = _channels.close_channel(sid);
+
+            if (id_rep_opt)
+                this->on_channel_destroyed(*id_rep_opt, _index);
         }).on_disconnected([this] (socket_id sid) {
-            NETTY__TRACE("[node]", "{}: reader socket disconnected: #{}", _name, sid);
+            NETTY__TRACE(TAG, "{}: reader socket disconnected: #{}", _name, sid);
 
             // schedule_reconnection(sid); // FIXME When need reconnection?
-            _channels.close_channel(sid);
+
+            auto id_rep_opt = _channels.close_channel(sid);
+
+            if (id_rep_opt)
+                this->on_channel_destroyed(*id_rep_opt, _index);
         }).on_data_ready([this] (socket_id sid, std::vector<char> && data) {
-            _input_processor.process_input(sid, std::move(data));
+            _input_controller.process_input(sid, std::move(data));
         }).on_locate_socket([this] (socket_id sid) {
             return _socket_pool.locate(sid);
         });
 
         _writer_pool.on_failure([this] (socket_id sid, netty::error const & err) {
-            _callbacks->on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
+            this->on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
             schedule_reconnection(sid);
         }).on_disconnected([this] (socket_id sid) {
-            NETTY__TRACE("[node]", "{}: writer socket disconnected: #{}", _name, sid);
+            NETTY__TRACE(TAG, "{}: writer socket disconnected: #{}", _name, sid);
             schedule_reconnection(sid);
         }).on_bytes_written([this] (socket_id sid, std::uint64_t n) {
             auto id_ptr = _channels.locate_writer(sid);
 
             if (id_ptr != nullptr)
-                _callbacks->on_bytes_written(*id_ptr, n);
+                this->on_bytes_written(*id_ptr, n);
         }).on_locate_socket([this] (socket_id sid) {
             return _socket_pool.locate(sid);
         });
 
-        _handshake_processor.on_expired([this] (socket_id sid) {
-            NETTY__TRACE("[node]", "{}: handshake expired for socket: #{}", _name, sid);
+        _handshake_controller.on_expired([this] (socket_id sid) {
+            NETTY__TRACE(TAG, "{}: handshake expired for socket: #{}", _name, sid);
         }).on_completed([this] (node_id_rep id_rep, socket_id sid, std::string const & name
                 , bool is_gateway, handshake_result_enum status) {
             switch (status) {
@@ -225,8 +304,8 @@ public:
 
                     PFS__TERMINATE(writer_sid != nullptr, "Fix meshnet::node algorithm");
 
-                    _heartbeat_processor.update(*writer_sid);
-                    _callbacks->on_channel_established(id_rep, _index, is_gateway);
+                    _heartbeat_controller.update(*writer_sid);
+                    this->on_channel_established(id_rep, _index, is_gateway);
                     break;
                 }
 
@@ -234,7 +313,7 @@ public:
                     auto psock = _socket_pool.locate(sid);
                     PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
 
-                    _callbacks->on_duplicated(id_rep, _index, name, psock->saddr());
+                    this->on_duplicated(id_rep, _index, name, psock->saddr());
 
                     close_socket(sid);
                     break;
@@ -250,12 +329,12 @@ public:
             }
         });
 
-        _heartbeat_processor.on_expired ([this] (socket_id sid) {
-            NETTY__TRACE("[node]", "{}: socket heartbeat timeout exceeded: #{}", _name, sid);
+        _heartbeat_controller.on_expired ([this] (socket_id sid) {
+            NETTY__TRACE(TAG, "{}: socket heartbeat timeout exceeded: #{}", _name, sid);
             schedule_reconnection(sid);
         });
 
-        NETTY__TRACE("[node]", "node: {} (gateway={}, id={})"
+        NETTY__TRACE(TAG, "node: {} (gateway={}, id={})"
             , _name, _is_gateway, node_id_traits::to_string(_id_rep));
     }
 
@@ -361,7 +440,7 @@ public:
             pkt.serialize(out, data, len);
             enqueue_private(*sid_ptr, priority, out.take());
         } else {
-            _callbacks->on_error(tr::f_("channel for send message not found: {}"
+            on_error(tr::f_("channel for send message not found: {}"
                 , node_id_traits::to_string(id_rep)));
         }
     }
@@ -379,7 +458,7 @@ public:
             pkt.serialize(out, std::move(data));
             enqueue_private(*sid_ptr, priority, out.take());
         } else {
-            _callbacks->on_error(tr::f_("channel for send message not found: {}"
+            on_error(tr::f_("channel for send message not found: {}"
                 , node_id_traits::to_string(id_rep)));
         }
     }
@@ -406,7 +485,7 @@ public:
         if (sid_ptr != nullptr) {
             enqueue_private(*sid_ptr, priority, std::move(data));
         } else {
-            _callbacks->on_error(tr::f_("channel for send packet not found: {}"
+            on_error(tr::f_("channel for send packet not found: {}"
                 , node_id_traits::to_string(id_rep)));
         }
     }
@@ -423,7 +502,7 @@ public:
         if (sid_ptr != nullptr) {
             enqueue_private(*sid_ptr, priority, data, len);
         } else {
-            _callbacks->on_error(tr::f_("channel for send packet not found: {}"
+            on_error(tr::f_("channel for send packet not found: {}"
                 , node_id_traits::to_string(id_rep)));
         }
     }
@@ -467,8 +546,8 @@ public:
         result += _writer_pool.step();
         result += _reader_pool.step();
 
-        result += _handshake_processor.step();
-        result += _heartbeat_processor.step();
+        result += _handshake_controller.step();
+        result += _heartbeat_controller.step();
 
         // Remove trash
         _connecting_pool.apply_remove();
@@ -516,9 +595,9 @@ public: // static
 private:
     void close_socket (socket_id sid)
     {
-        _handshake_processor.cancel(sid);
-        _heartbeat_processor.remove(sid);
-        _input_processor.remove(sid);
+        _handshake_controller.cancel(sid);
+        _heartbeat_controller.remove(sid);
+        _input_controller.remove(sid);
         _reader_pool.remove_later(sid);
         _writer_pool.remove_later(sid);
         _socket_pool.remove_later(sid);
@@ -563,7 +642,10 @@ private:
                 schedule_reconnection(psock->saddr());
         }
 
-        _channels.close_channel(sid);
+        auto id_rep_opt = _channels.close_channel(sid);
+
+        if (id_rep_opt)
+            this->on_channel_destroyed(*id_rep_opt, _index);
     }
 
     void process_alive_info (socket_id sid, alive_info const & ainfo)
@@ -571,7 +653,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_alive_received(*id_ptr, _index, ainfo);
+            this->on_alive_received(*id_ptr, _index, ainfo);
     }
 
     void process_unreachable_info (socket_id sid, unreachable_info const & uinfo)
@@ -579,7 +661,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_unreachable_received(*id_ptr, _index, uinfo);
+            this->on_unreachable_received(*id_ptr, _index, uinfo);
     }
 
     void process_route_info (socket_id sid, bool is_response, route_info const & rinfo)
@@ -587,7 +669,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_route_received(*id_ptr, _index, is_response, rinfo);
+            this->on_route_received(*id_ptr, _index, is_response, rinfo);
     }
 
     void process_message_received (socket_id sid, int priority, std::vector<char> && bytes)
@@ -595,7 +677,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr)
-            _callbacks->on_domestic_message_received(*id_ptr, priority, std::move(bytes));
+            this->on_domestic_message_received(*id_ptr, priority, std::move(bytes));
     }
 
     void process_message_received (socket_id sid, int priority, node_id_rep sender_id
@@ -604,7 +686,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr) {
-            _callbacks->on_global_message_received(*id_ptr
+            this->on_global_message_received(*id_ptr
                 , priority
                 , sender_id
                 , receiver_id
@@ -615,17 +697,17 @@ private:
     void forward_global_packet (int priority, node_id_rep sender_id
         , node_id_rep receiver_id, std::vector<char> && packet)
     {
-        _callbacks->forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
+        this->on_forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
     }
 
-    HandshakeProcessor<node> & handshake_processor ()
+    HandshakeController<node> & handshake_processor ()
     {
-        return _handshake_processor;
+        return _handshake_controller;
     }
 
-    HeartbeatProcessor<node> & heartbeat_processor ()
+    HeartbeatController<node> & heartbeat_processor ()
     {
-        return _heartbeat_processor;
+        return _heartbeat_controller;
     }
 
 public: // Below methods are for internal use only
@@ -641,8 +723,7 @@ public: // Below methods are for internal use only
 
 public: // node_interface
     template <class Node>
-    class node_interface_impl: public node_interface<node_id_traits>
-        , protected Node
+    class node_interface_impl: public node_interface<node_id_traits>, protected Node
     {
         using node_id = typename Node::node_id;
         using node_id_rep = typename Node::node_id_rep;
@@ -747,6 +828,73 @@ public: // node_interface
             , std::size_t len) override
         {
             Node::enqueue_forward_packet(sender_id_rep, priority, data, len);
+        }
+
+        //
+        // Callback assign methods
+        //
+        void on_error (callback_t<void (std::string const &)> cb) override
+        {
+            Node::on_error = std::move(cb);
+        }
+
+        void on_channel_established (callback_t<void (node_id_rep, node_index_t
+            , bool /*is_gateway*/)> cb) override
+        {
+            Node::on_channel_established = std::move(cb);
+        }
+
+        void on_channel_destroyed (callback_t<void (node_id_rep, node_index_t)> cb) override
+        {
+            Node::on_channel_destroyed = std::move(cb);
+        }
+
+        void on_duplicated (callback_t<void (node_id_rep, node_index_t, std::string const &
+            , socket4_addr)> cb) override
+        {
+            Node::on_duplicated = std::move(cb);
+        }
+
+        void on_bytes_written (callback_t<void (node_id_rep, std::uint64_t)> cb) override
+        {
+            Node::on_bytes_written = std::move(cb);
+        }
+
+        void on_alive_received (callback_t<void (node_id_rep, node_index_t
+            , alive_info const &)> cb) override
+        {
+            Node::on_alive_received = std::move(cb);
+        }
+
+        void on_unreachable_received (callback_t<void (node_id_rep, node_index_t
+            , unreachable_info const &)> cb) override
+        {
+            Node::on_unreachable_received = std::move(cb);
+        }
+
+        void on_route_received (callback_t<void (node_id_rep, node_index_t, bool
+            , route_info const &)> cb) override
+        {
+            Node::on_route_received = std::move(cb);
+        }
+
+        void on_domestic_message_received (callback_t<void (node_id_rep, int
+            , std::vector<char>)> cb) override
+        {
+            Node::on_domestic_message_received = std::move(cb);
+        }
+
+        void on_global_message_received (callback_t<void (node_id_rep /*last transmitter node*/
+            , int /*priority*/, node_id_rep /*sender ID*/, node_id_rep /*receiver ID*/
+            , std::vector<char>)> cb) override
+        {
+            Node::on_global_message_received = std::move(cb);
+        }
+
+        void on_forward_global_packet (callback_t<void (int /*priority*/, node_id_rep /*sender ID*/
+            , node_id_rep /*receiver ID*/, std::vector<char>)> cb) override
+        {
+            Node::on_forward_global_packet = std::move(cb);
         }
     };
 

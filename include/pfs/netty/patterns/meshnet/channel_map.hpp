@@ -8,7 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "unordered_bimap.hpp"
+#include <pfs/assert.hpp>
+#include <pfs/optional.hpp>
 #include <functional>
 #include <set>
 
@@ -31,19 +34,15 @@ private:
     unordered_bimap<node_id_rep, socket_id> _readers;
     unordered_bimap<node_id_rep, socket_id> _writers;
 
-    std::function<void(socket_id)> _on_close_socket;
+public:
+    mutable callback_t<void(socket_id)> on_close_socket = [] (socket_id) {
+        PFS__TERMINATE(false, "Assign channel_map::on_close_socket callback");
+    };
 
 public:
     channel_map () = default;
 
 public:
-    template <typename F>
-    channel_map & on_close_socket (F && f)
-    {
-        _on_close_socket = std::forward<F>(f);
-        return *this;
-    }
-
     socket_id const * locate_reader (node_id_rep id_rep) const
     {
         return _readers.locate_by_first(id_rep);
@@ -79,26 +78,41 @@ public:
         return locate_writer(id_rep) != nullptr && locate_reader(id_rep) != nullptr;
     }
 
-    void close_channel (node_id_rep id_rep)
+    /**
+     * Returns @c non-nullopt node ID if the channel is found and was closed.
+     */
+    pfs::optional<node_id_rep> close_channel (node_id_rep id_rep)
     {
         socket_id const * reader_sid_ptr = locate_reader(id_rep);
         socket_id const * writer_sid_ptr = locate_writer(id_rep);
 
+        bool success = false;
+
         if (reader_sid_ptr != nullptr) {
-            _on_close_socket(*reader_sid_ptr);
+            this->on_close_socket(*reader_sid_ptr);
             _readers.erase_by_first(id_rep);
+            success = true;
         }
 
         if (writer_sid_ptr != nullptr) {
             if (!(reader_sid_ptr != nullptr && *writer_sid_ptr == *reader_sid_ptr)) {
-                _on_close_socket(*writer_sid_ptr);
+                this->on_close_socket(*writer_sid_ptr);
             }
 
             _writers.erase_by_first(id_rep);
+            success = true;
         }
+
+        if (!success)
+            return pfs::nullopt;
+
+        return id_rep;
     }
 
-    void close_channel (socket_id sid)
+    /**
+     * Returns @c non-nullopt node ID if the channel is found and was closed.
+     */
+    pfs::optional<node_id_rep> close_channel (socket_id sid)
     {
         node_id_rep const * id_rep_ptr = locate_reader(sid);
 
@@ -107,9 +121,9 @@ public:
 
         // Neither the writer nor the reader were found.
         if (id_rep_ptr == nullptr)
-            return;
+            return pfs::nullopt;
 
-        close_channel(*id_rep_ptr);
+        return close_channel(*id_rep_ptr);
     }
 
     /**

@@ -11,23 +11,22 @@
 #include <pfs/universal_id_traits.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
-#include <pfs/netty/patterns/meshnet/alive_processor.hpp>
+#include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
 #include <pfs/netty/patterns/meshnet/dual_link_handshake.hpp>
-#include <pfs/netty/patterns/meshnet/functional_callbacks.hpp>
 #include <pfs/netty/patterns/meshnet/node.hpp>
 #include <pfs/netty/patterns/meshnet/node_id_rep.hpp>
 #include <pfs/netty/patterns/meshnet/node_pool.hpp>
-#include <pfs/netty/patterns/meshnet/priority_input_processor.hpp>
+#include <pfs/netty/patterns/meshnet/priority_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/reconnection_policy.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
-#include <pfs/netty/patterns/meshnet/simple_input_processor.hpp>
+#include <pfs/netty/patterns/meshnet/simple_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/single_link_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_heartbeat.hpp>
-#include <pfs/netty/patterns/meshnet/without_input_processor.hpp>
+#include <pfs/netty/patterns/meshnet/without_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/without_reconnection_policy.hpp>
 #include <pfs/netty/writer_queue.hpp>
 #include <pfs/netty/posix/tcp_listener.hpp>
@@ -39,7 +38,7 @@ using node_id = pfs::universal_id_traits::type;
 using priority_writer_queue_t = meshnet_ns::priority_writer_queue<3>;
 
 template <typename Node>
-using priority_input_processor = meshnet_ns::priority_input_processor<3, Node>;
+using priority_input_controller = meshnet_ns::priority_input_controller<3, Node>;
 
 using channel_map_t = meshnet_ns::channel_map<pfs::universal_id_traits, netty::posix::tcp_socket>;
 
@@ -72,8 +71,7 @@ using nopriority_meshnet_node_t = meshnet_ns::node<
     , meshnet_ns::reconnection_policy
     , meshnet_ns::single_link_handshake // dual_link_handshake
     , meshnet_ns::simple_heartbeat
-    , meshnet_ns::simple_input_processor
-    , meshnet_ns::node_callbacks>;
+    , meshnet_ns::simple_input_controller>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // priority_meshnet_node_t
@@ -104,8 +102,7 @@ using priority_meshnet_node_t = meshnet_ns::node<
     , meshnet_ns::reconnection_policy
     , meshnet_ns::single_link_handshake // dual_link_handshake
     , meshnet_ns::simple_heartbeat
-    , priority_input_processor
-    , meshnet_ns::node_callbacks>;
+    , priority_input_controller>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // bare_meshnet_node_t
@@ -137,8 +134,7 @@ using bare_meshnet_node_t = meshnet_ns::node<
     , meshnet_ns::without_reconnection_policy
     , meshnet_ns::without_handshake
     , meshnet_ns::without_heartbeat
-    , meshnet_ns::without_input_processor
-    , meshnet_ns::node_callbacks>;
+    , meshnet_ns::without_input_controller>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // meshnet_node_t
@@ -148,9 +144,8 @@ using bare_meshnet_node_t = meshnet_ns::node<
 using node_t = priority_meshnet_node_t;
 
 using routing_table_t = meshnet_ns::routing_table<netty::patterns::serializer_traits_t>;
-using alive_processor_t = meshnet_ns::alive_processor<netty::patterns::serializer_traits_t>;
+using alive_controller_t = meshnet_ns::alive_controller<netty::patterns::serializer_traits_t>;
 using node_pool_t = meshnet_ns::node_pool<pfs::universal_id_traits
     , routing_table_t
-    , alive_processor_t
-    , std::recursive_mutex
-    , meshnet_ns::node_pool_callbacks>;
+    , alive_controller_t
+    , std::recursive_mutex>;

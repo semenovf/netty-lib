@@ -31,8 +31,10 @@ class node_pool_dictionary
 public:
     struct entry
     {
-        node_pool_t::options opts;
-        std::uint16_t port;
+        node_pool_t::node_id id;
+        std::string name;
+        bool is_gateway {false};
+        std::uint16_t port {0};
         node_pool_t::node_id_rep id_rep;
     };
 
@@ -43,10 +45,10 @@ public:
     node_pool_dictionary (std::initializer_list<entry> init)
     {
         for (auto && x: init) {
-            auto res = _data.insert({x.opts.name, std::move(x)});
+            auto res = _data.insert({x.name, std::move(x)});
             PFS__ASSERT(res.second, "");
             auto & ent = res.first->second;
-            ent.id_rep = node_pool_t::node_id_traits::cast(ent.opts.id);
+            ent.id_rep = node_pool_t::node_id_traits::cast(ent.id);
         }
     }
 
@@ -63,7 +65,7 @@ public:
         entry const * ptr = nullptr;
 
         for (auto const & x: _data) {
-            if (x.second.opts.id == id) {
+            if (x.second.id == id) {
                 ptr = & x.second;
                 break;
             }
@@ -108,7 +110,7 @@ public:
         , bool is_gateway);
     void on_channel_destroyed (std::string const & source_name, node_t::node_id_rep id_rep);
     void on_duplicated (std::string const & source_name, node_t::node_id_rep id_rep
-    , std::string const & name, netty::socket4_addr saddr);
+        , std::string const & name, netty::socket4_addr saddr);
 
     void on_node_alive (std::string const & source_name, node_t::node_id_rep id_rep);
     void on_node_expired (std::string const & source_name, node_t::node_id_rep id_rep);
@@ -121,23 +123,23 @@ public:
     mesh_network (std::initializer_list<std::string> np_names)
         : _np_dictionary {
             // Gateways
-              { {"01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", GATEWAY_FLAG}, 4210 }
-            , { {"01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", GATEWAY_FLAG}, 4220 }
-            , { {"01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", GATEWAY_FLAG}, 4230 }
-            , { {"01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", GATEWAY_FLAG}, 4240 }
+              { "01JQN2NGY47H3R81Y9SG0F0A00"_uuid, "a", GATEWAY_FLAG, 4210 }
+            , { "01JQN2NGY47H3R81Y9SG0F0B00"_uuid, "b", GATEWAY_FLAG, 4220 }
+            , { "01JQN2NGY47H3R81Y9SG0F0C00"_uuid, "c", GATEWAY_FLAG, 4230 }
+            , { "01JQN2NGY47H3R81Y9SG0F0D00"_uuid, "d", GATEWAY_FLAG, 4240 }
 
             // Regular nodes
-            , { {"01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", REGULAR_NODE_FLAG}, 4211 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", REGULAR_NODE_FLAG}, 4212 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", REGULAR_NODE_FLAG}, 4221 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", REGULAR_NODE_FLAG}, 4222 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", REGULAR_NODE_FLAG}, 4231 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", REGULAR_NODE_FLAG}, 4232 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", REGULAR_NODE_FLAG}, 4241 }
-            , { {"01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", REGULAR_NODE_FLAG}, 4242 }
+            , { "01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0", REGULAR_NODE_FLAG, 4211 }
+            , { "01JQC29M6RC2EVS1ZST11P0VA1"_uuid, "A1", REGULAR_NODE_FLAG, 4212 }
+            , { "01JQC29M6RC2EVS1ZST11P0VB0"_uuid, "B0", REGULAR_NODE_FLAG, 4221 }
+            , { "01JQC29M6RC2EVS1ZST11P0VB1"_uuid, "B1", REGULAR_NODE_FLAG, 4222 }
+            , { "01JQC29M6RC2EVS1ZST11P0VC0"_uuid, "C0", REGULAR_NODE_FLAG, 4231 }
+            , { "01JQC29M6RC2EVS1ZST11P0VC1"_uuid, "C1", REGULAR_NODE_FLAG, 4232 }
+            , { "01JQC29M6RC2EVS1ZST11P0VD0"_uuid, "D0", REGULAR_NODE_FLAG, 4241 }
+            , { "01JQC29M6RC2EVS1ZST11P0VD1"_uuid, "D1", REGULAR_NODE_FLAG, 4242 }
 
             // For test duplication
-            , { {"01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", REGULAR_NODE_FLAG}, 4213 }
+            , { "01JQC29M6RC2EVS1ZST11P0VA0"_uuid, "A0_dup", REGULAR_NODE_FLAG, 4213 }
         }
     {
         std::size_t seria_number = 0;
@@ -175,18 +177,18 @@ protected:
 public:
     std::string node_name_by_id (node_pool_t::node_id_rep id_rep)
     {
-        return _np_dictionary.locate(id_rep)->opts.name;
+        return _np_dictionary.locate(id_rep)->name;
     }
 
     std::string node_name_by_id (node_pool_t::node_id id)
     {
-        return _np_dictionary.locate(id)->opts.name;
+        return _np_dictionary.locate(id)->name;
     }
 
     node_pool_t::node_id node_id_by_name (std::string const & name)
     {
         // return locate(name)->np_ptr->id();
-        return _np_dictionary.locate(name)->opts.id;
+        return _np_dictionary.locate(name)->id;
     }
 
     node_pool_t::node_id_rep node_id_rep_by_name (std::string const & name)
@@ -320,47 +322,45 @@ node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_ne
     if (p == nullptr)
         return nullptr;
 
-    node_pool_t::options opts = p->opts;
     netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, p->port};
 
-    node_pool_t::callback_suite callbacks;
+    auto ptr = std::make_unique<node_pool_t>(p->id, p->name, p->is_gateway);
 
-    callbacks.on_error = [] (std::string const & errstr) {
+    ptr->on_error = [] (std::string const & errstr) {
         LOGE(TAG, "{}", errstr);
     };
 
-    callbacks.on_channel_established = [this_meshnet, source_name] (node_t::node_id_rep id_rep, bool is_gateway) {
+    ptr->on_channel_established = [this_meshnet, source_name] (node_t::node_id_rep id_rep, bool is_gateway) {
         this_meshnet->on_channel_established(source_name, id_rep, is_gateway);
     };
 
-    callbacks.on_channel_destroyed = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+    ptr->on_channel_destroyed = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
         this_meshnet->on_channel_destroyed(source_name, id_rep);
     };
 
-    callbacks.on_duplicated = [this_meshnet, source_name] (node_t::node_id_rep id_rep
+    ptr->on_duplicated = [this_meshnet, source_name] (node_t::node_id_rep id_rep
             , std::string const & name, netty::socket4_addr saddr) {
         this_meshnet->on_duplicated(source_name, id_rep, name, saddr);
     };
 
-    callbacks.on_node_alive = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+    ptr->on_node_alive = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
         this_meshnet->on_node_alive(source_name, id_rep);
     };
 
-    callbacks.on_node_expired = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
+    ptr->on_node_expired = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
         this_meshnet->on_node_expired(source_name, id_rep);
     };
 
     // Notify when node alive status changed
-    callbacks.on_route_ready = [this_meshnet, source_name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
+    ptr->on_route_ready = [this_meshnet, source_name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
         this_meshnet->on_route_ready(source_name, dest_id_rep, hops);
     };
 
-    callbacks.on_message_received = [this_meshnet, source_name] (node_t::node_id_rep sender_id_rep
-            , int priority, std::vector<char> && bytes) {
+    ptr->on_message_received = [this_meshnet, source_name] (node_t::node_id_rep sender_id_rep
+            , int priority, std::vector<char> bytes) {
         this_meshnet->on_message_received(source_name, sender_id_rep, priority, std::move(bytes));
     };
 
-    auto ptr = std::make_unique<node_pool_t>(std::move(opts), std::move(callbacks));
     auto index = ptr->add_node<node_t>({listener_saddr});
 
     ptr->listen(index, 10);

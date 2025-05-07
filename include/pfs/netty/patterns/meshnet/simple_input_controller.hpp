@@ -4,43 +4,47 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.22 Initial version.
+//      2025.02.05 Initial version.
+//      2025.05.07 Renamed from simple_input_processor.hpp to simple_input_controller.hpp.
+//                 Class `simple_input_processor` renamed to `simple_input_controller`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "basic_input_processor.hpp"
-#include "priority_frame.hpp"
+#include "basic_input_controller.hpp"
 #include "protocol.hpp"
+#include "route_info.hpp"
 #include <pfs/assert.hpp>
-#include <cstring>
-#include <unordered_map>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <int N, typename Node>
-class priority_input_processor: public basic_input_processor<priority_input_processor<N, Node>, Node>
+template <typename Node>
+class simple_input_controller: public basic_input_controller<simple_input_controller<Node>, Node>
 {
-    using base_class = basic_input_processor<priority_input_processor<N, Node>, Node>;
+    using base_class = basic_input_controller<simple_input_controller<Node>, Node>;
     using socket_id = typename Node::socket_id;
 
     friend base_class;
 
     struct account
     {
-        socket_id sid {Node::socket_type::kINVALID_SOCKET};
-        std::array<std::vector<char>, N> priority_buffers; // Buffers to accumulate raw data
-        int current_priority {-1};
-        std::vector<char> tmp; // Intermediate buffer
+        socket_id sid;
+        std::vector<char> b; // Buffer to accumulate raw data
     };
 
 private:
     std::unordered_map<socket_id, account> _accounts;
 
+    // Need to support requirements of basic_input_controller when calling read_frame
+    bool _frame_ready {false};
+
 public:
-    priority_input_processor (Node * node)
+    simple_input_controller (Node * node)
         : base_class(node)
     {}
 
@@ -62,45 +66,26 @@ private:
 
     void append_chunk (account & acc, std::vector<char> && chunk)
     {
-        acc.tmp.insert(acc.tmp.end(), chunk.begin(), chunk.end());
+        acc.b.insert(acc.b.end(), chunk.begin(), chunk.end());
+        _frame_ready = true;
     }
 
     std::vector<char> & inpb_ref (account & acc)
     {
-        PFS__TERMINATE(acc.current_priority >= 0, "unexpected current_priority value, fix");
-        return acc.priority_buffers[acc.current_priority];
+        return acc.b;
     }
 
-    int priority (account & acc) const noexcept
+    int priority (account &) const noexcept
     {
-        return acc.current_priority;
+        return 0;
     }
 
-    /**
-     * Attempt too read frame.
-     *
-     * @return @c true if data contains complete frame, or @c false otherwise.
-     */
-    bool read_frame (account & acc)
+    bool read_frame (account &)
     {
-        auto opt_frame = priority_frame::parse(acc.tmp.data(), acc.tmp.size());
-
-        // Incomplete frame
-        if (!opt_frame)
-            return false;
-
-        acc.current_priority = opt_frame->priority();
-
-        PFS__TERMINATE(acc.current_priority >= 0, "unexpected current_priority value, fix");
-
-        auto & inpb = inpb_ref(acc);
-        auto first = acc.tmp.data() + priority_frame::header_size();
-        auto frame_size = priority_frame::header_size() + opt_frame->payload_size();
-
-        inpb.insert(inpb.end(), first, first + opt_frame->payload_size());
-        acc.tmp.erase(acc.tmp.begin(), acc.tmp.begin() + frame_size);
-
-        return true;
+        // No frames, only unstructured chunks
+        auto res = _frame_ready;
+        _frame_ready = false;
+        return res;
     }
 
 public:
@@ -152,8 +137,7 @@ public:
     }
 
     void process_message_received (socket_id sid, int priority, node_id_rep sender_id
-        , node_id_rep receiver_id
-        , std::vector<char> && bytes)
+        , node_id_rep receiver_id, std::vector<char> && bytes)
     {
         this->_node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
@@ -168,3 +152,4 @@ public:
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
+

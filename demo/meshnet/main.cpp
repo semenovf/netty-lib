@@ -80,21 +80,13 @@ static void print_usage (pfs::filesystem::path const & programName
 // Check node specilizations
 void dumb ()
 {
-    bare_meshnet_node_t::options bare_opts;
-    bare_opts.id = pfs::generate_uuid();
-    bare_opts.is_gateway = false;
+    auto id = pfs::generate_uuid();
+    std::string name = "node";
+    bool is_gateway = false;
 
-    nopriority_meshnet_node_t::options nopriority_opts;
-    nopriority_opts.id = pfs::generate_uuid();
-    nopriority_opts.is_gateway = false;
-
-    priority_meshnet_node_t::options priority_opts;
-    priority_opts.id = pfs::generate_uuid();
-    priority_opts.is_gateway = false;
-
-    bare_meshnet_node_t {std::move(bare_opts), std::make_shared<bare_meshnet_node_t::callback_suite>()};
-    nopriority_meshnet_node_t {std::move(nopriority_opts), std::make_shared<nopriority_meshnet_node_t::callback_suite>()};
-    priority_meshnet_node_t {std::move(priority_opts), std::make_shared<priority_meshnet_node_t::callback_suite>()};
+    bare_meshnet_node_t {id, name, is_gateway};
+    nopriority_meshnet_node_t {id, name, is_gateway};
+    priority_meshnet_node_t {id, name, is_gateway};
 }
 
 int main (int argc, char * argv[])
@@ -102,8 +94,9 @@ int main (int argc, char * argv[])
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
-    node_pool_t::options opts;
-    opts.id = pfs::generate_uuid();
+    auto id = pfs::generate_uuid();
+    std::string name;
+    bool is_gateway = false;
     std::vector<node_item> nodes;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
@@ -130,7 +123,7 @@ int main (int argc, char * argv[])
                     expectedArgError = true;
                 }
             } else if (x.is_option("gw")) {
-                opts.is_gateway = true;
+                is_gateway = true;
             } else if (x.is_option("node")) {
                 nodes.emplace_back(); // Emplace back empty item
             } else if (x.is_option("nat")) {
@@ -195,28 +188,27 @@ int main (int argc, char * argv[])
     }
 
     netty::startup_guard netty_startup;
-    node_pool_t::callback_suite callbacks;
 
-    callbacks.on_channel_established = [] (node_t::node_id_rep id, bool is_gateway) {
+    node_pool_t node_pool {id, name, is_gateway};
+
+    node_pool.on_channel_established = [] (node_t::node_id_rep id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
         LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
     };
 
-    callbacks.on_channel_destroyed = [] (node_t::node_id_rep id) {
+    node_pool.on_channel_destroyed = [] (node_t::node_id_rep id) {
         LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
     };
 
     // Notify when node alive status changed
-    callbacks.on_node_alive = [] (node_t::node_id_rep id) {
+    node_pool.on_node_alive = [] (node_t::node_id_rep id) {
         LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
     };
 
     // Notify when node alive status changed
-    callbacks.on_node_expired = [] (node_t::node_id_rep id) {
+    node_pool.on_node_expired = [] (node_t::node_id_rep id) {
         LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
     };
-
-    node_pool_t node_pool {std::move(opts), std::move(callbacks)};
 
     for (auto & item: nodes) {
         auto node_index = node_pool.add_node<node_t>(item.listener_saddrs);

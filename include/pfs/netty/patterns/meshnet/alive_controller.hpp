@@ -5,9 +5,12 @@
 //
 // Changelog:
 //      2025.03.13 Initial version.
+//      2025.05.07 Renamed from alive_processor.hpp to alive_controller.hpp.
+//                 Class `alive_processor` renamed to `alive_controller`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "alive_info.hpp"
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
@@ -26,7 +29,7 @@ namespace meshnet {
 // The algorithm is similar to heartbeat algorithm
 //
 template <typename SerializerTraits>
-class alive_processor
+class alive_controller
 {
     using serializer_traits = SerializerTraits;
     using time_point_type = std::chrono::steady_clock::time_point;
@@ -66,11 +69,12 @@ private:
 
     std::set<alive_item> _alive_items;
 
-    std::function<void (node_id_rep)> _on_alive = [] (node_id_rep) {};
-    std::function<void (node_id_rep)> _on_expired = [] (node_id_rep) {};
+public:
+    callback_t<void (node_id_rep)> on_alive = [] (node_id_rep) {};
+    callback_t<void (node_id_rep)> on_expired = [] (node_id_rep) {};
 
 public:
-    alive_processor (node_id_rep id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
+    alive_controller (node_id_rep id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
         , std::chrono::seconds interval = std::chrono::seconds{5}
         , std::chrono::milliseconds looping_interval = std::chrono::milliseconds{2500})
         : _id(id)
@@ -80,12 +84,12 @@ public:
         , _next_notification_time(std::chrono::steady_clock::now())
     {}
 
-    alive_processor (alive_processor const &) = delete;
-    alive_processor (alive_processor &&) = delete;
-    alive_processor & operator = (alive_processor const &) = delete;
-    alive_processor & operator = (alive_processor &&) = delete;
+    alive_controller (alive_controller const &) = delete;
+    alive_controller (alive_controller &&) = delete;
+    alive_controller & operator = (alive_controller const &) = delete;
+    alive_controller & operator = (alive_controller &&) = delete;
 
-    ~alive_processor () = default;
+    ~alive_controller () = default;
 
 private:
     void insert (node_id_rep id)
@@ -96,24 +100,10 @@ private:
     }
 
 public:
-    template <typename F>
-    alive_processor & on_alive (F && f)
-    {
-        _on_alive = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    alive_processor & on_expired (F && f)
-    {
-        _on_expired = std::forward<F>(f);
-        return *this;
-    }
-
     void add_sibling (node_id_rep id)
     {
         _sibling_nodes.insert(id);
-        _on_alive(id);
+        this->on_alive(id);
     }
 
     /**
@@ -142,7 +132,7 @@ public:
         }
 
         if (count > 0)
-            _on_expired(id);
+            this->on_expired(id);
     }
 
     /**
@@ -176,7 +166,7 @@ public:
         // New alive node detected
         insert(id);
 
-        _on_alive(id);
+        this->on_alive(id);
 
         return true;
     }
@@ -252,7 +242,7 @@ public:
 
             while (!_alive_items.empty() && pos->exp_time <= now) {
                 _alive_nodes.erase(pos->id);
-                _on_expired(pos->id);
+                this->on_expired(pos->id);
                 pos = _alive_items.erase(pos);
             }
         }
