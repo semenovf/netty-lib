@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "protocol.hpp"
 #include <chrono>
 #include <functional>
@@ -53,7 +54,8 @@ private:
     // TODO May be not optimized for large number of sockets
     std::unordered_map<socket_id, time_point_type> _limits;
 
-    std::function<void (socket_id)> _on_expired = [] (socket_id) {};
+public:
+    mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
 
 public:
     simple_heartbeat (Node * node
@@ -94,13 +96,6 @@ public:
         _limits[sid] = std::chrono::steady_clock::now() + _exp_timeout;
     }
 
-    template <typename F>
-    simple_heartbeat & on_expired (F && f)
-    {
-        _on_expired = std::forward<F>(f);
-        return *this;
-    }
-
     unsigned int step ()
     {
         unsigned int result = 0;
@@ -139,7 +134,7 @@ public:
                     auto sid = pos->first;
                     pos = _limits.erase(pos);
                     remove(sid);
-                    _on_expired(sid);
+                    this->on_expired(sid);
                 } else {
                     ++pos;
                 }

@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include "tools.hpp"
 #include <pfs/log.hpp>
 #include <pfs/universal_id.hpp>
 #include <pfs/netty/inet4_addr.hpp>
@@ -109,14 +110,16 @@ void worker ()
     reader_pool_t reader_pool;
     writer_pool_t writer_pool;
 
-    listener_pool.on_failure([self_port] (netty::error const & err) {
+    listener_pool.on_failure = [self_port] (netty::error const & err) {
         LOGE(TAG, "{:04}: listener pool failure: {}", self_port, err.what());
-    }).on_accepted([& peer_sockets, & reader_pool, self_port] (socket_t && sock) {
+    };
+
+    listener_pool.on_accepted = [& peer_sockets, & reader_pool, self_port] (socket_t && sock) {
         auto sock_id = sock.id();
         LOGD(TAG, "{:04}: socket accepted: id={}: {}", self_port, sock_id, to_string(sock.saddr()));
         peer_sockets[sock.id()] = std::move(sock);
         reader_pool.add(sock_id);
-    });
+    };
 
     listener_pool.add(listener_saddr, & err);
 
@@ -141,9 +144,11 @@ void worker ()
     if (s_is_error.load())
         return;
 
-    connecting_pool.on_failure([self_port] (netty::error const & err) {
+    connecting_pool.on_failure = [self_port] (netty::error const & err) {
         LOGE(TAG, "{:04}: {}", self_port, err.what());
-    }).on_connected([& connected_sockets, & writer_pool, host_id, self_port] (socket_t && sock) {
+    };
+
+    connecting_pool.on_connected = [& connected_sockets, & writer_pool, host_id, self_port] (socket_t && sock) {
         auto sock_id = sock.id();
         LOGD(TAG, "{:04}: socket connected: id={}: {}", self_port, sock_id, to_string(sock.saddr()));
         connected_sockets[sock.id()] = std::move(sock);
@@ -153,7 +158,9 @@ void worker ()
         serializer_t::ostream_type out;
         serializer_t::pack(out, packet);
         writer_pool.enqueue(sock_id, out.data(), out.size());
-    }).on_connection_refused ([self_port, & connecting_pool] (netty::socket4_addr saddr
+    };
+
+    connecting_pool.on_connection_refused = [self_port, & connecting_pool] (netty::socket4_addr saddr
             , netty::connection_refused_reason reason) {
         LOGE(TAG, "{:04}: connection refused for socket: {}: reason: {}, reconnecting"
             , self_port, to_string(saddr), to_string(reason));
@@ -161,31 +168,39 @@ void worker ()
         std::chrono::seconds timeout {1};
         LOGD(TAG, "{:04}: Reconnect after {}", self_port, timeout);
         connecting_pool.connect_timeout(timeout, saddr);
-    });
+    };
 
-    reader_pool.on_failure([& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {
+    reader_pool.on_failure = [& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {
         LOGE(TAG, "{:04}: read socket failure: id={}: {}", self_port, id, err.what());
         connected_sockets.erase(id);
         peer_sockets.erase(id);
-    }).on_data_ready([& read_counter, self_port] (socket_id id, std::vector<char> && data) {
+    };
+
+    reader_pool.on_data_ready = [& read_counter, self_port] (socket_id id, std::vector<char> && data) {
         LOGD(TAG, "{:04}: Input data ready: id={}: {} bytes", self_port, id, data.size());
         read_counter++;
-    }).on_locate_socket([& peer_sockets] (socket_id id) {
+    };
+
+    reader_pool.locate_socket = [& peer_sockets] (socket_id id) {
         auto pos = peer_sockets.find(id);
         return pos == peer_sockets.end() ? nullptr : & pos->second;
-    });
+    };
 
-    writer_pool.on_failure([& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {
+    writer_pool.on_failure = [& connected_sockets, & peer_sockets, self_port] (socket_id id, netty::error const & err) {
         LOGE(TAG, "{:04}: write socket failure: id={}: {}", self_port, id, err.what());
         connected_sockets.erase(id);
         peer_sockets.erase(id);
-    }).on_bytes_written([& write_counter, self_port] (socket_id id, std::uint64_t n) {
+    };
+
+    writer_pool.on_bytes_written = [& write_counter, self_port] (socket_id id, std::uint64_t n) {
         LOGD(TAG, "{:04}: bytes written: id={}: {}", self_port, id, n);
         write_counter++;
-    }).on_locate_socket([& connected_sockets] (socket_id id) {
+    };
+
+    writer_pool.locate_socket = [& connected_sockets] (socket_id id) {
         auto pos = connected_sockets.find(id);
         return pos == connected_sockets.end() ? nullptr : & pos->second;
-    });
+    };
 
     for (auto port = BASE_PORT; port < BASE_PORT + MAX_NODES_COUNT; port++) {
         if (port != self_port) {

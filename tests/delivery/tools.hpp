@@ -16,7 +16,6 @@ static constexpr char const * TAG = CYAN "delivery-test" END_COLOR;
 #include "../meshnet/tools.hpp"
 #include <pfs/universal_id_hash.hpp>
 #include <pfs/universal_id_traits.hpp>
-#include <pfs/netty/patterns/delivery/functional_callbacks.hpp>
 #include <pfs/netty/patterns/delivery/incoming_controller.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
 #include <pfs/netty/patterns/delivery/outgoing_controller.hpp>
@@ -35,9 +34,8 @@ using incoming_controller_t = delivery_ns::incoming_controller<message_id_traits
     , netty::patterns::serializer_traits_t>;
 using outgoing_controller_t = delivery_ns::outgoing_controller<message_id_traits
     , netty::patterns::serializer_traits_t>;
-using callbacks_t = delivery_ns::delivery_callbacks<delivery_transport_t::node_id, message_id_traits::type>;
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id_traits
-    , incoming_controller_t, outgoing_controller_t, std::mutex, callbacks_t>;
+    , incoming_controller_t, outgoing_controller_t, std::mutex>;
 
 class mesh_network_delivery: protected mesh_network
 {
@@ -68,15 +66,48 @@ private:
     }
 
 public:
+    void on_receiver_ready (std::string const & receiver_name, delivery_manager_t::address_type addr);
+    void on_message_received (std::string const & sender_name, delivery_manager_t::address_type addr
+        , delivery_manager_t::message_id msgid, std::vector<char> msg);
+    void on_message_dispatched (std::string const & receiver_name, delivery_manager_t::address_type addr
+        , delivery_manager_t::message_id msgid);
+    void on_report_received (std::string const & sender_name, delivery_manager_t::address_type addr
+        , std::vector<char> report);
+
+public:
     std::string node_name_by_id (node_pool_t::node_id id)
     {
         return mesh_network::node_name_by_id(id);
     }
 
-    void tie_delivery_manager (std::string np_name, delivery_manager_t::callback_suite callbacks)
+    void tie_delivery_manager (std::string np_name)
     {
-        auto dm = std::make_unique<delivery_manager_t>(transport(np_name), std::move(callbacks));
-        _with_delivery_manager.insert({std::move(np_name), std::move(dm)});
+        auto pdm = std::make_unique<delivery_manager_t>(transport(np_name));
+
+        pdm->on_receiver_ready = [this] (delivery_manager_t::address_type addr)
+        {
+            this->on_receiver_ready(this->node_name_by_id(addr), addr);
+        };
+
+        pdm->on_message_received = [this] (delivery_manager_t::address_type addr
+            , tools::delivery_manager_t::message_id msgid, std::vector<char> msg)
+        {
+            this->on_message_received(this->node_name_by_id(addr), addr, msgid, std::move(msg));
+        };
+
+        pdm->on_message_dispatched = [this] (delivery_manager_t::address_type addr
+            , tools::delivery_manager_t::message_id msgid)
+        {
+            this->on_message_dispatched(this->node_name_by_id(addr), addr, msgid);
+        };
+
+        pdm->on_report_received = [this] (delivery_manager_t::address_type addr
+            , std::vector<char> report)
+        {
+            this->on_report_received(this->node_name_by_id(addr), addr, std::move(report));
+        };
+
+        _with_delivery_manager.insert({std::move(np_name), std::move(pdm)});
     }
 
     void connect_host (std::string const & initiator_name, std::string const & target_name

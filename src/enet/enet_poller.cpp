@@ -179,7 +179,7 @@ int enet_poller::poll (std::chrono::milliseconds millis, error * perr)
     return success ? total_events : -1;
 }
 
-int enet_poller::check_and_notify_can_write (std::function<void (socket_id)> && can_write)
+int enet_poller::check_and_notify_can_write (callback_t<void (socket_id)> can_write)
 {
     int n = 0;
 

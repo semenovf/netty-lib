@@ -8,7 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "../../socket4_addr.hpp"
+#include "handshake_result.hpp"
+#include <string>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -19,14 +22,16 @@ template <typename Node>
 class without_handshake
 {
     using socket_id = typename Node::socket_id;
+    using node_id_rep = typename Node::node_id_rep;
     using channel_collection_type = typename Node::channel_collection_type;
 
 public:
     without_handshake (Node *, channel_collection_type *) {}
 
 public:
-    template <typename F> without_handshake & on_expired (F &&) { return *this; }
-    template <typename F> without_handshake & on_completed (F &&)  { return *this; }
+    mutable callback_t<void (socket_id)> on_expired;
+    mutable callback_t<void (node_id_rep, socket_id, std::string const &, bool
+        , handshake_result_enum)> on_completed;
 
     void start (socket_id, bool) {}
     void cancel (socket_id) {}

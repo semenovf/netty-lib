@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "../../socket4_addr.hpp"
 
 NETTY__NAMESPACE_BEGIN
@@ -22,6 +23,9 @@ class without_heartbeat
     using serializer_traits = typename Node::serializer_traits;
 
 public:
+    mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
+
+public:
     without_heartbeat (Node *) {}
 
 public:
@@ -29,12 +33,6 @@ public:
     void remove (socket_id) {}
     void process (socket_id, heartbeat_packet const &) {}
     unsigned int step () { return 0; }
-
-    template <typename F>
-    without_heartbeat & on_expired (F &&)
-    {
-        return *this;
-    }
 };
 
 }} // namespace patterns::meshnet

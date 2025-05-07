@@ -38,7 +38,7 @@ private:
 
         PFS__ASSERT(success, "Fix meshnet::single_link_handshake algorithm");
 
-        this->_on_completed(id_rep, sid, name, is_gateway, handshake_result_enum::success);
+        this->on_completed(id_rep, sid, name, is_gateway, handshake_result_enum::success);
     }
 
 public:
@@ -54,7 +54,7 @@ public:
                 if (this->_node->id_rep() == pkt.id_rep) {
                     // Check Node ID duplication. Requester must be an initiator of the socket closing.
 
-                    this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
+                    this->on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
                         , handshake_result_enum::duplicated);
                 } else {
                     // Response received by connected socket (writer)
@@ -62,7 +62,7 @@ public:
                     if (pkt.accepted()) {
                         complete_channel_success(pkt.id_rep, sid, pkt.name, pkt.is_gateway());
                     } else {
-                        this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
+                        this->on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway()
                             , handshake_result_enum::reject);
                     }
                 }

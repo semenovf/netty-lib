@@ -1,12 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2024.12.26 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
+#include "callback.hpp"
 #include "error.hpp"
 #include <pfs/i18n.hpp>
 #include <chrono>
@@ -28,15 +31,20 @@ private:
     std::unordered_map<listener_id, listener_socket_type> _listeners;
     std::vector<listener_id> _removable;
 
-    mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
-    mutable std::function<void(socket_type &&)> _on_accepted;
+public:
+    mutable callback_t<void(error const &)> on_failure = [] (error const &) {};
+
+    /**
+     * Accept an incoming connection callback.
+     */
+    mutable callback_t<void(socket_type &&)> on_accepted = [] (socket_type &&) {};
 
 public:
     listener_pool ()
     {
         ListenerPoller::on_failure = [this] (listener_id id, error const & err) {
             remove_later(id);
-            _on_failure(err);
+            this->on_failure(err);
         };
 
         ListenerPoller::accept = [this] (listener_id id) {
@@ -47,38 +55,17 @@ public:
                 auto peer_socket = pos->second.accept_nonblocking(id, & err);
 
                 if (!err)
-                    _on_accepted(std::move(peer_socket));
+                    this->on_accepted(std::move(peer_socket));
             } else {
                 err = error {tr::f_("listener not found: {}", id)};
             }
 
             if (err)
-                _on_failure(err);
+                this->on_failure(err);
         };
     }
 
 public:
-    /**
-     * Sets a callback for the failure. Callback signature is void(netty::error const &).
-     */
-    template <typename F>
-    listener_pool & on_failure (F && f)
-    {
-        _on_failure = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Sets a callback to accept an incoming connection.
-     * Callback signature is void(socket_type &&).
-     */
-    template <typename F>
-    listener_pool & on_accepted (F && f)
-    {
-        _on_accepted = std::forward<F>(f);
-        return *this;
-    }
-
     template <typename ...Args>
     void add (Args &&... args)
     {
@@ -116,7 +103,7 @@ public:
                 ListenerPoller::add(listener.id(), & err);
 
             if (err)
-                _on_failure(err);
+                this->on_failure(err);
         }
     }
 

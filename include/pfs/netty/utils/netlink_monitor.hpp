@@ -1,13 +1,16 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2024 Vladislav Trifochkin
+// Copyright (c) 2023-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.02.16 Initial version.
 //      2024.04.08 Moved to `utils` namespace.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../namespace.hpp"
+#include "../callback.hpp"
 #include "pfs/netty/error.hpp"
 #include "pfs/netty/exports.hpp"
 #include "pfs/netty/inet4_addr.hpp"
@@ -17,7 +20,8 @@
 #include <string>
 #include <vector>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace utils {
 
 struct netlink_attributes
@@ -40,14 +44,14 @@ private:
     std::unique_ptr<impl> _d;
 
 public:
-    mutable std::function<void (error const &)> on_failure = [] (error const &) {};
-    mutable std::function<void(inet4_addr, std::uint32_t)> inet4_addr_added;
-    mutable std::function<void(inet4_addr, std::uint32_t)> inet4_addr_removed;
-    // mutable std::function<void(inet6_addr, int)> inet6_addr_added;
-    // mutable std::function<void(inet6_addr, int)> inet6_addr_removed;
+    mutable callback_t<void (error const &)> on_failure = [] (error const &) {};
+    mutable callback_t<void(inet4_addr, std::uint32_t)> inet4_addr_added;
+    mutable callback_t<void(inet4_addr, std::uint32_t)> inet4_addr_removed;
+    // mutable callback_t<void(inet6_addr, int)> inet6_addr_added;
+    // mutable callback_t<void(inet6_addr, int)> inet6_addr_removed;
 
     // Unused in Windows
-    mutable std::function<void(netlink_attributes const &)> attrs_ready;
+    mutable callback_t<void(netlink_attributes const &)> attrs_ready;
 
 public:
     NETTY__EXPORT netlink_monitor (error * perr = nullptr);
@@ -55,4 +59,6 @@ public:
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);
 };
 
-}} // namespace netty::utils
+} // namespace utils
+
+NETTY__NAMESPACE_END

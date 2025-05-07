@@ -7,6 +7,8 @@
 //      2025.03.30 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "handshake_result.hpp"
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
@@ -37,9 +39,12 @@ protected:
     std::map<socket_id, time_point_type> _cache;
     std::chrono::seconds _timeout {3};
 
-    mutable std::function<void(socket_id)> _on_expired;
-    mutable std::function<void(node_id_rep, socket_id, std::string const & /*name*/
-        , bool /*is_gateway*/, handshake_result_enum res)> _on_completed;
+public:
+    mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
+
+    mutable callback_t<void (node_id_rep, socket_id, std::string const &, bool
+        , handshake_result_enum)> on_completed = [] (node_id_rep, socket_id
+        , std::string const & /*name*/, bool /*is_gateway*/, handshake_result_enum) {};
 
 protected:
     basic_handshake (Node * node, channel_collection_type * channels)
@@ -88,7 +93,7 @@ protected:
                     pos = _cache.erase(pos);
                     result++;
                     _channels->close_channel(sid);
-                    _on_expired(sid);
+                    this->on_expired(sid);
                 } else {
                     ++pos;
                 }
@@ -99,20 +104,6 @@ protected:
     }
 
 public:
-    template <typename F>
-    basic_handshake & on_expired (F && f)
-    {
-        _on_expired = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    basic_handshake & on_completed (F && f)
-    {
-        _on_completed = std::forward<F>(f);
-        return *this;
-    }
-
     void start (socket_id sid, bool behind_nat)
     {
         enqueue_request(sid, behind_nat);

@@ -1,10 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2024.12.26 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "connection_refused_reason.hpp"
@@ -45,16 +46,19 @@ private:
     std::map<socket_id, socket_type> _connecting_sockets;
     std::vector<socket_id> _removable;
     std::set<deferred_connection_item> _deferred_connections;
-    mutable std::function<void(error const &)> _on_failure = [] (error const &) {};
-    mutable std::function<void(socket_type &&)> _on_connected;
-    mutable std::function<void(socket4_addr, connection_refused_reason)> _on_connection_refused;
+
+public:
+    mutable callback_t<void (error const &)> on_failure = [] (error const &) {};
+    mutable callback_t<void (socket_type &&)> on_connected = [] (socket_type &&) {};
+    mutable callback_t<void (socket4_addr, connection_refused_reason)> on_connection_refused
+        = [] (socket4_addr, connection_refused_reason) {};
 
 public:
     connecting_pool ()
     {
         ConnectingPoller::on_failure = [this] (socket_id id, error const & err) {
             remove_later(id);
-            _on_failure(err);
+            this->on_failure(err);
         };
 
         ConnectingPoller::connected = [this] (socket_id id) {
@@ -63,14 +67,14 @@ public:
             remove_later(id);
 
             if (pos != _connecting_sockets.end()) {
-                if (_on_connected)
-                    _on_connected(std::move(pos->second));
+                if (this->on_connected)
+                    this->on_connected(std::move(pos->second));
             } else {
                 err = error {tr::f_("on socket connected failure: id={}", id)};
             }
 
             if (err)
-                _on_failure(err);
+                this->on_failure(err);
         };
 
         ConnectingPoller::connection_refused = [this] (socket_id id, connection_refused_reason reason) {
@@ -79,10 +83,10 @@ public:
             remove_later(id);
 
             if (pos != _connecting_sockets.end()) {
-                if (_on_connection_refused)
-                    _on_connection_refused(pos->second.saddr(), reason);
+                if (this->on_connection_refused)
+                    this->on_connection_refused(pos->second.saddr(), reason);
             } else {
-                _on_failure(error {tr::f_("on connection refused on socket failure: id={}", id)});
+                this->on_failure(error {tr::f_("on connection refused on socket failure: id={}", id)});
             }
         };
     }
@@ -105,34 +109,6 @@ public:
         }
     }
 
-    /**
-     * Sets a callback for the failure. Callback signature is void(netty::error const &).
-     */
-    template <typename F>
-    connecting_pool & on_failure (F && f)
-    {
-        _on_failure = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Sets a callback to accept an incoming connection.
-     * Callback signature is void(socket_type &&).
-     */
-    template <typename F>
-    connecting_pool & on_connected (F && f)
-    {
-        _on_connected = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    connecting_pool & on_connection_refused (F && f)
-    {
-        _on_connection_refused = std::forward<F>(f);
-        return *this;
-    }
-
     template <typename ...Args>
     netty::conn_status connect (Args &&... args)
     {
@@ -142,7 +118,7 @@ public:
 
         switch (status) {
             case netty::conn_status::connected:
-                _on_connected(std::move(sock));
+                this->on_connected(std::move(sock));
                 break;
             case netty::conn_status::connecting: {
                 ConnectingPoller::add(sock.id(), & err);
@@ -150,18 +126,18 @@ public:
                 if (!err) {
                     _connecting_sockets[sock.id()] = std::move(sock);
                 } else {
-                    _on_failure(err);
+                    this->on_failure(err);
                 }
 
                 break;
             }
 
             case netty::conn_status::unreachable:
-                _on_connection_refused(sock.saddr(), connection_refused_reason::unreachable);
+                this->on_connection_refused(sock.saddr(), connection_refused_reason::unreachable);
                 break;
 
             case netty::conn_status::failure:
-                _on_failure(err);
+                this->on_failure(err);
                 break;
 
             case netty::conn_status::deferred:

@@ -1,14 +1,16 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2024.12.31 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "error.hpp"
 #include "namespace.hpp"
+#include "callback.hpp"
+#include "error.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
@@ -39,10 +41,11 @@ private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
 
-    mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
-    mutable std::function<void(socket_id, std::vector<char> &&)> _on_data_ready;
-    mutable std::function<void(socket_id)> _on_disconnected;
-    mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
+public:
+    mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
+    mutable callback_t<void (socket_id, std::vector<char>)> on_data_ready;
+    mutable callback_t<void (socket_id)> on_disconnected;
+    mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
         return nullptr;
     };
@@ -52,12 +55,12 @@ public:
     {
         ReaderPoller::on_failure = [this] (socket_id id, error const & err) {
             remove_later(id);
-            _on_failure(id, err);
+            this->on_failure(id, err);
         };
 
         ReaderPoller::on_disconnected = [this] (socket_id id) {
-            if (_on_disconnected)
-                _on_disconnected(id);
+            if (this->on_disconnected)
+                this->on_disconnected(id);
             remove_later(id);
         };
 
@@ -68,11 +71,11 @@ public:
             PFS__TERMINATE(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
                 " reader account not found by id");
 
-            auto sock = _locate_socket(id);
+            auto sock = this->locate_socket(id);
 
             if (sock == nullptr) {
                 remove_later(id);
-                _on_failure(id, error {tr::f_("cannot locate socket for reading by ID: {}"
+                this->on_failure(id, error {tr::f_("cannot locate socket for reading by ID: {}"
                     ", removed from reader pool", id)
                 });
                 return;
@@ -89,7 +92,7 @@ public:
                 auto n = sock->recv(inpb.data() + offset, acc->frame_size, & err);
 
                 if (n < 0) {
-                    _on_failure(id, err);
+                    this->on_failure(id, err);
                     remove_later(id);
                     return;
                 }
@@ -100,8 +103,8 @@ public:
                     break;
             }
 
-            if (_on_data_ready)
-                _on_data_ready(id, std::move(inpb));
+            if (this->on_data_ready)
+                this->on_data_ready(id, std::move(inpb));
         };
     }
 
@@ -136,7 +139,7 @@ private:
             ReaderPoller::add(id, & err);
 
             if (err)
-                _on_failure(id, err);
+                this->on_failure(id, err);
         }
 
         return acc;
@@ -163,40 +166,6 @@ public:
 
             _removable.clear();
         }
-    }
-
-    /**
-     * Sets a callback for the failure. Callback signature is void(socket_id, netty::error const &).
-     */
-    template <typename F>
-    reader_pool & on_failure (F && f)
-    {
-        _on_failure = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Sets a callback for reading from the socket. Callback signature is void(socket_id, std::vector<char> &&).
-     */
-    template <typename F>
-    reader_pool & on_data_ready (F && f)
-    {
-        _on_data_ready = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    reader_pool & on_disconnected (F && f)
-    {
-        _on_disconnected = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    reader_pool & on_locate_socket (F && f)
-    {
-        _locate_socket = std::forward<F>(f);
-        return *this;
     }
 
     /**

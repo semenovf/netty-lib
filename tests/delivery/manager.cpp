@@ -118,41 +118,43 @@ void tools::mesh_network::on_message_received (std::string const & receiver_name
 //     g_message_matrix.wlock()->set(row, col, true);
 }
 
+void tools::mesh_network_delivery::on_receiver_ready (std::string const & receiver_name
+    , delivery_manager_t::address_type addr)
+{
+    LOGD(TAG, "Receiver ready: {}", receiver_name);
+    g_syn_completed_counter++;
+}
+
+void tools::mesh_network_delivery::on_message_received (std::string const & sender_name
+    , delivery_manager_t::address_type addr, delivery_manager_t::message_id msgid, std::vector<char> msg)
+{
+    LOGD(TAG, "Message received from {}: {}: {} bytes", sender_name
+        , tools::delivery_manager_t::message_id_traits::to_string(msgid), msg.size());
+}
+
+void tools::mesh_network_delivery::on_message_dispatched (std::string const & receiver_name
+    , delivery_manager_t::address_type addr, delivery_manager_t::message_id msgid)
+{
+    LOGD(TAG, "Message dispatched {}: {}", receiver_name
+        , tools::delivery_manager_t::message_id_traits::to_string(msgid));
+
+    g_message_dispatched_counter++;
+}
+
+void tools::mesh_network_delivery::on_report_received (std::string const & sender_name
+    , delivery_manager_t::address_type addr, std::vector<char> report)
+{
+    LOGD(TAG, "Report received from {}: {} bytes", sender_name, report.size());
+    g_report_received_counter++;
+}
+
 TEST_CASE("sync delivery") {
     netty::startup_guard netty_startup;
 
     tools::mesh_network_delivery mesh_network { "a", "b", "c", "A0", "C0" };
 
-    tools::delivery_manager_t::callback_suite callbacks;
-
-    callbacks.on_receiver_ready = [& mesh_network] (tools::delivery_manager_t::address_type addr) {
-        LOGD(TAG, "Receiver ready: {}", mesh_network.node_name_by_id(addr));
-        g_syn_completed_counter++;
-    };
-
-    callbacks.on_message_received = [& mesh_network] (tools::delivery_manager_t::address_type addr
-            , tools::delivery_manager_t::message_id msgid, std::vector<char> && msg) {
-        LOGD(TAG, "Message received from {}: {}: {} bytes", mesh_network.node_name_by_id(addr)
-            , tools::delivery_manager_t::message_id_traits::to_string(msgid), msg.size());
-    };
-
-    callbacks.on_message_dispatched = [& mesh_network] (tools::delivery_manager_t::address_type addr
-            , tools::delivery_manager_t::message_id msgid) {
-        LOGD(TAG, "Message dispatched {}: {}", mesh_network.node_name_by_id(addr)
-            , tools::delivery_manager_t::message_id_traits::to_string(msgid));
-
-        g_message_dispatched_counter++;
-    };
-
-    callbacks.on_report_received = [& mesh_network] (tools::delivery_manager_t::address_type addr
-            , std::vector<char> && report) {
-        LOGD(TAG, "Report received from {}: {} bytes", mesh_network.node_name_by_id(addr)
-            , report.size());
-        g_report_received_counter++;
-    };
-
-    mesh_network.tie_delivery_manager("A0", tools::delivery_manager_t::callback_suite{callbacks});
-    mesh_network.tie_delivery_manager("C0", tools::delivery_manager_t::callback_suite{callbacks});
+    mesh_network.tie_delivery_manager("A0");
+    mesh_network.tie_delivery_manager("C0");
 
     constexpr bool BEHIND_NAT = true;
     // g_text = random_text();

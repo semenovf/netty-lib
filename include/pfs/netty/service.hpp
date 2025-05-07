@@ -1,12 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2024.05.07 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
+#include "callback.hpp"
 #include "connection_refused_reason.hpp"
 #include "error.hpp"
 #include "property.hpp"
@@ -63,16 +66,16 @@ public:
         std::map<socket_id, requester_account> _requesters;
 
     public:
-        mutable std::function<void (error const &)> on_failure = [] (error const &) {};
-        mutable std::function<void (std::string const & )> on_error = [] (std::string const & ) {};
-        mutable std::function<void (socket_id)> accepted = [] (socket_id) {};
-        mutable std::function<void (socket_id)> disconnected = [] (socket_id) {};
-        mutable std::function<void (socket_id)> released = [] (socket_id) {};
-        mutable std::function<void (socket_id, InputEnvelope const &)> on_message_received
+        mutable callback_t<void (error const &)> on_failure = [] (error const &) {};
+        mutable callback_t<void (std::string const & )> on_error = [] (std::string const & ) {};
+        mutable callback_t<void (socket_id)> accepted = [] (socket_id) {};
+        mutable callback_t<void (socket_id)> disconnected = [] (socket_id) {};
+        mutable callback_t<void (socket_id)> released = [] (socket_id) {};
+        mutable callback_t<void (socket_id, InputEnvelope const &)> on_message_received
             = [] (socket_id, InputEnvelope const &) {};
 
     private:
-        std::function<socket_id(socket_id, bool &)> accept_proc ()
+        callback_t<socket_id(socket_id, bool &)> accept_proc ()
         {
             return [this] (socket_id listener_sock, bool & success) {
                 netty::error err;
@@ -386,22 +389,22 @@ public:
         bool _connecting {false};
 
     public:
-        mutable std::function<void (error const &)> on_failure = [] (error const &) {};
-        mutable std::function<void (std::string const & )> on_error = [] (std::string const & ) {};
-        mutable std::function<void ()> connected = [] () {};
-        mutable std::function<void ()> connection_refused = [] () {};
+        mutable callback_t<void (error const &)> on_failure = [] (error const &) {};
+        mutable callback_t<void (std::string const & )> on_error = [] (std::string const & ) {};
+        mutable callback_t<void ()> connected = [] () {};
+        mutable callback_t<void ()> connection_refused = [] () {};
 
         /**
          * Client socket has been disconnected by the peer.
          */
-        mutable std::function<void ()> disconnected = [] () {};
+        mutable callback_t<void ()> disconnected = [] () {};
 
         /**
          * Client socket has been destroyed/released.
          */
-        mutable std::function<void ()> released = [] () {};
+        mutable callback_t<void ()> released = [] () {};
 
-        mutable std::function<void (InputEnvelope const &)> on_message_received
+        mutable callback_t<void (InputEnvelope const &)> on_message_received
             = [] (InputEnvelope const &) {};
 
     private:

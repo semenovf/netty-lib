@@ -1,12 +1,14 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2023-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.09 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "callback.hpp"
 #include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
@@ -27,12 +29,12 @@ private:
     std::unique_ptr<Backend> _rep;
 
 public:
-    mutable std::function<void(listener_id, error const &)> on_failure;
+    mutable callback_t<void(listener_id, error const &)> on_failure;
 
     /**
      * This callback must implement the accept procedure.
      */
-    mutable std::function<void(listener_id)> accept;
+    mutable callback_t<void(listener_id)> accept;
 
 public:
     NETTY__EXPORT listener_poller ();

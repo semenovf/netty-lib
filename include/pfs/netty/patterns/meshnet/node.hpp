@@ -226,18 +226,22 @@ public:
 
         _channels.on_close_socket = [this] (socket_id sid) { close_socket(sid); };
 
-        _listener_pool.on_failure([this] (netty::error const & err) {
+        _listener_pool.on_failure = [this] (netty::error const & err) {
             this->on_error(tr::f_("listener pool failure: {}", err.what()));
-        }).on_accepted([this] (socket_type && sock) {
+        };
+
+        _listener_pool.on_accepted = [this] (socket_type && sock) {
             NETTY__TRACE(TAG, "{}: socket accepted: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_accepted(std::move(sock));
-        });
+        };
 
-        _connecting_pool.on_failure([this] (netty::error const & err) {
+        _connecting_pool.on_failure = [this] (netty::error const & err) {
             this->on_error(tr::f_("connecting pool failure: {}", err.what()));
-        }).on_connected([this] (socket_type && sock) {
+        };
+
+        _connecting_pool.on_connected = [this] (socket_type && sock) {
             NETTY__TRACE(TAG, "{}: socket connected: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
 
             bool behind_nat = false;
@@ -250,21 +254,25 @@ public:
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_connected(std::move(sock));
-        }).on_connection_refused ([this] (netty::socket4_addr saddr
+        };
+
+        _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
                 , netty::connection_refused_reason reason) {
             this->on_error(tr::f_("connection refused for socket: {}: reason: {}"
                 , to_string(saddr), to_string(reason)));
             schedule_reconnection(saddr);
-        });
+        };
 
-        _reader_pool.on_failure([this] (socket_id sid, netty::error const & err) {
+        _reader_pool.on_failure = [this] (socket_id sid, netty::error const & err) {
             this->on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
 
             auto id_rep_opt = _channels.close_channel(sid);
 
             if (id_rep_opt)
                 this->on_channel_destroyed(*id_rep_opt, _index);
-        }).on_disconnected([this] (socket_id sid) {
+        };
+
+        _reader_pool.on_disconnected = [this] (socket_id sid) {
             NETTY__TRACE(TAG, "{}: reader socket disconnected: #{}", _name, sid);
 
             // schedule_reconnection(sid); // FIXME When need reconnection?
@@ -273,30 +281,42 @@ public:
 
             if (id_rep_opt)
                 this->on_channel_destroyed(*id_rep_opt, _index);
-        }).on_data_ready([this] (socket_id sid, std::vector<char> && data) {
-            _input_controller.process_input(sid, std::move(data));
-        }).on_locate_socket([this] (socket_id sid) {
-            return _socket_pool.locate(sid);
-        });
+        };
 
-        _writer_pool.on_failure([this] (socket_id sid, netty::error const & err) {
+        _reader_pool.on_data_ready = [this] (socket_id sid, std::vector<char> && data) {
+            _input_controller.process_input(sid, std::move(data));
+        };
+
+        _reader_pool.locate_socket = [this] (socket_id sid) {
+            return _socket_pool.locate(sid);
+        };
+
+        _writer_pool.on_failure = [this] (socket_id sid, netty::error const & err) {
             this->on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
             schedule_reconnection(sid);
-        }).on_disconnected([this] (socket_id sid) {
+        };
+
+        _writer_pool.on_disconnected = [this] (socket_id sid) {
             NETTY__TRACE(TAG, "{}: writer socket disconnected: #{}", _name, sid);
             schedule_reconnection(sid);
-        }).on_bytes_written([this] (socket_id sid, std::uint64_t n) {
+        };
+
+        _writer_pool.on_bytes_written = [this] (socket_id sid, std::uint64_t n) {
             auto id_ptr = _channels.locate_writer(sid);
 
             if (id_ptr != nullptr)
                 this->on_bytes_written(*id_ptr, n);
-        }).on_locate_socket([this] (socket_id sid) {
-            return _socket_pool.locate(sid);
-        });
+        };
 
-        _handshake_controller.on_expired([this] (socket_id sid) {
+        _writer_pool.locate_socket = [this] (socket_id sid) {
+            return _socket_pool.locate(sid);
+        };
+
+        _handshake_controller.on_expired = [this] (socket_id sid) {
             NETTY__TRACE(TAG, "{}: handshake expired for socket: #{}", _name, sid);
-        }).on_completed([this] (node_id_rep id_rep, socket_id sid, std::string const & name
+        };
+
+        _handshake_controller.on_completed = [this] (node_id_rep id_rep, socket_id sid, std::string const & name
                 , bool is_gateway, handshake_result_enum status) {
             switch (status) {
                 case handshake_result_enum::success: {
@@ -327,12 +347,12 @@ public:
                     PFS__TERMINATE(false, "Fix meshnet::node algorithm");
                     break;
             }
-        });
+        };
 
-        _heartbeat_controller.on_expired ([this] (socket_id sid) {
+        _heartbeat_controller.on_expired = [this] (socket_id sid) {
             NETTY__TRACE(TAG, "{}: socket heartbeat timeout exceeded: #{}", _name, sid);
             schedule_reconnection(sid);
-        });
+        };
 
         NETTY__TRACE(TAG, "node: {} (gateway={}, id={})"
             , _name, _is_gateway, node_id_traits::to_string(_id_rep));

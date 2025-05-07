@@ -7,6 +7,7 @@
 //      2025.05.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
 #include <functional>
 
 NETTY__NAMESPACE_BEGIN

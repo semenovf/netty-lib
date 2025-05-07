@@ -1,16 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2023-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.23 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
+#include "callback.hpp"
 #include "chrono.hpp"
 #include "error.hpp"
 #include "exports.hpp"
-#include "namespace.hpp"
 #include <functional>
 #include <memory>
 
@@ -26,9 +28,9 @@ private:
     std::unique_ptr<Backend> _rep;
 
 public:
-    mutable std::function<void(socket_id, error const &)> on_failure;
-    mutable std::function<void(socket_id)> on_disconnected;
-    mutable std::function<void(socket_id)> on_ready_read;
+    mutable std::function<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
+    mutable std::function<void (socket_id)> on_disconnected = [] (socket_id) {};
+    mutable std::function<void (socket_id)> on_ready_read = [] (socket_id) {};
 
 public:
     NETTY__EXPORT reader_poller ();

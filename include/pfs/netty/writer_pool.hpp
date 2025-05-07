@@ -1,14 +1,16 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2024 Vladislav Trifochkin
+// Copyright (c) 2024-2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2024.12.27 Initial version.
+//      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "error.hpp"
 #include "namespace.hpp"
+#include "callback.hpp"
+#include "error.hpp"
 #include "send_result.hpp"
 #include "writer_queue.hpp"
 #include <pfs/assert.hpp>
@@ -54,10 +56,11 @@ private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
 
-    mutable std::function<void(socket_id, error const &)> _on_failure = [] (socket_id, error const &) {};
-    mutable std::function<void(socket_id, std::uint64_t)> _on_bytes_written;
-    mutable std::function<void(socket_id)> _on_disconnected = [] (socket_id) {};
-    mutable std::function<Socket *(socket_id)> _locate_socket = [] (socket_id) -> Socket * {
+public:
+    mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
+    mutable callback_t<void (socket_id, std::uint64_t)> on_bytes_written;
+    mutable callback_t<void (socket_id)> on_disconnected = [] (socket_id) {};
+    mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
         return nullptr;
     };
@@ -67,12 +70,12 @@ public:
     {
         WriterPoller::on_failure = [this] (socket_id id, error const & err) {
             remove_later(id);
-            _on_failure(id, err);
+            this->on_failure(id, err);
         };
 
         WriterPoller::on_disconnected = [this] (socket_id id) {
             remove_later(id);
-            _on_disconnected(id);
+            this->on_disconnected(id);
         };
 
         WriterPoller::can_write = [this] (socket_id id) {
@@ -135,11 +138,11 @@ private:
                 if (acc.q.empty())
                     continue;
 
-                auto sock = _locate_socket(acc.id);
+                auto sock = this->locate_socket(acc.id);
 
                 if (sock == nullptr) {
                     remove_later(acc.id);
-                    _on_failure(acc.id, error {
+                    this->on_failure(acc.id, error {
                         tr::f_("cannot locate socket for writing by ID: {}"
                             ", removed from writer pool", acc.id)
                     });
@@ -159,7 +162,7 @@ private:
                     case netty::send_status::failure:
                     case netty::send_status::network:
                         remove_later(acc.id);
-                        _on_failure(acc.id, err);
+                        this->on_failure(acc.id, err);
                         break;
 
                     case netty::send_status::again:
@@ -177,8 +180,8 @@ private:
 
                             result++;
 
-                            if (_on_bytes_written)
-                                _on_bytes_written(acc.id, res.n);
+                            if (this->on_bytes_written)
+                                this->on_bytes_written(acc.id, res.n);
                         }
                         break;
                 }
@@ -259,37 +262,6 @@ public:
     void enqueue_broadcast (char const * data, std::size_t len)
     {
         enqueue_broadcast(0, data, len);
-    }
-
-    /**
-     * Sets a callback for the failure. Callback signature is void(socket_id, netty::error const &).
-     */
-    template <typename F>
-    writer_pool & on_failure (F && f)
-    {
-        _on_failure = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    writer_pool & on_disconnected (F && f)
-    {
-        _on_disconnected = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    writer_pool & on_bytes_written (F && f)
-    {
-        _on_bytes_written = std::forward<F>(f);
-        return *this;
-    }
-
-    template <typename F>
-    writer_pool & on_locate_socket (F && f)
-    {
-        _locate_socket = std::forward<F>(f);
-        return *this;
     }
 
     /**

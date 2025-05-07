@@ -8,8 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
+#include "../../tag.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
+#include <pfs/log.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -32,8 +35,7 @@ template <typename Transport
     , typename MessageIdTraits
     , typename IncomingController
     , typename OutgoingController
-    , typename WriterMutex
-    , typename CallbackSuite>
+    , typename WriterMutex>
 class manager
 {
     using transport_type = Transport;
@@ -45,7 +47,6 @@ public:
     using message_id_traits = MessageIdTraits;
     using message_id = typename message_id_traits::type;
     using writer_mutex_type = WriterMutex;
-    using callback_suite = CallbackSuite;
 
 private:
     transport_type * _transport {nullptr};
@@ -56,16 +57,28 @@ private:
     // Controllers to track outgoing messages.
     std::unordered_map<address_type, outgoing_controller_type> _ocontrollers;
 
-    callback_suite _callbacks;
-
     std::atomic_bool _interrupted {false};
 
     writer_mutex_type _writer_mtx;
 
 public:
-    manager (transport_type & transport, callback_suite && callbacks)
+    mutable callback_t<void (std::string const &)> on_error
+        = [] (std::string const & msg) { LOGE(TAG, "{}", msg); };
+
+    mutable callback_t<void (address_type)> on_receiver_ready = [] (address_type) {};
+
+    mutable callback_t<void (address_type, message_id, std::vector<char>)> on_message_received
+        = [] (address_type, message_id, std::vector<char>) {};
+
+    mutable callback_t<void (address_type, message_id)> on_message_dispatched
+        = [] (address_type, message_id) {};
+
+    mutable callback_t<void (address_type, std::vector<char>)> on_report_received
+        = [] (address_type, std::vector<char>) {};
+
+public:
+    manager (transport_type & transport)
         : _transport(& transport)
-        , _callbacks(std::move(callbacks))
     {}
 
     manager (manager const &) = delete;
@@ -180,7 +193,7 @@ public:
         auto on_ready = [this, sender_addr] () { // On ready
             auto outc = ensure_outgoing_controller(sender_addr);
             outc->set_synchronized(true);
-            _callbacks.on_receiver_ready(sender_addr);
+            this->on_receiver_ready(sender_addr);
         };
 
         auto on_acknowledged = [this, sender_addr] (serial_number sn) {
@@ -194,7 +207,7 @@ public:
         };
 
         auto on_report_received = [this, sender_addr] (std::vector<char> && report) {
-            _callbacks.on_report_received(sender_addr, std::move(report));
+            this->on_report_received(sender_addr, std::move(report));
         };
 
         auto inpc = ensure_incoming_controller(sender_addr);
@@ -232,7 +245,7 @@ public:
             };
 
             auto on_dispatched = [this, addr] (message_id msgid) {
-                _callbacks.on_message_dispatched(addr, msgid);
+                this->on_message_dispatched(addr, msgid);
             };
 
             n += outc.step(std::move(on_send), std::move(on_dispatched));
@@ -243,7 +256,7 @@ public:
             auto & inpc = x.second;
 
             auto on_message_received = [this, addr] (message_id msgid, std::vector<char> && msg) {
-                _callbacks.on_message_received(addr, msgid, std::move(msg));
+                this->on_message_received(addr, msgid, std::move(msg));
             };
 
             n += inpc.step(std::move(on_message_received));

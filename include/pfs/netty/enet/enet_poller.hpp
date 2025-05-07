@@ -7,6 +7,8 @@
 //      2024.05.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../namespace.hpp"
+#include "../callback.hpp"
 #include "enet_socket.hpp"
 #include "enet_listener.hpp"
 #include "pfs/netty/error.hpp"
@@ -19,7 +21,8 @@
 
 struct _ENetHost;
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace enet {
 
 class enet_poller
@@ -95,7 +98,9 @@ public:
     /**
      * @return number of sockets can write.
      */
-    int check_and_notify_can_write (std::function<void (socket_id)> && can_write);
+    int check_and_notify_can_write (callback_t<void (socket_id)> can_write);
 };
 
-}} // namespace netty::enet
+} // namespace enet
+
+NETTY__NAMESPACE_END
