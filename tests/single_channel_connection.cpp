@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "tools.hpp"
 #include <pfs/log.hpp>
 #include <pfs/universal_id.hpp>
 #include <pfs/netty/inet4_addr.hpp>
@@ -40,7 +39,11 @@
 #   include <pfs/netty/udt/udt_socket.hpp>
 #endif
 
+// Before #include "tools.hpp"
 static constexpr char const * TAG = "SCC";
+
+#include "tools.hpp"
+
 static constexpr int MAX_NODES_COUNT = 20;
 static constexpr std::uint16_t BASE_PORT = 3101;
 static std::atomic<int> s_listener_counter {0};

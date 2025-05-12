@@ -77,4 +77,40 @@ public:
     }
 };
 
+template <typename RouteMatrix>
+bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption)
+{
+    bool success = true;
+    fmt::print("[   ]");
+
+    for (std::size_t j = 0; j < m.columns(); j++)
+        fmt::print("[{:^3}]", caption[j]);
+
+    fmt::println("");
+
+    for (std::size_t i = 0; i < m.rows(); i++) {
+        fmt::print("[{:^3}]", caption[i]);
+
+        for (std::size_t j = 0; j < m.columns(); j++) {
+            if (i == j) {
+
+
+                if (m.test(i, j)) {
+                    fmt::print("[!!!]");
+                    success = false;
+                } else {
+                    fmt::print("[---]");
+                }
+            } else if (m.test(i, j))
+                fmt::print("[{:^3}]", '+');
+            else
+                fmt::print("[   ]");
+        }
+
+        fmt::println("");
+    }
+
+    return success;
+}
+
 } // namespace tools

@@ -25,6 +25,7 @@ class basic_input_controller
 {
     using socket_id = typename Node::socket_id;
     using serializer_traits = typename Node::serializer_traits;
+    using node_id = typename Node::node_id;
 
 protected:
     Node * _node {nullptr};
@@ -68,7 +69,7 @@ public:
 
                 switch (h.type()) {
                     case packet_enum::handshake: {
-                        handshake_packet pkt {h, in};
+                        handshake_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
@@ -90,7 +91,7 @@ public:
                     }
 
                     case packet_enum::alive: {
-                        alive_packet pkt {h, in};
+                        alive_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
@@ -101,7 +102,7 @@ public:
                     }
 
                     case packet_enum::unreach: {
-                        unreachable_packet pkt {h, in};
+                        unreachable_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
@@ -112,7 +113,7 @@ public:
                     }
 
                     case packet_enum::route: {
-                        route_packet pkt {h, in};
+                        route_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
                             that->process(sid, pkt);
@@ -134,10 +135,10 @@ public:
                     }
 
                     case packet_enum::gdata: {
-                        gdata_packet pkt {h, in};
+                        gdata_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction()) {
-                            if (pkt.receiver_id == _node->id_rep()) {
+                            if (pkt.receiver_id == _node->id()) {
                                 that->process_message_received(sid, priority
                                     , pkt.sender_id
                                     , pkt.receiver_id

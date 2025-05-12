@@ -128,57 +128,54 @@ static void matrix_set (std::size_t row, std::size_t col, bool value = true)
 }
 
 void tools::mesh_network::on_channel_established (std::string const & source_name
-    , node_t::node_id_rep id_rep, bool /*is_gateway*/)
+    , node_t::node_id id, bool /*is_gateway*/)
 {
-    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id_rep));
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id));
     ++g_channels_established_counter;
 }
 
-void tools::mesh_network::on_channel_destroyed (std::string const & source_name
-    , node_t::node_id_rep id_rep)
+void tools::mesh_network::on_channel_destroyed (std::string const & source_name, node_t::node_id id)
 {
-    LOGD(TAG, "{}: Channel destroyed with {}", source_name, node_name_by_id(id_rep));
+    LOGD(TAG, "{}: Channel destroyed with {}", source_name, node_name_by_id(id));
 }
 
-void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id_rep
+void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id
     , std::string const &, netty::socket4_addr)
 {};
 
-void tools::mesh_network::on_node_alive (std::string const & source_name
-    , node_t::node_id_rep id_rep)
+void tools::mesh_network::on_node_alive (std::string const & source_name, node_t::node_id id)
 {
-    LOGD(TAG, "{}: Node alive: {}", source_name, node_name_by_id(id_rep));
+    LOGD(TAG, "{}: Node alive: {}", source_name, node_name_by_id(id));
 }
 
-void tools::mesh_network::on_node_expired (std::string const & source_name
-    , node_t::node_id_rep id_rep)
+void tools::mesh_network::on_node_expired (std::string const & source_name, node_t::node_id id)
 {
-    LOGD(TAG, "{}: Node expired: {}", source_name, node_name_by_id(id_rep));
+    LOGD(TAG, "{}: Node expired: {}", source_name, node_name_by_id(id));
 }
 
 void tools::mesh_network::on_message_received (std::string const & /*receiver_name*/
-    , node_t::node_id_rep /*sender_id_rep*/, int /*priority*/, std::vector<char> && /*bytes*/)
+    , node_t::node_id /*sender_id*/, int /*priority*/, std::vector<char> && /*bytes*/)
 {}
 
-void tools::mesh_network::on_route_ready (std::string const & source_name
-    , node_t::node_id_rep dest_id_rep, std::uint16_t hops)
+void tools::mesh_network::on_route_ready (std::string const & source_name, node_t::node_id dest_id
+    , std::uint16_t hops)
 {
     if (hops == 0) {
         // Gateway is this node when direct access
         LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "direct access" END_COLOR ")"
             , source_name
             , node_pool_t::node_id_traits::to_string(node_id_by_name(source_name))
-            , node_pool_t::node_id_traits::to_string(dest_id_rep));
+            , node_pool_t::node_id_traits::to_string(dest_id));
     } else {
         LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "hops={}" END_COLOR ")"
             , source_name
             , node_pool_t::node_id_traits::to_string(node_id_by_name(source_name))
-            , node_pool_t::node_id_traits::to_string(dest_id_rep)
+            , node_pool_t::node_id_traits::to_string(dest_id)
             , hops);
     }
 
     auto row = serial_number(source_name);
-    auto col = serial_number(dest_id_rep);
+    auto col = serial_number(dest_id);
 
     matrix_set(row, col, true);
 }

@@ -22,6 +22,7 @@ class dual_link_handshake: public basic_handshake<Node>
     using base_class = basic_handshake<Node>;
     using channel_collection_type = typename base_class::channel_collection_type;
     using socket_id = typename base_class::socket_id;
+    using node_id = typename base_class::node_id;
 
 public:
     dual_link_handshake (Node * node, channel_collection_type * channels)
@@ -29,7 +30,7 @@ public:
     {}
 
 public:
-    void process (socket_id sid, handshake_packet const & pkt)
+    void process (socket_id sid, handshake_packet<node_id> const & pkt)
     {
         if (pkt.is_response()) {
             auto pos = this->_cache.find(sid);
@@ -39,20 +40,20 @@ public:
                 this->cancel(sid);
 
                 // Check Node ID duplication. Requester must be an initiator of the socket closing.
-                if (this->_node->id_rep() == pkt.id_rep) {
+                if (this->_node->id() == pkt.id) {
                     NETTY__TRACE("[handshake]", "{}: DUPLICATED: sid={}", pkt.name, sid)
                     this->_channels->close_channel(sid);
-                    this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::duplicated);
+                    this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::duplicated);
                 } else {
                     NETTY__TRACE("[handshake]", "{}: RESPONSE: sid={}", pkt.name, sid)
 
                     // Response received by connected socket (writer)
-                    auto success = this->_channels->insert_writer(pkt.id_rep, sid);
+                    auto success = this->_channels->insert_writer(pkt.id, sid);
                     PFS__ASSERT(success, "Fix meshnet::dual_link_handshake algorithm");
 
                     // Check if reader and writer handshaked
-                    if (this->_channels->channel_complete_for(pkt.id_rep))
-                        this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
+                    if (this->_channels->channel_complete_for(pkt.id))
+                        this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
                 }
             } else {
                 // The socket is already expired
@@ -66,12 +67,12 @@ public:
             this->enqueue(sid, packet_way_enum::response);
 
             // Request received by accepted socket (reader)
-            auto success = this->_channels->insert_reader(pkt.id_rep, sid);
+            auto success = this->_channels->insert_reader(pkt.id, sid);
             PFS__ASSERT(success, "Fix meshnet::dual_link_handshake algorithm");
 
             // Check if reader and writer handshaked
-            if (this->_channels->channel_complete_for(pkt.id_rep))
-                this->_on_completed(pkt.id_rep, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
+            if (this->_channels->channel_complete_for(pkt.id))
+                this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
         }
     }
 };

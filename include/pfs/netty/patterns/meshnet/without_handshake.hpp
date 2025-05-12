@@ -21,8 +21,8 @@ namespace meshnet {
 template <typename Node>
 class without_handshake
 {
+    using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
-    using node_id_rep = typename Node::node_id_rep;
     using channel_collection_type = typename Node::channel_collection_type;
 
 public:
@@ -30,7 +30,7 @@ public:
 
 public:
     mutable callback_t<void (socket_id)> on_expired;
-    mutable callback_t<void (node_id_rep, socket_id, std::string const &, bool
+    mutable callback_t<void (node_id, socket_id, std::string const &, bool
         , handshake_result_enum)> on_completed;
 
     void start (socket_id, bool) {}

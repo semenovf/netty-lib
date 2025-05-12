@@ -10,7 +10,6 @@
 #include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "../serializer_traits.hpp"
-#include "node_id_rep.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include <pfs/i18n.hpp>
@@ -26,19 +25,21 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename SerializerTraits>
+template <typename NodeIdTraits, typename SerializerTraits>
 class routing_table
 {
+    using node_id_traits = NodeIdTraits;
+    using node_id = typename node_id_traits::type;
     using serializer_traits = SerializerTraits;
-    using route_map_type = std::unordered_multimap<node_id_rep, std::size_t>;
+    using route_map_type = std::unordered_multimap<node_id, std::size_t>;
 
 public:
-    using gateway_chain_type = gateway_chain_t;
+    using gateway_chain_type = std::vector<node_id>;
 
 private:
-    std::unordered_set<node_id_rep> _sibling_nodes;
+    std::unordered_set<node_id> _sibling_nodes;
 
-    std::vector<node_id_rep> _gateways;
+    std::vector<node_id> _gateways;
     std::vector<gateway_chain_type> _routes;
 
     // Used to determine the route to send message.
@@ -65,12 +66,12 @@ private:
     }
 
     /**
-     * Find route for node @a id_rep with minimim hops (number of gateways).
+     * Find route for node @a id with minimim hops (number of gateways).
      */
-    std::pair<bool, std::size_t> find_route_for (node_id_rep id_rep) const
+    std::pair<bool, std::size_t> find_route_for (node_id id) const
     {
         auto min_hops = std::numeric_limits<std::size_t>::max();
-        auto res = _route_map.equal_range(id_rep);
+        auto res = _route_map.equal_range(id);
 
         // Not found
         if (res.first == res.second)
@@ -98,7 +99,7 @@ private:
         return std::make_pair(true, index);
     }
 
-    bool add_route_helper (node_id_rep dest_id_rep, gateway_chain_t gw_chain)
+    bool add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
     {
         PFS__TERMINATE(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
 
@@ -109,11 +110,11 @@ private:
             _routes.push_back(std::move(gw_chain));
             auto index = _routes.size() - 1;
 
-            _route_map.insert({dest_id_rep, index});
+            _route_map.insert({dest_id, index});
             return true;
         } else {
             // Check if record for destination node already exists
-            auto range = _route_map.equal_range(dest_id_rep);
+            auto range = _route_map.equal_range(dest_id);
 
             if (range.first != range.second) {
                 // Check if route to destination already exists
@@ -127,16 +128,23 @@ private:
             }
 
             auto index = res.second;
-            _route_map.insert({dest_id_rep, index});
+            _route_map.insert({dest_id, index});
             return true;
         }
 
         return false;
     }
 
-    bool is_sibling (node_id_rep id_rep) const
+    bool is_sibling (node_id id) const
     {
-        return _sibling_nodes.find(id_rep) != _sibling_nodes.end();
+        return _sibling_nodes.find(id) != _sibling_nodes.end();
+    }
+
+    static gateway_chain_type reverse_gateway_chain (gateway_chain_type const & gw_chain)
+    {
+        gateway_chain_type reversed_gw_chain(gw_chain.size());
+        std::reverse_copy(gw_chain.begin(), gw_chain.end(), reversed_gw_chain.begin());
+        return reversed_gw_chain;
     }
 
 public:
@@ -146,37 +154,37 @@ public:
     }
 
     /**
-     * Adds new gateway node @a id_rep.
+     * Adds new gateway node @a id.
      *
      * @return @c true if gateway node added or @c false if gateway node already exists
      */
-    bool add_gateway (node_id_rep id_rep)
+    bool add_gateway (node_id gwid)
     {
         // Check if already exists
         for (auto const & x: _gateways) {
-            if (x == id_rep)
+            if (x == gwid)
                 return false;
         }
 
-        _gateways.push_back(id_rep);
+        _gateways.push_back(gwid);
         return true;
     }
 
     /**
-     * Adds new sibling node @a id_rep.
+     * Adds new sibling node @a id.
      *
      * @return @c true if sibling node added or @c false if sibling node already exists
      */
-    bool add_sibling (node_id_rep id_rep)
+    bool add_sibling (node_id id)
     {
         // Remove all non-direct routes between sibling nodes
-        _route_map.erase(id_rep);
+        _route_map.erase(id);
 
-        auto res = _sibling_nodes.insert(id_rep);
+        auto res = _sibling_nodes.insert(id);
         return res.second;
     }
 
-    void remove_sibling (node_id_rep id)
+    void remove_sibling (node_id id)
     {
         _sibling_nodes.erase(id);
     }
@@ -186,7 +194,7 @@ public:
      *
      * @return @c true if new route added or @c false if route already exists
      */
-    bool add_route (node_id_rep dest, gateway_chain_type const & gw_chain, bool reverse_order = false)
+    bool add_route (node_id dest, gateway_chain_type const & gw_chain, bool reverse_order = false)
     {
         if (is_sibling(dest))
             return false;
@@ -204,7 +212,7 @@ public:
      *
      * @return @c true if new route added or @c false if route already exists
      */
-    bool add_subroute (node_id_rep dest, node_id_rep gw, gateway_chain_type const & gw_chain
+    bool add_subroute (node_id dest, node_id gw, gateway_chain_type const & gw_chain
         , bool reverse_order = false)
     {
         if (is_sibling(dest))
@@ -216,19 +224,19 @@ public:
 
             PFS__TERMINATE(pos != reversed_gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-            return add_route_helper(dest, gateway_chain_t(++pos, reversed_gw_chain.cend()));
+            return add_route_helper(dest, gateway_chain_type(++pos, reversed_gw_chain.cend()));
         }
 
         auto pos = std::find(gw_chain.cbegin(), gw_chain.cend(), gw);
 
         PFS__TERMINATE(pos != gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
-        return add_route_helper(dest, gateway_chain_t(++pos, gw_chain.cend()));
+        return add_route_helper(dest, gateway_chain_type(++pos, gw_chain.cend()));
     }
 
-    void remove_route (node_id_rep dest_id_rep, node_id_rep gw_id_rep)
+    void remove_route (node_id dest_id, node_id gw_id)
     {
-        auto res = _route_map.equal_range(dest_id_rep);
+        auto res = _route_map.equal_range(dest_id);
 
         // Not found
         if (res.first == res.second)
@@ -236,7 +244,7 @@ public:
 
         for (auto pos = res.first; pos != res.second; ) {
             auto & r = _routes[pos->second];
-            auto gw_pos = std::find(r.begin(), r.end(), gw_id_rep);
+            auto gw_pos = std::find(r.begin(), r.end(), gw_id);
 
             if (gw_pos != r.end()) {
                 pos = _route_map.erase(pos);
@@ -249,8 +257,8 @@ public:
     template <typename F>
     void foreach_gateway (F && f) const
     {
-        for (auto const & gwid: _gateways)
-            f(gwid);
+        for (auto const & gw_id: _gateways)
+            f(gw_id);
     }
 
     template <typename F>
@@ -263,7 +271,7 @@ public:
     /**
      * Iterate over all routes, include sibling nodes.
      *
-     * @param f Invokable object with signature void (node_id_rep dest, gateway_chain_t const &)
+     * @param f Invokable object with signature void (node_id dest, gateway_chain_type const &)
      */
     template <typename F>
     void foreach_route (F && f) const
@@ -282,12 +290,12 @@ public:
      *
      * @details Preference is given to a route with a low value of hops and its reachability.
      */
-    pfs::optional<node_id_rep> gateway_for (node_id_rep id_rep) const
+    pfs::optional<node_id> gateway_for (node_id id) const
     {
-        if (is_sibling(id_rep))
-            return id_rep;
+        if (is_sibling(id))
+            return id;
 
-        auto res = find_route_for(id_rep);
+        auto res = find_route_for(id);
 
         if (!res.first)
             return pfs::nullopt;
@@ -298,9 +306,9 @@ public:
         return gw_chain[0];
     }
 
-    pfs::optional<gateway_chain_type> gateway_chain_for (node_id_rep id_rep)
+    pfs::optional<gateway_chain_type> gateway_chain_for (node_id id)
     {
-        auto res = find_route_for(id_rep);
+        auto res = find_route_for(id);
 
         if (!res.first)
             return pfs::nullopt;
@@ -314,10 +322,10 @@ public:
     /**
      * Serializes initial request
      */
-    std::vector<char> serialize_request (node_id_rep initiator_id)
+    std::vector<char> serialize_request (node_id initiator_id)
     {
         auto out = serializer_traits::make_serializer();
-        route_packet pkt {packet_way_enum::request};
+        route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo.initiator_id = initiator_id;
         pkt.serialize(out);
         return out.take();
@@ -326,12 +334,12 @@ public:
     /**
      * Serializes request to forward.
      */
-    std::vector<char> serialize_request (node_id_rep gwid, route_info const & rinfo)
+    std::vector<char> serialize_request (node_id gw_id, route_info<node_id> const & rinfo)
     {
         auto out = serializer_traits::make_serializer();
-        route_packet pkt {packet_way_enum::request};
+        route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo = rinfo;
-        pkt.rinfo.route.push_back(gwid);
+        pkt.rinfo.route.push_back(gw_id);
         pkt.serialize(out);
         return out.take();
     }
@@ -339,10 +347,10 @@ public:
     /**
      * Serializes initial response
      */
-    std::vector<char> serialize_response (node_id_rep responder_id, route_info const & rinfo)
+    std::vector<char> serialize_response (node_id responder_id, route_info<node_id> const & rinfo)
     {
         auto out = serializer_traits::make_serializer();
-        route_packet pkt {packet_way_enum::response};
+        route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.rinfo.responder_id = responder_id;
         pkt.serialize(out);
@@ -352,10 +360,10 @@ public:
     /**
      * Serializes response to forward.
      */
-    std::vector<char> serialize_response (route_info const & rinfo)
+    std::vector<char> serialize_response (route_info<node_id> const & rinfo)
     {
         auto out = serializer_traits::make_serializer();
-        route_packet pkt {packet_way_enum::response};
+        route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.serialize(out);
         return out.take();
@@ -364,21 +372,21 @@ public:
     /**
      * Serializes initial custom message.
      */
-    std::vector<char> serialize_message (node_id_rep sender_id_rep, node_id_rep gw_id_rep
-        , node_id_rep receiver_id_rep, bool force_checksum, char const * data, std::size_t len )
+    std::vector<char> serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
+        , bool force_checksum, char const * data, std::size_t len )
     {
         // Enough space for packet header -------------------v
         auto out = serializer_traits::make_serializer(len + 64);
 
         // Domestic exchange
-        if (gw_id_rep == receiver_id_rep) {
+        if (gw_id == receiver_id) {
             ddata_packet pkt {force_checksum};
             pkt.serialize(out, data, len);
             return out.take();
         }
 
         // Intersegment exchange
-        gdata_packet pkt {sender_id_rep, receiver_id_rep, force_checksum};
+        gdata_packet<node_id> pkt {sender_id, receiver_id, force_checksum};
         pkt.serialize(out, data, len);
         return out.take();
     }

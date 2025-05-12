@@ -35,7 +35,6 @@ public:
         std::string name;
         bool is_gateway {false};
         std::uint16_t port {0};
-        node_pool_t::node_id_rep id_rep;
     };
 
 private:
@@ -48,19 +47,18 @@ public:
             auto res = _data.insert({x.name, std::move(x)});
             PFS__ASSERT(res.second, "");
             auto & ent = res.first->second;
-            ent.id_rep = node_pool_t::node_id_traits::cast(ent.id);
         }
     }
 
 public:
-    entry const * locate (std::string const & name) const
+    entry const * locate_by_name (std::string const & name) const
     {
         auto pos = _data.find(name);
         PFS__ASSERT(pos != _data.end(), "");
         return & pos->second;
     }
 
-    entry const * locate (node_pool_t::node_id id) const
+    entry const * locate_by_id (node_pool_t::node_id id) const
     {
         entry const * ptr = nullptr;
 
@@ -75,11 +73,6 @@ public:
         return ptr;
     }
 
-    entry const * locate (node_pool_t::node_id_rep id_rep) const
-    {
-        return locate(node_pool_t::node_id_traits::cast(id_rep));
-    }
-
     std::unique_ptr<node_pool_t>
     create_node_pool (std::string const & name, mesh_network * this_net) const;
 };
@@ -87,36 +80,30 @@ public:
 constexpr bool GATEWAY_FLAG = true;
 constexpr bool REGULAR_NODE_FLAG = false;
 
-class mesh_network_delivery;
-
 class mesh_network
 {
 protected:
-    struct context {
+    struct context
+    {
         std::unique_ptr<node_pool_t> np_ptr;
         std::size_t serial_number; // Serial number used in matrix to check tests results
     };
 
 protected:
-    // Used by delivery tests
-    mesh_network_delivery * _meshnet_delivery_ptr {nullptr};
-
     node_pool_dictionary _np_dictionary;
     std::map<std::string, context> _node_pools;
     std::map<node_pool_t *, std::thread> _threads;
 
 public:
-    void on_channel_established (std::string const & source_name, node_t::node_id_rep id_rep
-        , bool is_gateway);
-    void on_channel_destroyed (std::string const & source_name, node_t::node_id_rep id_rep);
-    void on_duplicated (std::string const & source_name, node_t::node_id_rep id_rep
+    void on_channel_established (std::string const & source_name, node_t::node_id id, bool is_gateway);
+    void on_channel_destroyed (std::string const & source_name, node_t::node_id id);
+    void on_duplicated (std::string const & source_name, node_t::node_id id
         , std::string const & name, netty::socket4_addr saddr);
 
-    void on_node_alive (std::string const & source_name, node_t::node_id_rep id_rep);
-    void on_node_expired (std::string const & source_name, node_t::node_id_rep id_rep);
-    void on_route_ready (std::string const & source_name, node_t::node_id_rep dest_id_rep
-        , std::uint16_t hops);
-    void on_message_received (std::string const & receiver_name, node_t::node_id_rep sender_id_rep
+    void on_node_alive (std::string const & source_name, node_t::node_id id);
+    void on_node_expired (std::string const & source_name, node_t::node_id id);
+    void on_route_ready (std::string const & source_name, node_t::node_id dest_id, std::uint16_t hops);
+    void on_message_received (std::string const & receiver_name, node_t::node_id sender_id
         , int priority, std::vector<char> && bytes);
 
 public:
@@ -152,19 +139,19 @@ public:
     }
 
 protected:
-    context * locate (std::string const & name)
+    context * locate_by_name (std::string const & name)
     {
         auto pos = _node_pools.find(name);
         PFS__ASSERT(pos != _node_pools.end(), "");
         return & pos->second;
     }
 
-    context * locate (node_pool_t::node_id_rep id_rep)
+    context * locate_by_id (node_pool_t::node_id id)
     {
         context * ptr = nullptr;
 
         for (auto & x: _node_pools) {
-            if (x.second.np_ptr->id_rep() == id_rep) {
+            if (x.second.np_ptr->id() == id) {
                 ptr = & x.second;
                 break;
             }
@@ -175,44 +162,33 @@ protected:
     }
 
 public:
-    std::string node_name_by_id (node_pool_t::node_id_rep id_rep)
-    {
-        return _np_dictionary.locate(id_rep)->name;
-    }
-
     std::string node_name_by_id (node_pool_t::node_id id)
     {
-        return _np_dictionary.locate(id)->name;
+        return _np_dictionary.locate_by_id(id)->name;
     }
 
     node_pool_t::node_id node_id_by_name (std::string const & name)
     {
         // return locate(name)->np_ptr->id();
-        return _np_dictionary.locate(name)->id;
+        return _np_dictionary.locate_by_name(name)->id;
     }
 
-    node_pool_t::node_id_rep node_id_rep_by_name (std::string const & name)
+    std::size_t serial_number (node_pool_t::node_id id)
     {
-        // return node_pool_t::node_id_traits::cast(locate(name)->np_ptr->id());
-        return _np_dictionary.locate(name)->id_rep;
-    }
-
-    std::size_t serial_number (node_pool_t::node_id_rep id_rep)
-    {
-        return locate(id_rep)->serial_number;
+        return locate_by_id(id)->serial_number;
     }
 
     std::size_t serial_number (std::string const & name)
     {
-        return locate(name)->serial_number;
+        return locate_by_name(name)->serial_number;
     }
 
     void connect_host (std::string const & initiator_name, std::string const & target_name
         , bool behind_nat = false)
     {
         meshnet_ns::node_index_t index = 1;
-        auto initiator_ctx = locate(initiator_name);
-        auto target_entry_ptr = _np_dictionary.locate(target_name);
+        auto initiator_ctx = locate_by_name(initiator_name);
+        auto target_entry_ptr = _np_dictionary.locate_by_name(target_name);
 
         netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_entry_ptr->port};
         initiator_ctx->np_ptr->connect_host(index, target_saddr, behind_nat);
@@ -221,10 +197,10 @@ public:
     void send (std::string const & src, std::string const & dest, std::string const & text)
     {
         int priority = 1;
-        auto sender_ctx = locate(src);
-        auto receiver_id_rep = node_id_rep_by_name(dest);
+        auto sender_ctx = locate_by_name(src);
+        auto receiver_id = node_id_by_name(dest);
 
-        sender_ctx->np_ptr->enqueue(receiver_id_rep, priority, text.data(), text.size());
+        sender_ctx->np_ptr->enqueue(receiver_id, priority, text.data(), text.size());
     }
 
     void run_all ()
@@ -248,7 +224,7 @@ public:
      */
     void destroy (std::string const & name)
     {
-        auto ctx_ptr = locate(name);
+        auto ctx_ptr = locate_by_name(name);
 
         PFS__ASSERT(ctx_ptr != nullptr, "");
 
@@ -268,7 +244,7 @@ public:
     void print_routing_table (std::string const & name)
     {
 #if NETTY__TRACE_ENABLED
-        auto ptr = locate(name);
+        auto ptr = locate_by_name(name);
         PFS__ASSERT(ptr != nullptr, "");
 
         auto routes = ptr->np_ptr->dump_routing_table();
@@ -286,7 +262,7 @@ public:
 
     void interrupt (std::string const & name)
     {
-        auto ptr = locate(name);
+        auto ptr = locate_by_name(name);
         PFS__ASSERT(ptr != nullptr, "");
         ptr->np_ptr->interrupt();
     }
@@ -310,14 +286,14 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////
     node_pool_t & transport (std::string const & name)
     {
-        return *locate(name)->np_ptr;
+        return *locate_by_name(name)->np_ptr;
     }
 };
 
 std::unique_ptr<node_pool_t>
 node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_network * this_meshnet) const
 {
-    auto const * p = locate(source_name);
+    auto const * p = locate_by_name(source_name);
 
     if (p == nullptr)
         return nullptr;
@@ -330,77 +306,41 @@ node_pool_dictionary::create_node_pool (std::string const & source_name, mesh_ne
         LOGE(TAG, "{}", errstr);
     };
 
-    ptr->on_channel_established = [this_meshnet, source_name] (node_t::node_id_rep id_rep, bool is_gateway) {
-        this_meshnet->on_channel_established(source_name, id_rep, is_gateway);
+    ptr->on_channel_established = [this_meshnet, source_name] (node_t::node_id id, bool is_gateway) {
+        this_meshnet->on_channel_established(source_name, id, is_gateway);
     };
 
-    ptr->on_channel_destroyed = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_channel_destroyed(source_name, id_rep);
+    ptr->on_channel_destroyed = [this_meshnet, source_name] (node_t::node_id id) {
+        this_meshnet->on_channel_destroyed(source_name, id);
     };
 
-    ptr->on_duplicated = [this_meshnet, source_name] (node_t::node_id_rep id_rep
+    ptr->on_duplicated = [this_meshnet, source_name] (node_t::node_id id
             , std::string const & name, netty::socket4_addr saddr) {
-        this_meshnet->on_duplicated(source_name, id_rep, name, saddr);
+        this_meshnet->on_duplicated(source_name, id, name, saddr);
     };
 
-    ptr->on_node_alive = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_node_alive(source_name, id_rep);
+    ptr->on_node_alive = [this_meshnet, source_name] (node_t::node_id id) {
+        this_meshnet->on_node_alive(source_name, id);
     };
 
-    ptr->on_node_expired = [this_meshnet, source_name] (node_t::node_id_rep id_rep) {
-        this_meshnet->on_node_expired(source_name, id_rep);
+    ptr->on_node_expired = [this_meshnet, source_name] (node_t::node_id id) {
+        this_meshnet->on_node_expired(source_name, id);
     };
 
     // Notify when node alive status changed
-    ptr->on_route_ready = [this_meshnet, source_name] (node_t::node_id_rep dest_id_rep, std::uint16_t hops) {
-        this_meshnet->on_route_ready(source_name, dest_id_rep, hops);
+    ptr->on_route_ready = [this_meshnet, source_name] (node_t::node_id dest_id, std::uint16_t hops) {
+        this_meshnet->on_route_ready(source_name, dest_id, hops);
     };
 
-    ptr->on_message_received = [this_meshnet, source_name] (node_t::node_id_rep sender_id_rep
+    ptr->on_message_received = [this_meshnet, source_name] (node_t::node_id sender_id
             , int priority, std::vector<char> bytes) {
-        this_meshnet->on_message_received(source_name, sender_id_rep, priority, std::move(bytes));
+        this_meshnet->on_message_received(source_name, sender_id, priority, std::move(bytes));
     };
 
     auto index = ptr->add_node<node_t>({listener_saddr});
 
     ptr->listen(index, 10);
     return ptr;
-}
-
-template <typename RouteMatrix>
-bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption)
-{
-    bool success = true;
-    fmt::print("[   ]");
-
-    for (std::size_t j = 0; j < m.columns(); j++)
-        fmt::print("[{:^3}]", caption[j]);
-
-    fmt::println("");
-
-    for (std::size_t i = 0; i < m.rows(); i++) {
-        fmt::print("[{:^3}]", caption[i]);
-
-        for (std::size_t j = 0; j < m.columns(); j++) {
-            if (i == j) {
-
-
-                if (m.test(i, j)) {
-                    fmt::print("[!!!]");
-                    success = false;
-                } else {
-                    fmt::print("[---]");
-                }
-            } else if (m.test(i, j))
-                fmt::print("[{:^3}]", '+');
-            else
-                fmt::print("[   ]");
-        }
-
-        fmt::println("");
-    }
-
-    return success;
 }
 
 } // namespace tools

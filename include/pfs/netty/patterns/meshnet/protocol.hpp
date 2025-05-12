@@ -9,7 +9,6 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "alive_info.hpp"
-#include "node_id_rep.hpp"
 #include "route_info.hpp"
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
@@ -202,10 +201,11 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // handshake packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename NodeId>
 class handshake_packet: public header
 {
 public:
-    node_id_rep id_rep;
+    NodeId id;
     std::string name;
 
 public:
@@ -248,8 +248,8 @@ public:
     handshake_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        std::uint16_t sz = 0;
-        in >> id_rep.h >> id_rep.l >> std::make_pair(& sz, & name);
+        std::uint16_t name_sz = 0;
+        in >> id >> std::make_pair(& name_sz, & name);
     }
 
 public:
@@ -277,7 +277,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << id_rep.h << id_rep.l << pfs::numeric_cast<std::uint16_t>(name.size()) << name;
+        out << id << pfs::numeric_cast<std::uint16_t>(name.size()) << name;
     }
 };
 
@@ -319,10 +319,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // alive packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename NodeId>
 class alive_packet: public header
 {
 public:
-    alive_info ainfo;
+    alive_info<NodeId> ainfo;
 
 public:
     alive_packet () noexcept
@@ -337,7 +338,7 @@ public:
     alive_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> ainfo.id.h >> ainfo.id.l;
+        in >> ainfo.id;
     }
 
 public:
@@ -345,17 +346,18 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << ainfo.id.h << ainfo.id.l;
+        out << ainfo.id;
     }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // alive packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename NodeId>
 class unreachable_packet: public header
 {
 public:
-    unreachable_info uinfo;
+    unreachable_info<NodeId> uinfo;
 
 public:
     unreachable_packet () noexcept
@@ -370,9 +372,9 @@ public:
     unreachable_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> uinfo.gw_id.h >> uinfo.gw_id.l
-            >> uinfo.sender_id.h >> uinfo.sender_id.l
-            >> uinfo.receiver_id.h >> uinfo.receiver_id.l;
+        std::uint8_t gw_id_size = 0, sender_id_size = 0, receiver_id_size = 0;
+
+        in >> uinfo.gw_id >> uinfo.sender_id >> uinfo.receiver_id;
     }
 
 public:
@@ -380,19 +382,18 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << uinfo.gw_id.h << uinfo.gw_id.l
-            << uinfo.sender_id.h << uinfo.sender_id.l
-            << uinfo.receiver_id.h << uinfo.receiver_id.l;
+        out << uinfo.gw_id << uinfo.sender_id << uinfo.receiver_id;
     }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // route packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename NodeId>
 class route_packet: public header
 {
 public:
-    route_info rinfo;
+    route_info<NodeId> rinfo;
 
 public:
     route_packet (packet_way_enum way) noexcept
@@ -406,17 +407,17 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> rinfo.initiator_id.h >> rinfo.initiator_id.l;
+        in >> rinfo.initiator_id;
 
         if (is_response())
-            in >> rinfo.responder_id.h >> rinfo.responder_id.l;
+            in >> rinfo.responder_id;
 
         std::uint8_t count = 0;
         in >> count;
 
         for (int i = 0; i < static_cast<int>(count); i++) {
-            node_id_rep id {0, 0};
-            in >> id.h >> id.l;
+            NodeId id {};
+            in >> id;
             rinfo.route.push_back(id);
         }
     }
@@ -432,15 +433,15 @@ public:
     {
         header::serialize(out);
 
-        out << rinfo.initiator_id.h << rinfo.initiator_id.l;
+        out << rinfo.initiator_id;
 
         if (is_response())
-            out << rinfo.responder_id.h << rinfo.responder_id.l;
+            out << rinfo.responder_id;
 
         out << pfs::numeric_cast<std::uint8_t>(rinfo.route.size());
 
         for (auto const & id: rinfo.route)
-            out << id.h << id.l;
+            out << id;
     }
 };
 
@@ -502,16 +503,17 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // gdata packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename NodeId>
 class gdata_packet: public header
 {
 public:
-    node_id_rep sender_id;
-    node_id_rep receiver_id;
+    NodeId sender_id;
+    NodeId receiver_id;
     std::vector<char> bytes;   // Used by deserializer only and when need to forward message.
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    gdata_packet (node_id_rep sender_id, node_id_rep receiver_id, bool has_checksum) noexcept
+    gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum) noexcept
         : header(packet_enum::gdata, has_checksum, 0)
         , sender_id(sender_id)
         , receiver_id(receiver_id)
@@ -521,12 +523,12 @@ public:
     gdata_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> sender_id.h >> sender_id.l;
+        in >> sender_id;
 
         if (!in.is_good())
             return;
 
-        in >> receiver_id.h >> receiver_id.l;
+        in >> receiver_id;
 
         if (!in.is_good())
             return;
@@ -558,7 +560,7 @@ public:
         _h.length = pfs::numeric_cast<decltype(_h.length)>(len);
 
         header::serialize(out);
-        out << sender_id.h << sender_id.l << receiver_id.h << receiver_id.l;
+        out << sender_id << receiver_id;
         out << std::make_pair(data, len);
     }
 
@@ -576,7 +578,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << sender_id.h << sender_id.l << receiver_id.h << receiver_id.l;
+        out << sender_id << receiver_id;
         out << std::make_pair(bytes.data(), bytes.size());
     }
 };

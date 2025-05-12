@@ -74,40 +74,38 @@ static std::string random_text ()
 }
 
 void tools::mesh_network::on_channel_established (std::string const & source_name
-    , node_t::node_id_rep id_rep, bool /*is_gateway*/)
+    , node_t::node_id id, bool /*is_gateway*/)
 {
-    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id_rep));
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id));
     g_channels_established_counter++;
 }
 
 void tools::mesh_network::on_channel_destroyed (std::string const & /*source_name*/
-    , node_t::node_id_rep /*id_rep*/)
+    , node_t::node_id /*id*/)
 {}
 
-void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id_rep
+void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id
     , std::string const &, netty::socket4_addr)
 {};
 
-void tools::mesh_network::on_node_alive (std::string const & /*source_name*/
-    , node_t::node_id_rep /*id_rep*/)
+void tools::mesh_network::on_node_alive (std::string const & /*source_name*/, node_t::node_id /*id*/)
 {}
 
-void tools::mesh_network::on_node_expired (std::string const & /*source_name*/
-    , node_t::node_id_rep /*id_rep*/)
+void tools::mesh_network::on_node_expired (std::string const & /*source_name*/, node_t::node_id /*id*/)
 {}
 
-void tools::mesh_network::on_route_ready (std::string const & source_name
-    , node_t::node_id_rep dest_id_rep, std::uint16_t hops)
+void tools::mesh_network::on_route_ready (std::string const & source_name, node_t::node_id dest_id
+    , std::uint16_t hops)
 {
     auto row = serial_number(source_name);
-    auto col = serial_number(dest_id_rep);
+    auto col = serial_number(dest_id);
     g_route_matrix.wlock()->set(row, col, true);
 }
 
 void tools::mesh_network::on_message_received (std::string const & receiver_name
-    , node_t::node_id_rep sender_id_rep, int priority, std::vector<char> && bytes)
+    , node_t::node_id sender_id, int priority, std::vector<char> && bytes)
 {
-    LOGD(TAG, "Message received by {} from {}", receiver_name, node_name_by_id(sender_id_rep));
+    LOGD(TAG, "Message received by {} from {}", receiver_name, node_name_by_id(sender_id));
 
     std::string text(bytes.data(), bytes.size());
 
@@ -115,7 +113,7 @@ void tools::mesh_network::on_message_received (std::string const & receiver_name
 
     // fmt::println(text);
 
-    auto row = serial_number(sender_id_rep);
+    auto row = serial_number(sender_id);
     auto col = serial_number(receiver_name);
     g_message_matrix.wlock()->set(row, col, true);
 }

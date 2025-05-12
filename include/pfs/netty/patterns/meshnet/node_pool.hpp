@@ -17,6 +17,7 @@
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <atomic>
 #include <chrono>
@@ -46,12 +47,11 @@ class node_pool
 
 public:
     using node_id_traits = NodeIdTraits;
-    using node_id_rep = typename NodeIdTraits::rep_type;
     using node_id = typename NodeIdTraits::type;
     using address_type = node_id;
 
 private:
-    node_id_rep _id_rep; // Node ID representation
+    node_id _id;
 
     // User friendly node identifier, default value is stringified representation of node identifier
     std::string _name;
@@ -70,51 +70,61 @@ private:
     writer_mutex_type _writer_mtx;
 
 public:
+    /**
+     * Notify when error occurred.
+     */
     mutable callback_t<void (std::string const &)> on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     // Notify when connection established with the remote node
-    mutable callback_t<void (node_id_rep, bool)> on_channel_established
-        = [] (node_id_rep, bool /*is_gateway*/) {};
+    mutable callback_t<void (node_id, bool)> on_channel_established
+        = [] (node_id, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
-    mutable callback_t<void (node_id_rep)> on_channel_destroyed = [] (node_id_rep) {};
+    mutable callback_t<void (node_id)> on_channel_destroyed = [] (node_id) {};
 
     // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id_rep, std::string const &, socket4_addr)> on_duplicated
-        = [] (node_id_rep, std::string const & /*name*/, socket4_addr) {};
+    mutable callback_t<void (node_id, std::string const &, socket4_addr)> on_duplicated
+        = [] (node_id, std::string const & /*name*/, socket4_addr) {};
 
     // Notify when node alive status changed
-    mutable callback_t<void (node_id_rep)> on_node_alive = [] (node_id_rep) {};
+    mutable callback_t<void (node_id)> on_node_alive = [] (node_id) {};
 
     // Notify when node alive status changed
-    mutable callback_t<void (node_id_rep)> on_node_expired = [] (node_id_rep) {};
+    mutable callback_t<void (node_id)> on_node_expired = [] (node_id) {};
 
     // Notify when some route ready by request or response
-    mutable callback_t<void (node_id_rep, std::uint16_t)> on_route_ready
-        = [] (node_id_rep /*dest*/, std::uint16_t /*hops*/) {};
+    mutable callback_t<void (node_id, std::uint16_t)> on_route_ready
+        = [] (node_id /*dest*/, std::uint16_t /*hops*/) {};
 
     // Notify when data actually sent (written into the socket)
-    mutable callback_t<void (node_id_rep, std::uint64_t)> on_bytes_written
-        = [] (node_id_rep, std::uint64_t /*n*/) {};
+    mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
+        = [] (node_id, std::uint64_t /*n*/) {};
 
     // Notify when message received (domestic or global)
-    mutable callback_t<void (node_id_rep, int, std::vector<char>)> on_message_received
-        = [] (node_id_rep, int /*priority*/, std::vector<char> /*bytes*/) {};
+    mutable callback_t<void (node_id, int, std::vector<char>)> on_message_received
+        = [] (node_id, int /*priority*/, std::vector<char> /*bytes*/) {};
 
 public:
     node_pool (node_id id, std::string name, bool is_gateway = false)
-        : _id_rep(node_id_traits::cast(id))
+        : _id(id)
         , _is_gateway(is_gateway)
-        , _alive_controller(node_id_traits::cast(id))
+        , _alive_controller(id)
     {
         if (name.empty())
             _name = node_id_traits::to_string(id);
         else
             _name = std::move(name);
 
-        _alive_controller.on_alive = [this] (node_id_rep id_rep) { this->on_node_alive(id_rep); };
-        _alive_controller.on_expired = [this] (node_id_rep id_rep) { this->on_node_expired(id_rep); };
+        _alive_controller.on_alive = [this] (node_id id)
+        {
+            this->on_node_alive(id);
+        };
+
+        _alive_controller.on_expired = [this] (node_id id)
+        {
+            this->on_node_expired(id);
+        };
     }
 
     node_pool (node_pool const &) = delete;
@@ -128,13 +138,13 @@ public:
     }
 
 private:
-    node_interface_type * locate_node (node_id_rep id_rep)
+    node_interface_type * locate_node (node_id id)
     {
-        if (_nodes[0]->id_rep() == id_rep)
+        if (_nodes[0]->id() == id)
             return & *_nodes[0];
 
         for (int i = 1; i < _nodes.size(); i++) {
-            if (_nodes[i]->id_rep() == id_rep) {
+            if (_nodes[i]->id() == id) {
                 return & *_nodes[i];
             }
         }
@@ -142,25 +152,25 @@ private:
         return nullptr;
     }
 
-    node_interface_type * locate_writer (node_id_rep id_rep, node_id_rep * gw_id_rep = nullptr)
+    node_interface_type * locate_writer (node_id id, node_id * gw_id = nullptr)
     {
         if (_nodes.empty())
             return nullptr;
 
-        auto gwid_opt = _rtab.gateway_for(id_rep);
+        auto gw_id_opt = _rtab.gateway_for(id);
 
         // No route or it is unreachable
-        if (!gwid_opt)
+        if (!gw_id_opt)
             return nullptr;
 
-        if (gw_id_rep != nullptr)
-            *gw_id_rep = *gwid_opt;
+        if (gw_id != nullptr)
+            *gw_id = *gw_id_opt;
 
-        if (_nodes[0]->has_writer(*gwid_opt))
+        if (_nodes[0]->has_writer(*gw_id_opt))
             return & *_nodes[0];
 
         for (int i = 1; i < _nodes.size(); i++) {
-            if (_nodes[i]->has_writer(*gwid_opt)) {
+            if (_nodes[i]->has_writer(*gw_id_opt)) {
                 return & *_nodes[i];
             }
         }
@@ -178,7 +188,7 @@ private:
         return & *_nodes[index - 1];
     }
 
-    bool enqueue_packet (node_id_rep id, int priority, std::vector<char> && data)
+    bool enqueue_packet (node_id id, int priority, std::vector<char> && data)
     {
         auto ptr = locate_writer(id);
 
@@ -191,7 +201,7 @@ private:
         return true;
     }
 
-    bool enqueue_packet (node_id_rep id, int priority, char const * data, std::size_t len)
+    bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len)
     {
         auto ptr = locate_writer(id);
 
@@ -204,7 +214,7 @@ private:
         return true;
     }
 
-    void process_alive_received (node_id_rep id_rep, node_index_t /*idx*/, alive_info const & ainfo)
+    void process_alive_received (node_id id, node_index_t /*idx*/, alive_info<node_id> const & ainfo)
     {
         auto initiator_id = ainfo.id;
         auto updated = _alive_controller.update_if(initiator_id);
@@ -212,11 +222,12 @@ private:
         if (updated && _is_gateway) {
             // Forward packet to nearest nodes
             std::vector<char> msg = _alive_controller.serialize_alive(ainfo);
-            forward_packet(id_rep, std::move(msg));
+            forward_packet(id, std::move(msg));
         }
     }
 
-    void process_unreachable_received (node_id_rep id_rep, node_index_t /*idx*/, unreachable_info const & uinfo)
+    void process_unreachable_received (node_id id, node_index_t /*idx*/
+        , unreachable_info<node_id> const & uinfo)
     {
         // Receiver cannot be reached through the specified gateway.
         // Disable all routes containing the specified gateway.
@@ -226,22 +237,22 @@ private:
         //
         // Since there is no information on which route the packet came, we will forward it to
         // the nearest gateway/node.
-        node_id_rep gw_id_rep;
-        auto ptr = locate_writer(uinfo.sender_id, & gw_id_rep);
+        node_id gw_id;
+        auto ptr = locate_writer(uinfo.sender_id, & gw_id);
 
         if (ptr != nullptr) {
             NETTY__TRACE(TAG, "UNREACHABLE RECEIVED: FORWARD TO: {}"
-                , node_id_traits::to_string(gw_id_rep));
+                , node_id_traits::to_string(gw_id));
 
             // Need an example when such situation could happen.
-            PFS__TERMINATE(gw_id_rep != id_rep, "Fix meshnet::node_pool algorithm");
+            PFS__TERMINATE(gw_id != id, "Fix meshnet::node_pool algorithm");
 
             std::vector<char> msg = _alive_controller.serialize_unreachable(uinfo);
-            ptr->enqueue_packet(gw_id_rep, 0, std::move(msg));
+            ptr->enqueue_packet(gw_id, 0, std::move(msg));
             return;
         } else {
             // Sender is me and there are no alternative routes
-            if (uinfo.sender_id == _id_rep) {
+            if (uinfo.sender_id == _id) {
                 // Expire receiver
                 _alive_controller.expire(uinfo.receiver_id);
             } else {
@@ -253,34 +264,34 @@ private:
         }
     }
 
-    void process_route_received (node_id_rep id_rep, node_index_t idx, bool is_response
-        , route_info const & rinfo)
+    void process_route_received (node_id id, node_index_t idx, bool is_response
+        , route_info<node_id> const & rinfo)
     {
         bool new_route_added = false;
         std::uint16_t hops = 0;
-        node_id_rep dest_id_rep {};
+        node_id dest_id {};
         bool reverse_order = true;
 
         if (is_response) {
-            dest_id_rep = rinfo.responder_id;
+            dest_id = rinfo.responder_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // Initiator node received response - add route to the routing table.
-            if (rinfo.initiator_id == _id_rep) {
+            if (rinfo.initiator_id == _id) {
                 if (hops == 0) {
-                    new_route_added = _rtab.add_sibling(dest_id_rep);
+                    new_route_added = _rtab.add_sibling(dest_id);
                 } else {
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route);
+                    new_route_added = _rtab.add_route(dest_id, rinfo.route);
                 }
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
 
                 // If there is no loop
-                if (_id_rep != dest_id_rep) {
+                if (_id != dest_id) {
                     PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
 
                     // Find this gateway
-                    auto opt_index = rinfo.gateway_index(_id_rep);
+                    auto opt_index = rinfo.gateway_index(_id);
 
                     PFS__TERMINATE(opt_index, "Fix meshnet::node_pool algorithm");
 
@@ -290,12 +301,12 @@ private:
                     if (index == rinfo.route.size() - 1) {
                         // NOTE. There are no known cases when this will happen, as the sibling node has
                         // already been added previously. But let it be for insurance purposes.
-                        new_route_added = _rtab.add_sibling(dest_id_rep);
+                        new_route_added = _rtab.add_sibling(dest_id);
                     } else {
-                        new_route_added = _rtab.add_subroute(dest_id_rep, _id_rep, rinfo.route);
+                        new_route_added = _rtab.add_subroute(dest_id, _id, rinfo.route);
 
                         // Receiving a route response is an indication that the responder is active.
-                        _alive_controller.update_if(dest_id_rep);
+                        _alive_controller.update_if(dest_id);
                     }
 
                     // Serialize response and send to previous gateway (if index > 0)
@@ -314,62 +325,62 @@ private:
                 PFS__TERMINATE(false, "Fix meshnet::node_pool algorithm");
             }
         } else { // Request
-            dest_id_rep = rinfo.initiator_id;
+            dest_id = rinfo.initiator_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // If there is no loop
-            if (_id_rep != dest_id_rep) {
+            if (_id != dest_id) {
                 // Add record to the routing table about the route to the initiator
                 if (_is_gateway) {
                     if (hops == 0)
-                        new_route_added = _rtab.add_sibling(dest_id_rep);
+                        new_route_added = _rtab.add_sibling(dest_id);
                     else
-                        new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, reverse_order);
+                        new_route_added = _rtab.add_route(dest_id, rinfo.route, reverse_order);
                 } else {
                     PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
-                    new_route_added = _rtab.add_route(dest_id_rep, rinfo.route, reverse_order);
+                    new_route_added = _rtab.add_route(dest_id, rinfo.route, reverse_order);
                 }
 
                 // Initiate response and transmit it by the reverse route
-                std::vector<char> msg = _rtab.serialize_response(_id_rep, rinfo);
-                enqueue_packet(id_rep, 0, std::move(msg));
+                std::vector<char> msg = _rtab.serialize_response(_id, rinfo);
+                enqueue_packet(id, 0, std::move(msg));
 
                 // Forward request to nearest nodes if this gateway is not present in the received route
                 // to prevent cycling.
                 if (_is_gateway) {
-                    auto opt_index = rinfo.gateway_index(_id_rep);
+                    auto opt_index = rinfo.gateway_index(_id);
 
                     if (!opt_index) {
-                        std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
-                        forward_packet(id_rep, std::move(msg));
+                        std::vector<char> msg = _rtab.serialize_request(_id, rinfo);
+                        forward_packet(id, std::move(msg));
                     }
                 }
             }
         }
 
         if (new_route_added) {
-            PFS__TERMINATE(_id_rep != dest_id_rep, "Fix meshnet::node_pool algorithm");
+            PFS__TERMINATE(_id != dest_id, "Fix meshnet::node_pool algorithm");
 #if NETTY__TRACE_ENABLED
-            auto gw_chain_opt = _rtab.gateway_chain_for(dest_id_rep);
+            auto gw_chain_opt = _rtab.gateway_chain_for(dest_id);
             PFS__TERMINATE(!!gw_chain_opt, "Fix meshnet::node_pool algorithm");
             NETTY__TRACE(TAG, "Route added: {}->{}: {}"
-                , node_id_traits::to_string(_id_rep)
-                , node_id_traits::to_string(dest_id_rep)
+                , node_id_traits::to_string(_id)
+                , node_id_traits::to_string(dest_id)
                 , to_string(*gw_chain_opt));
 #endif
-            this->on_route_ready(dest_id_rep, hops);
+            this->on_route_ready(dest_id, hops);
         }
     }
 
     /**
-     * Forward packet to nearest nodes excluding node identified by @a sender_id_rep.
+     * Forward packet to nearest nodes excluding node identified by @a sender_id.
      *
      * @param data Serialized packet.
      */
-    void forward_packet (node_id_rep sender_id_rep, std::vector<char> && data)
+    void forward_packet (node_id sender_id, std::vector<char> && data)
     {
         for (node_index_t i = 0; i < _nodes.size(); i++)
-            _nodes[i]->enqueue_forward_packet(sender_id_rep, 0, data.data(), data.size());
+            _nodes[i]->enqueue_forward_packet(sender_id, 0, data.data(), data.size());
     }
 
     /**
@@ -379,14 +390,14 @@ private:
     {
         auto msg = _alive_controller.serialize_alive();
 
-        _rtab.foreach_gateway([this, & msg] (node_id_rep gwid) {
+        _rtab.foreach_gateway([this, & msg] (node_id gwid) {
             if (_alive_controller.is_alive(gwid))
                 enqueue_packet(gwid, 0, msg.data(), msg.size());
         });
     }
 
 #if NETTY__TRACE_ENABLED
-    std::string to_string (gateway_chain_t const & gw_chain) const
+    std::string to_string (std::vector<node_id> const & gw_chain) const
     {
         if (gw_chain.empty())
             return std::string{};
@@ -405,14 +416,9 @@ private:
 #endif
 
 public:
-    node_id_rep id_rep () const noexcept
-    {
-        return _id_rep;
-    }
-
     node_id id () const noexcept
     {
-        return node_id_traits::cast(_id_rep);
+        return _id;
     }
 
     std::string name () const noexcept
@@ -441,7 +447,7 @@ public:
     template <typename Node, typename ListenerIt>
     node_index_t add_node (ListenerIt first, ListenerIt last, error * perr = nullptr)
     {
-        auto node = Node::template make_interface(node_id_traits::cast(_id_rep), _name, _is_gateway);
+        auto node = Node::template make_interface(_id, _name, _is_gateway);
         error err;
 
         for (ListenerIt pos = first; pos != last; ++pos) {
@@ -458,115 +464,112 @@ public:
             this->on_error(errstr);
         });
 
-        node->on_channel_established([this] (node_id_rep id_rep, node_index_t, bool is_gateway) {
+        node->on_channel_established([this] (node_id id, node_index_t, bool is_gateway) {
             // Add direct route
-            auto route_added = _rtab.add_sibling(id_rep);
+            auto route_added = _rtab.add_sibling(id);
 
             // Add sibling node as alive
-            _alive_controller.add_sibling(id_rep);
+            _alive_controller.add_sibling(id);
 
             // Start routes discovery and initiate alive exchange if channel established
             // with gateway
             if (is_gateway) {
-                _rtab.add_gateway(id_rep);
+                _rtab.add_gateway(id);
 
-                std::vector<char> msg = _rtab.serialize_request(_id_rep);
-                this->enqueue_packet(id_rep, 0, std::move(msg));
+                std::vector<char> msg = _rtab.serialize_request(_id);
+                this->enqueue_packet(id, 0, std::move(msg));
 
                 // Send available routes to connected gateway on behalf of destination (according to
                 // routing table) nodes.
                 if (_is_gateway) {
                     // TODO Should all known routes be sent or only sibling nodes are sufficient?
 
-                    _rtab.foreach_sibling_node([this, id_rep] (node_id_rep initiator_id) {
-                        if (initiator_id != id_rep) {
-                            route_info rinfo;
+                    _rtab.foreach_sibling_node([this, id] (node_id initiator_id) {
+                        if (initiator_id != id) {
+                            route_info<node_id> rinfo;
                             rinfo.initiator_id = initiator_id;
-                            std::vector<char> msg = _rtab.serialize_request(_id_rep, rinfo);
-                            this->enqueue_packet(id_rep, 0, std::move(msg));
+                            std::vector<char> msg = _rtab.serialize_request(_id, rinfo);
+                            this->enqueue_packet(id, 0, std::move(msg));
                         }
                     });
                 }
             }
 
-            this->on_channel_established(id_rep, is_gateway);
+            this->on_channel_established(id, is_gateway);
 
             if (route_added)
-                this->on_route_ready(id_rep, 0);
+                this->on_route_ready(id, 0);
         });
 
-        node->on_channel_destroyed([this] (node_id_rep id_rep, node_index_t /*index*/) {
-            _rtab.remove_sibling(id_rep);
-            _alive_controller.expire(id_rep);
-            this->on_channel_destroyed(id_rep);
+        node->on_channel_destroyed([this] (node_id id, node_index_t /*index*/) {
+            _rtab.remove_sibling(id);
+            _alive_controller.expire(id);
+            this->on_channel_destroyed(id);
         });
 
-        node->on_duplicated([this](node_id_rep id_rep, node_index_t, std::string const & name
+        node->on_duplicated([this](node_id id, node_index_t, std::string const & name
                 , socket4_addr saddr) {
-            this->on_duplicated(id_rep, name, saddr);
+            this->on_duplicated(id, name, saddr);
         });
 
-        node->on_bytes_written([this](node_id_rep id_rep, std::uint64_t n) {
-            this->on_bytes_written(id_rep, n);
+        node->on_bytes_written([this](node_id id, std::uint64_t n) {
+            this->on_bytes_written(id, n);
         });
 
-        node->on_alive_received([this](node_id_rep id_rep, node_index_t index
-                , alive_info const & ainfo) {
-            process_alive_received(id_rep, index, ainfo);
+        node->on_alive_received([this](node_id id, node_index_t index, alive_info<node_id> const & ainfo) {
+            process_alive_received(id, index, ainfo);
         });
 
-        node->on_unreachable_received([this] (node_id_rep id_rep, node_index_t index
-                , unreachable_info const & uinfo) {
-            process_unreachable_received(id_rep, index, uinfo);
+        node->on_unreachable_received([this] (node_id id, node_index_t index
+                , unreachable_info<node_id> const & uinfo) {
+            process_unreachable_received(id, index, uinfo);
         });
 
-        node->on_route_received([this] (node_id_rep id_rep, node_index_t index
-                , bool is_response, route_info const & rinfo) {
-            process_route_received(id_rep, index, is_response, rinfo);
+        node->on_route_received([this] (node_id id, node_index_t index
+                , bool is_response, route_info<node_id> const & rinfo) {
+            process_route_received(id, index, is_response, rinfo);
         });
 
-        node->on_domestic_message_received([this] (node_id_rep id_rep
-                , int priority, std::vector<char> bytes) {
-            this->on_message_received(id_rep, priority, std::move(bytes));
+        node->on_domestic_message_received([this] (node_id id, int priority, std::vector<char> bytes) {
+            this->on_message_received(id, priority, std::move(bytes));
         });
 
-        node->on_global_message_received([this] (node_id_rep /*id_rep*/, int priority
-                , node_id_rep sender_id, node_id_rep receiver_id, std::vector<char> bytes) {
-            PFS__TERMINATE(_id_rep == receiver_id, "Fix meshnet::node_pool algorithm");
+        node->on_global_message_received([this] (node_id /*id*/, int priority
+                , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
+            PFS__TERMINATE(_id == receiver_id, "Fix meshnet::node_pool algorithm");
             this->on_message_received(sender_id, priority, std::move(bytes));
         });
 
-        node->on_forward_global_packet([this] (int priority
-                , node_id_rep sender_id_rep, node_id_rep receiver_id_rep
+        node->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
                 , std::vector<char> packet) {
-            PFS__TERMINATE(_id_rep != receiver_id_rep && _is_gateway, "Fix meshnet::node_pool algorithm");
+            PFS__TERMINATE(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
 
-            node_id_rep gw_id_rep;
-            auto ptr = locate_writer(receiver_id_rep, & gw_id_rep);
+            node_id gw_id;
+            auto ptr = locate_writer(receiver_id, & gw_id);
 
             if (ptr != nullptr) {
-                ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
+                ptr->enqueue_packet(gw_id, priority, std::move(packet));
                 return;
             }
 
             // Notify sender about unreachable destination
             this->on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
-                , node_id_traits::to_string(sender_id_rep)
-                , node_id_traits::to_string(receiver_id_rep)));
+                , node_id_traits::to_string(sender_id)
+                , node_id_traits::to_string(receiver_id)));
 
-            std::vector<char> unreach_pkt = _alive_controller.serialize_unreachable(_id_rep
-                , sender_id_rep, receiver_id_rep);
+            std::vector<char> unreach_pkt = _alive_controller.serialize_unreachable(_id
+                , sender_id, receiver_id);
 
-            ptr = locate_writer(sender_id_rep, & gw_id_rep);
+            ptr = locate_writer(sender_id, & gw_id);
 
             if (ptr != nullptr) {
-                ptr->enqueue_packet(gw_id_rep, 0, std::move(unreach_pkt));
+                ptr->enqueue_packet(gw_id, 0, std::move(unreach_pkt));
                 return;
             } else {
                 // Stuck. Nothing can be done.
                 this->on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
-                    , node_id_traits::to_string(sender_id_rep)
-                    , node_id_traits::to_string(receiver_id_rep)));
+                    , node_id_traits::to_string(sender_id)
+                    , node_id_traits::to_string(receiver_id)));
             }
         });
 
@@ -633,51 +636,48 @@ public:
     }
 
     /**
-     * Enqueues message for delivery to specified node ID @a id_rep.
+     * Enqueues message for delivery to specified node ID @a id.
      *
-     * @param id_rep Receiver ID.
+     * @param id Receiver ID.
      * @param priority Message priority.
      * @param force_checksum Calculate checksum before sending.
      * @param data Message content.
      * @param len Length of the message content.
      *
-     * @return @c true if message route found for @a id_rep.
+     * @return @c true if message route found for @a id.
      */
-    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum, char const * data
-        , std::size_t len)
+    bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
-        node_id_rep gw_id_rep;
-        auto ptr = locate_writer(id_rep, & gw_id_rep);
+        node_id gw_id;
+        auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}"
-                , node_id_traits::to_string(id_rep)));
+            this->on_error(tr::f_("node not found to send message: {}", node_id_traits::to_string(id)));
             return false;
         }
 
-        auto packet = _rtab.serialize_message(_id_rep, gw_id_rep, id_rep, force_checksum, data, len);
-        ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
+        auto packet = _rtab.serialize_message(_id, gw_id, id, force_checksum, data, len);
+        ptr->enqueue_packet(gw_id, priority, std::move(packet));
         return true;
     }
 
-    bool enqueue (node_id_rep id_rep, int priority, bool force_checksum, std::vector<char> && data)
+    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
-        node_id_rep gw_id_rep;
-        auto ptr = locate_writer(id_rep, & gw_id_rep);
+        node_id gw_id;
+        auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}"
-                , node_id_traits::to_string(id_rep)));
+            this->on_error(tr::f_("node not found to send message: {}", node_id_traits::to_string(id)));
             return false;
         }
 
-        auto packet = _rtab.serialize_message(_id_rep, gw_id_rep, id_rep, force_checksum
+        auto packet = _rtab.serialize_message(_id, gw_id, id, force_checksum
             , data.data(), data.size());
-        ptr->enqueue_packet(gw_id_rep, priority, std::move(packet));
+        ptr->enqueue_packet(gw_id, priority, std::move(packet));
         return true;
     }
 
@@ -691,34 +691,14 @@ public:
      *
      * @return @c true if message route found for @a id.
      */
-    bool enqueue (node_id_rep id, int priority, char const * data, std::size_t len)
+    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
     {
         return enqueue(id, priority, false, data, len);
     }
 
-    bool enqueue (node_id_rep id, int priority, std::vector<char> && data)
-    {
-        return enqueue(id, priority, false, std::move(data));
-    }
-
-    bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
-    {
-        return enqueue(node_id_traits::cast(id), priority, force_checksum, data, len);
-    }
-
-    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
-    {
-        return enqueue(node_id_traits::cast(id), priority, force_checksum, std::move(data));
-    }
-
-    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
-    {
-        return enqueue(node_id_traits::cast(id), priority, data, len);
-    }
-
     bool enqueue (node_id id, int priority, std::vector<char> && data)
     {
-        return enqueue(node_id_traits::cast(id), priority, std::move(data));
+        return enqueue(id, priority, false, std::move(data));
     }
 
     /**
@@ -772,20 +752,15 @@ public:
         }
     }
 
-    bool is_reachable (node_id_rep id_rep) const
+    bool is_reachable (node_id id) const
     {
-        auto gwid_opt = _rtab.gateway_for(id_rep);
+        auto gwid_opt = _rtab.gateway_for(id);
 
         // No route or it is unreachable
         if (!gwid_opt)
             return false;
 
         return true;
-    }
-
-    bool is_reachable (node_id id) const
-    {
-        return is_reachable(node_id_traits::cast(id));
     }
 
 #if NETTY__TRACE_ENABLED
@@ -799,9 +774,9 @@ public:
     {
         std::vector<std::string> result;
 
-        _rtab.foreach_route([this, & result] (node_id_rep dest_id_rep, gateway_chain_t const & gw_chain) {
+        _rtab.foreach_route([this, & result] (node_id dest_id, std::vector<node_id> const & gw_chain) {
             result.push_back(fmt::format("{}: {}"
-                , node_id_traits::to_string(dest_id_rep), this->to_string(gw_chain)));
+                , node_id_traits::to_string(dest_id), this->to_string(gw_chain)));
         });
 
         return result;

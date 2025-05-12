@@ -15,7 +15,6 @@
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
 #include <pfs/netty/patterns/meshnet/dual_link_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/node.hpp>
-#include <pfs/netty/patterns/meshnet/node_id_rep.hpp>
 #include <pfs/netty/patterns/meshnet/node_pool.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
@@ -143,8 +142,9 @@ using bare_meshnet_node_t = meshnet_ns::node<
 //using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
-using routing_table_t = meshnet_ns::routing_table<netty::patterns::serializer_traits_t>;
-using alive_controller_t = meshnet_ns::alive_controller<netty::patterns::serializer_traits_t>;
+using routing_table_t = meshnet_ns::routing_table<pfs::universal_id_traits, netty::patterns::serializer_traits_t>;
+using alive_controller_t = meshnet_ns::alive_controller<pfs::universal_id_traits
+    , netty::patterns::serializer_traits_t>;
 using node_pool_t = meshnet_ns::node_pool<pfs::universal_id_traits
     , routing_table_t
     , alive_controller_t

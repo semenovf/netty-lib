@@ -122,7 +122,7 @@ public:
     /**
      */
     template <typename OnSend, typename OnDispatched>
-    unsigned int step (OnSend && on_send, OnDispatched && on_dispatched)
+    unsigned int step (OnSend && on_send, OnDispatched && on_delivered)
     {
         unsigned int n = 0;
 
@@ -171,7 +171,7 @@ public:
                 auto msgid_opt = message_id_traits::parse(mt.msgid());
 
                 if (msgid_opt)
-                    on_dispatched(*msgid_opt);
+                    on_delivered(*msgid_opt);
             }
 
             _q.pop_front();

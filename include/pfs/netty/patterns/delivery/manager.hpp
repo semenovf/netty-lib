@@ -38,11 +38,11 @@ template <typename Transport
     , typename WriterMutex>
 class manager
 {
-    using transport_type = Transport;
     using incoming_controller_type = IncomingController;
     using outgoing_controller_type = OutgoingController;
 
 public:
+    using transport_type = Transport;
     using address_type = typename transport_type::address_type;
     using message_id_traits = MessageIdTraits;
     using message_id = typename message_id_traits::type;
@@ -70,7 +70,7 @@ public:
     mutable callback_t<void (address_type, message_id, std::vector<char>)> on_message_received
         = [] (address_type, message_id, std::vector<char>) {};
 
-    mutable callback_t<void (address_type, message_id)> on_message_dispatched
+    mutable callback_t<void (address_type, message_id)> on_message_delivered
         = [] (address_type, message_id) {};
 
     mutable callback_t<void (address_type, std::vector<char>)> on_report_received
@@ -244,11 +244,11 @@ public:
                 _transport->enqueue(addr, priority, force_checksum, std::move(data));
             };
 
-            auto on_dispatched = [this, addr] (message_id msgid) {
-                this->on_message_dispatched(addr, msgid);
+            auto on_delivered = [this, addr] (message_id msgid) {
+                this->on_message_delivered(addr, msgid);
             };
 
-            n += outc.step(std::move(on_send), std::move(on_dispatched));
+            n += outc.step(std::move(on_send), std::move(on_delivered));
         }
 
         for (auto & x: _icontrollers) {

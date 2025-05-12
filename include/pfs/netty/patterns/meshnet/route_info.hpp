@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "gateway_chain.hpp"
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -21,21 +20,22 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+template <typename NodeId>
 struct route_info
 {
-    node_id_rep initiator_id;
-    node_id_rep responder_id; // not used when request
+    NodeId initiator_id;
+    NodeId responder_id; // not used when request
 
-    gateway_chain_t route;
+    std::vector<NodeId> route; // Gateways chain
 
 public:
     /**
      * Find gateway index in the route.
      */
-    pfs::optional<std::size_t> gateway_index (node_id_rep gw) const
+    pfs::optional<std::size_t> gateway_index (NodeId gw_id) const
     {
         for (std::size_t i = 0; i < route.size(); i++) {
-            if (gw == route[i])
+            if (gw_id == route[i])
                 return i;
         }
 

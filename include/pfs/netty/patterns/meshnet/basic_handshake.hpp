@@ -27,7 +27,8 @@ template <typename Node>
 class basic_handshake
 {
 protected:
-    using node_id_rep = typename Node::node_id_rep;
+    using node_id_traits = typename Node::node_id_traits;
+    using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
     using serializer_traits = typename Node::serializer_traits;
     using time_point_type = std::chrono::steady_clock::time_point;
@@ -42,8 +43,8 @@ protected:
 public:
     mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
 
-    mutable callback_t<void (node_id_rep, socket_id, std::string const &, bool
-        , handshake_result_enum)> on_completed = [] (node_id_rep, socket_id
+    mutable callback_t<void (node_id, socket_id, std::string const &, bool
+        , handshake_result_enum)> on_completed = [] (node_id, socket_id
         , std::string const & /*name*/, bool /*is_gateway*/, handshake_result_enum) {};
 
 protected:
@@ -56,9 +57,9 @@ protected:
     void enqueue_request (socket_id sid, bool behind_nat)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet pkt {_node->is_gateway(), behind_nat};
+        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat};
 
-        pkt.id_rep = _node->id_rep();
+        pkt.id = _node->id();
         pkt.name = _node->name();
         pkt.serialize(out);
 
@@ -71,9 +72,9 @@ protected:
     void enqueue_response (socket_id sid, bool behind_nat, bool accepted)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet pkt {_node->is_gateway(), behind_nat, accepted};
+        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, accepted};
 
-        pkt.id_rep = _node->id_rep();
+        pkt.id = _node->id();
         pkt.name = _node->name();
         pkt.serialize(out);
 

@@ -28,6 +28,7 @@ class simple_input_controller: public basic_input_controller<simple_input_contro
 {
     using base_class = basic_input_controller<simple_input_controller<Node>, Node>;
     using socket_id = typename Node::socket_id;
+    using node_id = typename Node::node_id;
 
     friend base_class;
 
@@ -106,7 +107,7 @@ public:
         _accounts.erase(sid);
     }
 
-    void process (socket_id sid, handshake_packet const & pkt)
+    void process (socket_id sid, handshake_packet<node_id> const & pkt)
     {
         this->_node->handshake_processor().process(sid, pkt);
     }
@@ -116,17 +117,17 @@ public:
         this->_node->heartbeat_processor().process(sid, pkt);
     }
 
-    void process (socket_id sid, alive_packet const & pkt)
+    void process (socket_id sid, alive_packet<node_id> const & pkt)
     {
         this->_node->process_alive_info(sid, pkt.ainfo);
     }
 
-    void process (socket_id sid, unreachable_packet const & pkt)
+    void process (socket_id sid, unreachable_packet<node_id> const & pkt)
     {
         this->_node->process_unreachable_info(sid, pkt.uinfo);
     }
 
-    void process (socket_id sid, route_packet const & pkt)
+    void process (socket_id sid, route_packet<node_id> const & pkt)
     {
         this->_node->process_route_info(sid, pkt.is_response(), pkt.rinfo);
     }
@@ -136,14 +137,14 @@ public:
         this->_node->process_message_received(sid, priority, std::move(bytes));
     }
 
-    void process_message_received (socket_id sid, int priority, node_id_rep sender_id
-        , node_id_rep receiver_id, std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, node_id sender_id
+        , node_id receiver_id, std::vector<char> && bytes)
     {
         this->_node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
 
-    void forward_global_packet (int priority, node_id_rep sender_id
-        , node_id_rep receiver_id, std::vector<char> && bytes)
+    void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
+        , std::vector<char> && bytes)
     {
         this->_node->forward_global_packet(priority, sender_id, receiver_id, std::move(bytes));
     }

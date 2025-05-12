@@ -26,13 +26,12 @@ class channel_map
 public:
     using node_id_traits = NodeIdTraits;
     using node_id = typename NodeIdTraits::type;
-    using node_id_rep = typename NodeIdTraits::rep_type;
     using socket_type = Socket;
     using socket_id = typename socket_type::socket_id;
 
 private:
-    unordered_bimap<node_id_rep, socket_id> _readers;
-    unordered_bimap<node_id_rep, socket_id> _writers;
+    unordered_bimap<node_id, socket_id> _readers;
+    unordered_bimap<node_id, socket_id> _writers;
 
 public:
     mutable callback_t<void(socket_id)> on_close_socket = [] (socket_id) {
@@ -43,54 +42,54 @@ public:
     channel_map () = default;
 
 public:
-    socket_id const * locate_reader (node_id_rep id_rep) const
+    socket_id const * locate_reader (node_id id) const
     {
-        return _readers.locate_by_first(id_rep);
+        return _readers.locate_by_first(id);
     }
 
-    node_id_rep const * locate_reader (socket_id sid) const
+    node_id const * locate_reader (socket_id sid) const
     {
         return _readers.locate_by_second(sid);
     }
 
-    socket_id const * locate_writer (node_id_rep id_rep) const
+    socket_id const * locate_writer (node_id id) const
     {
-        return _writers.locate_by_first(id_rep);
+        return _writers.locate_by_first(id);
     }
 
-    node_id_rep const * locate_writer (socket_id sid) const
+    node_id const * locate_writer (socket_id sid) const
     {
         return _writers.locate_by_second(sid);
     }
 
-    bool insert_reader (node_id_rep id_rep, socket_id sid)
+    bool insert_reader (node_id id, socket_id sid)
     {
-        return _readers.insert(id_rep, sid);
+        return _readers.insert(id, sid);
     }
 
-    bool insert_writer (node_id_rep id_rep, socket_id sid)
+    bool insert_writer (node_id id, socket_id sid)
     {
-        return _writers.insert(id_rep, sid);
+        return _writers.insert(id, sid);
     }
 
-    bool channel_complete_for (node_id_rep id_rep) const
+    bool channel_complete_for (node_id id) const
     {
-        return locate_writer(id_rep) != nullptr && locate_reader(id_rep) != nullptr;
+        return locate_writer(id) != nullptr && locate_reader(id) != nullptr;
     }
 
     /**
      * Returns @c non-nullopt node ID if the channel is found and was closed.
      */
-    pfs::optional<node_id_rep> close_channel (node_id_rep id_rep)
+    pfs::optional<node_id> close_channel (node_id id)
     {
-        socket_id const * reader_sid_ptr = locate_reader(id_rep);
-        socket_id const * writer_sid_ptr = locate_writer(id_rep);
+        socket_id const * reader_sid_ptr = locate_reader(id);
+        socket_id const * writer_sid_ptr = locate_writer(id);
 
         bool success = false;
 
         if (reader_sid_ptr != nullptr) {
             this->on_close_socket(*reader_sid_ptr);
-            _readers.erase_by_first(id_rep);
+            _readers.erase_by_first(id);
             success = true;
         }
 
@@ -99,31 +98,31 @@ public:
                 this->on_close_socket(*writer_sid_ptr);
             }
 
-            _writers.erase_by_first(id_rep);
+            _writers.erase_by_first(id);
             success = true;
         }
 
         if (!success)
             return pfs::nullopt;
 
-        return id_rep;
+        return id;
     }
 
     /**
      * Returns @c non-nullopt node ID if the channel is found and was closed.
      */
-    pfs::optional<node_id_rep> close_channel (socket_id sid)
+    pfs::optional<node_id> close_channel (socket_id sid)
     {
-        node_id_rep const * id_rep_ptr = locate_reader(sid);
+        node_id const * id_ptr = locate_reader(sid);
 
-        if (id_rep_ptr == nullptr)
-            id_rep_ptr = locate_writer(sid);
+        if (id_ptr == nullptr)
+            id_ptr = locate_writer(sid);
 
         // Neither the writer nor the reader were found.
-        if (id_rep_ptr == nullptr)
+        if (id_ptr == nullptr)
             return pfs::nullopt;
 
-        return close_channel(*id_rep_ptr);
+        return close_channel(*id_ptr);
     }
 
     /**
@@ -132,18 +131,18 @@ public:
     void clear ()
     {
         // Collect all node identifiers
-        std::set<node_id_rep> tmp;
+        std::set<node_id> tmp;
 
         if (!_readers.empty())
-            _readers.for_each([& tmp] (node_id_rep id_rep, socket_id) {tmp.insert(id_rep);});
+            _readers.for_each([& tmp] (node_id id, socket_id) {tmp.insert(id);});
 
         if (!_writers.empty())
-            _writers.for_each([& tmp] (node_id_rep id_rep, socket_id) {tmp.insert(id_rep);});
+            _writers.for_each([& tmp] (node_id id, socket_id) {tmp.insert(id);});
 
         if (!tmp.empty()) {
             // Close all channels
-            for (auto const & id_rep: tmp)
-                close_channel(id_rep);
+            for (auto const & id: tmp)
+                close_channel(id);
 
             _readers.clear();
             _writers.clear();

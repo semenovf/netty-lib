@@ -5,28 +5,29 @@
 //
 // Changelog:
 //      2025.03.13 Initial version.
+//      2025.05.12 `node_id_rep` replaced by `std::string`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "node_id_rep.hpp"
-#include <cstdint>
-#include <utility>
+#include <string>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
+template <typename NodeId>
 struct alive_info
 {
-    node_id_rep id;
+    NodeId id;
 };
 
+template <typename NodeId>
 struct unreachable_info
 {
-    node_id_rep gw_id;       // Last gateway
-    node_id_rep sender_id;   // Sender node
-    node_id_rep receiver_id; // Unreachable node
+    NodeId gw_id;       // Last gateway ID
+    NodeId sender_id;   // Sender node ID
+    NodeId receiver_id; // Unreachable node ID
 };
 
 }} // namespace patterns::meshnet
