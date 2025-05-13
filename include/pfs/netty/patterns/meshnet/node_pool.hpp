@@ -180,7 +180,7 @@ private:
 
     node_interface_type * locate_node (node_index_t index)
     {
-        if (index < 1 && index > _nodes.size()) {
+        if (index < 1 || index > _nodes.size()) {
             this->on_error(tr::f_("node index is out of bounds: {}", index));
             return nullptr;
         }

@@ -22,9 +22,9 @@ namespace tools {
 inline void sleep (int timeout, std::string const & description = std::string{})
 {
     if (description.empty()) {
-        LOGD(TAG, "Waiting for {} seconds", timeout);
+        LOGD("", "Waiting for {} seconds", timeout);
     } else {
-        LOGD(TAG, "{}: waiting for {} seconds", description, timeout);
+        LOGD("", "{}: waiting for {} seconds", description, timeout);
     }
 
     std::this_thread::sleep_for(std::chrono::seconds{timeout});
@@ -45,7 +45,7 @@ bool wait_atomic_counter (AtomicCounter & counter
 
 template <typename SyncRouteMatrix>
 bool wait_matrix_count (SyncRouteMatrix & safe_matrix, std::size_t limit
-, std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+    , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
 {
     pfs::countdown_timer<std::milli> timer {timelimit};
 

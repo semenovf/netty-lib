@@ -9,6 +9,7 @@
 #pragma once
 #include <pfs/fake_mutex.hpp>
 #include <pfs/universal_id_traits.hpp>
+#include <pfs/netty/callback.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>

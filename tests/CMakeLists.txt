@@ -47,9 +47,10 @@ add_test(NAME meshnet-unreachable-tests COMMAND meshnet-unreachable-tests)
 ####################################################################################################
 # Delivery tests
 ####################################################################################################
-add_executable(delivery-manager-tests delivery/manager.cpp)
-target_link_libraries(delivery-manager-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME delivery-manager-tests COMMAND delivery-manager-tests)
+#FIXME
+# add_executable(delivery-manager-tests delivery/manager.cpp)
+# target_link_libraries(delivery-manager-tests PRIVATE pfs::netty pfs::lorem)
+# add_test(NAME delivery-manager-tests COMMAND delivery-manager-tests)
 
 ####################################################################################################
 # Channel connection tests

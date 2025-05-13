@@ -8,7 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
-#include "tools.hpp"
+#include "../tools.hpp"
+#include "mesh_network.hpp"
+#include <pfs/synchronized.hpp>
 #include <pfs/lorem/lorem_ipsum.hpp>
 #include <pfs/netty/startup.hpp>
 
@@ -28,9 +30,8 @@
 //          +----- d -----+
 //
 
-using namespace netty::patterns;
+using mesh_network_t = test::meshnet::network<node_pool_t>;
 
-tools::mesh_network * g_mesh_network_ptr = nullptr;
 std::atomic_int g_channels_established_counter {0};
 std::atomic_int g_expired_counter {0};
 pfs::synchronized<bit_matrix<6>> g_route_matrix;
@@ -39,12 +40,8 @@ std::string g_text;
 
 static void sigterm_handler (int sig)
 {
-    MESSAGE("Force interrupt: ", sig);
-
-    if (g_mesh_network_ptr != nullptr) {
-        MESSAGE("Force interrupt all nodes by signal: ", sig);
-        g_mesh_network_ptr->interrupt_all();
-    }
+    MESSAGE("Force interrupt all nodes by signal: ", sig);
+    mesh_network_t::instance()->interrupt_all();
 }
 
 static std::string random_text ()
@@ -66,105 +63,86 @@ static std::string random_text ()
     return text;
 }
 
-void tools::mesh_network::on_channel_established (std::string const & source_name
-    , node_t::node_id id, bool /*is_gateway*/)
-{
-    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, node_name_by_id(id));
-    g_channels_established_counter++;
-}
-
-void tools::mesh_network::on_channel_destroyed (std::string const & /*source_name*/
-    , node_t::node_id /*id*/)
-{}
-
-void tools::mesh_network::on_duplicated (std::string const &, node_t::node_id
-    , std::string const &, netty::socket4_addr)
-{};
-
-void tools::mesh_network::on_node_alive (std::string const & /*source_name*/, node_t::node_id /*id*/)
-{}
-
-void tools::mesh_network::on_node_expired (std::string const & source_name, node_t::node_id id)
-{
-    ++g_expired_counter;
-}
-
-void tools::mesh_network::on_route_ready (std::string const & source_name, node_t::node_id dest_id
-    , std::uint16_t hops)
-{
-    auto row = serial_number(source_name);
-    auto col = serial_number(dest_id);
-    g_route_matrix.wlock()->set(row, col, true);
-}
-
-void tools::mesh_network::on_message_received (std::string const & receiver_name
-    , node_t::node_id sender_id, int priority, std::vector<char> && bytes)
-{
-    LOGD(TAG, "Message received by {} from {}", receiver_name, node_name_by_id(sender_id));
-
-    std::string text(bytes.data(), bytes.size());
-
-    REQUIRE_EQ(text, g_text);
-
-    // fmt::println(text);
-
-    auto row = serial_number(sender_id);
-    auto col = serial_number(receiver_name);
-    g_message_matrix.wlock()->set(row, col, true);
-}
-
 TEST_CASE("unreachable") {
     netty::startup_guard netty_startup;
 
-    tools::mesh_network mesh_network {"a", "b", "c", "d", "A0", "C0"};
+    mesh_network_t net {"a", "b", "c", "d", "A0", "C0"};
+
+    net.on_channel_established = [] (std::string const & source_name, std::string const & target_name
+        , bool /*is_gateway*/)
+    {
+        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
+        ++g_channels_established_counter;
+    };
+
+    net.on_node_expired = [] (std::string const & source_name, std::string const & target_name)
+    {
+        LOGD(TAG, "{}: Node expired: {}", source_name, target_name);
+        ++g_expired_counter;
+    };
+
+    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name, std::uint16_t hops
+        , std::size_t source_index, std::size_t target_index)
+    {
+        g_route_matrix.wlock()->set(source_index, target_index, true);
+    };
+
+    net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
+        , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
+    {
+        LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
+
+        std::string text(bytes.data(), bytes.size());
+
+        REQUIRE_EQ(text, g_text);
+
+        // fmt::println(text);
+
+        g_message_matrix.wlock()->set(source_index, target_index, true);
+    };
 
     constexpr bool BEHIND_NAT = true;
     g_text = random_text();
 
     // Connect gateways
-    mesh_network.connect_host("a", "b");
-    mesh_network.connect_host("a", "c");
-    mesh_network.connect_host("a", "d");
+    net.connect_host("a", "b");
+    net.connect_host("a", "c");
+    net.connect_host("a", "d");
 
-    mesh_network.connect_host("b", "a");
-    mesh_network.connect_host("b", "c");
+    net.connect_host("b", "a");
+    net.connect_host("b", "c");
 
-    mesh_network.connect_host("c", "a");
-    mesh_network.connect_host("c", "b");
-    mesh_network.connect_host("c", "d");
+    net.connect_host("c", "a");
+    net.connect_host("c", "b");
+    net.connect_host("c", "d");
 
-    mesh_network.connect_host("d", "a");
-    mesh_network.connect_host("d", "c");
+    net.connect_host("d", "a");
+    net.connect_host("d", "c");
 
-    mesh_network.connect_host("A0", "a", BEHIND_NAT);
-    mesh_network.connect_host("C0", "c", BEHIND_NAT);
-
-    g_mesh_network_ptr = & mesh_network;
+    net.connect_host("A0", "a", BEHIND_NAT);
+    net.connect_host("C0", "c", BEHIND_NAT);
 
     tools::signal_guard signal_guard {SIGINT, sigterm_handler};
 
-    mesh_network.run_all();
+    net.run_all();
 
     CHECK(tools::wait_atomic_counter(g_channels_established_counter, 14));
     CHECK(tools::wait_matrix_count(g_route_matrix, 30));
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "d", "A0", "C0"}));
 
-    mesh_network.print_routing_table("A0");
+    net.print_routing_table("A0");
 
-    mesh_network.send("A0", "C0", g_text);
+    net.send("A0", "C0", g_text);
 
     CHECK(tools::wait_matrix_count(g_message_matrix, 1));
 
-    mesh_network.destroy("C0");
+    net.destroy("C0");
 
-    mesh_network.send("A0", "C0", g_text);
+    net.send("A0", "C0", g_text);
     CHECK(tools::wait_atomic_counter(g_expired_counter, 1));
 
-    mesh_network.print_routing_table("A0");
+    net.print_routing_table("A0");
 
-    mesh_network.interrupt_all();
-    mesh_network.join_all();
-
-    g_mesh_network_ptr = nullptr;
+    net.interrupt_all();
+    net.join_all();
 }
-
