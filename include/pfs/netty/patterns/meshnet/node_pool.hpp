@@ -102,7 +102,7 @@ public:
         = [] (node_id, std::uint64_t /*n*/) {};
 
     // Notify when message received (domestic or global)
-    mutable callback_t<void (node_id, int, std::vector<char>)> on_message_received
+    mutable callback_t<void (node_id, int, std::vector<char>)> on_data_received
         = [] (node_id, int /*priority*/, std::vector<char> /*bytes*/) {};
 
 public:
@@ -441,6 +441,11 @@ public:
         return _interrupted.load();
     }
 
+    void clear_interrupted ()
+    {
+        _interrupted.store(false);
+    }
+
     /**
      * Adds new node to the pool with specified listeners.
      */
@@ -530,14 +535,14 @@ public:
             process_route_received(id, index, is_response, rinfo);
         });
 
-        node->on_domestic_message_received([this] (node_id id, int priority, std::vector<char> bytes) {
-            this->on_message_received(id, priority, std::move(bytes));
+        node->on_domestic_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
+            this->on_data_received(id, priority, std::move(bytes));
         });
 
-        node->on_global_message_received([this] (node_id /*id*/, int priority
+        node->on_global_data_received([this] (node_id /*id*/, int priority
                 , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
             PFS__TERMINATE(_id == receiver_id, "Fix meshnet::node_pool algorithm");
-            this->on_message_received(sender_id, priority, std::move(bytes));
+            this->on_data_received(sender_id, priority, std::move(bytes));
         });
 
         node->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
@@ -730,7 +735,7 @@ public:
 
     void run (std::chrono::milliseconds loop_interval = std::chrono::milliseconds{10})
     {
-        _interrupted.store(false);
+        clear_interrupted();
 
         while (!_interrupted) {
             pfs::countdown_timer<std::milli> countdown_timer {loop_interval};

@@ -24,6 +24,9 @@ class node_pool_rd
 {
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
+
+
+public:
     using node_id = typename transport_type::node_id;
     using message_id = typename DeliveryManager::message_id;
 
@@ -110,6 +113,72 @@ public:
         {
             this->on_error(errstr);
         };
+
+        //
+        // Transport specific callbacks.
+        //
+        _t.on_channel_established = [this] (node_id id, bool is_gateway)
+        {
+            this->on_channel_established(id, is_gateway);
+        };
+
+        _t.on_channel_destroyed = [this] (node_id id)
+        {
+            this->on_channel_destroyed(id);
+        };
+
+        _t.on_duplicated = [this] (node_id id, std::string const & name, socket4_addr saddr)
+        {
+            this->on_duplicated(id, name, saddr);
+        };
+
+        _t.on_node_alive = [this] (node_id id)
+        {
+            this->on_node_alive(id);
+        };
+
+        _t.on_node_expired = [this] (node_id id)
+        {
+            this->on_node_expired(id);
+        };
+
+        _t.on_route_ready = [this] (node_id dest_id, std::uint16_t hops)
+        {
+            this->on_route_ready(dest_id, hops);
+        };
+
+        _t.on_bytes_written = [this] (node_id id, std::uint64_t n)
+        {
+            this->on_bytes_written(id, n);
+        };
+
+        _t.on_data_received = [this] (node_id id, int priority, std::vector<char> bytes)
+        {
+            _dm.process_packet(id, priority, std::move(bytes));
+        };
+
+        //
+        // Reliable delivery managr specific callbacks.
+        //
+        _dm.on_receiver_ready = [this] (node_id id)
+        {
+            this->on_receiver_ready(id);
+        };
+
+        _dm.on_message_received = [this] (node_id id, message_id msgid, std::vector<char> msg)
+        {
+            this->on_message_received(id, msgid, std::move(msg));
+        };
+
+        _dm.on_message_delivered = [this] (node_id id, message_id msgid)
+        {
+            this->on_message_delivered(id, msgid);
+        };
+
+        _dm.on_report_received = [this] (node_id id, std::vector<char> report)
+        {
+            this->on_report_received(id, std::move(report));
+        };
     }
 
     node_pool_rd (node_pool_rd const &) = delete;
@@ -119,7 +188,118 @@ public:
 
     ~node_pool_rd () = default;
 
-private:
+public:
+    node_id id () const noexcept
+    {
+        return _t.id();
+    }
+
+    std::string name () const noexcept
+    {
+        return _t.name();
+    }
+
+    bool is_gateway () const noexcept
+    {
+        return _t.is_gateway();
+    }
+
+    template <typename Node>
+    node_index_t add_node (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    {
+        return _t.template add_node<Node>(listener_saddrs, perr);
+    }
+
+    /**
+     * Adds new node to the node pool with specified listeners.
+     */
+    template <typename Node>
+    node_index_t add_node (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    {
+        return _t.template add_node<Node>(listener_saddrs, perr);
+    }
+
+    void listen (int backlog = 50)
+    {
+        _t.listen(backlog);
+    }
+
+    void listen (node_index_t index, int backlog)
+    {
+        _t.listen(index, backlog);
+    }
+
+    bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
+    {
+        return _t.connect_host(index, remote_saddr, behind_nat);
+    }
+
+    bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
+        , bool behind_nat = false)
+    {
+        return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
+    }
+
+    bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
+        , std::vector<char> && msg)
+    {
+        return _dm.enqueue_message(id, msgid, priority, force_checksum, std::move(msg));
+    }
+
+    bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
+        , char const * msg, std::size_t length)
+    {
+        return _dm.enqueue_message(id, msgid, priority, force_checksum, msg, length);
+    }
+
+    bool enqueue_static_message (node_id id, message_id msgid, int priority
+        , bool force_checksum, char const * msg, std::size_t length)
+    {
+        return _dm.enqueue_static_message(id, msgid, priority, force_checksum, msg, length);
+    }
+
+    bool enqueue_report (node_id id, int priority, bool force_checksum, char const * data
+        , std::size_t length)
+    {
+        return _dm.enqueue_report(id, priority, force_checksum, data, length);
+    }
+
+    bool enqueue_report (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    {
+        return _dm.enqueue_report(id, priority, force_checksum, std::move(data));
+    }
+
+    void interrupt ()
+    {
+        _t.interrupt();
+    }
+
+    bool interrupted () const noexcept
+    {
+        return _t.interrupted();
+    }
+
+    /**
+     * @return Number of events occurred.
+     */
+    unsigned int step ()
+    {
+        return _dm.step();
+    }
+
+    void run (std::chrono::milliseconds loop_interval = std::chrono::milliseconds{10})
+    {
+        _t.clear_interrupted();
+
+        while (!interrupted()) {
+            pfs::countdown_timer<std::milli> countdown_timer {loop_interval};
+            auto n = step();
+
+            if (n == 0)
+                std::this_thread::sleep_for(countdown_timer.remain());
+        }
+    }
+
 };
 
 }} // namespace patterns::meshnet

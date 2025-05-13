@@ -11,7 +11,6 @@
 #include "../tools.hpp"
 #include "mesh_network.hpp"
 #include <pfs/synchronized.hpp>
-#include <pfs/lorem/lorem_ipsum.hpp>
 #include <pfs/netty/startup.hpp>
 
 // =================================================================================================
@@ -51,25 +50,6 @@ static void sigterm_handler (int sig)
     mesh_network_t::instance()->interrupt_all();
 }
 
-static std::string random_text ()
-{
-    lorem::lorem_ipsum ipsum;
-    ipsum.set_paragraph_count(1);
-    ipsum.set_sentence_count(10);
-    ipsum.set_word_count(20);
-
-    auto para = ipsum();
-    std::string text;
-    char const * delim = "" ;
-
-    for (auto const & sentence: para[0]) {
-        text += delim + sentence;
-        delim = "\n";
-    }
-
-    return text;
-}
-
 TEST_CASE("messaging") {
 
     netty::startup_guard netty_startup;
@@ -96,7 +76,7 @@ TEST_CASE("messaging") {
         g_route_matrix.wlock()->set(source_index, target_index, true);
     };
 
-    net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
+    net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
         , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
     {
         LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
@@ -111,7 +91,7 @@ TEST_CASE("messaging") {
     };
 
     constexpr bool BEHIND_NAT = true;
-    g_text = random_text();
+    g_text = tools::random_text();
 
     // Connect gateways
     net.connect_host("a", "b");

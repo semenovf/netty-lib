@@ -86,6 +86,9 @@ public:
         _dynamic_payload = std::move(msg);
     }
 
+    ~multipart_tracker ()
+    {}
+
 private:
     std::size_t size () const noexcept
     {

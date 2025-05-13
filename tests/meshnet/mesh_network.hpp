@@ -106,6 +106,10 @@ class network
 public:
     using node_id = typename NodePool::node_id;
 
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+    using message_id = typename NodePool::message_id;
+#endif
+
 private:
     static network * _self;
 
@@ -129,29 +133,50 @@ public:
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &, netty::socket4_addr saddr)> on_duplicated
-        = [this] (std::string const & /*source_name*/, std::string const & /*target_name*/, netty::socket4_addr saddr) {};
+        = [] (std::string const & /*source_name*/, std::string const & /*target_name*/, netty::socket4_addr saddr) {};
 
     netty::callback_t<void (std::string const &, std::string const &)> on_node_alive
-        = [this] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
+        = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &)> on_node_expired
-        = [this] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
+        = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::uint16_t
         , std::size_t, std::size_t)> on_route_ready
-        = [this] (std::string const & /*source_name*/, std::string const & /*target_name*/
+        = [] (std::string const & /*source_name*/, std::string const & /*target_name*/
             , std::uint16_t /*hops*/, std::size_t /*source_index*/, std::size_t /*target_index*/) {};
 
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+    netty::callback_t<void (std::string const &, std::string const &, std::size_t, std::size_t)> on_receiver_ready
+        = [] (std::string const & /*source_name*/, std::string const & /*receiver_name*/
+            , std::size_t /*source_index*/, std::size_t /*receiver_index*/) {};
+
+    netty::callback_t<void (std::string const &, std::string const &, std::string const &
+        , std::vector<char>)> on_message_received
+        = [] (std::string const &, std::string const &, std::string const &, std::vector<char>) {};
+
+    netty::callback_t<void (std::string const &, std::string const &, std::string const &)> on_message_delivered
+        = [] (std::string const &, std::string const &, std::string const &) {};
+
+    netty::callback_t<void (std::string const &, std::string const &, std::vector<char>)> on_report_received
+        = [] (std::string const &, std::string const &, std::vector<char>) {};
+
+#else
     netty::callback_t<void (std::string const &, std::string const &, int, std::vector<char>
-        , std::size_t, std::size_t)> on_message_received
+        , std::size_t, std::size_t)> on_data_received
         = [] (std::string const & /*receiver_name*/, std::string const & /*sender_name*/
             , int /*priority*/, std::vector<char> /*bytes*/, std::size_t /*source_index*/
             , std::size_t /*target_index*/) {};
+#endif
 
 public:
     network (std::initializer_list<std::string> node_pool_names)
         : _dict(node_dictionary::make())
     {
+        PFS__ASSERT(_self == nullptr, "Network instance already instantiated");
+
+        _self = this;
+
         std::size_t index = 0; // May be used as matrix column/row index
 
         for (auto const & name: node_pool_names) {
@@ -159,6 +184,12 @@ public:
             PFS__ASSERT(node_pool_ptr != nullptr, "");
             _node_pools.insert({name, context{std::move(node_pool_ptr), index++}});
         }
+    }
+
+    ~network ()
+    {
+        PFS__ASSERT(_self != nullptr, "Network instance is not instantiated");
+        _self = nullptr;
     }
 
 private:
@@ -211,12 +242,41 @@ private:
                 , index_by_name(target_name));
         };
 
-        ptr->on_message_received = [this, source_name] (node_id sender_id, int priority, std::vector<char> bytes)
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+        ptr->on_receiver_ready = [this, source_name] (node_id receiver_id)
+        {
+            auto receiver_name = node_name_by_id(receiver_id);
+            this->on_receiver_ready(source_name, receiver_name, index_by_name(source_name)
+                , index_by_name(receiver_name));
+        };
+
+        ptr->on_message_received = [this, source_name] (node_id sender_id, message_id msgid
+            , std::vector<char> msg)
         {
             auto sender_name = node_name_by_id(sender_id);
-            this->on_message_received(source_name, sender_name, priority, std::move(bytes)
+            this->on_message_received(source_name, sender_name, to_string(msgid), std::move(msg));
+        };
+
+        ptr->on_message_delivered = [this, source_name] (node_id receiver_id, message_id msgid)
+        {
+            auto receiver_name = node_name_by_id(receiver_id);
+            this->on_message_delivered(source_name, receiver_name, to_string(msgid));
+        };
+
+        ptr->on_report_received = [this, source_name] (node_id sender_id, std::vector<char> report)
+        {
+            auto sender_name = node_name_by_id(sender_id);
+            this->on_report_received(source_name, sender_name, std::move(report));
+        };
+#else
+        ptr->on_data_received = [this, source_name] (node_id sender_id, int priority
+            , std::vector<char> bytes)
+        {
+            auto sender_name = node_name_by_id(sender_id);
+            this->on_data_received(source_name, sender_name, priority, std::move(bytes)
                 , index_by_name(source_name), index_by_name(sender_name));
         };
+#endif
 
         auto index = ptr->template add_node<node_t>({listener_saddr});
 
@@ -281,7 +341,14 @@ public:
         auto sender_ctx = locate_by_name(src);
         auto receiver_id = node_id_by_name(dest);
 
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+        message_id msgid = pfs::generate_uuid();
+
+        sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, false
+            , text.data(), text.size());
+#else
         sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+#endif
     }
 
     void run_all ()
@@ -324,7 +391,6 @@ public:
 
     void print_routing_table (std::string const & name)
     {
-#if NETTY__TRACE_ENABLED
         auto ptr = locate_by_name(name);
         PFS__ASSERT(ptr != nullptr, "");
 
@@ -338,7 +404,6 @@ public:
         }
 
         LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
-#endif
     }
 
     void interrupt (std::string const & name)

@@ -13,7 +13,6 @@
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/log.hpp>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -174,6 +173,12 @@ public:
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
+    /**
+     * Incoming packet handler.
+     *
+     * @details Must be called when data received by underlying transport (e.g. from transport
+     *          callback for handle incoming data)
+     */
     void process_packet (address_type sender_addr, int /*priority*/, std::vector<char> && data)
     {
         PFS__ASSERT(data.size() > 0, "");
@@ -213,16 +218,6 @@ public:
         auto inpc = ensure_incoming_controller(sender_addr);
         inpc->process_packet(std::move(data), std::move(on_send), std::move(on_ready)
             , std::move(on_acknowledged), std::move(on_again), std::move(on_report_received));
-    }
-
-    void interrupt ()
-    {
-        _interrupted = true;
-    }
-
-    bool interrupted () const noexcept
-    {
-        return _interrupted.load();
     }
 
     /**
@@ -265,19 +260,6 @@ public:
         n += _transport->step();
 
         return n;
-    }
-
-    void run (std::chrono::milliseconds loop_interval = std::chrono::milliseconds{10})
-    {
-        _interrupted.store(false);
-
-        while (!_interrupted) {
-            pfs::countdown_timer<std::milli> countdown_timer {loop_interval};
-            auto n = step();
-
-            if (n == 0)
-                std::this_thread::sleep_for(countdown_timer.remain());
-        }
     }
 };
 

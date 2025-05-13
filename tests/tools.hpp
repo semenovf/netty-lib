@@ -11,6 +11,7 @@
 #include <pfs/countdown_timer.hpp>
 #include <pfs/fmt.hpp>
 #include <pfs/log.hpp>
+#include <pfs/lorem/lorem_ipsum.hpp>
 #include <atomic>
 #include <cstdint>
 #include <chrono>
@@ -111,6 +112,25 @@ bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption
     }
 
     return success;
+}
+
+inline std::string random_text ()
+{
+    lorem::lorem_ipsum ipsum;
+    ipsum.set_paragraph_count(1);
+    ipsum.set_sentence_count(10);
+    ipsum.set_word_count(20);
+
+    auto para = ipsum();
+    std::string text;
+    char const * delim = "" ;
+
+    for (auto const & sentence: para[0]) {
+        text += delim + sentence;
+        delim = "\n";
+    }
+
+    return text;
 }
 
 } // namespace tools

@@ -190,7 +190,7 @@ public: // callbacks
         = [] (node_id, node_index_t, bool /*is_response*/, route_info<node_id> const &) {};
 
     // On domestic message received
-    mutable callback_t<void (node_id, int, std::vector<char>)> on_domestic_message_received
+    mutable callback_t<void (node_id, int, std::vector<char>)> on_domestic_data_received
         = [] (node_id, int /*priority*/, std::vector<char> /*bytes*/) {};
 
     // On global (intersubnet) message received
@@ -198,7 +198,7 @@ public: // callbacks
         , int // priority
         , node_id // sender ID
         , node_id // receiver ID
-        , std::vector<char>)> on_global_message_received
+        , std::vector<char>)> on_global_data_received
         = [] (node_id, int /*priority*/, node_id /*sender_id*/
             , node_id /*receiver_id*/, std::vector<char> /*bytes*/) {};
 
@@ -711,7 +711,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr)
-            this->on_domestic_message_received(*id_ptr, priority, std::move(bytes));
+            this->on_domestic_data_received(*id_ptr, priority, std::move(bytes));
     }
 
     void process_message_received (socket_id sid, int priority, node_id sender_id
@@ -720,7 +720,7 @@ private:
         auto id_ptr = _channels.locate_reader(sid);
 
         if (id_ptr != nullptr) {
-            this->on_global_message_received(*id_ptr, priority, sender_id, receiver_id, std::move(bytes));
+            this->on_global_data_received(*id_ptr, priority, sender_id, receiver_id, std::move(bytes));
         }
     }
 
@@ -901,17 +901,17 @@ public: // node_interface
             Node::on_route_received = std::move(cb);
         }
 
-        void on_domestic_message_received (callback_t<void (node_id, int
+        void on_domestic_data_received (callback_t<void (node_id, int
             , std::vector<char>)> cb) override
         {
-            Node::on_domestic_message_received = std::move(cb);
+            Node::on_domestic_data_received = std::move(cb);
         }
 
-        void on_global_message_received (callback_t<void (node_id /*last transmitter node*/
+        void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
             , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/
             , std::vector<char>)> cb) override
         {
-            Node::on_global_message_received = std::move(cb);
+            Node::on_global_data_received = std::move(cb);
         }
 
         void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/

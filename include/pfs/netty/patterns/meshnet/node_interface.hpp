@@ -58,8 +58,8 @@ public:
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
     virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;
     virtual void on_route_received (callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)>) = 0;
-    virtual void on_domestic_message_received (callback_t<void (node_id, int, std::vector<char>)>) = 0;
-    virtual void on_global_message_received (callback_t<void (node_id /*last transmitter node*/
+    virtual void on_domestic_data_received (callback_t<void (node_id, int, std::vector<char>)>) = 0;
+    virtual void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
         , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/, std::vector<char>)>) = 0;
     virtual void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/
         , node_id /*receiver ID*/, std::vector<char>)>) = 0;

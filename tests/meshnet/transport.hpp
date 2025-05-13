@@ -12,11 +12,15 @@
 #include <pfs/netty/callback.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
+#include <pfs/netty/patterns/delivery/incoming_controller.hpp>
+#include <pfs/netty/patterns/delivery/manager.hpp>
+#include <pfs/netty/patterns/delivery/outgoing_controller.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
 #include <pfs/netty/patterns/meshnet/dual_link_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/node.hpp>
 #include <pfs/netty/patterns/meshnet/node_pool.hpp>
+#include <pfs/netty/patterns/meshnet/node_pool_rd.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/reconnection_policy.hpp>
@@ -32,6 +36,7 @@
 #include <pfs/netty/posix/tcp_listener.hpp>
 #include <pfs/netty/posix/tcp_socket.hpp>
 
+namespace delivery_ns = netty::patterns::delivery;
 namespace meshnet_ns = netty::patterns::meshnet;
 
 using node_id = pfs::universal_id_traits::type;
@@ -137,7 +142,7 @@ using bare_meshnet_node_t = meshnet_ns::node<
     , meshnet_ns::without_input_controller>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// meshnet_node_t
+// Node pool
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Choose required type here
 //using node_t = nopriority_meshnet_node_t;
@@ -150,3 +155,17 @@ using node_pool_t = meshnet_ns::node_pool<pfs::universal_id_traits
     , routing_table_t
     , alive_controller_t
     , std::recursive_mutex>;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+// Reliable delivery node pool
+////////////////////////////////////////////////////////////////////////////////////////////////////
+using delivery_transport_t = node_pool_t;
+using message_id_traits = pfs::universal_id_traits;
+using incoming_controller_t = delivery_ns::incoming_controller<message_id_traits
+    , netty::patterns::serializer_traits_t>;
+using outgoing_controller_t = delivery_ns::outgoing_controller<message_id_traits
+    , netty::patterns::serializer_traits_t>;
+using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id_traits
+    , incoming_controller_t, outgoing_controller_t, std::mutex>;
+
+using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;

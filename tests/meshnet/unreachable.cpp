@@ -87,7 +87,7 @@ TEST_CASE("unreachable") {
         g_route_matrix.wlock()->set(source_index, target_index, true);
     };
 
-    net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
+    net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
         , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
     {
         LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);

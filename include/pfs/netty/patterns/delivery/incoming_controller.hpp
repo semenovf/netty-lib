@@ -12,6 +12,7 @@
 #include "../../namespace.hpp"
 #include "multipart_assembler.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/utility.hpp>
 #include <chrono>
 #include <cstdint>

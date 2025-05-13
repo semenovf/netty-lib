@@ -13,7 +13,6 @@ add_subdirectory(discovery)
 # add_subdirectory(meshnet) # FIXME UNCOMMENT
 add_subdirectory(mtu)
 # add_subdirectory(netty) # FIXME
-# add_subdirectory(reliable-delivery) # TODO IMPLEMENT
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
 # add_subdirectory(service) # FIXME
