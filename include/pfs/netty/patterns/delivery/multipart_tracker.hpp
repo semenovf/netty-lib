@@ -87,8 +87,13 @@ public:
         _dynamic_payload = std::move(msg);
     }
 
-    ~multipart_tracker ()
-    {}
+    multipart_tracker (multipart_tracker const &) = delete;
+    multipart_tracker (multipart_tracker &&) = default;
+
+    multipart_tracker & operator = (multipart_tracker const &) = delete;
+    multipart_tracker & operator = (multipart_tracker &&) = default;
+
+    ~multipart_tracker () {}
 
 private:
     std::size_t size () const noexcept

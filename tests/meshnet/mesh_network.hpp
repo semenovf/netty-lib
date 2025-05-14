@@ -156,7 +156,8 @@ public:
         = [] (std::string const &, std::string const &, std::string const &, std::vector<char>) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::string const &)> on_message_delivered
-        = [] (std::string const &, std::string const &, std::string const &) {};
+        = [] (std::string const & /*source_name*/, std::string const & /*receiver_name*/
+            , std::string const & /*msgid*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::vector<char>)> on_report_received
         = [] (std::string const &, std::string const &, std::vector<char>) {};

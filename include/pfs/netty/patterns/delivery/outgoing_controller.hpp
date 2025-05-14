@@ -94,6 +94,7 @@ public:
         _q.emplace_back(msgid, priority, force_checksum, _part_size, ++_recent_sn, std::move(msg), _exp_timeout);
         auto & mt = _q.back();
         _recent_sn = mt.last_sn();
+
         return true;
     }
 
@@ -162,10 +163,10 @@ public:
         }
 
         // Check complete messages
-        auto & mt = _q.front();
+        auto mt = & _q.front();
 
-        while (mt.is_complete()) {
-            on_delivered(mt.msgid());
+        while (mt->is_complete()) {
+            on_delivered(mt->msgid());
 
             _q.pop_front();
             n++;
@@ -173,19 +174,19 @@ public:
             if (_q.empty())
                 break;
 
-            mt = _q.front();
+            mt = & _q.front();
         }
 
         if (_q.empty())
             return n;
 
         // Try to acquire next part of the current sending message
-        mt = _q.front();
+        mt = & _q.front();
 
         auto out = serializer_traits::make_serializer();
 
-        if (mt.acquire_part(out)) {
-            on_send(mt.priority(), mt.force_checksum(), out.take());
+        if (mt->acquire_part(out)) {
+            on_send(mt->priority(), mt->force_checksum(), out.take());
             n++;
         }
 

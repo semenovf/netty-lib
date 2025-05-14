@@ -28,6 +28,7 @@
 
 using mesh_network_t = test::meshnet::network<reliable_node_pool_t>;
 
+std::atomic_int g_message_delivered_counter {0};
 pfs::synchronized<bit_matrix<5>> g_route_matrix;
 pfs::synchronized<bit_matrix<5>> g_receiver_ready_matrix;
 std::string g_text0, g_text1, g_text2;
@@ -56,6 +57,14 @@ TEST_CASE("sync delivery") {
         g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
     };
 
+    net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
+        , std::string const & msgid)
+    {
+        g_message_delivered_counter++;
+        LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
+    };
+
+
     constexpr bool BEHIND_NAT = true;
     g_text0 = tools::random_text();
     g_text1 = tools::random_text();
@@ -77,10 +86,11 @@ TEST_CASE("sync delivery") {
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
 
     net.send("A0", "C0", g_text0);
-    // net.send("A0", "C0", g_text1);
-    // net.send("A0", "C0", g_text2);
+    net.send("A0", "C0", g_text1);
+    net.send("A0", "C0", g_text2);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
+    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 2));
 
     net.interrupt_all();
     net.join_all();

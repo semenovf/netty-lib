@@ -56,6 +56,14 @@ public:
         _parts_received.resize(_remain_parts, false);
     }
 
+    multipart_assembler (multipart_assembler const &) = delete;
+    multipart_assembler (multipart_assembler &&) = default;
+
+    multipart_assembler & operator = (multipart_assembler const &) = delete;
+    multipart_assembler & operator = (multipart_assembler &&) = default;
+
+    ~multipart_assembler () {}
+
 public:
     MessageId msgid () const noexcept
     {
