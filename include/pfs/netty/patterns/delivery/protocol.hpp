@@ -160,10 +160,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // message_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename MessageId>
 class message_packet: public header
 {
 public:
-    std::string msgid;
+    MessageId msgid;
     std::uint64_t total_size {0};
     std::uint32_t part_size {0};
     serial_number last_sn {0};
@@ -183,9 +184,7 @@ public:
     message_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
         : header(h)
     {
-        std::uint16_t msgid_size = 0;
-        in >> std::make_pair(& msgid_size, & msgid);
-        in >> total_size >> part_size >> last_sn;
+        in >> msgid >> total_size >> part_size >> last_sn;
 
         std::uint32_t size = 0;
         in >> std::make_pair(& size, & bytes);
@@ -202,9 +201,7 @@ public:
     {
         header::serialize(out);
 
-        auto msgid_size = pfs::numeric_cast<std::uint16_t>(msgid.size());
-        out << msgid_size << msgid;
-        out << total_size << part_size << last_sn;
+        out << msgid << total_size << part_size << last_sn;
 
         auto size = pfs::numeric_cast<std::uint32_t>(len);
         out << size << std::make_pair(data, len);

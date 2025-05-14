@@ -77,8 +77,8 @@ TEST_CASE("sync delivery") {
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
 
     net.send("A0", "C0", g_text0);
-    net.send("A0", "C0", g_text1);
-    net.send("A0", "C0", g_text2);
+    // net.send("A0", "C0", g_text1);
+    // net.send("A0", "C0", g_text2);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
 

@@ -21,9 +21,10 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace delivery {
 
+template <typename MessageId>
 class multipart_assembler
 {
-    std::string _msgid; // Serialized message ID
+    MessageId _msgid; // Serialized message ID
     std::uint32_t _part_size {0};
     serial_number _first_sn {0};
     serial_number _last_sn {0};
@@ -36,9 +37,9 @@ public:
     /**
      *  Constructs multipart message assembler.
      */
-    multipart_assembler (std::string && msgid, std::uint64_t total_size, std::uint32_t part_size
+    multipart_assembler (MessageId msgid, std::uint64_t total_size, std::uint32_t part_size
         , serial_number first_sn, serial_number last_sn)
-        : _msgid(std::move(msgid))
+        : _msgid(msgid)
         , _part_size(part_size)
         , _first_sn(first_sn)
         , _last_sn(last_sn)
@@ -56,7 +57,7 @@ public:
     }
 
 public:
-    std::string const & msgid () const noexcept
+    MessageId msgid () const noexcept
     {
         return _msgid;
     }

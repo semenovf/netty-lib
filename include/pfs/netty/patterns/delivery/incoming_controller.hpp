@@ -40,7 +40,7 @@ private:
     // serial_number _committed_sn {0}; // Last serial number of the last committed income message
     serial_number _expected_sn {0};  // Expected income message part serial number
 
-    std::deque<multipart_assembler> _assemblers;
+    std::deque<multipart_assembler<message_id>> _assemblers;
 
 public:
     incoming_controller ()
@@ -100,7 +100,7 @@ public:
 
                     case packet_enum::message: {
                         std::vector<char> part;
-                        message_packet pkt {h, in, part};
+                        message_packet<message_id> pkt {h, in, part};
 
                         if (!in.commit_transaction())
                             break;
@@ -130,15 +130,7 @@ public:
                             break;
                         }
 
-                        PFS__THROW_UNEXPECTED(!pkt.msgid.empty(), "Fix meshnet::incoming_controller algorithm");
-
-                        auto msgid_opt = message_id_traits::parse(pkt.msgid);
-
-                        // Bad message ID received
-                        if (!msgid_opt)
-                            break;
-
-                        multipart_assembler assembler { std::move(pkt.msgid), pkt.total_size
+                        multipart_assembler<message_id> assembler { pkt.msgid, pkt.total_size
                             , pkt.part_size, pkt.sn(), pkt.last_sn };
 
                         assembler.emplace_part(pkt.sn(), std::move(part));
@@ -167,7 +159,7 @@ public:
                         if (_assemblers.empty())
                             break;
 
-                        multipart_assembler * assembler_ptr = nullptr;
+                        multipart_assembler<message_id> * assembler_ptr = nullptr;
 
                         for (auto & a: _assemblers) {
                             if (pkt.sn() >= a.first_sn() && pkt.sn() <= a.last_sn()) {
@@ -219,17 +211,7 @@ public:
             auto & a = _assemblers.front();
 
             if (a.is_complete()) {
-                auto msgid_opt = message_id_traits::parse(a.msgid());
-
-                // Bad message ID received
-                if (!msgid_opt) {
-                    throw error {
-                          make_error_code(pfs::errc::unexpected_error)
-                        , tr::f_("bad message ID received")
-                    };
-                }
-
-                on_message_received(*msgid_opt, a.payload());
+                on_message_received(a.msgid(), a.payload());
                 _assemblers.pop_front();
                 n++;
             } else {

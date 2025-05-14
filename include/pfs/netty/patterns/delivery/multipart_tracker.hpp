@@ -22,13 +22,15 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace delivery {
 
+template <typename MessageId>
 class multipart_tracker
 {
+    using message_id = MessageId;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
 private:
-    std::string _msgid; // Serialized message ID (for message only, empty for report)
+    message_id _msgid;
     int _priority {0};
     bool _force_checksum {false};
 
@@ -49,10 +51,10 @@ private:
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
 public:
-    multipart_tracker (std::string && msgid, int priority, bool force_checksum
+    multipart_tracker (message_id msgid, int priority, bool force_checksum
         , std::uint32_t part_size, serial_number first_sn, char const * msg, std::size_t length
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
-        : _msgid(std::move(msgid))
+        : _msgid(msgid)
         , _priority(priority)
         , _force_checksum(force_checksum)
         , _part_size(part_size)
@@ -73,14 +75,13 @@ public:
     }
 
     /**
-     * Constructs tracker for report message with content that will be valid until the message
+     * Constructs tracker for message with content that will be valid until the message
      * is transmitted.
      */
-    multipart_tracker (std::string && msgid, int priority, bool force_checksum
+    multipart_tracker (message_id msgid, int priority, bool force_checksum
         , std::uint32_t part_size, serial_number first_sn, std::vector<char> && msg
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
-        : multipart_tracker(std::move(msgid), priority, force_checksum, part_size
-            , first_sn, nullptr, 0, exp_timeout)
+        : multipart_tracker(msgid, priority, force_checksum, part_size, first_sn, nullptr, 0, exp_timeout)
     {
         _is_static = false;
         _dynamic_payload = std::move(msg);
@@ -96,7 +97,7 @@ private:
     }
 
 public:
-    std::string const & msgid () const noexcept
+    message_id msgid () const noexcept
     {
         return _msgid;
     }
@@ -122,11 +123,6 @@ public:
     serial_number last_sn () const noexcept
     {
         return _last_sn;
-    }
-
-    bool is_report () const noexcept
-    {
-        return _msgid.empty();
     }
 
     void acknowledge (serial_number sn)
@@ -173,8 +169,8 @@ public:
             part_size = size() - _part_size * index;
 
         if (index == 0) { // First part
-            message_packet pkt {sn};
-            pkt.msgid = _msgid; // Empty string if report
+            message_packet<message_id> pkt {sn};
+            pkt.msgid = _msgid;
             pkt.total_size = pfs::numeric_cast<std::uint64_t>(size());
             pkt.part_size  = _part_size;
             pkt.last_sn    = _last_sn;
@@ -208,14 +204,12 @@ public:
             index = _recent_index++;
             found = true;
         } else {
-            if (!is_report()) {
-                // Find first expired part.
-                for (std::size_t i = 0; i < _recent_index; i++) {
-                    if (!_parts_acked[i] && _parts_expired[i] <= clock_type::now()) {
-                        index = i;
-                        found = true;
-                        break;
-                    }
+            // Find first expired part.
+            for (std::size_t i = 0; i < _recent_index; i++) {
+                if (!_parts_acked[i] && _parts_expired[i] <= clock_type::now()) {
+                    index = i;
+                    found = true;
+                    break;
                 }
             }
         }

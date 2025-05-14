@@ -48,7 +48,7 @@ private:
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
     // Window/queue to track outgoing message/report parts (need access to random element)
-    std::deque<multipart_tracker> _q;
+    std::deque<multipart_tracker<message_id>> _q;
 
     // The queue stores serial numbers for retransmission.
     std::queue<serial_number> _again;
@@ -91,8 +91,7 @@ public:
      */
     bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> && msg)
     {
-        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
-            , _part_size, ++_recent_sn, std::move(msg), _exp_timeout);
+        _q.emplace_back(msgid, priority, force_checksum, _part_size, ++_recent_sn, std::move(msg), _exp_timeout);
         auto & mt = _q.back();
         _recent_sn = mt.last_sn();
         return true;
@@ -104,8 +103,7 @@ public:
     bool enqueue_static_message (message_id msgid, int priority, bool force_checksum
         , char const * msg, std::size_t length)
     {
-        _q.emplace_back(message_id_traits::to_string(msgid), priority, force_checksum
-            , _part_size, ++_recent_sn, msg, length, _exp_timeout);
+        _q.emplace_back(msgid, priority, force_checksum, _part_size, ++_recent_sn, msg, length, _exp_timeout);
         auto & mt = _q.back();
         _recent_sn = mt.last_sn();
         return true;
@@ -149,7 +147,7 @@ public:
                 serial_number sn = _again.front();
                 _again.pop();
 
-                auto pos = multipart_tracker::find(_q.begin(), _q.end(), sn);
+                auto pos = multipart_tracker<message_id>::find(_q.begin(), _q.end(), sn);
                 PFS__THROW_UNEXPECTED(pos != _q.end(), "Fix delivery::outgoing_controller algorithm");
 
                 auto out = serializer_traits::make_serializer();
@@ -167,12 +165,7 @@ public:
         auto & mt = _q.front();
 
         while (mt.is_complete()) {
-            if (!mt.is_report()) {
-                auto msgid_opt = message_id_traits::parse(mt.msgid());
-
-                if (msgid_opt)
-                    on_delivered(*msgid_opt);
-            }
+            on_delivered(mt.msgid());
 
             _q.pop_front();
             n++;
@@ -201,7 +194,7 @@ public:
 
     void acknowledge (serial_number sn)
     {
-        auto pos = multipart_tracker::find(_q.begin(), _q.end(), sn);
+        auto pos = multipart_tracker<message_id>::find(_q.begin(), _q.end(), sn);
         PFS__THROW_UNEXPECTED(pos != _q.end(), "Fix delivery::outgoing_controller algorithm");
         pos->acknowledge(sn);
     }
