@@ -342,6 +342,10 @@ public:
                     PFS__TERMINATE(writer_sid != nullptr, "Fix meshnet::node algorithm");
 
                     _heartbeat_controller.update(*writer_sid);
+
+                    NETTY__TRACE(TAG, "{}: successful handshake on socket: #{} with: {}"
+                        , _name, sid, name);
+
                     this->on_channel_established(id, _index, is_gateway);
                     break;
                 }
@@ -357,6 +361,8 @@ public:
                 }
 
                 case handshake_result_enum::reject:
+                    NETTY__TRACE(TAG, "{}: closing socket by reject reason while handshaking: #{}"
+                        , _name, sid);
                     close_socket(sid);
                     break;
 
@@ -371,7 +377,8 @@ public:
             schedule_reconnection(sid);
         };
 
-        NETTY__TRACE(TAG, "node: {} (gateway={}, id={})", _name, _is_gateway, node_id_traits::to_string(_id));
+        NETTY__TRACE(TAG, "{}: node constructed (gateway={}, id={})", _name, _is_gateway
+            , node_id_traits::to_string(_id));
     }
 
     node (node const &) = delete;
@@ -382,6 +389,7 @@ public:
     ~node ()
     {
         clear_channels();
+        NETTY__TRACE(TAG, "{}: node destroyed", _name);
     }
 
 public:
@@ -651,13 +659,13 @@ private:
             if (!pos->second.required()) {
                 _reconn_policies.erase(pos);
                 reconnecting = false;
-                NETTY__TRACE("[node]", "{}: stopped reconnection to: {}", _name, to_string(saddr));
+                NETTY__TRACE(TAG, "{}: stopped reconnection to: {}", _name, to_string(saddr));
             }
         }
 
         if (reconnecting) {
             auto reconn_timeout = pos->second.fetch_timeout();
-            NETTY__TRACE("[node]", "{}: reconnecting to: {} after {}", _name, to_string(saddr)
+            NETTY__TRACE(TAG, "{}: reconnecting to: {} after {}", _name, to_string(saddr)
                 , reconn_timeout);
             _connecting_pool.connect_timeout(reconn_timeout, saddr);
         }

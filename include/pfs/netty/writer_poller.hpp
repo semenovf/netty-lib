@@ -15,6 +15,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -26,6 +27,7 @@ public:
 
 private:
     std::unique_ptr<Backend> _rep;
+    std::vector<socket_id> _removable;
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure;
@@ -41,6 +43,20 @@ public:
     writer_poller (writer_poller &&) = delete;
     writer_poller & operator = (writer_poller &&) = delete;
 
+private:
+    void remove_later (socket_id sid)
+    {
+        _removable.push_back(sid);
+    }
+
+    void apply_removable ()
+    {
+        for (auto sid: _removable)
+            remove(sid);
+        _removable.clear();
+    }
+
+public:
     NETTY__EXPORT void wait_for_write (socket_id sock, error * perr = nullptr);
     NETTY__EXPORT void remove (socket_id sock, error * perr = nullptr);
     NETTY__EXPORT int poll (std::chrono::milliseconds millis, error * perr = nullptr);

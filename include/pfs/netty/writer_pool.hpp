@@ -12,6 +12,8 @@
 #include "callback.hpp"
 #include "error.hpp"
 #include "send_result.hpp"
+#include "tag.hpp"
+#include "trace.hpp"
 #include "writer_queue.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/stopwatch.hpp>
@@ -273,6 +275,7 @@ public:
         auto result = 0;
         result += send(perr);
         auto n = WriterPoller::poll(std::chrono::milliseconds{0}, perr);
+
         result += n > 0 ? n : 0;
 
         return result;

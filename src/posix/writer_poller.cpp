@@ -36,6 +36,9 @@ writer_poller<posix::select_poller>::writer_poller ()
 template <>
 int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (!_removable.empty())
+        apply_removable();
+
     fd_set wfds;
 
     auto n = _rep->poll(nullptr, & wfds, millis, perr);
@@ -60,6 +63,7 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
             if (FD_ISSET(fd, & wfds)) {
                 res++;
                 can_write(fd);
+                remove_later(fd);
                 --rcounter;
             }
         }
@@ -89,6 +93,9 @@ writer_poller<posix::poll_poller>::writer_poller ()
 template <>
 int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (!_removable.empty())
+        apply_removable();
+
     auto n = _rep->poll(millis, perr);
 
     if (n < 0)
@@ -119,14 +126,17 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                         tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
+                    remove_later(ev.fd);
                 } else {
                     if (error_val == ECONNRESET) {
                         on_disconnected(ev.fd);
+                        remove_later(ev.fd);
                     } else {
                         on_failure(ev.fd, error {
                             tr::f_("write socket failure: {} (socket={})"
                                 , pfs::system_error_text(error_val), ev.fd)
                         });
+                        remove_later(ev.fd);
                     }
                 }
 
@@ -146,6 +156,7 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
             )) {
                 res++;
                 can_write(ev.fd);
+                remove_later(ev.fd);
             }
         }
     }

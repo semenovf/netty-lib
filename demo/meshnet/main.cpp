@@ -26,19 +26,18 @@
 using string_view = pfs::string_view;
 using pfs::to_string;
 
-// static constexpr std::uint16_t PORT = 4242;
-static std::atomic_bool quit_flag {false};
+static std::atomic_bool s_quit_flag {false};
 
 static void sigterm_handler (int /*sig*/)
 {
-    quit_flag.store(true);
+    s_quit_flag.store(true);
 }
 
 struct node_item
 {
     bool behind_nat {false};
     std::vector<netty::socket4_addr> listener_saddrs;
-    std::vector<netty::socket4_addr> neighbor_saddrs;
+    std::vector<std::pair<netty::socket4_addr, bool>> neighbor_saddrs;
 };
 
 static void print_usage (pfs::filesystem::path const & programName
@@ -49,31 +48,32 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} --id=NODE_ID [--gw] {{--node [--nat] --port=PORT... --nb=ADDR:PORT...}}...\n\n"
+        "{0} [--reliable] [--name=NODE_NAME] [--id=NODE_ID] [--gw]\n"
+        "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
         "\tPrint this help and exit\n"
+        "--reliable\n"
+        "\tUse reliable implementation of node pool\n"
+        "--name=NODE_NAME\n"
+        "\tThis node name\n"
         "--id=NODE_ID\n"
-        "\tThis node identifier\n\n"
+        "\tThis node identifier\n"
         "--gw\n"
         "\tThis node is a gateway\n\n"
+
         "--node\n"
         "\tStart node parameters\n\n"
-        "--nat\n"
-        "\tThis node is behind NAT\n\n"
         "--port=PORT...\n"
         "\tRun listeners for node on specified ports\n\n"
         "--nb=ADDR:PORT...\n"
-        "\tNeighbor nodes addresses\n\n"
+        "--nb-nat=ADDR:PORT...\n"
+        "\tNeighbor nodes addresses. --nb-nat specifies the node behind NAT\n\n"
 
         "Examples:\n\n"
         "Run with connection to 192.168.0.2:\n"
-        "\t{0} --id=01JJP9Y5YTSC57COOLERMASTER --node --port=4242 --nb=192.168.0.2:4242\n"
-        "Run gateway:\n"
-        "\t{0} --id=01JJP9Y5YTSC57COOLERMASTER --gw\\\n"
-        "\t    --node --port=4242 --nb=192.168.0.2:4242\\\n"
-        "\t    --node --port=4343 --nb=192.168.0.3:4243"
+        "\t{0} --name=\"Node Name\" --id=01JW83N29KV04QNATTK82Z5NTX --node --port=4242 --nb=192.168.0.2:4242\n"
         , programName);
 }
 
@@ -89,11 +89,51 @@ void dumb ()
     priority_meshnet_node_t {id, name, is_gateway};
 }
 
+template <typename NodePool>
+void run (NodePool & node_pool, std::vector<node_item> & nodes)
+{
+    node_pool.on_channel_established = [] (node_t::node_id id, bool is_gateway) {
+        auto node_type = is_gateway ? "gateway node" : "regular node";
+        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
+    };
+
+    node_pool.on_channel_destroyed = [] (node_t::node_id id) {
+        LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
+    };
+
+    // Notify when node alive status changed
+    node_pool.on_node_alive = [] (node_t::node_id id) {
+        LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
+    };
+
+    // Notify when node alive status changed
+    node_pool.on_node_expired = [] (node_t::node_id id) {
+        LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
+    };
+
+    for (auto & item: nodes) {
+        auto node_index = node_pool.template add_node<node_t>(item.listener_saddrs);
+        node_pool.listen(node_index, 10);
+
+        for (auto const & x: item.neighbor_saddrs)
+            node_pool.connect_host(node_index, x.first, x.second);
+    }
+
+    while (!s_quit_flag.load()) {
+        pfs::countdown_timer<std::milli> countdown_timer {std::chrono::milliseconds {10}};
+        auto n = node_pool.step();
+
+        if (n == 0)
+            std::this_thread::sleep_for(countdown_timer.remain());
+    }
+}
+
 int main (int argc, char * argv[])
 {
     signal(SIGINT, sigterm_handler);
     signal(SIGTERM, sigterm_handler);
 
+    bool is_reliable_impl = false;
     auto id = pfs::generate_uuid();
     std::string name;
     bool is_gateway = false;
@@ -107,10 +147,19 @@ int main (int argc, char * argv[])
         while (commandLineIterator.has_more()) {
             auto x = commandLineIterator.next();
             auto expectedArgError = false;
+            auto expectedNodeOption = false;
 
             if (x.is_option("help") || x.is_option("h")) {
                 print_usage(programName);
                 return EXIT_SUCCESS;
+            } else if (x.is_option("reliable")) {
+                is_reliable_impl = true;
+            } else if (x.is_option("name")) {
+                if (x.has_arg()) {
+                    name = std::string(x.arg().data(), x.arg().size());
+                } else {
+                    expectedArgError = true;
+                }
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
                     auto node_id_opt = pfs::parse_universal_id(x.arg().data(), x.arg().size());
@@ -126,49 +175,52 @@ int main (int argc, char * argv[])
                 is_gateway = true;
             } else if (x.is_option("node")) {
                 nodes.emplace_back(); // Emplace back empty item
-            } else if (x.is_option("nat")) {
-                nodes.back().behind_nat = true;
             } else if (x.is_option("port")) {
-                if (x.has_arg()) {
-                    std::error_code ec;
-                    auto port = pfs::to_integer<std::uint16_t>(x.arg().begin(), x.arg().end()
-                        , std::uint16_t{1024}, std::uint16_t{65535}, ec);
+                if (!nodes.empty()) {
+                    if (x.has_arg()) {
+                        std::error_code ec;
+                        auto port = pfs::to_integer<std::uint16_t>(x.arg().begin(), x.arg().end()
+                            , std::uint16_t{1024}, std::uint16_t{65535}, ec);
 
-                    if (ec) {
-                        LOGE(TAG, "Bad port");
-                        return EXIT_FAILURE;
+                        if (ec) {
+                            LOGE(TAG, "Bad port");
+                            return EXIT_FAILURE;
+                        }
+
+                        netty::socket4_addr listener {netty::inet4_addr {netty::inet4_addr::any_addr_value}, port};
+                        nodes.back().listener_saddrs.push_back(std::move(listener));
+                    } else {
+                        expectedArgError = true;
                     }
-
-                    if (nodes.empty()) {
-                        LOGE(TAG, "Expected --node option before --port option");
-                        return EXIT_FAILURE;
-                    }
-
-                    netty::socket4_addr listener {netty::inet4_addr {netty::inet4_addr::any_addr_value}, port};
-                    nodes.back().listener_saddrs.push_back(std::move(listener));
                 } else {
-                    expectedArgError = true;
+                    expectedNodeOption = true;
                 }
-            } else if (x.is_option("nb")) {
-                if (x.has_arg()) {
-                    auto saddr_opt = netty::socket4_addr::parse(x.arg());
+            } else if (x.is_option("nb") || x.is_option("nb-nat")) {
+                if (!nodes.empty()) {
+                    bool nat = x.is_option("nb-nat");
 
-                    if (!saddr_opt) {
-                        LOGE(TAG, "Bad socket address for '{}'", to_string(x.optname()));
-                        return EXIT_FAILURE;
+                    if (x.has_arg()) {
+                        auto saddr_opt = netty::socket4_addr::parse(x.arg());
+
+                        if (!saddr_opt) {
+                            LOGE(TAG, "Bad socket address for '{}'", to_string(x.optname()));
+                            return EXIT_FAILURE;
+                        }
+
+                        nodes.back().neighbor_saddrs.push_back(std::make_pair(*saddr_opt, nat));
+                    } else {
+                        expectedArgError = true;
                     }
-
-                    if (nodes.empty()) {
-                        LOGE(TAG, "Expected --node option before --nb option");
-                        return EXIT_FAILURE;
-                    }
-
-                    nodes.back().neighbor_saddrs.push_back(*saddr_opt);
                 } else {
-                    expectedArgError = true;
+                    expectedNodeOption = true;
                 }
             } else {
                 LOGE(TAG, "Bad arguments. Try --help option.");
+                return EXIT_FAILURE;
+            }
+
+            if (expectedNodeOption) {
+                print_usage(programName, "Expected --node option before " + to_string(x.optname()));
                 return EXIT_FAILURE;
             }
 
@@ -189,41 +241,12 @@ int main (int argc, char * argv[])
 
     netty::startup_guard netty_startup;
 
-    node_pool_t node_pool {id, name, is_gateway};
-
-    node_pool.on_channel_established = [] (node_t::node_id_rep id, bool is_gateway) {
-        auto node_type = is_gateway ? "gateway node" : "regular node";
-        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
-    };
-
-    node_pool.on_channel_destroyed = [] (node_t::node_id_rep id) {
-        LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
-    };
-
-    // Notify when node alive status changed
-    node_pool.on_node_alive = [] (node_t::node_id_rep id) {
-        LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
-    };
-
-    // Notify when node alive status changed
-    node_pool.on_node_expired = [] (node_t::node_id_rep id) {
-        LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
-    };
-
-    for (auto & item: nodes) {
-        auto node_index = node_pool.add_node<node_t>(item.listener_saddrs);
-        node_pool.listen(node_index, 10);
-
-        for (auto const & saddr: item.neighbor_saddrs)
-            node_pool.connect_host(node_index, saddr, item.behind_nat);
-    }
-
-    while (!quit_flag.load()) {
-        pfs::countdown_timer<std::milli> countdown_timer {std::chrono::milliseconds {10}};
-        auto n = node_pool.step();
-
-        if (n == 0)
-            std::this_thread::sleep_for(countdown_timer.remain());
+    if (is_reliable_impl) {
+        reliable_node_pool_t node_pool {id, name, is_gateway};
+        run(node_pool, nodes);
+    } else {
+        node_pool_t node_pool {id, name, is_gateway};
+        run(node_pool, nodes);
     }
 
     return EXIT_SUCCESS;

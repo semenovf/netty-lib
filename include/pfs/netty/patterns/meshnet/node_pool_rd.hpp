@@ -25,7 +25,6 @@ class node_pool_rd
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
 
-
 public:
     using node_id = typename transport_type::node_id;
     using message_id = typename DeliveryManager::message_id;

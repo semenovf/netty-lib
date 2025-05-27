@@ -23,6 +23,9 @@ writer_poller<enet::enet_poller>::writer_poller ()
 template <>
 int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (!_removable.empty())
+        apply_removable();
+
     auto n = _rep->poll(millis, perr);
 
     if (n < 0)
@@ -33,6 +36,7 @@ int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, er
     if (_rep->has_wait_for_write_sockets()) {
         n = _rep->check_and_notify_can_write([this] (socket_id sock) {
             can_write(sock);
+            remove_later(sock);
         });
     }
 

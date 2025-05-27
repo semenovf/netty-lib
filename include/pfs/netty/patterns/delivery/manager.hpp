@@ -13,6 +13,7 @@
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/log.hpp>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>

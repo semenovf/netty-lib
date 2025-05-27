@@ -23,6 +23,9 @@ writer_poller<linux_os::epoll_poller>::writer_poller ()
 template <>
 int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (!_removable.empty())
+        apply_removable();
+
     auto n = _rep->poll(millis, perr);
 
     if (n < 0)
@@ -53,14 +56,17 @@ int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
                         tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.data.fd)
                     });
+                    remove_later(ev.data.fd);
                 } else {
                     if (error_val == ECONNRESET) {
                         on_disconnected(ev.data.fd);
+                        remove_later(ev.data.fd);
                     } else {
                         on_failure(ev.data.fd, error {
                             tr::f_("write socket failure: {} (socket={})"
                                 , pfs::system_error_text(error_val), ev.data.fd)
                         });
+                        remove_later(ev.data.fd);
                     }
                 }
 
@@ -72,6 +78,7 @@ int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
             if (ev.events & (EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)) {
                 res++;
                 can_write(ev.data.fd);
+                remove_later(ev.data.fd);
             }
         }
     }
