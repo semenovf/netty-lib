@@ -470,6 +470,8 @@ public:
         });
 
         node->on_channel_established([this] (node_id id, node_index_t, bool is_gateway) {
+            this->on_channel_established(id, is_gateway);
+
             // Add direct route
             auto route_added = _rtab.add_sibling(id);
 
@@ -500,16 +502,14 @@ public:
                 }
             }
 
-            this->on_channel_established(id, is_gateway);
-
             if (route_added)
                 this->on_route_ready(id, 0);
         });
 
         node->on_channel_destroyed([this] (node_id id, node_index_t /*index*/) {
+            this->on_channel_destroyed(id);
             _rtab.remove_sibling(id);
             _alive_controller.expire(id);
-            this->on_channel_destroyed(id);
         });
 
         node->on_duplicated([this](node_id id, node_index_t, std::string const & name
