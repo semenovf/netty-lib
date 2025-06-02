@@ -162,8 +162,8 @@ public: // callbacks
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     // Notify when connection established with the remote node
-    mutable callback_t<void (node_id, node_index_t, bool)> on_channel_established
-        = [] (node_id, node_index_t, bool /*is_gateway*/) {};
+    mutable callback_t<void (node_id, node_index_t, std::string, bool)> on_channel_established
+        = [] (node_id, node_index_t, std::string const & /*name*/, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     mutable callback_t<void (node_id, node_index_t)> on_channel_destroyed
@@ -346,7 +346,7 @@ public:
                     NETTY__TRACE(TAG, "{}: successful handshake on socket: #{} with: {}"
                         , _name, sid, name);
 
-                    this->on_channel_established(id, _index, is_gateway);
+                    this->on_channel_established(id, _index, name, is_gateway);
                     break;
                 }
 
@@ -869,7 +869,7 @@ public: // node_interface
             Node::on_error = std::move(cb);
         }
 
-        void on_channel_established (callback_t<void (node_id, node_index_t
+        void on_channel_established (callback_t<void (node_id, node_index_t, std::string const &
             , bool /*is_gateway*/)> cb) override
         {
             Node::on_channel_established = std::move(cb);

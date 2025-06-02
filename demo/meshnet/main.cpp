@@ -92,9 +92,9 @@ void dumb ()
 template <typename NodePool>
 void run (NodePool & node_pool, std::vector<node_item> & nodes)
 {
-    node_pool.on_channel_established = [] (node_t::node_id id, bool is_gateway) {
+    node_pool.on_channel_established = [] (node_t::node_id id, std::string const & name, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
-        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Channel established with {}: {} ({})", node_type, name, node_t::node_id_traits::to_string(id));
     };
 
     node_pool.on_channel_destroyed = [] (node_t::node_id id) {

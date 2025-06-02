@@ -210,9 +210,10 @@ private:
             LOGE(TAG, "{}", errstr);
         };
 
-        ptr->on_channel_established = [this, source_name] (node_id id, bool is_gateway)
+        ptr->on_channel_established = [this, source_name] (node_id id, std::string const & name
+            , bool is_gateway)
         {
-            this->on_channel_established(source_name, node_name_by_id(id), is_gateway);
+            this->on_channel_established(source_name, name, is_gateway);
         };
 
         ptr->on_channel_destroyed = [this, source_name] (node_id id)

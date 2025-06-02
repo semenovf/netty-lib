@@ -78,8 +78,8 @@ public:
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     // Notify when connection established with the remote node
-    mutable callback_t<void (node_id, bool)> on_channel_established
-        = [] (node_id, bool /*is_gateway*/) {};
+    mutable callback_t<void (node_id, std::string const &, bool)> on_channel_established
+        = [] (node_id, std::string const & /*name*/, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     mutable callback_t<void (node_id)> on_channel_destroyed = [] (node_id) {};
@@ -460,8 +460,9 @@ public:
             this->on_error(errstr);
         });
 
-        node->on_channel_established([this] (node_id id, node_index_t, bool is_gateway) {
-            this->on_channel_established(id, is_gateway);
+        node->on_channel_established([this] (node_id id, node_index_t, std::string const & name
+                , bool is_gateway) {
+            this->on_channel_established(id, name, is_gateway);
 
             // Add direct route
             auto route_added = _rtab.add_sibling(id);
