@@ -141,10 +141,10 @@ public:
     netty::callback_t<void (std::string const &, std::string const &)> on_node_expired
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
-    netty::callback_t<void (std::string const &, std::string const &, std::uint16_t
+    netty::callback_t<void (std::string const &, std::string const &, std::vector<node_id> const &
         , std::size_t, std::size_t)> on_route_ready
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/
-            , std::uint16_t /*hops*/, std::size_t /*source_index*/, std::size_t /*target_index*/) {};
+            , std::vector<node_id> const & /*gw_chain*/, std::size_t /*source_index*/, std::size_t /*target_index*/) {};
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
     netty::callback_t<void (std::string const &, std::string const &, std::size_t, std::size_t)> on_receiver_ready
@@ -236,10 +236,10 @@ private:
             this->on_node_expired(source_name, node_name_by_id(id));
         };
 
-        ptr->on_route_ready = [this, source_name] (node_id target_id, std::uint16_t hops)
+        ptr->on_route_ready = [this, source_name] (node_id target_id, std::vector<node_id> gw_chain)
         {
             auto target_name = node_name_by_id(target_id);
-            this->on_route_ready(source_name, target_name, hops, index_by_name(source_name)
+            this->on_route_ready(source_name, target_name, std::move(gw_chain), index_by_name(source_name)
                 , index_by_name(target_name));
         };
 

@@ -49,6 +49,7 @@ public:
     using node_id_traits = NodeIdTraits;
     using node_id = typename NodeIdTraits::type;
     using address_type = node_id;
+    using gateway_chain_type = typename routing_table_type::gateway_chain_type;
 
 private:
     node_id _id;
@@ -94,8 +95,7 @@ public:
     mutable callback_t<void (node_id)> on_node_expired = [] (node_id) {};
 
     // Notify when some route ready by request or response
-    mutable callback_t<void (node_id, std::uint16_t)> on_route_ready
-        = [] (node_id /*dest*/, std::uint16_t /*hops*/) {};
+    mutable callback_t<void (node_id, gateway_chain_type)> on_route_ready;
 
     // Notify when data actually sent (written into the socket)
     mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
@@ -268,6 +268,7 @@ private:
         , route_info<node_id> const & rinfo)
     {
         bool new_route_added = false;
+        std::size_t gw_chain_index {0};
         std::uint16_t hops = 0;
         node_id dest_id {};
         bool reverse_order = true;
@@ -281,7 +282,9 @@ private:
                 if (hops == 0) {
                     new_route_added = _rtab.add_sibling(dest_id);
                 } else {
-                    new_route_added = _rtab.add_route(dest_id, rinfo.route);
+                    auto res = _rtab.add_route(dest_id, rinfo.route);
+                    gw_chain_index = res.first;
+                    new_route_added = res.second;
                 }
             } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
@@ -303,7 +306,9 @@ private:
                         // already been added previously. But let it be for insurance purposes.
                         new_route_added = _rtab.add_sibling(dest_id);
                     } else {
-                        new_route_added = _rtab.add_subroute(dest_id, _id, rinfo.route);
+                        auto res = _rtab.add_subroute(dest_id, _id, rinfo.route);
+                        gw_chain_index = res.first;
+                        new_route_added = res.second;
 
                         // Receiving a route response is an indication that the responder is active.
                         _alive_controller.update_if(dest_id);
@@ -332,13 +337,18 @@ private:
             if (_id != dest_id) {
                 // Add record to the routing table about the route to the initiator
                 if (_is_gateway) {
-                    if (hops == 0)
+                    if (hops == 0) {
                         new_route_added = _rtab.add_sibling(dest_id);
-                    else
-                        new_route_added = _rtab.add_route(dest_id, rinfo.route, reverse_order);
+                    } else {
+                        auto res = _rtab.add_route(dest_id, rinfo.route, reverse_order);
+                        gw_chain_index = res.first;
+                        new_route_added = res.second;
+                    }
                 } else {
                     PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
-                    new_route_added = _rtab.add_route(dest_id, rinfo.route, reverse_order);
+                    auto res = _rtab.add_route(dest_id, rinfo.route, reverse_order);
+                    gw_chain_index = res.first;
+                    new_route_added = res.second;
                 }
 
                 // Initiate response and transmit it by the reverse route
@@ -360,15 +370,15 @@ private:
 
         if (new_route_added) {
             PFS__TERMINATE(_id != dest_id, "Fix meshnet::node_pool algorithm");
-#if NETTY__TRACE_ENABLED
-            auto gw_chain_opt = _rtab.gateway_chain_for(dest_id);
-            PFS__TERMINATE(!!gw_chain_opt, "Fix meshnet::node_pool algorithm");
-            NETTY__TRACE(TAG, "Route added: {}->{}: {}"
-                , node_id_traits::to_string(_id)
-                , node_id_traits::to_string(dest_id)
-                , to_string(*gw_chain_opt));
-#endif
-            this->on_route_ready(dest_id, hops);
+
+            if (this->on_route_ready) {
+                auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
+                this->on_route_ready(dest_id, std::move(gw_chain));
+                // NETTY__TRACE(TAG, "Route added: {}->{}: {}"
+                //         , node_id_traits::to_string(_id)
+                //         , node_id_traits::to_string(dest_id)
+                //         , to_string(*gw_chain_opt));
+            }
         }
     }
 
@@ -395,25 +405,6 @@ private:
                 enqueue_packet(gwid, 0, msg.data(), msg.size());
         });
     }
-
-#if NETTY__TRACE_ENABLED
-    std::string to_string (std::vector<node_id> const & gw_chain) const
-    {
-        if (gw_chain.empty())
-            return std::string{};
-
-        std::string result;
-
-        result += node_id_traits::to_string(gw_chain[0]);
-
-        for (std::size_t i = 1; i < gw_chain.size(); i++) {
-            result += "->";
-            result += node_id_traits::to_string(gw_chain[i]);
-        }
-
-        return result;
-    }
-#endif
 
 public:
     node_id id () const noexcept
@@ -502,8 +493,10 @@ public:
                 }
             }
 
-            if (route_added)
-                this->on_route_ready(id, 0);
+            if (route_added) {
+                if (this->on_route_ready)
+                    this->on_route_ready(id, gateway_chain_type{});
+            }
         });
 
         node->on_channel_destroyed([this] (node_id id, node_index_t /*index*/) {
@@ -768,7 +761,26 @@ public:
         return true;
     }
 
-#if NETTY__TRACE_ENABLED
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Utility methods
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    static std::string to_string (gateway_chain_type const & gw_chain)
+    {
+        if (gw_chain.empty())
+            return std::string{};
+
+        std::string result;
+
+        result += node_id_traits::to_string(gw_chain[0]);
+
+        for (std::size_t i = 1; i < gw_chain.size(); i++) {
+            result += "->";
+            result += node_id_traits::to_string(gw_chain[i]);
+        }
+
+        return result;
+    }
+
     /**
      * Dump routing table as string vector.
      *
@@ -781,12 +793,11 @@ public:
 
         _rtab.foreach_route([this, & result] (node_id dest_id, std::vector<node_id> const & gw_chain) {
             result.push_back(fmt::format("{}: {}"
-                , node_id_traits::to_string(dest_id), this->to_string(gw_chain)));
+                , node_id_traits::to_string(dest_id), to_string(gw_chain)));
         });
 
         return result;
     }
-#endif
 };
 
 }} // namespace patterns::meshnet

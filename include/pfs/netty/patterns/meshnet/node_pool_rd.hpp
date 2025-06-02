@@ -28,6 +28,7 @@ class node_pool_rd
 public:
     using node_id = typename transport_type::node_id;
     using message_id = typename DeliveryManager::message_id;
+    using gateway_chain_type = typename transport_type::gateway_chain_type;
 
 private:
     transport_type _t;
@@ -70,8 +71,8 @@ public:
     /**
      * Notify when some route ready by request or response.
      */
-    mutable callback_t<void (node_id, std::uint16_t)> on_route_ready
-        = [] (node_id /*dest*/, std::uint16_t /*hops*/) {};
+    mutable callback_t<void (node_id, gateway_chain_type)> on_route_ready
+        = [] (node_id /*dest*/, gateway_chain_type /*gw_chain*/) {};
 
     /**
      * Notify when data actually sent (written into the socket).
@@ -141,9 +142,9 @@ public:
             this->on_node_expired(id);
         };
 
-        _t.on_route_ready = [this] (node_id dest_id, std::uint16_t hops)
+        _t.on_route_ready = [this] (node_id dest_id, gateway_chain_type gw_chain)
         {
-            this->on_route_ready(dest_id, hops);
+            this->on_route_ready(dest_id, std::move(gw_chain));
         };
 
         _t.on_bytes_written = [this] (node_id id, std::uint64_t n)
@@ -298,7 +299,6 @@ public:
                 std::this_thread::sleep_for(countdown_timer.remain());
         }
     }
-
 };
 
 }} // namespace patterns::meshnet

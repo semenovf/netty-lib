@@ -144,9 +144,11 @@ auto on_node_expired = [] (std::string const & source_name, std::string const & 
     LOGD(TAG, "{}: Node expired: {}", source_name, target_name);
 };
 
-auto on_route_ready = [] (std::string const & source_name, std::string const & target_name, std::uint16_t hops
-    , std::size_t source_index, std::size_t target_index)
+auto on_route_ready = [] (std::string const & source_name, std::string const & target_name
+    , std::vector<node_id> gw_chain, std::size_t source_index, std::size_t target_index)
 {
+    auto hops = gw_chain.size();
+
     if (hops == 0) {
         // Gateway is this node when direct access
         LOGD(TAG, "{}: " LGREEN "Route ready" END_COLOR ": {}->{} (" LGREEN "direct access" END_COLOR ")"

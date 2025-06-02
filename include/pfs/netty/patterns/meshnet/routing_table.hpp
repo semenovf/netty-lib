@@ -15,6 +15,7 @@
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -68,7 +69,7 @@ private:
     /**
      * Find route for node @a id with minimim hops (number of gateways).
      */
-    std::pair<bool, std::size_t> find_route_for (node_id id) const
+    std::pair<bool, std::size_t> find_optimal_route_for (node_id id) const
     {
         auto min_hops = std::numeric_limits<std::size_t>::max();
         auto res = _route_map.equal_range(id);
@@ -99,7 +100,8 @@ private:
         return std::make_pair(true, index);
     }
 
-    bool add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
+    std::pair<std::size_t, bool>
+    add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
     {
         PFS__TERMINATE(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
 
@@ -111,28 +113,26 @@ private:
             auto index = _routes.size() - 1;
 
             _route_map.insert({dest_id, index});
-            return true;
-        } else {
-            // Check if record for destination node already exists
-            auto range = _route_map.equal_range(dest_id);
-
-            if (range.first != range.second) {
-                // Check if route to destination already exists
-                for (auto pos = range.first; pos != range.second; ++pos) {
-                    auto & tmp = _routes[pos->second];
-
-                    // Already exists
-                    if (tmp == gw_chain)
-                        return false;
-                }
-            }
-
-            auto index = res.second;
-            _route_map.insert({dest_id, index});
-            return true;
+            return std::make_pair(std::size_t{index + 1}, true);
         }
 
-        return false;
+        // Check if record for destination node already exists
+        auto range = _route_map.equal_range(dest_id);
+
+        if (range.first != range.second) {
+            // Check if route to destination already exists
+            for (auto pos = range.first; pos != range.second; ++pos) {
+                auto & tmp = _routes[pos->second];
+
+                // Already exists
+                if (tmp == gw_chain)
+                    return std::make_pair(std::size_t{pos->second + 1}, false);
+            }
+        }
+
+        auto index = res.second;
+        _route_map.insert({dest_id, index});
+        return std::make_pair(std::size_t{index + 1}, true);
     }
 
     bool is_sibling (node_id id) const
@@ -192,12 +192,15 @@ public:
     /**
      * Adds new route to the destination node @a dest.
      *
-     * @return @c true if new route added or @c false if route already exists
+     * @return A pair consisting of the index of a newly added route (or the index of a route that
+     *         already exists) and a bool value set to @c true if and only if route adding took
+     *         place. Zero index indicates sibling node.
      */
-    bool add_route (node_id dest, gateway_chain_type const & gw_chain, bool reverse_order = false)
+    std::pair<std::size_t, bool>
+    add_route (node_id dest, gateway_chain_type const & gw_chain, bool reverse_order = false)
     {
         if (is_sibling(dest))
-            return false;
+            return std::make_pair(std::size_t{0}, false);
 
         if (reverse_order) {
             auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
@@ -210,13 +213,13 @@ public:
     /**
      * Adds new route to the destination node @a dest constructed from sub-route.
      *
-     * @return @c true if new route added or @c false if route already exists
+     * @return See add_route.
      */
-    bool add_subroute (node_id dest, node_id gw, gateway_chain_type const & gw_chain
-        , bool reverse_order = false)
+    std::pair<std::size_t, bool>
+    add_subroute (node_id dest, node_id gw, gateway_chain_type const & gw_chain, bool reverse_order = false)
     {
         if (is_sibling(dest))
-            return false;
+            return std::make_pair(std::size_t{0}, false);
 
         if (reverse_order) {
             auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
@@ -295,7 +298,7 @@ public:
         if (is_sibling(id))
             return id;
 
-        auto res = find_route_for(id);
+        auto res = find_optimal_route_for(id);
 
         if (!res.first)
             return pfs::nullopt;
@@ -306,14 +309,23 @@ public:
         return gw_chain[0];
     }
 
-    pfs::optional<gateway_chain_type> gateway_chain_for (node_id id)
+    /**
+     * Return gateway chain by index (first element of the value returned by add_route or add_subroute).
+     * Zero index indicates sibling node, so result is empty chain.
+     */
+    gateway_chain_type gateway_chain_by_index (size_t index)
     {
-        auto res = find_route_for(id);
+        if (index == 0)
+            return gateway_chain_type{};
 
-        if (!res.first)
-            return pfs::nullopt;
+        if (index > _routes.size()) {
+            throw error {
+                  std::make_error_code(std::errc::invalid_argument)
+                , tr::f_("gateway chain index is out of bounds")
+            };
+        }
 
-        return _routes[res.second];
+        return _routes[index - 1];
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////

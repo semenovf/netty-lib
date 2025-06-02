@@ -44,8 +44,8 @@ TEST_CASE("sync delivery") {
 
     mesh_network_t net { "a", "b", "c", "A0", "C0" };
 
-    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name, std::uint16_t hops
-        , std::size_t source_index, std::size_t target_index)
+    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
+        , std::vector<node_id> /*gw_chain*/, std::size_t source_index, std::size_t target_index)
     {
         g_route_matrix.wlock()->set(source_index, target_index, true);
     };
