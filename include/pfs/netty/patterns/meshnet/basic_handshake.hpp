@@ -43,9 +43,8 @@ protected:
 public:
     mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
 
-    mutable callback_t<void (node_id, socket_id, std::string const &, bool
-        , handshake_result_enum)> on_completed = [] (node_id, socket_id
-        , std::string const & /*name*/, bool /*is_gateway*/, handshake_result_enum) {};
+    mutable callback_t<void (node_id, socket_id, bool, handshake_result_enum)> on_completed
+        = [] (node_id, socket_id, bool /*is_gateway*/, handshake_result_enum) {};
 
 protected:
     basic_handshake (Node * node, channel_collection_type * channels)
@@ -60,7 +59,6 @@ protected:
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat};
 
         pkt.id = _node->id();
-        pkt.name = _node->name();
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
@@ -75,7 +73,6 @@ protected:
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, accepted};
 
         pkt.id = _node->id();
-        pkt.name = _node->name();
         pkt.serialize(out);
 
         _node->enqueue_private(sid, 0, out.data(), out.size());

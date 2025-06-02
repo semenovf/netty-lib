@@ -44,8 +44,8 @@ public:
     /**
      * Notify when connection established with the remote node.
      */
-    mutable callback_t<void (node_id, std::string const &, bool)> on_channel_established
-        = [] (node_id, std::string const & /*name*/, bool /*is_gateway*/) {};
+    mutable callback_t<void (node_id, bool)> on_channel_established
+        = [] (node_id, bool /*is_gateway*/) {};
 
     /**
      * Notify when the channel is destroyed with the remote node.
@@ -55,8 +55,8 @@ public:
     /**
      * Notify when a node with identical ID is detected.
      */
-    mutable callback_t<void (node_id, std::string const &, socket4_addr)> on_duplicated
-        = [] (node_id, std::string const & /*name*/, socket4_addr) {};
+    mutable callback_t<void (node_id, socket4_addr)> on_duplicated
+        = [] (node_id, socket4_addr) {};
 
     /**
      * Notify when node alive status changed.
@@ -105,8 +105,8 @@ public:
         = [] (node_id, std::vector<char>) {};
 
 public:
-    node_pool_rd (node_id id, std::string name, bool is_gateway = false)
-        : _t(id, name, is_gateway)
+    node_pool_rd (node_id id, bool is_gateway = false)
+        : _t(id, is_gateway)
         , _dm(_t)
     {
         _t.on_error = _dm.on_error = [this] (std::string const & errstr)
@@ -117,9 +117,9 @@ public:
         //
         // Transport specific callbacks.
         //
-        _t.on_channel_established = [this] (node_id id, std::string const & name, bool is_gateway)
+        _t.on_channel_established = [this] (node_id id, bool is_gateway)
         {
-            this->on_channel_established(id, name, is_gateway);
+            this->on_channel_established(id, is_gateway);
         };
 
         _t.on_channel_destroyed = [this] (node_id id)
@@ -127,9 +127,9 @@ public:
             this->on_channel_destroyed(id);
         };
 
-        _t.on_duplicated = [this] (node_id id, std::string const & name, socket4_addr saddr)
+        _t.on_duplicated = [this] (node_id id, socket4_addr saddr)
         {
-            this->on_duplicated(id, name, saddr);
+            this->on_duplicated(id, saddr);
         };
 
         _t.on_node_alive = [this] (node_id id)

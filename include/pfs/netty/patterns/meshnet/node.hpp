@@ -52,11 +52,10 @@ namespace meshnet {
  * using node_t = netty::patterns::meshnet::node<...>;
  *
  * node_t::node_id id = <Node-ID>;
- * std::string name = <Node-Name>;
  * bool is_gateway = <true | false>;
  *
  * // Define instance
- * node_t node { id, std::move(name), is_gateway };
+ * node_t node { id, is_gateway };
  *
  * // Assign callbacks
  * node.on_error = ...;
@@ -128,9 +127,6 @@ private:
     // Unique node identifier
     node_id _id;
 
-    // User friendly node identifier, default value is stringified representation of node identifier
-    std::string _name;
-
     channel_collection_type _channels;
 
     listener_pool_type   _listener_pool;
@@ -162,16 +158,16 @@ public: // callbacks
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     // Notify when connection established with the remote node
-    mutable callback_t<void (node_id, node_index_t, std::string, bool)> on_channel_established
-        = [] (node_id, node_index_t, std::string const & /*name*/, bool /*is_gateway*/) {};
+    mutable callback_t<void (node_id, node_index_t, bool)> on_channel_established
+        = [] (node_id, node_index_t, bool /*is_gateway*/) {};
 
     // Notify when the channel is destroyed with the remote node
     mutable callback_t<void (node_id, node_index_t)> on_channel_destroyed
         = [] (node_id, node_index_t) {};
 
     // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id, node_index_t, std::string const &, socket4_addr)> on_duplicated
-        = [] (node_id, node_index_t, std::string const & /*name*/, socket4_addr) {};
+    mutable callback_t<void (node_id, node_index_t, socket4_addr)> on_duplicated
+        = [] (node_id, node_index_t, socket4_addr) {};
 
     // Notify when data actually sent (written into the socket)
     mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
@@ -211,18 +207,13 @@ public: // callbacks
             , std::vector<char> /*packet*/) {};
 
 public:
-    node (node_id id, std::string name, bool is_gateway = false)
+    node (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
         , _handshake_controller(this, & _channels)
         , _heartbeat_controller(this)
         , _input_controller(this)
     {
-        if (name.empty())
-            _name = node_id_traits::to_string(id);
-        else
-            _name = std::move(name);
-
         _channels.on_close_socket = [this] (socket_id sid)
         {
             close_socket(sid);
@@ -235,7 +226,7 @@ public:
 
         _listener_pool.on_accepted = [this] (socket_type && sock)
         {
-            NETTY__TRACE(TAG, "{}: socket accepted: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
+            NETTY__TRACE(TAG, "socket accepted: #{}: {}", sock.id(), to_string(sock.saddr()));
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_accepted(std::move(sock));
@@ -248,7 +239,7 @@ public:
 
         _connecting_pool.on_connected = [this] (socket_type && sock)
         {
-            NETTY__TRACE(TAG, "{}: socket connected: #{}: {}", _name, sock.id(), to_string(sock.saddr()));
+            NETTY__TRACE(TAG, "socket connected: #{}: {}", sock.id(), to_string(sock.saddr()));
 
             bool behind_nat = false;
 
@@ -282,7 +273,7 @@ public:
 
         _reader_pool.on_disconnected = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "{}: reader socket disconnected: #{}", _name, sid);
+            NETTY__TRACE(TAG, "reader socket disconnected: #{}", sid);
 
             // schedule_reconnection(sid); // FIXME When need reconnection?
 
@@ -310,7 +301,7 @@ public:
 
         _writer_pool.on_disconnected = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "{}: writer socket disconnected: #{}", _name, sid);
+            NETTY__TRACE(TAG, "writer socket disconnected: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -329,11 +320,11 @@ public:
 
         _handshake_controller.on_expired = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "{}: handshake expired for socket: #{}", _name, sid);
+            NETTY__TRACE(TAG, "handshake expired for socket: #{}", sid);
         };
 
-        _handshake_controller.on_completed = [this] (node_id id, socket_id sid, std::string const & name
-            , bool is_gateway, handshake_result_enum status)
+        _handshake_controller.on_completed = [this] (node_id id, socket_id sid, bool is_gateway
+            , handshake_result_enum status)
         {
             switch (status) {
                 case handshake_result_enum::success: {
@@ -343,10 +334,9 @@ public:
 
                     _heartbeat_controller.update(*writer_sid);
 
-                    NETTY__TRACE(TAG, "{}: successful handshake on socket: #{} with: {}"
-                        , _name, sid, name);
+                    NETTY__TRACE(TAG, "successful handshake on socket: #{}", sid);
 
-                    this->on_channel_established(id, _index, name, is_gateway);
+                    this->on_channel_established(id, _index, is_gateway);
                     break;
                 }
 
@@ -354,15 +344,14 @@ public:
                     auto psock = _socket_pool.locate(sid);
                     PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
 
-                    this->on_duplicated(id, _index, name, psock->saddr());
+                    this->on_duplicated(id, _index, psock->saddr());
 
                     close_socket(sid);
                     break;
                 }
 
                 case handshake_result_enum::reject:
-                    NETTY__TRACE(TAG, "{}: closing socket by reject reason while handshaking: #{}"
-                        , _name, sid);
+                    NETTY__TRACE(TAG, "closing socket by reject reason while handshaking: #{}", sid);
                     close_socket(sid);
                     break;
 
@@ -373,12 +362,12 @@ public:
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
-            NETTY__TRACE(TAG, "{}: socket heartbeat timeout exceeded: #{}", _name, sid);
+            NETTY__TRACE(TAG, "socket heartbeat timeout exceeded: #{}", sid);
             schedule_reconnection(sid);
         };
 
-        NETTY__TRACE(TAG, "{}: node constructed (gateway={}, id={})", _name, _is_gateway
-            , node_id_traits::to_string(_id));
+        NETTY__TRACE(TAG, "node constructed (id={}, gateway={})", node_id_traits::to_string(_id)
+            , _is_gateway);
     }
 
     node (node const &) = delete;
@@ -389,23 +378,13 @@ public:
     ~node ()
     {
         clear_channels();
-        NETTY__TRACE(TAG, "{}: node destroyed", _name);
+        NETTY__TRACE(TAG, "node destroyed: {}", node_id_traits::to_string(_id));
     }
 
 public:
     node_id id () const noexcept
     {
         return _id;
-    }
-
-    void set_name (std::string const & name)
-    {
-        _name = name;
-    }
-
-    std::string const & name () const noexcept
-    {
-        return _name;
     }
 
     bool is_gateway () const noexcept
@@ -659,14 +638,13 @@ private:
             if (!pos->second.required()) {
                 _reconn_policies.erase(pos);
                 reconnecting = false;
-                NETTY__TRACE(TAG, "{}: stopped reconnection to: {}", _name, to_string(saddr));
+                NETTY__TRACE(TAG, "stopped reconnection to: {}", to_string(saddr));
             }
         }
 
         if (reconnecting) {
             auto reconn_timeout = pos->second.fetch_timeout();
-            NETTY__TRACE(TAG, "{}: reconnecting to: {} after {}", _name, to_string(saddr)
-                , reconn_timeout);
+            NETTY__TRACE(TAG, "reconnecting to: {} after {}", to_string(saddr), reconn_timeout);
             _connecting_pool.connect_timeout(reconn_timeout, saddr);
         }
     }
@@ -779,11 +757,6 @@ public: // node_interface
             return Node::id();
         }
 
-        std::string name () const noexcept override
-        {
-            return Node::name();
-        }
-
         void set_index (node_index_t index) noexcept override
         {
             Node::set_index(index);
@@ -869,8 +842,7 @@ public: // node_interface
             Node::on_error = std::move(cb);
         }
 
-        void on_channel_established (callback_t<void (node_id, node_index_t, std::string const &
-            , bool /*is_gateway*/)> cb) override
+        void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)> cb) override
         {
             Node::on_channel_established = std::move(cb);
         }
@@ -880,8 +852,7 @@ public: // node_interface
             Node::on_channel_destroyed = std::move(cb);
         }
 
-        void on_duplicated (callback_t<void (node_id, node_index_t, std::string const &
-            , socket4_addr)> cb) override
+        void on_duplicated (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
         {
             Node::on_duplicated = std::move(cb);
         }

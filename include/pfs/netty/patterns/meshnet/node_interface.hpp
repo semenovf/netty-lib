@@ -32,7 +32,6 @@ public:
 
 public:
     virtual node_id id () const noexcept = 0;
-    virtual std::string name () const noexcept = 0;
 
     virtual void set_index (node_index_t index) noexcept = 0;
     virtual node_index_t index () const noexcept = 0;
@@ -51,10 +50,9 @@ public:
     // Callback assign methods
     //
     virtual void on_error (callback_t<void (std::string const &)>) = 0;
-    virtual void on_channel_established (callback_t<void (node_id, node_index_t
-        , std::string const & /*name*/, bool /*is_gateway*/)>) = 0;
+    virtual void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)>) = 0;
     virtual void on_channel_destroyed (callback_t<void (node_id, node_index_t)>) = 0;
-    virtual void on_duplicated (callback_t<void (node_id, node_index_t, std::string const &, socket4_addr)>) = 0;
+    virtual void on_duplicated (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
     virtual void on_bytes_written (callback_t<void (node_id, std::uint64_t)>) = 0;
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
     virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;

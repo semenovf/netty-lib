@@ -41,11 +41,11 @@ public:
 
                 // Check Node ID duplication. Requester must be an initiator of the socket closing.
                 if (this->_node->id() == pkt.id) {
-                    NETTY__TRACE("[handshake]", "{}: DUPLICATED: sid={}", pkt.name, sid)
+                    NETTY__TRACE("[handshake]", "DUPLICATED: sid={}", sid)
                     this->_channels->close_channel(sid);
-                    this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::duplicated);
+                    this->on_completed(pkt.id, sid, pkt.is_gateway(), handshake_result_enum::duplicated);
                 } else {
-                    NETTY__TRACE("[handshake]", "{}: RESPONSE: sid={}", pkt.name, sid)
+                    NETTY__TRACE("[handshake]", "RESPONSE: sid={}", sid)
 
                     // Response received by connected socket (writer)
                     auto success = this->_channels->insert_writer(pkt.id, sid);
@@ -53,7 +53,7 @@ public:
 
                     // Check if reader and writer handshaked
                     if (this->_channels->channel_complete_for(pkt.id))
-                        this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
+                        this->on_completed(pkt.id, sid, pkt.is_gateway(), handshake_result_enum::success);
                 }
             } else {
                 // The socket is already expired
@@ -61,7 +61,7 @@ public:
                 PFS__ASSERT(false, "socket must be closed by handshake `expired` callback");
             }
         } else { // Request received
-            NETTY__TRACE("[handshake]", "{}: REQUEST: sid={}", pkt.name, sid)
+            NETTY__TRACE("[handshake]", "REQUEST: sid={}", sid)
 
             // Send response
             this->enqueue(sid, packet_way_enum::response);
@@ -72,7 +72,7 @@ public:
 
             // Check if reader and writer handshaked
             if (this->_channels->channel_complete_for(pkt.id))
-                this->_on_completed(pkt.id, sid, pkt.name, pkt.is_gateway(), handshake_result_enum::success);
+                this->on_completed(pkt.id, sid, pkt.is_gateway(), handshake_result_enum::success);
         }
     }
 };

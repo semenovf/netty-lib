@@ -206,7 +206,6 @@ class handshake_packet: public header
 {
 public:
     NodeId id;
-    std::string name;
 
 public:
     /**
@@ -248,8 +247,7 @@ public:
     handshake_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        std::uint16_t name_sz = 0;
-        in >> id >> std::make_pair(& name_sz, & name);
+        in >> id;
     }
 
 public:
@@ -277,7 +275,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << id << pfs::numeric_cast<std::uint16_t>(name.size()) << name;
+        out << id;
     }
 };
 

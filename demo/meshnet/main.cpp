@@ -48,7 +48,7 @@ static void print_usage (pfs::filesystem::path const & programName
 
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
-        "{0} [--reliable] [--name=NODE_NAME] [--id=NODE_ID] [--gw]\n"
+        "{0} [--reliable] [--id=NODE_ID] [--gw]\n"
         "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}...\n\n"
 
         "Options:\n\n"
@@ -56,8 +56,6 @@ static void print_usage (pfs::filesystem::path const & programName
         "\tPrint this help and exit\n"
         "--reliable\n"
         "\tUse reliable implementation of node pool\n"
-        "--name=NODE_NAME\n"
-        "\tThis node name\n"
         "--id=NODE_ID\n"
         "\tThis node identifier\n"
         "--gw\n"
@@ -81,20 +79,19 @@ static void print_usage (pfs::filesystem::path const & programName
 void dumb ()
 {
     auto id = pfs::generate_uuid();
-    std::string name = "node";
     bool is_gateway = false;
 
-    bare_meshnet_node_t {id, name, is_gateway};
-    nopriority_meshnet_node_t {id, name, is_gateway};
-    priority_meshnet_node_t {id, name, is_gateway};
+    bare_meshnet_node_t {id, is_gateway};
+    nopriority_meshnet_node_t {id, is_gateway};
+    priority_meshnet_node_t {id, is_gateway};
 }
 
 template <typename NodePool>
 void run (NodePool & node_pool, std::vector<node_item> & nodes)
 {
-    node_pool.on_channel_established = [] (node_t::node_id id, std::string const & name, bool is_gateway) {
+    node_pool.on_channel_established = [] (node_t::node_id id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
-        LOGD(TAG, "Channel established with {}: {} ({})", node_type, name, node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
     };
 
     node_pool.on_channel_destroyed = [] (node_t::node_id id) {
@@ -135,7 +132,6 @@ int main (int argc, char * argv[])
 
     bool is_reliable_impl = false;
     auto id = pfs::generate_uuid();
-    std::string name;
     bool is_gateway = false;
     std::vector<node_item> nodes;
 
@@ -154,12 +150,6 @@ int main (int argc, char * argv[])
                 return EXIT_SUCCESS;
             } else if (x.is_option("reliable")) {
                 is_reliable_impl = true;
-            } else if (x.is_option("name")) {
-                if (x.has_arg()) {
-                    name = std::string(x.arg().data(), x.arg().size());
-                } else {
-                    expectedArgError = true;
-                }
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
                     auto node_id_opt = pfs::parse_universal_id(x.arg().data(), x.arg().size());
@@ -242,10 +232,10 @@ int main (int argc, char * argv[])
     netty::startup_guard netty_startup;
 
     if (is_reliable_impl) {
-        reliable_node_pool_t node_pool {id, name, is_gateway};
+        reliable_node_pool_t node_pool {id, is_gateway};
         run(node_pool, nodes);
     } else {
-        node_pool_t node_pool {id, name, is_gateway};
+        node_pool_t node_pool {id, is_gateway};
         run(node_pool, nodes);
     }
 

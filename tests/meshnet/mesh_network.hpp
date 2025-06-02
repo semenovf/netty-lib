@@ -203,17 +203,16 @@ private:
 
         netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, p->port};
 
-        auto ptr = std::make_unique<NodePool>(p->id, p->name, p->is_gateway);
+        auto ptr = std::make_unique<NodePool>(p->id, p->is_gateway);
 
         ptr->on_error = [] (std::string const & errstr)
         {
             LOGE(TAG, "{}", errstr);
         };
 
-        ptr->on_channel_established = [this, source_name] (node_id id, std::string const & name
-            , bool is_gateway)
+        ptr->on_channel_established = [this, source_name] (node_id id, bool is_gateway)
         {
-            this->on_channel_established(source_name, name, is_gateway);
+            this->on_channel_established(source_name, node_name_by_id(id), is_gateway);
         };
 
         ptr->on_channel_destroyed = [this, source_name] (node_id id)
@@ -221,8 +220,7 @@ private:
             this->on_channel_destroyed(source_name, node_name_by_id(id));
         };
 
-        ptr->on_duplicated = [this, source_name] (node_id id, std::string const & /*name*/
-            , netty::socket4_addr saddr)
+        ptr->on_duplicated = [this, source_name] (node_id id, netty::socket4_addr saddr)
         {
             this->on_duplicated(source_name, node_name_by_id(id), saddr);
         };
@@ -358,10 +356,10 @@ public:
         for (auto & x: _node_pools) {
             auto ptr = & *x.second.node_pool_ptr;
             std::thread th {
-                [ptr] () {
-                    LOGD(TAG, "{}: thread started", ptr->name());
+                [this, ptr] () {
+                    LOGD(TAG, "{}: thread started", node_name_by_id(ptr->id()));
                     ptr->run();
-                    LOGD(TAG, "{}: thread finished", ptr->name());
+                    LOGD(TAG, "{}: thread finished", node_name_by_id(ptr->id()));
                 }
             };
 

@@ -30,8 +30,7 @@ public:
 
 public:
     mutable callback_t<void (socket_id)> on_expired;
-    mutable callback_t<void (node_id, socket_id, std::string const &, bool
-        , handshake_result_enum)> on_completed;
+    mutable callback_t<void (node_id, socket_id, bool, handshake_result_enum)> on_completed;
 
     void start (socket_id, bool) {}
     void cancel (socket_id) {}
