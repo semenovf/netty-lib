@@ -22,20 +22,20 @@ class reconnection_policy
 public:
     bool required () const noexcept
     {
-        return _attempts <= 45;
+        return _attempts <= 30;
     }
 
     std::chrono::seconds fetch_timeout () noexcept
     {
         _attempts++;
 
-        if (_attempts > 45)
+        if (_attempts > 30)
             return std::chrono::seconds{0};
 
-        if (_attempts > 15)
+        if (_attempts > 20)
             return std::chrono::seconds{30};
 
-        if (_attempts > 5)
+        if (_attempts > 10)
             return std::chrono::seconds{10};
 
         return std::chrono::seconds{5};

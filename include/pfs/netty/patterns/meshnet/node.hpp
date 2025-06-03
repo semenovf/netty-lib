@@ -264,23 +264,13 @@ public:
         _reader_pool.on_failure = [this] (socket_id sid, netty::error const & err)
         {
             this->on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
-
-            auto id_opt = _channels.close_channel(sid);
-
-            if (id_opt)
-                this->on_channel_destroyed(*id_opt, _index);
+            schedule_reconnection(sid);
         };
 
         _reader_pool.on_disconnected = [this] (socket_id sid)
         {
             NETTY__TRACE(TAG, "reader socket disconnected: #{}", sid);
-
-            // schedule_reconnection(sid); // FIXME When need reconnection?
-
-            auto id_opt = _channels.close_channel(sid);
-
-            if (id_opt)
-                this->on_channel_destroyed(*id_opt, _index);
+            schedule_reconnection(sid);
         };
 
         _reader_pool.on_data_ready = [this] (socket_id sid, std::vector<char> && data)
