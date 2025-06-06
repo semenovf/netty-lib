@@ -22,7 +22,6 @@
 #include "../../writer_pool.hpp"
 #include "alive_info.hpp"
 #include "channel_map.hpp"
-#include "handshake_result.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
 #include "protocol.hpp"
@@ -69,7 +68,8 @@ namespace meshnet {
  *
  * @endcode
  */
-template <typename ChannelCollection
+template <typename NodeId
+    , typename Socket
     , typename Listener
     , typename ConnectingPoller
     , typename ListenerPoller
@@ -88,11 +88,9 @@ class node
     friend class HeartbeatController<node>;
     friend /*class */InputController<node>;
 
-public:
-    using channel_collection_type = ChannelCollection;
-
 private:
-    using node_class = node<ChannelCollection
+    using node_class = node<NodeId
+        , Socket
         , Listener
         , ConnectingPoller
         , ListenerPoller
@@ -106,8 +104,8 @@ private:
         , HeartbeatController
         , InputController>;
 
+    using socket_type = Socket;
     using listener_type = Listener;
-    using socket_type = typename channel_collection_type::socket_type;
     using socket_pool_type = netty::socket_pool<socket_type>;
     using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
@@ -120,8 +118,10 @@ private:
 public:
     using socket_id = typename socket_type::socket_id;
     using serializer_traits = SerializerTraits;
-    using node_id_traits = typename channel_collection_type::node_id_traits;
-    using node_id = typename node_id_traits::type;
+    using node_id = NodeId;
+
+private:
+    using channel_collection_type = channel_map<node_id, socket_id>;
 
 private:
     // Unique node identifier
@@ -166,7 +166,7 @@ public: // callbacks
         = [] (node_id, node_index_t) {};
 
     // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id, node_index_t, socket4_addr)> on_duplicated
+    mutable callback_t<void (node_id, node_index_t, socket4_addr)> on_duplicate_id
         = [] (node_id, node_index_t, socket4_addr) {};
 
     // Notify when data actually sent (written into the socket)
@@ -210,7 +210,7 @@ public:
     node (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
-        , _handshake_controller(this, & _channels)
+        , _handshake_controller(this)
         , _heartbeat_controller(this)
         , _input_controller(this)
     {
@@ -311,44 +311,41 @@ public:
         _handshake_controller.on_expired = [this] (socket_id sid)
         {
             NETTY__TRACE(TAG, "handshake expired for socket: #{}", sid);
+            schedule_reconnection(sid);
         };
 
-        _handshake_controller.on_completed = [this] (node_id id, socket_id sid, bool is_gateway
-            , handshake_result_enum status)
+        _handshake_controller.enqueue_packet = [this] (socket_id sid, std::vector<char> && data)
         {
-            switch (status) {
-                case handshake_result_enum::success: {
-                    socket_id const * writer_sid = _channels.locate_writer(id);
+            enqueue_private(sid, 0, std::move(data));
+        };
 
-                    PFS__TERMINATE(writer_sid != nullptr, "Fix meshnet::node algorithm");
+        _handshake_controller.on_completed = [this] (node_id id, socket_id reader_sid
+            , socket_id writer_sid, bool is_gateway)
+        {
+            auto success = _channels.insert_reader(id, reader_sid);
+            success = success && _channels.insert_writer(id, writer_sid);
 
-                    _heartbeat_controller.update(*writer_sid);
+            PFS__ASSERT(success, "Fix handshake algorithm");
 
-                    NETTY__TRACE(TAG, "successful handshake on socket: #{}", sid);
+            _heartbeat_controller.update(writer_sid);
 
-                    this->on_channel_established(id, _index, is_gateway);
-                    break;
-                }
+            this->on_channel_established(id, _index, is_gateway);
+        };
 
-                case handshake_result_enum::duplicated: {
-                    auto psock = _socket_pool.locate(sid);
-                    PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
+        _handshake_controller.on_duplicate_id = [this] (node_id id, socket_id sid, bool force_closing)
+        {
+            auto psock = _socket_pool.locate(sid);
+            PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
+            this->on_duplicate_id(id, _index, psock->saddr());
 
-                    this->on_duplicated(id, _index, psock->saddr());
+            if (force_closing)
+                close_socket(sid);
+        };
 
-                    close_socket(sid);
-                    break;
-                }
-
-                case handshake_result_enum::reject:
-                    NETTY__TRACE(TAG, "closing socket by reject reason while handshaking: #{}", sid);
-                    close_socket(sid);
-                    break;
-
-                default:
-                    PFS__TERMINATE(false, "Fix meshnet::node algorithm");
-                    break;
-            }
+        _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
+        {
+            NETTY__TRACE(TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
+            close_socket(sid);
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
@@ -356,7 +353,7 @@ public:
             schedule_reconnection(sid);
         };
 
-        NETTY__TRACE(TAG, "node constructed (id={}, gateway={})", node_id_traits::to_string(_id)
+        NETTY__TRACE(TAG, "node constructed (id={}, gateway={})", to_string(_id)
             , _is_gateway);
     }
 
@@ -368,7 +365,7 @@ public:
     ~node ()
     {
         clear_channels();
-        NETTY__TRACE(TAG, "node destroyed: {}", node_id_traits::to_string(_id));
+        NETTY__TRACE(TAG, "node destroyed: {}", to_string(_id));
     }
 
 public:
@@ -449,28 +446,13 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send message not found: {}"
-            , node_id_traits::to_string(id)));
+        on_error(tr::f_("channel for send message not found: {}", to_string(id)));
         return false;
     }
 
-    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data)
     {
-        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
-
-        auto sid_ptr = _channels.locate_writer(id);
-
-        if (sid_ptr != nullptr) {
-            auto out = serializer_traits::make_serializer();
-            ddata_packet pkt {force_checksum};
-            pkt.serialize(out, std::move(data));
-            enqueue_private(*sid_ptr, priority, out.take());
-            return true;
-        }
-
-        on_error(tr::f_("channel for send message not found: {}"
-            , node_id_traits::to_string(id)));
-        return false;
+        return enqueue(id, priority, force_checksum, data.data(), data.size());
     }
 
     bool enqueue (node_id id, int priority, char const * data, std::size_t len)
@@ -497,7 +479,7 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send packet not found: {}", node_id_traits::to_string(id)));
+        on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
         return false;
     }
 
@@ -515,7 +497,7 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send packet not found: {}", node_id_traits::to_string(id)));
+        on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
         return false;
     }
 
@@ -722,14 +704,14 @@ public: // Below methods are for internal use only
         _writer_pool.enqueue(sid, priority, data, len);
     }
 
-    void enqueue_private (socket_id sid, int priority, std::vector<char> && data)
+    void enqueue_private (socket_id sid, int priority, std::vector<char> data)
     {
         _writer_pool.enqueue(sid, priority, std::move(data));
     }
 
 public: // node_interface
     template <class Node>
-    class node_interface_impl: public node_interface<node_id_traits>, protected Node
+    class node_interface_impl: public node_interface<node_id>, protected Node
     {
         using node_id = typename Node::node_id;
 
@@ -783,7 +765,7 @@ public: // node_interface
             Node::enqueue(id, priority, force_checksum, data, len);
         }
 
-        void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data) override
+        void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data) override
         {
             Node::enqueue(id, priority, force_checksum, std::move(data));
         }
@@ -803,7 +785,7 @@ public: // node_interface
             Node::clear_channels();
         }
 
-        bool enqueue_packet (node_id id, int priority, std::vector<char> && data) override
+        bool enqueue_packet (node_id id, int priority, std::vector<char> data) override
         {
             return Node::enqueue_packet(id, priority, std::move(data));
         }
@@ -842,9 +824,9 @@ public: // node_interface
             Node::on_channel_destroyed = std::move(cb);
         }
 
-        void on_duplicated (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
+        void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
         {
-            Node::on_duplicated = std::move(cb);
+            Node::on_duplicate_id = std::move(cb);
         }
 
         void on_bytes_written (callback_t<void (node_id, std::uint64_t)> cb) override
@@ -891,10 +873,10 @@ public: // node_interface
     };
 
     template <typename ...Args>
-    static std::unique_ptr<node_interface<node_id_traits>>
+    static std::unique_ptr<node_interface<node_id>>
     make_interface (Args &&... args)
     {
-        return std::unique_ptr<node_interface<node_id_traits>>(
+        return std::unique_ptr<node_interface<node_id>>(
             new node_interface_impl<node_class>(std::forward<Args>(args)...));
     }
 };

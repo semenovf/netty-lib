@@ -33,21 +33,20 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeIdTraits
+template <typename NodeId
     , typename RoutingTable
     , typename AliveController
     , typename RecursiveWriterMutex>
 class node_pool
 {
-    using node_interface_type = node_interface<NodeIdTraits>;
+    using node_interface_type = node_interface<NodeId>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
     using alive_controller_type = AliveController;
     using writer_mutex_type = RecursiveWriterMutex;
 
 public:
-    using node_id_traits = NodeIdTraits;
-    using node_id = typename NodeIdTraits::type;
+    using node_id = NodeId;
     using address_type = node_id;
     using gateway_chain_type = typename routing_table_type::gateway_chain_type;
 
@@ -82,7 +81,7 @@ public:
     mutable callback_t<void (node_id)> on_channel_destroyed = [] (node_id) {};
 
     // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id, socket4_addr)> on_duplicated
+    mutable callback_t<void (node_id, socket4_addr)> on_duplicate_id
         = [] (node_id, socket4_addr) {};
 
     // Notify when node alive status changed
@@ -185,7 +184,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send packet: {}", node_id_traits::to_string(id)));
+            this->on_error(tr::f_("node not found to send packet: {}", to_string(id)));
             return false;
         }
 
@@ -198,7 +197,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send packet: {}", node_id_traits::to_string(id)));
+            this->on_error(tr::f_("node not found to send packet: {}", to_string(id)));
             return false;
         }
 
@@ -247,8 +246,8 @@ private:
             } else {
                 // Stuck. Nothing can be done.
                 this->on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
-                    , node_id_traits::to_string(uinfo.sender_id)
-                    , node_id_traits::to_string(uinfo.receiver_id)));
+                    , to_string(uinfo.sender_id)
+                    , to_string(uinfo.receiver_id)));
             }
         }
     }
@@ -363,9 +362,7 @@ private:
             if (this->on_route_ready) {
                 auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
                 this->on_route_ready(dest_id, std::move(gw_chain));
-                // NETTY__TRACE(TAG, "Route added: {}->{}: {}"
-                //         , node_id_traits::to_string(_id)
-                //         , node_id_traits::to_string(dest_id)
+                // NETTY__TRACE(TAG, "Route added: {}->{}: {}", to_string(_id), to_string(dest_id)
                 //         , to_string(*gw_chain_opt));
             }
         }
@@ -489,8 +486,8 @@ public:
             _alive_controller.expire(id);
         });
 
-        node->on_duplicated([this](node_id id, node_index_t, socket4_addr saddr) {
-            this->on_duplicated(id, saddr);
+        node->on_duplicate_id([this](node_id id, node_index_t, socket4_addr saddr) {
+            this->on_duplicate_id(id, saddr);
         });
 
         node->on_bytes_written([this](node_id id, std::uint64_t n) {
@@ -535,8 +532,7 @@ public:
 
             // Notify sender about unreachable destination
             this->on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
-                , node_id_traits::to_string(sender_id)
-                , node_id_traits::to_string(receiver_id)));
+                , to_string(sender_id), to_string(receiver_id)));
 
             std::vector<char> unreach_pkt = _alive_controller.serialize_unreachable(_id
                 , sender_id, receiver_id);
@@ -549,8 +545,7 @@ public:
             } else {
                 // Stuck. Nothing can be done.
                 this->on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
-                    , node_id_traits::to_string(sender_id)
-                    , node_id_traits::to_string(receiver_id)));
+                    , to_string(sender_id), to_string(receiver_id)));
             }
         });
 
@@ -635,7 +630,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}", node_id_traits::to_string(id)));
+            this->on_error(tr::f_("node not found to send message: {}", to_string(id)));
             return false;
         }
 
@@ -652,7 +647,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}", node_id_traits::to_string(id)));
+            this->on_error(tr::f_("node not found to send message: {}", to_string(id)));
             return false;
         }
 
@@ -747,18 +742,18 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Utility methods
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    static std::string to_string (gateway_chain_type const & gw_chain)
+    static std::string stringify (gateway_chain_type const & gw_chain)
     {
         if (gw_chain.empty())
             return std::string{};
 
         std::string result;
 
-        result += node_id_traits::to_string(gw_chain[0]);
+        result += to_string(gw_chain[0]);
 
         for (std::size_t i = 1; i < gw_chain.size(); i++) {
             result += "->";
-            result += node_id_traits::to_string(gw_chain[i]);
+            result += to_string(gw_chain[i]);
         }
 
         return result;
@@ -775,8 +770,7 @@ public:
         std::vector<std::string> result;
 
         _rtab.foreach_route([this, & result] (node_id dest_id, std::vector<node_id> const & gw_chain) {
-            result.push_back(fmt::format("{}: {}"
-                , node_id_traits::to_string(dest_id), to_string(gw_chain)));
+            result.push_back(fmt::format("{}: {}", to_string(dest_id), stringify(gw_chain)));
         });
 
         return result;

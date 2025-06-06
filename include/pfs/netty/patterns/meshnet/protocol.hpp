@@ -13,7 +13,6 @@
 #include <pfs/crc32.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
-#include <pfs/universal_id_rep.hpp>
 #include <cstdint>
 #include <cstring>
 #include <utility>
@@ -489,12 +488,6 @@ public:
 
         header::serialize(out);
         out << std::make_pair(data, len);
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out, std::vector<char> && data)
-    {
-        serialize<Serializer>(out, data.data(), data.size());
     }
 };
 

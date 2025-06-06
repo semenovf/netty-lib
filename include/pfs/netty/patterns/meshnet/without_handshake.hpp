@@ -9,9 +9,8 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
-#include "../../socket4_addr.hpp"
-#include "handshake_result.hpp"
 #include <string>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -23,14 +22,17 @@ class without_handshake
 {
     using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
-    using channel_collection_type = typename Node::channel_collection_type;
 
 public:
-    without_handshake (Node *, channel_collection_type *) {}
+    without_handshake (Node *) {}
 
 public:
     mutable callback_t<void (socket_id)> on_expired;
-    mutable callback_t<void (node_id, socket_id, bool, handshake_result_enum)> on_completed;
+    mutable callback_t<void (socket_id, std::vector<char> &&)> enqueue_packet;
+    mutable callback_t<void (node_id, socket_id /*reader_sid*/, socket_id /*writer_sid*/
+        , bool /*is_gateway*/)> on_completed;
+    mutable callback_t<void (node_id, socket_id /*sid*/, bool /*force_closing*/)> on_duplicate_id;
+    mutable callback_t<void (node_id, socket_id /*sid*/)> on_discarded;
 
     void start (socket_id, bool) {}
     void cancel (socket_id) {}

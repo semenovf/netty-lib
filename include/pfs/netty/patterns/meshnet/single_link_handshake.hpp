@@ -6,6 +6,7 @@
 // Changelog:
 //      2025.01.25 Initial version.
 //      2025.03.30 Renamed to single_link_handshake and refactored totally.
+//      2025.06.06 Algorithm fixed.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "basic_handshake.hpp"
@@ -20,68 +21,92 @@ template <typename Node>
 class single_link_handshake: public basic_handshake<Node>
 {
     using base_class = basic_handshake<Node>;
-    using channel_collection_type = typename base_class::channel_collection_type;
     using node_id = typename base_class::node_id;
     using socket_id = typename base_class::socket_id;
 
 public:
-    single_link_handshake (Node * node, channel_collection_type * channels)
-        : base_class(node, channels)
+    single_link_handshake (Node * node)
+        : base_class(node)
     {}
 
 private:
-    void complete_channel_success (node_id id, socket_id sid, bool is_gateway)
+    // TODO Methods process_behind_nat() and process_exclusive() can be merged into one method
+    // if algorithm will be successfully tested.
+
+    void process_behind_nat (socket_id sid, handshake_packet<node_id> const & pkt)
     {
-        auto success = this->_channels->insert_reader(id, sid);
-        success = success && this->_channels->insert_writer(id, sid);
+        // Check Node ID duplication.
+        bool is_duplicated = this->_node->id() == pkt.id;
 
-        PFS__ASSERT(success, "Fix meshnet::single_link_handshake algorithm");
+        if (pkt.is_response()) {
+            // `sid` is a connected socket.
+            // Finalize handshake (erase socket from cache)
+            bool canceled = this->cancel(sid);
 
-        this->on_completed(id, sid, is_gateway, handshake_result_enum::success);
+            PFS__ASSERT(canceled, "socket must be closed by handshake `expired` callback");
+
+            if (is_duplicated)
+                this->on_duplicate_id(pkt.id, sid, true);
+        } else { // Request
+            // `sid` is an accepted socket
+            // Send response
+            this->enqueue_response(sid, pkt.behind_nat(), true);
+
+            // NOTE. Accepted socket can't be closed if ID duplacated because need to send response.
+            // Requester (connected socket) will be an initiator of the socket closing.
+
+            if (is_duplicated)
+                this->on_duplicate_id(pkt.id, sid, false);
+        }
+
+        if (!is_duplicated)
+            this->on_completed(pkt.id, sid, sid, pkt.is_gateway());
+    }
+
+    void process_exclusive (socket_id sid, handshake_packet<node_id> const & pkt)
+    {
+        // Check Node ID duplication.
+        bool is_duplicated = this->_node->id() == pkt.id;
+
+        if (pkt.is_response()) {
+            // `sid` is a connected socket.
+            // Finalize handshake (erase socket from cache)
+            bool canceled = this->cancel(sid);
+
+            PFS__ASSERT(canceled, "socket must be closed by handshake `expired` callback");
+
+            if (is_duplicated) {
+                this->on_duplicate_id(pkt.id, sid, true);
+            } else {
+                if (this->_node->id() > pkt.id) {
+                    this->on_completed(pkt.id, sid, sid, pkt.is_gateway());
+                } else {
+                    this->on_discarded(pkt.id, sid);
+                }
+            }
+        } else { // Request
+            // `sid` is an accepted socket
+            // Send response
+            this->enqueue_response(sid, pkt.behind_nat(), true);
+
+            if (is_duplicated) {
+                this->on_duplicate_id(pkt.id, sid, false);
+            } else {
+                if (this->_node->id() < pkt.id) {
+                    this->on_completed(pkt.id, sid, sid, pkt.is_gateway());
+                }
+            }
+        }
     }
 
 public:
     void process (socket_id sid, handshake_packet<node_id> const & pkt)
     {
-        if (pkt.is_response()) {
-            auto pos = this->_cache.find(sid);
-
-            if (pos != this->_cache.end()) {
-                // Finalize handshake (erase socket from cache)
-                this->cancel(sid);
-
-                if (this->_node->id() == pkt.id) {
-                    // Check Node ID duplication. Requester must be an initiator of the socket closing.
-
-                    this->on_completed(pkt.id, sid, pkt.is_gateway(), handshake_result_enum::duplicated);
-                } else {
-                    // Response received by connected socket (writer)
-
-                    if (pkt.accepted()) {
-                        complete_channel_success(pkt.id, sid, pkt.is_gateway());
-                    } else {
-                        this->on_completed(pkt.id, sid, pkt.is_gateway(), handshake_result_enum::reject);
-                    }
-                }
-            } else {
-                // The socket is already expired
-                // Usually this can't happen because socket must be closed by expired callback
-                PFS__ASSERT(false, "socket must be closed by handshake `expired` callback");
-            }
-        } else { // Request received
-            // Send response
-
-            if (pkt.behind_nat()) {
-                this->enqueue_response(sid, pkt.behind_nat(), true);
-                complete_channel_success(pkt.id, sid, pkt.is_gateway());
-            } else {
-                if (this->_node->id() > pkt.id) {
-                    this->enqueue_response(sid, pkt.behind_nat(), true);
-                    complete_channel_success(pkt.id, sid, pkt.is_gateway());
-                } else {
-                    this->enqueue_response(sid, pkt.behind_nat(), false);
-                }
-            }
+        if (pkt.behind_nat()) {
+            process_behind_nat(sid, pkt);
+            return;
+        } else {
+            process_exclusive(sid, pkt);
         }
     }
 };

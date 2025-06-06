@@ -32,7 +32,7 @@ namespace delivery {
  * @param MessageIdTraits Message identifier traits (identifier type definition, to_string() converter, etc).
  */
 template <typename Transport
-    , typename MessageIdTraits
+    , typename MessageId
     , typename IncomingController
     , typename OutgoingController
     , typename WriterMutex>
@@ -44,8 +44,7 @@ class manager
 public:
     using transport_type = Transport;
     using address_type = typename transport_type::address_type;
-    using message_id_traits = MessageIdTraits;
-    using message_id = typename message_id_traits::type;
+    using message_id = MessageId;
     using writer_mutex_type = WriterMutex;
 
 private:

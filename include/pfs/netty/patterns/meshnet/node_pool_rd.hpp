@@ -55,7 +55,7 @@ public:
     /**
      * Notify when a node with identical ID is detected.
      */
-    mutable callback_t<void (node_id, socket4_addr)> on_duplicated
+    mutable callback_t<void (node_id, socket4_addr)> on_duplicate_id
         = [] (node_id, socket4_addr) {};
 
     /**
@@ -127,9 +127,9 @@ public:
             this->on_channel_destroyed(id);
         };
 
-        _t.on_duplicated = [this] (node_id id, socket4_addr saddr)
+        _t.on_duplicate_id = [this] (node_id id, socket4_addr saddr)
         {
-            this->on_duplicated(id, saddr);
+            this->on_duplicate_id(id, saddr);
         };
 
         _t.on_node_alive = [this] (node_id id)

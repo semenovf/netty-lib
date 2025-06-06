@@ -26,11 +26,10 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeIdTraits, typename SerializerTraits>
+template <typename NodeId, typename SerializerTraits>
 class routing_table
 {
-    using node_id_traits = NodeIdTraits;
-    using node_id = typename node_id_traits::type;
+    using node_id = NodeId;
     using serializer_traits = SerializerTraits;
     using route_map_type = std::unordered_multimap<node_id, std::size_t>;
 

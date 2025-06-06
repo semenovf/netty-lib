@@ -16,17 +16,18 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+#if FIXME // Need fixing (see single_link_handshake)
+
 template <typename Node>
 class dual_link_handshake: public basic_handshake<Node>
 {
     using base_class = basic_handshake<Node>;
-    using channel_collection_type = typename base_class::channel_collection_type;
     using socket_id = typename base_class::socket_id;
     using node_id = typename base_class::node_id;
 
 public:
-    dual_link_handshake (Node * node, channel_collection_type * channels)
-        : base_class(node, channels)
+    dual_link_handshake (Node * node)
+        : base_class(node)
     {}
 
 public:
@@ -76,6 +77,8 @@ public:
         }
     }
 };
+
+#endif
 
 }} // namespace patterns::meshnet
 

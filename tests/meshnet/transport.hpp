@@ -8,7 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/fake_mutex.hpp>
-#include <pfs/universal_id_traits.hpp>
+#include <pfs/universal_id.hpp>
+#include <pfs/universal_id_hash.hpp>
+#include <pfs/universal_id_pack.hpp>
 #include <pfs/netty/callback.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
@@ -39,19 +41,18 @@
 namespace delivery_ns = netty::patterns::delivery;
 namespace meshnet_ns = netty::patterns::meshnet;
 
-using node_id = pfs::universal_id_traits::type;
+using node_id = pfs::universal_id;
 using priority_writer_queue_t = meshnet_ns::priority_writer_queue<3>;
 
 template <typename Node>
 using priority_input_controller = meshnet_ns::priority_input_controller<3, Node>;
 
-using channel_map_t = meshnet_ns::channel_map<pfs::universal_id_traits, netty::posix::tcp_socket>;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // nopriority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 using nopriority_meshnet_node_t = meshnet_ns::node<
-      channel_map_t
+      node_id
+    , netty::posix::tcp_socket
     , netty::posix::tcp_listener
 
 #if NETTY__EPOLL_ENABLED
@@ -82,7 +83,8 @@ using nopriority_meshnet_node_t = meshnet_ns::node<
 // priority_meshnet_node_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 using priority_meshnet_node_t = meshnet_ns::node<
-      channel_map_t
+      node_id
+    , netty::posix::tcp_socket
     , netty::posix::tcp_listener
 
 #if NETTY__EPOLL_ENABLED
@@ -114,7 +116,8 @@ using priority_meshnet_node_t = meshnet_ns::node<
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Unusable, for test without_XXX parameters only.
 using bare_meshnet_node_t = meshnet_ns::node<
-      channel_map_t
+      node_id
+    , netty::posix::tcp_socket
     , netty::posix::tcp_listener
 
 #if NETTY__EPOLL_ENABLED
@@ -148,10 +151,10 @@ using bare_meshnet_node_t = meshnet_ns::node<
 //using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
-using routing_table_t = meshnet_ns::routing_table<pfs::universal_id_traits, netty::patterns::serializer_traits_t>;
-using alive_controller_t = meshnet_ns::alive_controller<pfs::universal_id_traits
+using routing_table_t = meshnet_ns::routing_table<pfs::universal_id, netty::patterns::serializer_traits_t>;
+using alive_controller_t = meshnet_ns::alive_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t>;
-using node_pool_t = meshnet_ns::node_pool<pfs::universal_id_traits
+using node_pool_t = meshnet_ns::node_pool<pfs::universal_id
     , routing_table_t
     , alive_controller_t
     , std::recursive_mutex>;
@@ -160,12 +163,11 @@ using node_pool_t = meshnet_ns::node_pool<pfs::universal_id_traits
 // Reliable delivery node pool
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 using delivery_transport_t = node_pool_t;
-using message_id_traits = pfs::universal_id_traits;
-using incoming_controller_t = delivery_ns::incoming_controller<message_id_traits
+using incoming_controller_t = delivery_ns::incoming_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t>;
-using outgoing_controller_t = delivery_ns::outgoing_controller<message_id_traits
+using outgoing_controller_t = delivery_ns::outgoing_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t>;
-using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id_traits
+using delivery_manager_t = delivery_ns::manager<delivery_transport_t, pfs::universal_id
     , incoming_controller_t, outgoing_controller_t, std::mutex>;
 
 using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;

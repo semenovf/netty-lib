@@ -91,21 +91,21 @@ void run (NodePool & node_pool, std::vector<node_item> & nodes)
 {
     node_pool.on_channel_established = [] (node_t::node_id id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
-        LOGD(TAG, "Channel established with {}: {}", node_type, node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Channel established with {}: {}", node_type, to_string(id));
     };
 
     node_pool.on_channel_destroyed = [] (node_t::node_id id) {
-        LOGD(TAG, "Channel destroyed with {}", node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Channel destroyed with {}", to_string(id));
     };
 
     // Notify when node alive status changed
     node_pool.on_node_alive = [] (node_t::node_id id) {
-        LOGD(TAG, "Node alive: {}", node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Node alive: {}", to_string(id));
     };
 
     // Notify when node alive status changed
     node_pool.on_node_expired = [] (node_t::node_id id) {
-        LOGD(TAG, "Node expired: {}", node_t::node_id_traits::to_string(id));
+        LOGD(TAG, "Node expired: {}", to_string(id));
     };
 
     for (auto & item: nodes) {

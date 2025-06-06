@@ -20,14 +20,12 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeIdTraits, typename Socket>
+template <typename NodeId, typename SocketId>
 class channel_map
 {
 public:
-    using node_id_traits = NodeIdTraits;
-    using node_id = typename NodeIdTraits::type;
-    using socket_type = Socket;
-    using socket_id = typename socket_type::socket_id;
+    using node_id = NodeId;
+    using socket_id = SocketId;
 
 private:
     unordered_bimap<node_id, socket_id> _readers;

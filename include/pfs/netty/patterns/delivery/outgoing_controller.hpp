@@ -26,12 +26,11 @@ namespace delivery {
 /**
  * Outgoing messages controller.
  */
-template <typename MessageIdTraits
+template <typename MessageId
     , typename SerializerTraits>
 class outgoing_controller
 {
-    using message_id_traits = MessageIdTraits;
-    using message_id = typename message_id_traits::type;
+    using message_id = MessageId;
     using serializer_traits = SerializerTraits;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;

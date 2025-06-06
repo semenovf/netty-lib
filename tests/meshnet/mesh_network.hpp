@@ -132,7 +132,7 @@ public:
     netty::callback_t<void (std::string const &, std::string const &)> on_channel_destroyed
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
-    netty::callback_t<void (std::string const &, std::string const &, netty::socket4_addr saddr)> on_duplicated
+    netty::callback_t<void (std::string const &, std::string const &, netty::socket4_addr saddr)> on_duplicate_id
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/, netty::socket4_addr saddr) {};
 
     netty::callback_t<void (std::string const &, std::string const &)> on_node_alive
@@ -220,9 +220,9 @@ private:
             this->on_channel_destroyed(source_name, node_name_by_id(id));
         };
 
-        ptr->on_duplicated = [this, source_name] (node_id id, netty::socket4_addr saddr)
+        ptr->on_duplicate_id = [this, source_name] (node_id id, netty::socket4_addr saddr)
         {
-            this->on_duplicated(source_name, node_name_by_id(id), saddr);
+            this->on_duplicate_id(source_name, node_name_by_id(id), saddr);
         };
 
         ptr->on_node_alive = [this, source_name] (node_id id)

@@ -28,12 +28,11 @@ namespace meshnet {
 //
 // The algorithm is similar to heartbeat algorithm
 //
-template <typename NodeIdTraits, typename SerializerTraits>
+template <typename NodeId, typename SerializerTraits>
 class alive_controller
 {
-    using node_id_traits = NodeIdTraits;
+    using node_id = NodeId;
     using serializer_traits = SerializerTraits;
-    using node_id = typename node_id_traits::type;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct alive_item

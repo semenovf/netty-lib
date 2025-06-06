@@ -27,13 +27,12 @@ namespace delivery {
 /**
  * Incominge messages controller
  */
-template <typename MessageIdTraits
+template <typename MessageId
     , typename SerializerTraits
     , std::uint32_t LostThreshold = 32> // Max number of lost message parts
 class incoming_controller
 {
-    using message_id_traits = MessageIdTraits;
-    using message_id = typename message_id_traits::type;
+    using message_id = MessageId;
     using serializer_traits = SerializerTraits;
 
 private:

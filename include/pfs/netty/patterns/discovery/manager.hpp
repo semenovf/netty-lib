@@ -31,14 +31,14 @@ namespace discovery {
  * public:
  * }
  */
-template <typename NodeIdTraits>
+template <typename NodeId>
 class manager
 {
-    using node_id_traits = NodeIdTraits;
-    using node_id = typename NodeIdTraits::node_id;
+    using node_id = NodeId;
 
 private:
     node_id _id;
+
 public:
     manager (node_id id)
         : _id(id)

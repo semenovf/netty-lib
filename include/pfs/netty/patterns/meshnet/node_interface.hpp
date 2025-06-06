@@ -21,11 +21,11 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeIdTraits>
+template <typename NodeId>
 class node_interface
 {
 public:
-    using node_id = typename NodeIdTraits::type;
+    using node_id = NodeId;
 
 public:
     virtual ~node_interface () {}
@@ -41,7 +41,7 @@ public:
     virtual bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) = 0;
     virtual void listen (int backlog = 50) = 0;
     virtual void enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len) = 0;
-    virtual void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data) = 0;
+    virtual void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data) = 0;
     virtual bool has_writer (node_id id) const = 0;
     virtual unsigned int step () = 0;
     virtual void clear_channels () = 0;
@@ -52,7 +52,7 @@ public:
     virtual void on_error (callback_t<void (std::string const &)>) = 0;
     virtual void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)>) = 0;
     virtual void on_channel_destroyed (callback_t<void (node_id, node_index_t)>) = 0;
-    virtual void on_duplicated (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
+    virtual void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
     virtual void on_bytes_written (callback_t<void (node_id, std::uint64_t)>) = 0;
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
     virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;
@@ -66,7 +66,7 @@ public:
     //
     // For internal use only
     //
-    virtual bool enqueue_packet (node_id id, int priority, std::vector<char> && data) = 0;
+    virtual bool enqueue_packet (node_id id, int priority, std::vector<char> data) = 0;
     virtual bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len) = 0;
     virtual void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) = 0;
     virtual void enqueue_forward_packet (node_id sender_id, int priority
