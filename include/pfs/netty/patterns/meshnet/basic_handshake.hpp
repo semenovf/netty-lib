@@ -53,7 +53,7 @@ protected:
     void enqueue_request (socket_id sid, bool behind_nat)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat};
+        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::request};
 
         pkt.id = _node->id();
         pkt.serialize(out);
@@ -64,10 +64,10 @@ protected:
         enqueue_packet(sid, out.take());
     }
 
-    void enqueue_response (socket_id sid, bool behind_nat, bool accepted)
+    void enqueue_response (socket_id sid, bool behind_nat)
     {
         auto out = serializer_traits::make_serializer();
-        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, accepted};
+        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::response};
 
         pkt.id = _node->id();
         pkt.serialize(out);

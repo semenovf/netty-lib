@@ -208,34 +208,19 @@ public:
 
 public:
     /**
-     * Construct handshake packet for request.
+     * Construct handshake packet.
      */
-    handshake_packet (bool is_gateway, bool behind_nat) noexcept
+    handshake_packet (bool is_gateway, bool behind_nat, packet_way_enum way = packet_way_enum::request) noexcept
         : header(packet_enum::handshake, false, 0)
     {
-        if (is_gateway)
-            enable_f1();
-
-        if (behind_nat)
-            enable_f2();
-    }
-
-    /**
-     * Construct handshake packet for response.
-     */
-    handshake_packet (bool is_gateway, bool behind_nat, bool accepted) noexcept
-        : header(packet_enum::handshake, false, 0)
-    {
-        enable_f0();
+        if (way == packet_way_enum::response)
+            enable_f0();
 
         if (is_gateway)
             enable_f1();
 
         if (behind_nat)
             enable_f2();
-
-        if (accepted)
-            enable_f3();
     }
 
     /**
@@ -263,11 +248,6 @@ public:
     bool behind_nat () const noexcept
     {
         return is_f2();
-    }
-
-    bool accepted () const noexcept
-    {
-        return is_f3();
     }
 
     template <typename Serializer>

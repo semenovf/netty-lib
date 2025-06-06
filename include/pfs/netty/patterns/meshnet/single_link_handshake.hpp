@@ -50,7 +50,7 @@ private:
         } else { // Request
             // `sid` is an accepted socket
             // Send response
-            this->enqueue_response(sid, pkt.behind_nat(), true);
+            this->enqueue_response(sid, pkt.behind_nat());
 
             // NOTE. Accepted socket can't be closed if ID duplacated because need to send response.
             // Requester (connected socket) will be an initiator of the socket closing.
@@ -87,7 +87,7 @@ private:
         } else { // Request
             // `sid` is an accepted socket
             // Send response
-            this->enqueue_response(sid, pkt.behind_nat(), true);
+            this->enqueue_response(sid, pkt.behind_nat());
 
             if (is_duplicated) {
                 this->on_duplicate_id(pkt.id, sid, false);
