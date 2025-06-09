@@ -20,6 +20,12 @@
 
 namespace tools {
 
+// See https://github.com/doctest/doctest/issues/345
+inline char const * current_doctest_name ()
+{
+    return doctest::detail::g_cs->currentTest->m_name;
+}
+
 inline void sleep (int timeout, std::string const & description = std::string{})
 {
     if (description.empty()) {
@@ -119,7 +125,26 @@ inline std::string random_text ()
     lorem::lorem_ipsum ipsum;
     ipsum.set_paragraph_count(1);
     ipsum.set_sentence_count(10);
-    ipsum.set_word_count(20);
+    ipsum.set_word_count(10);
+
+    auto para = ipsum();
+    std::string text;
+    char const * delim = "" ;
+
+    for (auto const & sentence: para[0]) {
+        text += delim + sentence;
+        delim = "\n";
+    }
+
+    return text;
+}
+
+inline std::string random_large_text ()
+{
+    lorem::lorem_ipsum ipsum;
+    ipsum.set_paragraph_count(1);
+    ipsum.set_sentence_count(900);
+    ipsum.set_word_count(100);
 
     auto para = ipsum();
     std::string text;

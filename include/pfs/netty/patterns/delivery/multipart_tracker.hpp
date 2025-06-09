@@ -63,15 +63,7 @@ public:
         , _static_payload(msg, length)
         , _exp_timeout(exp_timeout)
     {
-        // part_count = 1 + size() / part_size
-        // last_sn    = first_sn + part_count - 1
-        //            = first_sn + (1 + size() / part_size) - 1
-        //            = first_sn + size() / part_size
-        _last_sn = _first_sn + size() / _part_size;
-
-        _remain_parts = _last_sn - _first_sn + 1;
-        _parts_acked.resize(_remain_parts, false);
-        _parts_expired.resize(_remain_parts);
+        init();
     }
 
     /**
@@ -81,10 +73,16 @@ public:
     multipart_tracker (message_id msgid, int priority, bool force_checksum
         , std::uint32_t part_size, serial_number first_sn, std::vector<char> && msg
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
-        : multipart_tracker(msgid, priority, force_checksum, part_size, first_sn, nullptr, 0, exp_timeout)
+        : _msgid(msgid)
+        , _priority(priority)
+        , _force_checksum(force_checksum)
+        , _part_size(part_size)
+        , _first_sn(first_sn)
+        , _is_static(false)
+        , _dynamic_payload(std::move(msg))
+        , _exp_timeout(exp_timeout)
     {
-        _is_static = false;
-        _dynamic_payload = std::move(msg);
+        init();
     }
 
     multipart_tracker (multipart_tracker const &) = delete;
@@ -96,6 +94,19 @@ public:
     ~multipart_tracker () {}
 
 private:
+    void init ()
+    {
+        // part_count = 1 + size() / part_size
+        // last_sn    = first_sn + part_count - 1
+        //            = first_sn + (1 + size() / part_size) - 1
+        //            = first_sn + size() / part_size
+        _last_sn = _first_sn + size() / _part_size;
+
+        _remain_parts = _last_sn - _first_sn + 1;
+        _parts_acked.resize(_remain_parts, false);
+        _parts_expired.resize(_remain_parts);
+    }
+
     std::size_t size () const noexcept
     {
         return _is_static ? _static_payload.second : _dynamic_payload.size();
@@ -157,7 +168,7 @@ public:
     template <typename Serializer>
     bool acquire_part (Serializer & out, serial_number sn)
     {
-        if (!sn >= _first_sn && sn <= _last_sn) {
+        if (!(sn >= _first_sn && sn <= _last_sn)) {
             throw error {
                   make_error_code(std::errc::invalid_argument)
                 , "serial number is out of bounds"
@@ -179,10 +190,10 @@ public:
             pkt.total_size = pfs::numeric_cast<std::uint64_t>(size());
             pkt.part_size  = _part_size;
             pkt.last_sn    = _last_sn;
-            pkt.serialize(out, begin + _part_size * index,  part_size);
+            pkt.serialize(out, begin + _part_size * index, part_size);
         } else {
             part_packet pkt {sn};
-            pkt.serialize(out, begin + _part_size * index,  part_size);
+            pkt.serialize(out, begin + _part_size * index, part_size);
         }
 
         _parts_expired[index] = clock_type::now() + _exp_timeout;

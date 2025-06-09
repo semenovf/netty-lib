@@ -167,8 +167,15 @@ public:
                             }
                         }
 
-                        if (assembler_ptr != nullptr)
+                        if (assembler_ptr != nullptr) {
                             assembler_ptr->emplace_part(pkt.sn(), std::move(part), true);
+
+                            // Send ACK packet
+                            auto out = serializer_traits::make_serializer();
+                            ack_packet ack_pkt {pkt.sn()};
+                            ack_pkt.serialize(out);
+                            on_send(out.take());
+                        }
 
                         break;
                     }

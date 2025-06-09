@@ -39,7 +39,66 @@ static void sigterm_handler (int sig)
     mesh_network_t::instance()->interrupt_all();
 }
 
+TEST_CASE("simple delivery") {
+    LOGD(TAG, "==========================================");
+    LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
+    LOGD(TAG, "==========================================");
+
+    netty::startup_guard netty_startup;
+
+    std::atomic_int route_ready_counter {0};
+    std::atomic_int message_received_counter {0};
+    mesh_network_t net { "A0", "A1" };
+
+    net.on_route_ready = [& route_ready_counter] (std::string const &, std::string const &
+        , std::vector<node_id>, std::size_t, std::size_t)
+    {
+        route_ready_counter++;
+    };
+
+    net.on_receiver_ready = [] (std::string const & source_name, std::string const & receiver_name
+        , std::size_t source_index, std::size_t receiver_index)
+    {
+        LOGD(TAG, "{}: Receiver ready: {}", source_name, receiver_name);
+        // g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
+    };
+
+    net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
+        , std::string const & msgid)
+    {
+        // g_message_delivered_counter++;
+        LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
+    };
+
+    net.on_message_received = [& message_received_counter] (std::string const &, std::string const &
+        , std::string const &, std::vector<char>)
+    {
+        message_received_counter++;
+    };
+
+    auto text = tools::random_large_text();
+
+    net.connect_host("A0", "A1");
+    net.connect_host("A1", "A0");
+
+    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+
+    net.run_all();
+    CHECK(tools::wait_atomic_counter(route_ready_counter, 1));
+
+    net.send("A0", "A1", text);
+
+    CHECK(tools::wait_atomic_counter(message_received_counter, 1));
+
+    net.interrupt_all();
+    net.join_all();
+}
+
 TEST_CASE("sync delivery") {
+    LOGD(TAG, "==========================================");
+    LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
+    LOGD(TAG, "==========================================");
+
     netty::startup_guard netty_startup;
 
     mesh_network_t net { "a", "b", "c", "A0", "C0" };
@@ -64,11 +123,10 @@ TEST_CASE("sync delivery") {
         LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
     };
 
-
     constexpr bool BEHIND_NAT = true;
-    g_text0 = tools::random_text();
-    g_text1 = tools::random_text();
-    g_text2 = tools::random_text();
+    g_text0 = tools::random_large_text();
+    g_text1 = tools::random_large_text();
+    g_text2 = tools::random_large_text();
 
     // Connect gateways
     net.connect_host("a", "b");
@@ -90,7 +148,7 @@ TEST_CASE("sync delivery") {
     net.send("A0", "C0", g_text2);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
-    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 2));
+    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));
 
     net.interrupt_all();
     net.join_all();
