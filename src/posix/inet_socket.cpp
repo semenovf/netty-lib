@@ -268,7 +268,7 @@ bool inet_socket::is_nonblocking (socket_id sock, error * perr)
 #if _MSC_VER
     // No "direct" way to determine mode of the socket.
     pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
-        tr::f_("unable to determine socket mode on Windows: {}", pfs::system_error_text()));
+        , tr::f_("unable to determine socket mode on Windows: {}", pfs::system_error_text()));
 
     return false;
 #else
