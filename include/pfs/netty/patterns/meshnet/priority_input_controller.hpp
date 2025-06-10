@@ -58,7 +58,7 @@ private:
         auto & acc = pos->second;
 
         // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__TERMINATE(acc.sid == sid, "socket IDs are not equal, fix");
+        PFS__THROW_UNEXPECTED(acc.sid == sid, "socket IDs are not equal, fix");
 
         return & acc;
     }
@@ -70,7 +70,7 @@ private:
 
     std::vector<char> & inpb_ref (account & acc)
     {
-        PFS__TERMINATE(acc.current_priority >= 0, "unexpected current_priority value, fix");
+        PFS__THROW_UNEXPECTED(acc.current_priority >= 0, "unexpected current_priority value, fix");
         return acc.priority_buffers[acc.current_priority];
     }
 
@@ -94,7 +94,7 @@ private:
 
         acc.current_priority = opt_frame->priority();
 
-        PFS__TERMINATE(acc.current_priority >= 0, "unexpected current_priority value, fix");
+        PFS__THROW_UNEXPECTED(acc.current_priority >= 0, "unexpected current_priority value, fix");
 
         auto & inpb = inpb_ref(acc);
         auto first = acc.tmp.data() + priority_frame::header_size();

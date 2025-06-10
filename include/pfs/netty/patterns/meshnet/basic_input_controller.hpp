@@ -44,7 +44,7 @@ public:
         auto that = static_cast<Derived *>(this);
         auto * pacc = that->locate_account(sid);
 
-        PFS__TERMINATE(pacc != nullptr, "account not found, fix");
+        PFS__THROW_UNEXPECTED(pacc != nullptr, "account not found, fix");
 
         that->append_chunk(*pacc, std::move(chunk));
 
@@ -52,7 +52,7 @@ public:
             auto & inpb = that->inpb_ref(*pacc);
             auto priority = that->priority(*pacc);
 
-            PFS__TERMINATE(priority >= 0, "invalid priority, fix");
+            PFS__THROW_UNEXPECTED(priority >= 0, "invalid priority, fix");
 
             auto in = serializer_traits::make_deserializer(inpb.data(), inpb.size());
             bool has_more_packets = true;

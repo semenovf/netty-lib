@@ -63,7 +63,7 @@ public:
     mutable callback_t<void (socket_id, std::uint64_t)> on_bytes_written;
     mutable callback_t<void (socket_id)> on_disconnected = [] (socket_id) {};
     mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
-        PFS__TERMINATE(false, "socket location callback must be set");
+        PFS__THROW_UNEXPECTED(false, "socket location callback must be set");
         return nullptr;
     };
 
@@ -99,7 +99,7 @@ private:
         auto & acc = pos->second;
 
         // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__TERMINATE(acc.id == id, "Fix the algorithm for a writer pool");
+        PFS__THROW_UNEXPECTED(acc.id == id, "Fix the algorithm for a writer pool");
 
         return & acc;
     }

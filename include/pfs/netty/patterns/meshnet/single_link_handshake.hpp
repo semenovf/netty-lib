@@ -43,7 +43,7 @@ private:
             // Finalize handshake (erase socket from cache)
             bool canceled = this->cancel(sid);
 
-            PFS__ASSERT(canceled, "socket must be closed by handshake `expired` callback");
+            PFS__THROW_UNEXPECTED(canceled, "socket must be closed by handshake `expired` callback");
 
             if (is_duplicated)
                 this->on_duplicate_id(pkt.id, sid, true);
@@ -73,7 +73,7 @@ private:
             // Finalize handshake (erase socket from cache)
             bool canceled = this->cancel(sid);
 
-            PFS__ASSERT(canceled, "socket must be closed by handshake `expired` callback");
+            PFS__THROW_UNEXPECTED(canceled, "socket must be closed by handshake `expired` callback");
 
             if (is_duplicated) {
                 this->on_duplicate_id(pkt.id, sid, true);

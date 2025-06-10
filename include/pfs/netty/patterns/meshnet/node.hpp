@@ -17,7 +17,6 @@
 #include "../../listener_pool.hpp"
 #include "../../reader_pool.hpp"
 #include "../../socket_pool.hpp"
-#include "../../tag.hpp"
 #include "../../trace.hpp"
 #include "../../writer_pool.hpp"
 #include "alive_info.hpp"
@@ -26,6 +25,7 @@
 #include "node_interface.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
+#include "tag.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/log.hpp>
 #include <chrono>
@@ -226,7 +226,7 @@ public:
 
         _listener_pool.on_accepted = [this] (socket_type && sock)
         {
-            NETTY__TRACE(TAG, "socket accepted: #{}: {}", sock.id(), to_string(sock.saddr()));
+            NETTY__TRACE(MESHNET_TAG, "socket accepted: #{}: {}", sock.id(), to_string(sock.saddr()));
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
             _socket_pool.add_accepted(std::move(sock));
@@ -239,7 +239,7 @@ public:
 
         _connecting_pool.on_connected = [this] (socket_type && sock)
         {
-            NETTY__TRACE(TAG, "socket connected: #{}: {}", sock.id(), to_string(sock.saddr()));
+            NETTY__TRACE(MESHNET_TAG, "socket connected: #{}: {}", sock.id(), to_string(sock.saddr()));
 
             bool behind_nat = false;
 
@@ -269,7 +269,7 @@ public:
 
         _reader_pool.on_disconnected = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "reader socket disconnected: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "reader socket disconnected: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -291,7 +291,7 @@ public:
 
         _writer_pool.on_disconnected = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "writer socket disconnected: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "writer socket disconnected: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -310,7 +310,7 @@ public:
 
         _handshake_controller.on_expired = [this] (socket_id sid)
         {
-            NETTY__TRACE(TAG, "handshake expired for socket: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "handshake expired for socket: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -325,7 +325,7 @@ public:
             auto success = _channels.insert_reader(id, reader_sid);
             success = success && _channels.insert_writer(id, writer_sid);
 
-            PFS__ASSERT(success, "Fix handshake algorithm");
+            PFS__THROW_UNEXPECTED(success, "Fix handshake algorithm");
 
             _heartbeat_controller.update(writer_sid);
 
@@ -335,7 +335,7 @@ public:
         _handshake_controller.on_duplicate_id = [this] (node_id id, socket_id sid, bool force_closing)
         {
             auto psock = _socket_pool.locate(sid);
-            PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
+            PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::node algorithm");
             this->on_duplicate_id(id, _index, psock->saddr());
 
             if (force_closing)
@@ -344,16 +344,16 @@ public:
 
         _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
         {
-            NETTY__TRACE(TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
+            NETTY__TRACE(MESHNET_TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
             close_socket(sid);
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
-            NETTY__TRACE(TAG, "socket heartbeat timeout exceeded: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
             schedule_reconnection(sid);
         };
 
-        NETTY__TRACE(TAG, "node constructed (id={}, gateway={})", to_string(_id)
+        NETTY__TRACE(MESHNET_TAG, "node constructed (id={}, gateway={})", to_string(_id)
             , _is_gateway);
     }
 
@@ -365,7 +365,7 @@ public:
     ~node ()
     {
         clear_channels();
-        NETTY__TRACE(TAG, "node destroyed: {}", to_string(_id));
+        NETTY__TRACE(MESHNET_TAG, "node destroyed: {}", to_string(_id));
     }
 
 public:
@@ -610,13 +610,13 @@ private:
             if (!pos->second.required()) {
                 _reconn_policies.erase(pos);
                 reconnecting = false;
-                NETTY__TRACE(TAG, "stopped reconnection to: {}", to_string(saddr));
+                NETTY__TRACE(MESHNET_TAG, "stopped reconnection to: {}", to_string(saddr));
             }
         }
 
         if (reconnecting) {
             auto reconn_timeout = pos->second.fetch_timeout();
-            NETTY__TRACE(TAG, "reconnecting to: {} after {}", to_string(saddr), reconn_timeout);
+            NETTY__TRACE(MESHNET_TAG, "reconnecting to: {} after {}", to_string(saddr), reconn_timeout);
             _connecting_pool.connect_timeout(reconn_timeout, saddr);
         }
     }
@@ -628,7 +628,7 @@ private:
             auto psock = _socket_pool.locate(sid, & is_accepted);
             auto reconnecting = !is_accepted;
 
-            PFS__TERMINATE(psock != nullptr, "Fix meshnet::node algorithm");
+            PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::node algorithm");
 
             if (reconnecting)
                 schedule_reconnection(psock->saddr());

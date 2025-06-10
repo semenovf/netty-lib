@@ -144,10 +144,12 @@ public:
     netty::callback_t<void (std::string const &, std::string const &, std::vector<node_id> const &
         , std::size_t, std::size_t)> on_route_ready
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/
-            , std::vector<node_id> const & /*gw_chain*/, std::size_t /*source_index*/, std::size_t /*target_index*/) {};
+            , std::vector<node_id> const & /*gw_chain*/, std::size_t /*source_index*/
+            , std::size_t /*target_index*/) {};
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-    netty::callback_t<void (std::string const &, std::string const &, std::size_t, std::size_t)> on_receiver_ready
+    netty::callback_t<void (std::string const &, std::string const &
+        , std::size_t, std::size_t)> on_receiver_ready
         = [] (std::string const & /*source_name*/, std::string const & /*receiver_name*/
             , std::size_t /*source_index*/, std::size_t /*receiver_index*/) {};
 
@@ -155,12 +157,20 @@ public:
         , std::vector<char>)> on_message_received
         = [] (std::string const &, std::string const &, std::string const &, std::vector<char>) {};
 
-    netty::callback_t<void (std::string const &, std::string const &, std::string const &)> on_message_delivered
+    netty::callback_t<void (std::string const &, std::string const &
+        , std::string const &)> on_message_delivered
         = [] (std::string const & /*source_name*/, std::string const & /*receiver_name*/
             , std::string const & /*msgid*/) {};
 
-    netty::callback_t<void (std::string const &, std::string const &, std::vector<char>)> on_report_received
+    netty::callback_t<void (std::string const &, std::string const &
+        , std::vector<char>)> on_report_received
         = [] (std::string const &, std::string const &, std::vector<char>) {};
+
+    netty::callback_t<void (std::string const &, std::string const &, std::string const &
+        , std::size_t, std::size_t)> on_message_receiving_progress
+        = [] (std::string const & /*source_name*/, std::string const & /*sender_name*/
+            , std::string const & /*msgid*/, std::size_t /*received_size*/
+            , std::size_t /*total_size*/) {};
 
 #else
     netty::callback_t<void (std::string const &, std::string const &, int, std::vector<char>
@@ -268,6 +278,14 @@ private:
             auto sender_name = node_name_by_id(sender_id);
             this->on_report_received(source_name, sender_name, std::move(report));
         };
+
+        ptr->on_message_receiving_progress([this, source_name] (node_id sender_id, message_id msgid
+            , std::size_t received_size, std::size_t total_size)
+        {
+            auto sender_name = node_name_by_id(sender_id);
+            this->on_message_receiving_progress(source_name, sender_name, to_string(msgid)
+                , received_size, total_size);
+        });
 #else
         ptr->on_data_received = [this, source_name] (node_id sender_id, int priority
             , std::vector<char> bytes)

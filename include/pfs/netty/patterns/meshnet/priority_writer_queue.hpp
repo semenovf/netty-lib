@@ -92,7 +92,7 @@ private:
         FrameCalculator fc;
 
         for (int i = 0; i < N; i++) {
-            PFS__ASSERT(fc.x[i] > 0, "priority_writer_queue: frame limit must be greater than zero");
+            PFS__THROW_UNEXPECTED(fc.x[i] > 0, "priority_writer_queue: frame limit must be greater than zero");
             _qpool[i].frame_counter = fc.x[i];
         }
 
@@ -102,7 +102,7 @@ private:
 
     void acquire_priority ()
     {
-        PFS__ASSERT(!empty(), "");
+        PFS__THROW_UNEXPECTED(!empty(), "");
 
         auto & x = _qpool[_priority_index];
 
@@ -152,7 +152,7 @@ private:
         }
 
         // Must be unreachable
-        PFS__TERMINATE(false, "priority_writer_queue: fix acquire_priority() method");
+        PFS__THROW_UNEXPECTED(false, "priority_writer_queue: fix acquire_priority() method");
     }
 
 public:
@@ -201,7 +201,7 @@ public:
         priority_frame{_priority_index}.serialize(_frame, b.data(), frame_size);
         b.erase(b.begin(), b.begin() + (frame_size - priority_frame::header_size()));
 
-        PFS__ASSERT(_total_size >= frame_size - priority_frame::header_size(), "");
+        PFS__THROW_UNEXPECTED(_total_size >= frame_size - priority_frame::header_size(), "");
 
         _total_size -= (frame_size - priority_frame::header_size());
 
@@ -216,7 +216,7 @@ public:
 
     void shift (std::size_t n)
     {
-        PFS__ASSERT(n > 0 && n <= _frame.size(), "");
+        PFS__THROW_UNEXPECTED(n > 0 && n <= _frame.size(), "");
 
         _frame.erase(_frame.begin(), _frame.begin() + n);
 
@@ -225,7 +225,7 @@ public:
         // Sending message complete
         if (_frame.empty()) {
             x.frame_counter--;
-            PFS__ASSERT(x.frame_counter >= 0, "");
+            PFS__THROW_UNEXPECTED(x.frame_counter >= 0, "");
         }
 
         if (empty())

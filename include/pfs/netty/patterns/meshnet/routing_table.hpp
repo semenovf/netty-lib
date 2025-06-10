@@ -83,7 +83,7 @@ private:
             auto & r = _routes[pos->second];
             auto hops = r.size();
 
-            PFS__TERMINATE(hops > 0, "Fix meshnet::routing_table algorithm");
+            PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::routing_table algorithm");
 
             if (min_hops > hops /*&& r.good()*/) { // FIXME Need the recognition of unreachable routes
                 min_hops = hops;
@@ -102,7 +102,7 @@ private:
     std::pair<std::size_t, bool>
     add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
     {
-        PFS__TERMINATE(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
+        PFS__THROW_UNEXPECTED(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
 
         auto res = find_route(gw_chain);
 
@@ -224,14 +224,14 @@ public:
             auto reversed_gw_chain = reverse_gateway_chain(gw_chain);
             auto pos = std::find(reversed_gw_chain.cbegin(), reversed_gw_chain.cend(), gw);
 
-            PFS__TERMINATE(pos != reversed_gw_chain.cend(), "Fix meshnet::routing_table algorithm");
+            PFS__THROW_UNEXPECTED(pos != reversed_gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
             return add_route_helper(dest, gateway_chain_type(++pos, reversed_gw_chain.cend()));
         }
 
         auto pos = std::find(gw_chain.cbegin(), gw_chain.cend(), gw);
 
-        PFS__TERMINATE(pos != gw_chain.cend(), "Fix meshnet::routing_table algorithm");
+        PFS__THROW_UNEXPECTED(pos != gw_chain.cend(), "Fix meshnet::routing_table algorithm");
 
         return add_route_helper(dest, gateway_chain_type(++pos, gw_chain.cend()));
     }

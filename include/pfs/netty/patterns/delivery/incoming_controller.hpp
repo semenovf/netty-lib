@@ -11,6 +11,7 @@
 #include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "multipart_assembler.hpp"
+#include "protocol.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/utility.hpp>
@@ -25,7 +26,7 @@ namespace patterns {
 namespace delivery {
 
 /**
- * Incominge messages controller
+ * Incoming messages controller
  */
 template <typename MessageId
     , typename SerializerTraits
@@ -36,7 +37,6 @@ class incoming_controller
     using serializer_traits = SerializerTraits;
 
 private:
-    // serial_number _committed_sn {0}; // Last serial number of the last committed income message
     serial_number _expected_sn {0};  // Expected income message part serial number
 
     std::deque<multipart_assembler<message_id>> _assemblers;
@@ -46,11 +46,9 @@ public:
     {}
 
 public:
-    template <typename OnSend, typename OnReady, typename OnAcknowledged, typename OnAgain
-        , typename OnReportReceived>
-    void process_packet (std::vector<char> && data, OnSend && on_send, OnReady && on_ready
-        , OnAcknowledged && on_acknowledged, OnAgain && on_again
-        , OnReportReceived && on_report_received)
+    template <typename Manager>
+    void process_packet (Manager * m, typename Manager::address_type sender_addr
+        , std::vector<char> && data)
     {
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
@@ -69,9 +67,9 @@ public:
                             auto out = serializer_traits::make_serializer();
                             syn_packet response_pkt {syn_way_enum::response, pkt.sn()};
                             response_pkt.serialize(out);
-                            on_send(out.take());
+                            m->enqueue_private(sender_addr, out.take());
                         } else {
-                            on_ready();
+                            m->process_ready(sender_addr);
                         }
 
                         break;
@@ -83,7 +81,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        on_acknowledged(pkt.sn());
+                        m->process_acknowledged(sender_addr, pkt.sn());
                         break;
                     }
 
@@ -93,7 +91,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        on_again(pkt.sn());
+                        m->process_again(sender_addr, pkt.sn());
                         break;
                     }
 
@@ -121,7 +119,7 @@ public:
                                     nak_pkt.serialize(out);
                                 }
 
-                                on_send(out.take());
+                                m->enqueue_private(sender_addr, out.take());
                             } else {
                                 PFS__THROW_UNEXPECTED(false, "Fix meshnet::incoming_controller algorithm");
                             }
@@ -140,7 +138,10 @@ public:
                         auto out = serializer_traits::make_serializer();
                         ack_packet ack_pkt {pkt.sn()};
                         ack_pkt.serialize(out);
-                        on_send(out.take());
+                        m->enqueue_private(sender_addr, out.take());
+
+                        m->process_message_receiving_progress(sender_addr, assembler.msgid()
+                            , assembler.received_size(), assembler.total_size());
 
                         _assemblers.push_back(std::move(assembler));
 
@@ -174,7 +175,10 @@ public:
                             auto out = serializer_traits::make_serializer();
                             ack_packet ack_pkt {pkt.sn()};
                             ack_pkt.serialize(out);
-                            on_send(out.take());
+                            m->enqueue_private(sender_addr, out.take());
+
+                            m->process_message_receiving_progress(sender_addr, assembler_ptr->msgid()
+                                , assembler_ptr->received_size(), assembler_ptr->total_size());
                         }
 
                         break;
@@ -187,7 +191,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        on_report_received(std::move(bytes));
+                        m->process_report_received(sender_addr, std::move(bytes));
                         break;
                     }
 
@@ -202,13 +206,16 @@ public:
             }
 
             if (!in.is_good()) {
-                throw error {tr::f_("bad or corrupted header for reliable delivery packet")};
+                throw error {
+                      make_error_code(pfs::errc::unexpected_error)
+                    , tr::f_("bad or corrupted header for reliable delivery packet")
+                };
             }
         } while (in.available() > 0);
     }
 
-    template <typename OnMessageReceived>
-    unsigned int step (OnMessageReceived && on_message_received)
+    template <typename Manager>
+    unsigned int step (Manager * m, typename Manager::address_type sender_addr)
     {
         unsigned int n = 0;
 
@@ -217,7 +224,7 @@ public:
             auto & a = _assemblers.front();
 
             if (a.is_complete()) {
-                on_message_received(a.msgid(), a.payload());
+                m->process_message_received(sender_addr, a.msgid(), a.payload());
                 _assemblers.pop_front();
                 n++;
             } else {

@@ -65,14 +65,14 @@ private:
             return nullptr;
 
         auto index = pos->second;
-        PFS__TERMINATE(index < _accounts.size()
+        PFS__THROW_UNEXPECTED(index < _accounts.size()
             , "socket_pool::locate_account(): fix implementation of socket_pool");
-        PFS__TERMINATE(_free_indices.find(index) == _free_indices.end()
+        PFS__THROW_UNEXPECTED(_free_indices.find(index) == _free_indices.end()
             , "socket_pool::locate_account(): fix implementation of socket_pool");
 
         auto & acc = _accounts[index];
 
-        PFS__TERMINATE(acc.sock.id() == id
+        PFS__THROW_UNEXPECTED(acc.sock.id() == id
             , "socket_pool::locate_account(): fix implementation of socket_pool");
 
         return & acc;
@@ -121,7 +121,7 @@ public:
      */
     std::size_t count ()
     {
-        PFS__TERMINATE(_accounts.size() < (_free_indices.size() - _removable.size())
+        PFS__THROW_UNEXPECTED(_accounts.size() < (_free_indices.size() - _removable.size())
             , "socket_pool::count(): fix implementation of socket_pool");
         return _accounts.size() - _free_indices.size() - _removable.size();
     }

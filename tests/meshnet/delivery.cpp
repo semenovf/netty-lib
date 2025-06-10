@@ -76,6 +76,14 @@ TEST_CASE("simple delivery") {
         message_received_counter++;
     };
 
+    net.on_message_receiving_progress = [] (std::string const & source_name
+        , std::string const & sender_name, std::string const & msgid
+        , std::size_t received_size, std::size_t total_size)
+    {
+        LOGD(TAG, "{}: Message progress from: {}: {}: {}/{} ({} %)", source_name, sender_name, msgid
+            , received_size, total_size, static_cast<std::size_t>(100 * (1.f * received_size)/total_size));
+    };
+
     auto text = tools::random_large_text();
 
     net.connect_host("A0", "A1");

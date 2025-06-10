@@ -9,9 +9,9 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
-#include "protocol.hpp"
 #include "serial_number.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -33,6 +33,9 @@ class multipart_assembler
     std::vector<char> _payload;
     std::size_t _remain_parts {0};
 
+    // For track progress
+    std::size_t _received_size {0};
+
 public:
     /**
      *  Constructs multipart message assembler.
@@ -47,7 +50,7 @@ public:
         if (_last_sn < _first_sn) {
             throw error {
                   make_error_code(std::errc::invalid_argument)
-                , "bad serial number bounds"
+                , tr::_("bad serial number bounds")
             };
         }
 
@@ -75,14 +78,14 @@ public:
         if (!(sn >= _first_sn && sn <= _last_sn)) {
             throw error {
                   make_error_code(std::errc::invalid_argument)
-                , "serial number is out of bounds"
+                , tr::_("serial number is out of bounds")
             };
         }
 
         if (part.size() > _part_size) {
             throw error {
                   make_error_code(std::errc::invalid_argument)
-                , "part size too big"
+                , tr::_("part size too big")
             };
         }
 
@@ -95,6 +98,7 @@ public:
         } else {
             PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
             _remain_parts--;
+            _received_size += part.size();
         }
 
         std::copy(part.begin(), part.end(), _payload.begin() + (index * _part_size));
@@ -120,6 +124,16 @@ public:
     {
         auto result = std::move(_payload);
         return result;
+    }
+
+    std::size_t total_size () const noexcept
+    {
+        return _payload.size();
+    }
+
+    std::size_t received_size () const noexcept
+    {
+        return _received_size;
     }
 };
 

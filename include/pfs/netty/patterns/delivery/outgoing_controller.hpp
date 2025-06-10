@@ -117,10 +117,8 @@ public:
         return _q.empty();
     }
 
-    /**
-     */
-    template <typename OnSend, typename OnDispatched>
-    unsigned int step (OnSend && on_send, OnDispatched && on_delivered)
+    template <typename Manager>
+    unsigned int step (Manager * m, typename Manager::address_type receiver_addr)
     {
         unsigned int n = 0;
 
@@ -131,7 +129,7 @@ public:
                 bool force_checksum = false; // No need checksum
 
                 auto syn_packet = acquire_syn_packet();
-                on_send(priority, force_checksum, std::move(syn_packet));
+                m->enqueue_private(receiver_addr, std::move(syn_packet), priority, force_checksum);
                 n++;
             }
 
@@ -153,7 +151,7 @@ public:
                 auto out = serializer_traits::make_serializer();
 
                 if (pos->acquire_part(out)) {
-                    on_send(pos->priority(), pos->force_checksum(), out.take());
+                    m->enqueue_private(receiver_addr, out.take(), pos->priority(), pos->force_checksum());
                     n++;
                 }
             }
@@ -165,7 +163,7 @@ public:
         auto mt = & _q.front();
 
         while (mt->is_complete()) {
-            on_delivered(mt->msgid());
+            m->process_message_delivered(receiver_addr, mt->msgid());
 
             _q.pop_front();
             n++;
@@ -185,7 +183,7 @@ public:
         auto out = serializer_traits::make_serializer();
 
         if (mt->acquire_part(out)) {
-            on_send(mt->priority(), mt->force_checksum(), out.take());
+            m->enqueue_private(receiver_addr, out.take(), mt->priority(), mt->force_checksum());
             n++;
         }
 

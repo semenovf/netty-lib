@@ -60,7 +60,7 @@ private:
         auto & acc = pos->second;
 
         // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__TERMINATE(acc.sid == sid, "socket IDs are not equal, fix");
+        PFS__THROW_UNEXPECTED(acc.sid == sid, "socket IDs are not equal, fix");
 
         return & acc;
     }
@@ -153,4 +153,3 @@ public:
 }} // namespace patterns::meshnet
 
 NETTY__NAMESPACE_END
-

@@ -68,7 +68,7 @@ public:
             auto acc = locate_account(id);
 
             // Inconsistent data: requested socket ID is not equal to account's ID
-            PFS__TERMINATE(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
+            PFS__THROW_UNEXPECTED(acc != nullptr, "Fix the algorithm of ready read for a reader pool:"
                 " reader account not found by id");
 
             auto sock = this->locate_socket(id);
@@ -119,7 +119,7 @@ private:
         auto & acc = pos->second;
 
         // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__TERMINATE(acc.id == id, "Fix the algorithm for a reader pool");
+        PFS__THROW_UNEXPECTED(acc.id == id, "Fix the algorithm for a reader pool");
 
         return & acc;
     }

@@ -75,31 +75,31 @@ public:
         = [] (node_id /*dest*/, gateway_chain_type /*gw_chain*/) {};
 
     /**
-     * Notify when data actually sent (written into the socket).
+     * Notify sender when data actually sent (written into the socket).
      */
     mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
         = [] (node_id, std::uint64_t /*n*/) {};
 
     /**
-     * Notify when synchronization with the receiver is complete (reliable delivery channel
-     * established).
+     * Notify sender when synchronization with the receiver is complete (logical reliable delivery
+     * channel established).
      */
     mutable callback_t<void (node_id)> on_receiver_ready = [] (node_id) {};
 
     /**
-     * Notify when message received.
+     * Notify receiver when message received.
      */
     mutable callback_t<void (node_id, message_id, std::vector<char>)> on_message_received
         = [] (node_id, message_id, std::vector<char>) {};
 
     /**
-     * Notify when message delivered to the receiver.
+     * Notify sender when message delivered to the receiver.
      */
     mutable callback_t<void (node_id, message_id)> on_message_delivered
         = [] (node_id, message_id) {};
 
     /**
-     * Notify when report received.
+     * Notify receiver when report received.
      */
     mutable callback_t<void (node_id, std::vector<char>)> on_report_received
         = [] (node_id, std::vector<char>) {};
@@ -298,6 +298,20 @@ public:
             if (n == 0)
                 std::this_thread::sleep_for(countdown_timer.remain());
         }
+    }
+
+public: // Set optional callbacks
+    /**
+     * Notify receiver about message receiving progress.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, message_id, std::size_t received_size, std::size_t total_size)
+     */
+    template <typename F>
+    node_pool_rd & on_message_receiving_progress (F && f)
+    {
+        _dm.on_message_receiving_progress = std::forward<F>(f);
+        return *this;
     }
 };
 

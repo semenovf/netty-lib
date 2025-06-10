@@ -9,11 +9,11 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
-#include "../../tag.hpp"
 #include "../../trace.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
 #include "route_info.hpp"
+#include "tag.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
@@ -233,7 +233,7 @@ private:
 
         if (ptr != nullptr) {
             // Need an example when such situation could happen.
-            PFS__TERMINATE(gw_id != id, "Fix meshnet::node_pool algorithm");
+            PFS__THROW_UNEXPECTED(gw_id != id, "Fix meshnet::node_pool algorithm");
 
             std::vector<char> msg = _alive_controller.serialize_unreachable(uinfo);
             ptr->enqueue_packet(gw_id, 0, std::move(msg));
@@ -279,12 +279,12 @@ private:
 
                 // If there is no loop
                 if (_id != dest_id) {
-                    PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
+                    PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::node_pool algorithm");
 
                     // Find this gateway
                     auto opt_index = rinfo.gateway_index(_id);
 
-                    PFS__TERMINATE(opt_index, "Fix meshnet::node_pool algorithm");
+                    PFS__THROW_UNEXPECTED(opt_index, "Fix meshnet::node_pool algorithm");
 
                     auto index = *opt_index;
 
@@ -315,7 +315,7 @@ private:
                     }
                 }
             } else {
-                PFS__TERMINATE(false, "Fix meshnet::node_pool algorithm");
+                PFS__THROW_UNEXPECTED(false, "Fix meshnet::node_pool algorithm");
             }
         } else { // Request
             dest_id = rinfo.initiator_id;
@@ -333,7 +333,7 @@ private:
                         new_route_added = res.second;
                     }
                 } else {
-                    PFS__TERMINATE(hops > 0, "Fix meshnet::node_pool algorithm");
+                    PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::node_pool algorithm");
                     auto res = _rtab.add_route(dest_id, rinfo.route, reverse_order);
                     gw_chain_index = res.first;
                     new_route_added = res.second;
@@ -357,12 +357,12 @@ private:
         }
 
         if (new_route_added) {
-            PFS__TERMINATE(_id != dest_id, "Fix meshnet::node_pool algorithm");
+            PFS__THROW_UNEXPECTED(_id != dest_id, "Fix meshnet::node_pool algorithm");
 
             if (this->on_route_ready) {
                 auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
                 this->on_route_ready(dest_id, std::move(gw_chain));
-                // NETTY__TRACE(TAG, "Route added: {}->{}: {}", to_string(_id), to_string(dest_id)
+                // NETTY__TRACE(MESHNET_TAG, "Route added: {}->{}: {}", to_string(_id), to_string(dest_id)
                 //         , to_string(*gw_chain_opt));
             }
         }
@@ -514,13 +514,13 @@ public:
 
         node->on_global_data_received([this] (node_id /*id*/, int priority
                 , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
-            PFS__TERMINATE(_id == receiver_id, "Fix meshnet::node_pool algorithm");
+            PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node_pool algorithm");
             this->on_data_received(sender_id, priority, std::move(bytes));
         });
 
         node->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
                 , std::vector<char> packet) {
-            PFS__TERMINATE(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
+            PFS__THROW_UNEXPECTED(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
 
             node_id gw_id;
             auto ptr = locate_writer(receiver_id, & gw_id);

@@ -38,6 +38,9 @@ template <typename Transport
     , typename WriterMutex>
 class manager
 {
+    friend IncomingController;
+    friend OutgoingController;
+
     using incoming_controller_type = IncomingController;
     using outgoing_controller_type = OutgoingController;
 
@@ -74,6 +77,11 @@ public:
 
     mutable callback_t<void (address_type, std::vector<char>)> on_report_received
         = [] (address_type, std::vector<char>) {};
+
+    /**
+     * Notify receiver about message receiving progress (optional).
+     */
+    mutable callback_t<void (address_type, message_id, std::size_t, std::size_t)> on_message_receiving_progress;
 
 public:
     manager (transport_type & transport)
@@ -116,6 +124,65 @@ private:
         PFS__ASSERT(res.second, "");
 
         return & res.first->second;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Incoming controller requirements
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // For:
+    //      * send SYN and ACK packets (priority = 0 and force_checksum = true)
+    //      * send messages (by outgoing controller)
+    void enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0
+        , bool force_checksum = true)
+    {
+        // Enqueue result is not important. In the worst case, data will be retransmitted.
+        /*auto success = */
+        _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
+    }
+
+    void process_ready (address_type sender_addr)
+    {
+        auto outc = ensure_outgoing_controller(sender_addr);
+        outc->set_synchronized(true);
+        this->on_receiver_ready(sender_addr);
+    }
+
+    void process_acknowledged (address_type sender_addr, serial_number sn)
+    {
+        auto outc = ensure_outgoing_controller(sender_addr);
+        outc->acknowledge(sn);
+    }
+
+    void process_again (address_type sender_addr, serial_number sn)
+    {
+        auto outc = ensure_outgoing_controller(sender_addr);
+        outc->again(sn);
+    }
+
+    void process_message_received (address_type sender_addr, message_id msgid, std::vector<char> && msg)
+    {
+        on_message_received(sender_addr, msgid, std::move(msg));
+    };
+
+    void process_report_received (address_type sender_addr, std::vector<char> && report)
+    {
+        this->on_report_received(sender_addr, std::move(report));
+    }
+
+    void process_message_receiving_progress (address_type sender_addr, message_id msgid
+        , std::size_t received_size, std::size_t total_size)
+    {
+        if (on_message_receiving_progress)
+            on_message_receiving_progress(sender_addr, msgid, received_size, total_size);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Outgoing controller requirements
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    void process_message_delivered (address_type receiver_addr, message_id msgid)
+    {
+        on_message_delivered(receiver_addr, msgid);
     }
 
 public:
@@ -183,41 +250,8 @@ public:
     {
         PFS__ASSERT(data.size() > 0, "");
 
-        // For sending SYN and ACK packets
-        auto on_send = [this, sender_addr] (std::vector<char> && data) { // On send
-            // See start_syn()
-            int priority = 0; // High priority
-            bool force_checksum = true; // Need checksum
-
-            // Enqueue result is not important. In the worst case, the request will
-            // be repeated.
-            /*auto success = */
-            _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
-        };
-
-        auto on_ready = [this, sender_addr] () { // On ready
-            auto outc = ensure_outgoing_controller(sender_addr);
-            outc->set_synchronized(true);
-            this->on_receiver_ready(sender_addr);
-        };
-
-        auto on_acknowledged = [this, sender_addr] (serial_number sn) {
-            auto outc = ensure_outgoing_controller(sender_addr);
-            outc->acknowledge(sn);
-        };
-
-        auto on_again = [this, sender_addr] (serial_number sn) {
-            auto outc = ensure_outgoing_controller(sender_addr);
-            outc->again(sn);
-        };
-
-        auto on_report_received = [this, sender_addr] (std::vector<char> && report) {
-            this->on_report_received(sender_addr, std::move(report));
-        };
-
         auto inpc = ensure_incoming_controller(sender_addr);
-        inpc->process_packet(std::move(data), std::move(on_send), std::move(on_ready)
-            , std::move(on_acknowledged), std::move(on_again), std::move(on_report_received));
+        inpc->process_packet(this, sender_addr, std::move(data));
     }
 
     /**
@@ -230,31 +264,17 @@ public:
         unsigned int n = 0;
 
         for (auto & x: _ocontrollers) {
-            auto & addr = x.first;
+            auto & receiver_addr = x.first;
             auto & outc = x.second;
 
-            auto on_send = [this, addr] (int priority, bool force_checksum, std::vector<char> && data) {
-                // Enqueue result is not important. In the worst case, data will be retransmitted.
-                /*auto success = */
-                _transport->enqueue(addr, priority, force_checksum, std::move(data));
-            };
-
-            auto on_delivered = [this, addr] (message_id msgid) {
-                this->on_message_delivered(addr, msgid);
-            };
-
-            n += outc.step(std::move(on_send), std::move(on_delivered));
+            n += outc.step(this, receiver_addr);
         }
 
         for (auto & x: _icontrollers) {
-            auto & addr = x.first;
+            auto & sender_addr = x.first;
             auto & inpc = x.second;
 
-            auto on_message_received = [this, addr] (message_id msgid, std::vector<char> && msg) {
-                this->on_message_received(addr, msgid, std::move(msg));
-            };
-
-            n += inpc.step(std::move(on_message_received));
+            n += inpc.step(this, sender_addr);
         }
 
         n += _transport->step();
