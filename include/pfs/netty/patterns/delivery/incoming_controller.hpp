@@ -15,6 +15,7 @@
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/utility.hpp>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -30,16 +31,17 @@ namespace delivery {
  */
 template <typename MessageId
     , typename SerializerTraits
+    , std::size_t PriorityCount = 1
     , std::uint32_t LostThreshold = 32> // Max number of lost message parts
 class incoming_controller
 {
     using message_id = MessageId;
     using serializer_traits = SerializerTraits;
+    using assembler_container = std::deque<multipart_assembler<message_id>>;
 
 private:
     serial_number _expected_sn {0};  // Expected income message part serial number
-
-    std::deque<multipart_assembler<message_id>> _assemblers;
+    std::array<assembler_container, PriorityCount> _assemblers;
 
 public:
     incoming_controller ()
@@ -47,9 +49,12 @@ public:
 
 public:
     template <typename Manager>
-    void process_packet (Manager * m, typename Manager::address_type sender_addr
+    void process_packet (Manager * m, int priority, typename Manager::address_type sender_addr
         , std::vector<char> && data)
     {
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
+            , "Priority value is out of bounds");
+
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
 
@@ -143,7 +148,7 @@ public:
                         m->process_message_receiving_progress(sender_addr, assembler.msgid()
                             , assembler.received_size(), assembler.total_size());
 
-                        _assemblers.push_back(std::move(assembler));
+                        _assemblers[priority].push_back(std::move(assembler));
 
                         break;
                     }
@@ -156,12 +161,12 @@ public:
                             break;
 
                         // No any message expected, drop part, it can be received later.
-                        if (_assemblers.empty())
+                        if (_assemblers[priority].empty())
                             break;
 
                         multipart_assembler<message_id> * assembler_ptr = nullptr;
 
-                        for (auto & a: _assemblers) {
+                        for (auto & a: _assemblers[priority]) {
                             if (pkt.sn() >= a.first_sn() && pkt.sn() <= a.last_sn()) {
                                 assembler_ptr = & a;
                                 break;
@@ -220,15 +225,17 @@ public:
         unsigned int n = 0;
 
         // Check message receiving is complete.
-        while (!_assemblers.empty()) {
-            auto & a = _assemblers.front();
+        for (int i = 0; i < PriorityCount; i++) {
+            while (!_assemblers[i].empty()) {
+                auto & a = _assemblers[i].front();
 
-            if (a.is_complete()) {
-                m->process_message_received(sender_addr, a.msgid(), a.payload());
-                _assemblers.pop_front();
-                n++;
-            } else {
-                break;
+                if (a.is_complete()) {
+                    m->process_message_received(sender_addr, a.msgid(), a.payload());
+                    _assemblers[i].pop_front();
+                    n++;
+                } else {
+                    break;
+                }
             }
         }
 

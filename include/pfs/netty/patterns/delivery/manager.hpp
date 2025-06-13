@@ -246,12 +246,12 @@ public:
      * @details Must be called when data received by underlying transport (e.g. from transport
      *          callback for handle incoming data)
      */
-    void process_packet (address_type sender_addr, int /*priority*/, std::vector<char> && data)
+    void process_packet (address_type sender_addr, int priority, std::vector<char> && data)
     {
         PFS__ASSERT(data.size() > 0, "");
 
         auto inpc = ensure_incoming_controller(sender_addr);
-        inpc->process_packet(this, sender_addr, std::move(data));
+        inpc->process_packet(this, priority, sender_addr, std::move(data));
     }
 
     /**
