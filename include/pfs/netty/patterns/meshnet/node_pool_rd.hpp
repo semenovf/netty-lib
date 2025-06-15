@@ -241,7 +241,7 @@ public:
     }
 
     bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
-        , std::vector<char> && msg)
+        , std::vector<char> msg)
     {
         return _dm.enqueue_message(id, msgid, priority, force_checksum, std::move(msg));
     }
@@ -264,7 +264,7 @@ public:
         return _dm.enqueue_report(id, priority, force_checksum, data, length);
     }
 
-    bool enqueue_report (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    bool enqueue_report (node_id id, int priority, bool force_checksum, std::vector<char> data)
     {
         return _dm.enqueue_report(id, priority, force_checksum, std::move(data));
     }

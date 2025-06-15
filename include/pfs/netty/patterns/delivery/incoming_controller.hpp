@@ -10,12 +10,12 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../priority_tracker.hpp"
 #include "multipart_assembler.hpp"
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/utility.hpp>
-#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -31,17 +31,22 @@ namespace delivery {
  */
 template <typename MessageId
     , typename SerializerTraits
-    , std::size_t PriorityCount = 1
+    , std::size_t PrioritySize = 1
     , std::uint32_t LostThreshold = 32> // Max number of lost message parts
 class incoming_controller
 {
     using message_id = MessageId;
     using serializer_traits = SerializerTraits;
-    using assembler_container = std::deque<multipart_assembler<message_id>>;
+
+    struct item
+    {
+        // Expected income message part serial number
+        serial_number expected_sn {0};
+        std::deque<multipart_assembler<message_id>> assemblers;
+    };
 
 private:
-    serial_number _expected_sn {0};  // Expected income message part serial number
-    std::array<assembler_container, PriorityCount> _assemblers;
+    std::array<item, PrioritySize> _items;
 
 public:
     incoming_controller ()
@@ -49,12 +54,9 @@ public:
 
 public:
     template <typename Manager>
-    void process_packet (Manager * m, int priority, typename Manager::address_type sender_addr
-        , std::vector<char> && data)
+    void process_packet (Manager * m, typename Manager::address_type sender_addr, int priority
+        , std::vector<char> data)
     {
-        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
-            , "Priority value is out of bounds");
-
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
 
@@ -68,11 +70,18 @@ public:
                         syn_packet pkt {h, in};
 
                         if (pkt.is_request()) {
-                            _expected_sn = pkt.sn();
+                            PFS__THROW_UNEXPECTED(pkt.sn_count() == PrioritySize
+                                , "Incompatible priority size");
+
+                            for (std::size_t i = 0; i < pkt.sn_count(); i++)
+                                _items[i].expected_sn = pkt.sn_at(i);
+
+                            // Serial number is no matter for response
                             auto out = serializer_traits::make_serializer();
-                            syn_packet response_pkt {syn_way_enum::response, pkt.sn()};
+                            syn_packet response_pkt {syn_way_enum::response, pkt.sn_at(0)};
                             response_pkt.serialize(out);
                             m->enqueue_private(sender_addr, out.take());
+
                         } else {
                             m->process_ready(sender_addr);
                         }
@@ -86,7 +95,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        m->process_acknowledged(sender_addr, pkt.sn());
+                        m->process_acknowledged(sender_addr, priority, pkt.sn());
                         break;
                     }
 
@@ -96,7 +105,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        m->process_again(sender_addr, pkt.sn());
+                        m->process_again(sender_addr, priority, pkt.sn());
                         break;
                     }
 
@@ -107,10 +116,12 @@ public:
                         if (!in.commit_transaction())
                             break;
 
+                        auto & x = _items[priority];
+
                         // Drop received packet and NAK expected serial number
-                        if (_expected_sn != pkt.sn()) {
-                            if (_expected_sn < pkt.sn()) {
-                                auto diff = pkt.sn() - _expected_sn;
+                        if (x.expected_sn != pkt.sn()) {
+                            if (x.expected_sn < pkt.sn()) {
+                                auto diff = pkt.sn() - x.expected_sn;
 
                                 // Too big number of lost parts (network problem?)
                                 // NAK only expected serial number
@@ -119,7 +130,7 @@ public:
 
                                 auto out = serializer_traits::make_serializer();
 
-                                for (serial_number sn = _expected_sn; sn <= _expected_sn + diff; sn++) {
+                                for (serial_number sn = x.expected_sn; sn <= x.expected_sn + diff; sn++) {
                                     nak_packet nak_pkt {sn};
                                     nak_pkt.serialize(out);
                                 }
@@ -137,7 +148,7 @@ public:
 
                         assembler.emplace_part(pkt.sn(), std::move(part));
 
-                        _expected_sn = assembler.last_sn() + 1;
+                        x.expected_sn = assembler.last_sn() + 1;
 
                         // Send ACK packet
                         auto out = serializer_traits::make_serializer();
@@ -148,7 +159,7 @@ public:
                         m->process_message_receiving_progress(sender_addr, assembler.msgid()
                             , assembler.received_size(), assembler.total_size());
 
-                        _assemblers[priority].push_back(std::move(assembler));
+                        x.assemblers.push_back(std::move(assembler));
 
                         break;
                     }
@@ -160,13 +171,15 @@ public:
                         if (!in.commit_transaction())
                             break;
 
+                        auto & x = _items[priority];
+
                         // No any message expected, drop part, it can be received later.
-                        if (_assemblers[priority].empty())
+                        if (x.assemblers.empty())
                             break;
 
                         multipart_assembler<message_id> * assembler_ptr = nullptr;
 
-                        for (auto & a: _assemblers[priority]) {
+                        for (auto & a: x.assemblers) {
                             if (pkt.sn() >= a.first_sn() && pkt.sn() <= a.last_sn()) {
                                 assembler_ptr = & a;
                                 break;
@@ -225,13 +238,13 @@ public:
         unsigned int n = 0;
 
         // Check message receiving is complete.
-        for (int i = 0; i < PriorityCount; i++) {
-            while (!_assemblers[i].empty()) {
-                auto & a = _assemblers[i].front();
+        for (auto & x: _items) {
+            while (!x.assemblers.empty()) {
+                auto & a = x.assemblers.front();
 
                 if (a.is_complete()) {
                     m->process_message_received(sender_addr, a.msgid(), a.payload());
-                    _assemblers[i].pop_front();
+                    x.assemblers.pop_front();
                     n++;
                 } else {
                     break;

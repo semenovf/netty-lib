@@ -10,6 +10,7 @@
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
 #include "../../tag.hpp"
+#include "../priority_tracker.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/log.hpp>
@@ -35,7 +36,8 @@ template <typename Transport
     , typename MessageId
     , typename IncomingController
     , typename OutgoingController
-    , typename WriterMutex>
+    , typename WriterMutex
+    , typename PriorityTracker = priority_tracker<single_priority_distribution>>
 class manager
 {
     friend IncomingController;
@@ -148,16 +150,16 @@ private:
         this->on_receiver_ready(sender_addr);
     }
 
-    void process_acknowledged (address_type sender_addr, serial_number sn)
+    void process_acknowledged (address_type sender_addr, int priority, serial_number sn)
     {
         auto outc = ensure_outgoing_controller(sender_addr);
-        outc->acknowledge(sn);
+        outc->acknowledge(priority, sn);
     }
 
-    void process_again (address_type sender_addr, serial_number sn)
+    void process_again (address_type sender_addr, int priority, serial_number sn)
     {
         auto outc = ensure_outgoing_controller(sender_addr);
-        outc->again(sn);
+        outc->again(priority, sn);
     }
 
     void process_message_received (address_type sender_addr, message_id msgid, std::vector<char> && msg)
@@ -187,7 +189,7 @@ private:
 
 public:
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
-        , std::vector<char> && msg)
+        , std::vector<char> msg)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -228,8 +230,7 @@ public:
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
-    bool enqueue_report (address_type addr, int priority, bool force_checksum
-        , std::vector<char> && data)
+    bool enqueue_report (address_type addr, int priority, bool force_checksum, std::vector<char> data)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -246,12 +247,12 @@ public:
      * @details Must be called when data received by underlying transport (e.g. from transport
      *          callback for handle incoming data)
      */
-    void process_packet (address_type sender_addr, int priority, std::vector<char> && data)
+    void process_packet (address_type sender_addr, int priority, std::vector<char> data)
     {
         PFS__ASSERT(data.size() > 0, "");
 
         auto inpc = ensure_incoming_controller(sender_addr);
-        inpc->process_packet(this, priority, sender_addr, std::move(data));
+        inpc->process_packet(this, sender_addr, priority, std::move(data));
     }
 
     /**

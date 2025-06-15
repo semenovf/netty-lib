@@ -26,25 +26,29 @@ foreach (target ${TESTS})
 endforeach()
 
 ####################################################################################################
-# Meshnet tests
+# Patterns tests
 ####################################################################################################
-add_executable(meshnet-handshake-tests meshnet/handshake.cpp)
+add_executable(priority-tracker-tests patterns/priority_tracker.cpp)
+target_link_libraries(priority-tracker-tests PRIVATE pfs::netty)
+add_test(NAME priority-tracker-tests COMMAND priority-tracker-tests)
+
+add_executable(meshnet-handshake-tests patterns/handshake.cpp)
 target_link_libraries(meshnet-handshake-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-handshake-tests COMMAND meshnet-handshake-tests)
 
-add_executable(meshnet-routing-table-tests meshnet/routing_table.cpp)
+add_executable(meshnet-routing-table-tests patterns/routing_table.cpp)
 target_link_libraries(meshnet-routing-table-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-routing-table-tests COMMAND meshnet-routing-table-tests)
 
-add_executable(meshnet-messaging-tests meshnet/messaging.cpp)
+add_executable(meshnet-messaging-tests patterns/messaging.cpp)
 target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
 
-add_executable(meshnet-unreachable-tests meshnet/unreachable.cpp)
+add_executable(meshnet-unreachable-tests patterns/unreachable.cpp)
 target_link_libraries(meshnet-unreachable-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-unreachable-tests COMMAND meshnet-unreachable-tests)
 
-add_executable(meshnet-delivery-tests meshnet/delivery.cpp)
+add_executable(meshnet-delivery-tests patterns/delivery.cpp)
 target_link_libraries(meshnet-delivery-tests PRIVATE pfs::netty pfs::lorem)
 add_test(NAME meshnet-delivery-tests COMMAND meshnet-delivery-tests)
 

@@ -10,6 +10,7 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../priority_tracker.hpp"
 #include "multipart_tracker.hpp"
 #include <pfs/assert.hpp>
 #include <chrono>
@@ -27,13 +28,30 @@ namespace delivery {
  * Outgoing messages controller.
  */
 template <typename MessageId
-    , typename SerializerTraits>
+    , typename SerializerTraits
+    , typename PriorityTracker = priority_tracker<single_priority_distribution>>
 class outgoing_controller
 {
+public:
+    using priority_tracker_type = PriorityTracker;
+
+private:
     using message_id = MessageId;
     using serializer_traits = SerializerTraits;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
+
+    struct item
+    {
+        // Serial number of the last message part (enqueued)
+        serial_number recent_sn {0};
+
+        // Window/queue to track outgoing message/report parts (need access to random element)
+        std::deque<multipart_tracker<message_id>> q;
+
+        // The queue stores serial numbers for retransmission.
+        std::queue<serial_number> again;
+    };
 
 private:
     // SYN packet expiration time
@@ -42,15 +60,11 @@ private:
     // Serial number synchronization flag: set to true when received SYN packet response.
     bool _synchronized {false};
 
-    serial_number _recent_sn {0}; // Serial number of the last message part (enqueued)
     std::uint32_t _part_size {0}; // Message portion size
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
-    // Window/queue to track outgoing message/report parts (need access to random element)
-    std::deque<multipart_tracker<message_id>> _q;
-
-    // The queue stores serial numbers for retransmission.
-    std::queue<serial_number> _again;
+    priority_tracker_type _priority_tracker;
+    std::array<item, PriorityTracker::SIZE> _items;
 
 public:
     outgoing_controller (std::uint32_t part_size = 16384U // 16 Kb
@@ -68,13 +82,20 @@ private:
     std::vector<char> acquire_syn_packet ()
     {
         _exp_syn = clock_type::now() + _exp_timeout;
-        serial_number syn_sn = _recent_sn + 1;
+        std::vector<serial_number> snumbers;
+        snumbers.reserve(PriorityTracker::SIZE);
 
-        if (!_q.empty())
-            syn_sn = _q.front().first_sn();
+        for (auto const & x: _items) {
+            serial_number syn_sn = x.recent_sn + 1;
+
+            if (!x.q.empty())
+                syn_sn = x.q.front().first_sn();
+
+            snumbers.push_back(syn_sn);
+        }
 
         auto out = serializer_traits::make_serializer();
-        syn_packet pkt {syn_way_enum::request, syn_sn};
+        syn_packet pkt {syn_way_enum::request, std::move(snumbers)};
         pkt.serialize(out);
         return out.take();
     }
@@ -88,11 +109,13 @@ public:
     /**
      * Enqueues regular message.
      */
-    bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> && msg)
+    bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> msg)
     {
-        _q.emplace_back(msgid, priority, force_checksum, _part_size, ++_recent_sn, std::move(msg), _exp_timeout);
-        auto & mt = _q.back();
-        _recent_sn = mt.last_sn();
+        auto & x = _items[priority];
+        x.q.emplace_back(msgid, priority, force_checksum, _part_size, ++x.recent_sn, std::move(msg)
+            , _exp_timeout);
+        auto & mt = x.q.back();
+        x.recent_sn = mt.last_sn();
 
         return true;
     }
@@ -103,9 +126,10 @@ public:
     bool enqueue_static_message (message_id msgid, int priority, bool force_checksum
         , char const * msg, std::size_t length)
     {
-        _q.emplace_back(msgid, priority, force_checksum, _part_size, ++_recent_sn, msg, length, _exp_timeout);
-        auto & mt = _q.back();
-        _recent_sn = mt.last_sn();
+        auto & x = _items[priority];
+        x.q.emplace_back(msgid, priority, force_checksum, _part_size, ++x.recent_sn, msg, length, _exp_timeout);
+        auto & mt = x.q.back();
+        x.recent_sn = mt.last_sn();
         return true;
     }
 
@@ -114,7 +138,12 @@ public:
      */
     bool empty () const
     {
-        return _q.empty();
+        for (auto const & x: _items) {
+            if (!x.q.empty())
+                return false;
+        }
+
+        return true;
     }
 
     template <typename Manager>
@@ -136,71 +165,96 @@ public:
             return n;
         }
 
-        if (_q.empty())
+        if (empty())
             return n;
 
         // Retransmit
-        if (!_again.empty()) {
-            while (!_again.empty()) {
-                serial_number sn = _again.front();
-                _again.pop();
+        for (auto & x: _items) {
+            if (!x.again.empty()) {
+                serial_number sn = x.again.front();
+                x.again.pop();
 
-                auto pos = multipart_tracker<message_id>::find(_q.begin(), _q.end(), sn);
-                PFS__THROW_UNEXPECTED(pos != _q.end(), "Fix delivery::outgoing_controller algorithm");
+                auto pos = multipart_tracker<message_id>::find(x.q.begin(), x.q.end(), sn);
+                PFS__THROW_UNEXPECTED(pos != x.q.end(), "Fix delivery::outgoing_controller algorithm");
 
                 auto out = serializer_traits::make_serializer();
 
-                if (pos->acquire_part(out)) {
+                if (pos->acquire_part(out, sn)) {
                     m->enqueue_private(receiver_addr, out.take(), pos->priority(), pos->force_checksum());
                     n++;
                 }
             }
-
-            return n;
         }
+
+        // Candidates to retransmit were found
+        if (n > 0)
+            return n;
 
         // Check complete messages
-        auto mt = & _q.front();
+        for (auto & x: _items) {
+            auto mt = & x.q.front();
 
-        while (mt->is_complete()) {
-            m->process_message_delivered(receiver_addr, mt->msgid());
+            while (mt->is_complete()) {
+                m->process_message_delivered(receiver_addr, mt->msgid());
 
-            _q.pop_front();
-            n++;
+                x.q.pop_front();
+                n++;
 
-            if (_q.empty())
-                break;
+                if (x.q.empty())
+                    break;
 
-            mt = & _q.front();
+                mt = & x.q.front();
+            }
         }
 
-        if (_q.empty())
+        if (empty())
             return n;
 
-        // Try to acquire next part of the current sending message
-        mt = & _q.front();
+        auto saved_priority = _priority_tracker.current();
 
-        auto out = serializer_traits::make_serializer();
+        // Try to acquire next part of the current sending message according to priority
+        do {
+            auto priority = _priority_tracker.next();
 
-        if (mt->acquire_part(out)) {
-            m->enqueue_private(receiver_addr, out.take(), mt->priority(), mt->force_checksum());
-            n++;
-        }
+            auto & x = _items[priority];
+
+            if (x.q.empty()) {
+                _priority_tracker.skip();
+                continue;
+            }
+
+            auto mt = & x.q.front();
+
+            auto out = serializer_traits::make_serializer();
+
+            if (mt->acquire_part(out)) {
+                m->enqueue_private(receiver_addr, out.take(), mt->priority(), mt->force_checksum());
+                n++;
+                break;
+            } else {
+                _priority_tracker.skip();
+                continue;
+            }
+        } while (_priority_tracker.current() != saved_priority);
 
         return n;
     }
 
-    void acknowledge (serial_number sn)
+    void acknowledge (int priority, serial_number sn)
     {
-        auto pos = multipart_tracker<message_id>::find(_q.begin(), _q.end(), sn);
-        PFS__THROW_UNEXPECTED(pos != _q.end(), "Fix delivery::outgoing_controller algorithm");
+        auto & x = _items[priority];
+
+        auto pos = multipart_tracker<message_id>::find(x.q.begin(), x.q.end(), sn);
+        PFS__THROW_UNEXPECTED(pos != x.q.end(), "Fix delivery::outgoing_controller algorithm");
         pos->acknowledge(sn);
     }
 
-    void again (serial_number sn)
+    void again (int priority, serial_number sn)
     {
+        auto & x = _items[priority];
+
         // Cache serial number for part retransmission in step()
-        _again.push(sn);
+        x.again.push(sn);
     }
 
 public: // static

@@ -9,8 +9,10 @@
 //                 packet_enum::payload replaced by packet_enum::message.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
+#include "../../namespace.hpp"
 #include "serial_number.hpp"
-#include <pfs/netty/namespace.hpp>
+#include <pfs/assert.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <cstdint>
 #include <cstring>
@@ -122,8 +124,21 @@ protected:
 class syn_packet: public header
 {
     std::uint8_t _way;
+    std::vector<serial_number> _snumbers;
 
 public:
+    syn_packet (syn_way_enum way, std::vector<serial_number> snumbers) noexcept
+        : header(packet_enum::syn, 0)
+        , _way(static_cast<std::uint8_t>(way))
+        , _snumbers(std::move(snumbers))
+    {
+        PFS__TERMINATE(!_snumbers.empty(), "serial numbers vector is empty");
+        _h.sn = _snumbers[0];
+
+        if (_snumbers.size() == 1)
+            _snumbers.clear();
+    }
+
     syn_packet (syn_way_enum way, serial_number sn) noexcept
         : header(packet_enum::syn, 0)
         , _way(static_cast<std::uint8_t>(way))
@@ -136,6 +151,16 @@ public:
         : header(h)
     {
         in >> _way;
+
+        if (!in.empty()) {
+            std::uint8_t size = 0;
+            in >> size;
+
+            _snumbers.resize(size);
+
+            for (int i = 0; i < size; i++)
+                in >> _snumbers[i];
+        }
     }
 
 public:
@@ -149,11 +174,29 @@ public:
         return static_cast<syn_way_enum>(_way);
     }
 
+    std::size_t sn_count () const noexcept
+    {
+        return _snumbers.empty() ? 1 : _snumbers.size();
+    }
+
+    serial_number sn_at (std::size_t index) const
+    {
+        return _snumbers.empty() ? sn() : _snumbers[index];
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
         out << _way;
+
+        if (_snumbers.size() > 1) {
+            auto size = pfs::numeric_cast<std::uint8_t>(_snumbers.size());
+            out << size;
+
+            for (int i = 0; i < size; i++)
+                out << _snumbers[i];
+        }
     }
 };
 
