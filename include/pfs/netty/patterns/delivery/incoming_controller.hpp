@@ -80,8 +80,7 @@ public:
                             auto out = serializer_traits::make_serializer();
                             syn_packet response_pkt {syn_way_enum::response, pkt.sn_at(0)};
                             response_pkt.serialize(out);
-                            m->enqueue_private(sender_addr, out.take());
-
+                            m->enqueue_private(sender_addr, out.take(), 0);
                         } else {
                             m->process_ready(sender_addr);
                         }
@@ -135,7 +134,7 @@ public:
                                     nak_pkt.serialize(out);
                                 }
 
-                                m->enqueue_private(sender_addr, out.take());
+                                m->enqueue_private(sender_addr, out.take(), priority);
                             } else {
                                 PFS__THROW_UNEXPECTED(false, "Fix meshnet::incoming_controller algorithm");
                             }
@@ -154,7 +153,7 @@ public:
                         auto out = serializer_traits::make_serializer();
                         ack_packet ack_pkt {pkt.sn()};
                         ack_pkt.serialize(out);
-                        m->enqueue_private(sender_addr, out.take());
+                        m->enqueue_private(sender_addr, out.take(), priority);
 
                         m->process_message_receiving_progress(sender_addr, assembler.msgid()
                             , assembler.received_size(), assembler.total_size());
@@ -193,7 +192,7 @@ public:
                             auto out = serializer_traits::make_serializer();
                             ack_packet ack_pkt {pkt.sn()};
                             ack_pkt.serialize(out);
-                            m->enqueue_private(sender_addr, out.take());
+                            m->enqueue_private(sender_addr, out.take(), priority);
 
                             m->process_message_receiving_progress(sender_addr, assembler_ptr->msgid()
                                 , assembler_ptr->received_size(), assembler_ptr->total_size());

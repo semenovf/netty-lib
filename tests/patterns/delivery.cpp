@@ -39,6 +39,7 @@ static void sigterm_handler (int sig)
     mesh_network_t::instance()->interrupt_all();
 }
 
+#if 1
 TEST_CASE("simple delivery") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
@@ -94,70 +95,73 @@ TEST_CASE("simple delivery") {
     net.run_all();
     CHECK(tools::wait_atomic_counter(route_ready_counter, 1));
 
-    net.send("A0", "A1", text);
+    net.send("A0", "A1", text, 1);
 
     CHECK(tools::wait_atomic_counter(message_received_counter, 1));
 
     net.interrupt_all();
     net.join_all();
 }
+#endif
 
-// TEST_CASE("sync delivery") {
-//     LOGD(TAG, "==========================================");
-//     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
-//     LOGD(TAG, "==========================================");
-//
-//     netty::startup_guard netty_startup;
-//
-//     mesh_network_t net { "a", "b", "c", "A0", "C0" };
-//
-//     net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
-//         , std::vector<node_id> /*gw_chain*/, std::size_t source_index, std::size_t target_index)
-//     {
-//         g_route_matrix.wlock()->set(source_index, target_index, true);
-//     };
-//
-//     net.on_receiver_ready = [] (std::string const & source_name, std::string const & receiver_name
-//         , std::size_t source_index, std::size_t receiver_index)
-//     {
-//         LOGD(TAG, "{}: Receiver ready: {}", source_name, receiver_name);
-//         g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
-//     };
-//
-//     net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
-//         , std::string const & msgid)
-//     {
-//         g_message_delivered_counter++;
-//         LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
-//     };
-//
-//     constexpr bool BEHIND_NAT = true;
-//     g_text0 = tools::random_large_text();
-//     g_text1 = tools::random_large_text();
-//     g_text2 = tools::random_large_text();
-//
-//     // Connect gateways
-//     net.connect_host("a", "b");
-//     net.connect_host("b", "a");
-//     net.connect_host("b", "c");
-//     net.connect_host("c", "b");
-//
-//     net.connect_host("A0", "a", BEHIND_NAT);
-//     net.connect_host("C0", "c", BEHIND_NAT);
-//
-//     tools::signal_guard signal_guard {SIGINT, sigterm_handler};
-//
-//     net.run_all();
-//     CHECK(tools::wait_matrix_count(g_route_matrix, 20));
-//     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
-//
-//     net.send("A0", "C0", g_text0);
-//     net.send("A0", "C0", g_text1);
-//     net.send("A0", "C0", g_text2);
-//
-//     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
-//     CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));
-//
-//     net.interrupt_all();
-//     net.join_all();
-// }
+#if 1
+TEST_CASE("delivery") {
+    LOGD(TAG, "==========================================");
+    LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
+    LOGD(TAG, "==========================================");
+
+    netty::startup_guard netty_startup;
+
+    mesh_network_t net { "a", "b", "c", "A0", "C0" };
+
+    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
+        , std::vector<node_id> /*gw_chain*/, std::size_t source_index, std::size_t target_index)
+    {
+        g_route_matrix.wlock()->set(source_index, target_index, true);
+    };
+
+    net.on_receiver_ready = [] (std::string const & source_name, std::string const & receiver_name
+        , std::size_t source_index, std::size_t receiver_index)
+    {
+        LOGD(TAG, "{}: Receiver ready: {}", source_name, receiver_name);
+        g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
+    };
+
+    net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
+        , std::string const & msgid)
+    {
+        g_message_delivered_counter++;
+        LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
+    };
+
+    constexpr bool BEHIND_NAT = true;
+    g_text0 = tools::random_large_text();
+    g_text1 = tools::random_large_text();
+    g_text2 = tools::random_large_text();
+
+    // Connect gateways
+    net.connect_host("a", "b");
+    net.connect_host("b", "a");
+    net.connect_host("b", "c");
+    net.connect_host("c", "b");
+
+    net.connect_host("A0", "a", BEHIND_NAT);
+    net.connect_host("C0", "c", BEHIND_NAT);
+
+    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+
+    net.run_all();
+    CHECK(tools::wait_matrix_count(g_route_matrix, 20));
+    CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
+
+    net.send("A0", "C0", g_text0, 0);
+    net.send("A0", "C0", g_text1, 1);
+    net.send("A0", "C0", g_text2, 2);
+
+    CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
+    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));
+
+    net.interrupt_all();
+    net.join_all();
+}
+#endif

@@ -162,11 +162,26 @@ using node_pool_t = meshnet_ns::node_pool<pfs::universal_id
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // Reliable delivery node pool
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+struct priority_distribution
+{
+    std::array<std::size_t, 3> distrib {9, 3, 1};
+
+    static constexpr std::size_t SIZE = 3;
+
+    constexpr std::size_t operator [] (std::size_t i) const noexcept
+    {
+        return distrib[i];
+    }
+};
+
+using priority_tracker_t = netty::patterns::priority_tracker<priority_distribution>;
+
 using delivery_transport_t = node_pool_t;
 using incoming_controller_t = delivery_ns::incoming_controller<pfs::universal_id
-    , netty::patterns::serializer_traits_t>;
+    , netty::patterns::serializer_traits_t, priority_tracker_t::SIZE>;
 using outgoing_controller_t = delivery_ns::outgoing_controller<pfs::universal_id
-    , netty::patterns::serializer_traits_t>;
+    , netty::patterns::serializer_traits_t, priority_tracker_t>;
+
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, pfs::universal_id
     , incoming_controller_t, outgoing_controller_t, std::mutex>;
 

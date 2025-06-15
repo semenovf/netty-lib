@@ -36,8 +36,7 @@ template <typename Transport
     , typename MessageId
     , typename IncomingController
     , typename OutgoingController
-    , typename WriterMutex
-    , typename PriorityTracker = priority_tracker<single_priority_distribution>>
+    , typename WriterMutex>
 class manager
 {
     friend IncomingController;

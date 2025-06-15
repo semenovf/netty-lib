@@ -353,9 +353,8 @@ public:
         initiator_ctx->node_pool_ptr->connect_host(index, target_saddr, behind_nat);
     }
 
-    void send (std::string const & src, std::string const & dest, std::string const & text)
+    void send (std::string const & src, std::string const & dest, std::string const & text, int priority = 0)
     {
-        int priority = 0;
         auto sender_ctx = locate_by_name(src);
         auto receiver_id = node_id_by_name(dest);
 
