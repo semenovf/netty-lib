@@ -208,7 +208,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        m->process_report_received(sender_addr, std::move(bytes));
+                        m->process_report_received(sender_addr, priority, std::move(bytes));
                         break;
                     }
 
@@ -237,12 +237,14 @@ public:
         unsigned int n = 0;
 
         // Check message receiving is complete.
-        for (auto & x: _items) {
+        for (int priority = 0; priority < _items.size(); priority++) {
+            auto & x = _items[priority];
+
             while (!x.assemblers.empty()) {
                 auto & a = x.assemblers.front();
 
                 if (a.is_complete()) {
-                    m->process_message_received(sender_addr, a.msgid(), a.payload());
+                    m->process_message_received(sender_addr, a.msgid(), priority, a.payload());
                     x.assemblers.pop_front();
                     n++;
                 } else {

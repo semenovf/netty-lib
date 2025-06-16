@@ -89,8 +89,8 @@ public:
     /**
      * Notify receiver when message received.
      */
-    mutable callback_t<void (node_id, message_id, std::vector<char>)> on_message_received
-        = [] (node_id, message_id, std::vector<char>) {};
+    mutable callback_t<void (node_id, message_id, int, std::vector<char>)> on_message_received
+        = [] (node_id, message_id, int /*priority*/, std::vector<char>) {};
 
     /**
      * Notify sender when message delivered to the receiver.
@@ -101,8 +101,8 @@ public:
     /**
      * Notify receiver when report received.
      */
-    mutable callback_t<void (node_id, std::vector<char>)> on_report_received
-        = [] (node_id, std::vector<char>) {};
+    mutable callback_t<void (node_id, int, std::vector<char>)> on_report_received
+        = [] (node_id, int /*priority*/, std::vector<char>) {};
 
 public:
     node_pool_rd (node_id id, bool is_gateway = false)
@@ -165,9 +165,9 @@ public:
             this->on_receiver_ready(id);
         };
 
-        _dm.on_message_received = [this] (node_id id, message_id msgid, std::vector<char> msg)
+        _dm.on_message_received = [this] (node_id id, message_id msgid, int priority, std::vector<char> msg)
         {
-            this->on_message_received(id, msgid, std::move(msg));
+            this->on_message_received(id, msgid, priority, std::move(msg));
         };
 
         _dm.on_message_delivered = [this] (node_id id, message_id msgid)
@@ -175,9 +175,9 @@ public:
             this->on_message_delivered(id, msgid);
         };
 
-        _dm.on_report_received = [this] (node_id id, std::vector<char> report)
+        _dm.on_report_received = [this] (node_id id, int priority, std::vector<char> report)
         {
-            this->on_report_received(id, std::move(report));
+            this->on_report_received(id, priority, std::move(report));
         };
     }
 

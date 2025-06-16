@@ -261,7 +261,7 @@ private:
         };
 
         ptr->on_message_received = [this, source_name] (node_id sender_id, message_id msgid
-            , std::vector<char> msg)
+            , int /*priority*/, std::vector<char> msg)
         {
             auto sender_name = node_name_by_id(sender_id);
             this->on_message_received(source_name, sender_name, to_string(msgid), std::move(msg));
@@ -273,7 +273,7 @@ private:
             this->on_message_delivered(source_name, receiver_name, to_string(msgid));
         };
 
-        ptr->on_report_received = [this, source_name] (node_id sender_id, std::vector<char> report)
+        ptr->on_report_received = [this, source_name] (node_id sender_id, int /*priority*/, std::vector<char> report)
         {
             auto sender_name = node_name_by_id(sender_id);
             this->on_report_received(source_name, sender_name, std::move(report));

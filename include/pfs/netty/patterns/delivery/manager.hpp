@@ -70,14 +70,14 @@ public:
 
     mutable callback_t<void (address_type)> on_receiver_ready = [] (address_type) {};
 
-    mutable callback_t<void (address_type, message_id, std::vector<char>)> on_message_received
-        = [] (address_type, message_id, std::vector<char>) {};
+    mutable callback_t<void (address_type, message_id, int, std::vector<char>)> on_message_received
+        = [] (address_type, message_id, int /*priority*/, std::vector<char>) {};
 
     mutable callback_t<void (address_type, message_id)> on_message_delivered
         = [] (address_type, message_id) {};
 
-    mutable callback_t<void (address_type, std::vector<char>)> on_report_received
-        = [] (address_type, std::vector<char>) {};
+    mutable callback_t<void (address_type, int, std::vector<char>)> on_report_received
+        = [] (address_type, int /*priority*/, std::vector<char>) {};
 
     /**
      * Notify receiver about message receiving progress (optional).
@@ -161,14 +161,15 @@ private:
         outc->again(priority, sn);
     }
 
-    void process_message_received (address_type sender_addr, message_id msgid, std::vector<char> && msg)
+    void process_message_received (address_type sender_addr, message_id msgid, int priority
+        , std::vector<char> && msg)
     {
-        on_message_received(sender_addr, msgid, std::move(msg));
+        on_message_received(sender_addr, msgid, priority, std::move(msg));
     };
 
-    void process_report_received (address_type sender_addr, std::vector<char> && report)
+    void process_report_received (address_type sender_addr, int priority, std::vector<char> && report)
     {
-        this->on_report_received(sender_addr, std::move(report));
+        this->on_report_received(sender_addr, priority, std::move(report));
     }
 
     void process_message_receiving_progress (address_type sender_addr, message_id msgid
