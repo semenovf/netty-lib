@@ -192,6 +192,9 @@ public:
 
         // Check complete messages
         for (auto & x: _items) {
+            if (x.q.empty())
+                continue;
+
             auto mt = & x.q.front();
 
             while (mt->is_complete()) {
