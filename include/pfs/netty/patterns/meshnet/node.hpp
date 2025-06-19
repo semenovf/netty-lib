@@ -153,58 +153,20 @@ private:
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
 
-public: // callbacks
-    mutable callback_t<void (std::string const &)> on_error
+private: // Callbacks
+    callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
-    // Notify when connection established with the remote node
-    mutable callback_t<void (node_id, node_index_t, bool)> on_channel_established
-        = [] (node_id, node_index_t, bool /*is_gateway*/) {};
-
-    // Notify when the channel is destroyed with the remote node
-    mutable callback_t<void (node_id, node_index_t)> on_channel_destroyed
-        = [] (node_id, node_index_t) {};
-
-    // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id, node_index_t, socket4_addr)> on_duplicate_id
-        = [] (node_id, node_index_t, socket4_addr) {};
-
-    // Notify when data actually sent (written into the socket)
-    mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
-        = [] (node_id, std::uint64_t /*n*/) {};
-
-    // On alive info received
-    mutable callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> on_alive_received
-        = [] (node_id, node_index_t, alive_info<node_id> const &) {};
-
-    // On unreachable node received
-    mutable callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)> on_unreachable_received
-        = [] (node_id, node_index_t, unreachable_info<node_id> const &) {};
-
-    // On intermediate route info received
-    mutable callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)> on_route_received
-        = [] (node_id, node_index_t, bool /*is_response*/, route_info<node_id> const &) {};
-
-    // On domestic message received
-    mutable callback_t<void (node_id, int, std::vector<char>)> on_domestic_data_received
-        = [] (node_id, int /*priority*/, std::vector<char> /*bytes*/) {};
-
-    // On global (intersubnet) message received
-    mutable callback_t<void (node_id // last transmitter node
-        , int // priority
-        , node_id // sender ID
-        , node_id // receiver ID
-        , std::vector<char>)> on_global_data_received
-        = [] (node_id, int /*priority*/, node_id /*sender_id*/
-            , node_id /*receiver_id*/, std::vector<char> /*bytes*/) {};
-
-    // On global (intersubnet) message received
-    mutable callback_t<void (int // priority
-        , node_id // sender ID
-        , node_id // receiver ID
-        , std::vector<char>)> on_forward_global_packet
-        = [] (int /*priority*/, node_id /*sender_id*/, node_id /*receiver_id*/
-            , std::vector<char> /*packet*/) {};
+    callback_t<void (node_id, node_index_t, bool)> _on_channel_established = [] (node_id, node_index_t, bool) {};
+    callback_t<void (node_id, node_index_t)> _on_channel_destroyed = [] (node_id, node_index_t) {};
+    callback_t<void (node_id, node_index_t, socket4_addr)> _on_duplicate_id;
+    callback_t<void (node_id, node_index_t, std::size_t)> _on_bytes_written;
+    callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> _on_alive_received;
+    callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)> _on_unreachable_received;
+    callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)> _on_route_received;
+    callback_t<void (node_id, int, std::vector<char>)> _on_domestic_data_received;
+    callback_t<void (node_id, int, node_id, node_id, std::vector<char>)> _on_global_data_received;
+    callback_t<void (int, node_id, node_id, std::vector<char>)> _on_forward_global_packet;
 
 public:
     node (node_id id, bool is_gateway = false)
@@ -221,7 +183,7 @@ public:
 
         _listener_pool.on_failure = [this] (netty::error const & err)
         {
-            this->on_error(tr::f_("listener pool failure: {}", err.what()));
+            _on_error(tr::f_("listener pool failure: {}", err.what()));
         };
 
         _listener_pool.on_accepted = [this] (socket_type && sock)
@@ -234,7 +196,7 @@ public:
 
         _connecting_pool.on_failure = [this] (netty::error const & err)
         {
-            this->on_error(tr::f_("connecting pool failure: {}", err.what()));
+            _on_error(tr::f_("connecting pool failure: {}", err.what()));
         };
 
         _connecting_pool.on_connected = [this] (socket_type && sock)
@@ -256,14 +218,14 @@ public:
         _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
                 , netty::connection_refused_reason reason)
         {
-            this->on_error(tr::f_("connection refused for socket: {}: reason: {}"
+            _on_error(tr::f_("connection refused for socket: {}: reason: {}"
                 , to_string(saddr), to_string(reason)));
             schedule_reconnection(saddr);
         };
 
         _reader_pool.on_failure = [this] (socket_id sid, netty::error const & err)
         {
-            this->on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
+            _on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
             schedule_reconnection(sid);
         };
 
@@ -285,7 +247,7 @@ public:
 
         _writer_pool.on_failure = [this] (socket_id sid, netty::error const & err)
         {
-            this->on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
+            _on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
             schedule_reconnection(sid);
         };
 
@@ -297,10 +259,12 @@ public:
 
         _writer_pool.on_bytes_written = [this] (socket_id sid, std::uint64_t n)
         {
-            auto id_ptr = _channels.locate_writer(sid);
+            if (_on_bytes_written) {
+                auto id_ptr = _channels.locate_writer(sid);
 
-            if (id_ptr != nullptr)
-                this->on_bytes_written(*id_ptr, n);
+                if (id_ptr != nullptr)
+                    _on_bytes_written(*id_ptr, _index, n);
+            }
         };
 
         _writer_pool.locate_socket = [this] (socket_id sid)
@@ -329,14 +293,14 @@ public:
 
             _heartbeat_controller.update(writer_sid);
 
-            this->on_channel_established(id, _index, is_gateway);
+            _on_channel_established(id, _index, is_gateway);
         };
 
         _handshake_controller.on_duplicate_id = [this] (node_id id, socket_id sid, bool force_closing)
         {
             auto psock = _socket_pool.locate(sid);
             PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::node algorithm");
-            this->on_duplicate_id(id, _index, psock->saddr());
+            _on_duplicate_id(id, _index, psock->saddr());
 
             if (force_closing)
                 close_socket(sid);
@@ -366,6 +330,151 @@ public:
     {
         clear_channels();
         NETTY__TRACE(MESHNET_TAG, "node destroyed: {}", to_string(_id));
+    }
+
+public: // Set callbacks
+    /**
+     * Sets error callback.
+     *
+     * @details Callback @a f signature must match:
+     *          void (std::string const &)
+     */
+    template <typename F>
+    node & on_error (F && f)
+    {
+        _on_error = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when connection established with the remote node.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id, node_index_t, bool is_gateway)
+     */
+    template <typename F>
+    node & on_channel_established (F && f)
+    {
+        _on_channel_established = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when the channel is destroyed with the remote node.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, node_index_t)
+     */
+    template <typename F>
+    node & on_channel_destroyed (F && f)
+    {
+        _on_channel_destroyed = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when a node with identical ID is detected.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, node_index_t, socket4_addr)
+     */
+    template <typename F>
+    node & on_duplicate_id (F && f)
+    {
+        _on_duplicate_id = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On alive info received.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, node_index_t, alive_info<node_id> const &)
+     */
+    template <typename F>
+    node & on_alive_received (F && f)
+    {
+        _on_alive_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On unreachable node received
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, node_index_t, unreachable_info<node_id> const &)
+     */
+    template <typename F>
+    node & on_unreachable_received (F && f)
+    {
+        _on_unreachable_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when data actually sent (written into the socket).
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id, std::uint64_t bytes_written_size)
+     */
+    template <typename F>
+    node & on_bytes_written (F && f)
+    {
+        _on_bytes_written = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On intermediate route info received.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, node_index_t, bool is_response, route_info<node_id> const &)
+     */
+    template <typename F>
+    node & on_route_received (F && f)
+    {
+        _on_route_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On domestic message received.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, int priority, std::vector<char> bytes/)
+     */
+    template <typename F>
+    node & on_domestic_data_received (F && f)
+    {
+        _on_domestic_data_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On global (intersubnet) message received
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id last_transmitter, int priority, node_id sender
+     *              , node_id receiver, std::vector<char> data)
+     */
+    template <typename F>
+    node & on_global_data_received (F && f)
+    {
+        _on_global_data_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On global (intersubnet) message received
+     *
+     * @details Callback @a f signature must match:
+     *          void (int priority, node_id sender, node_id receiver, std::vector<char> data)
+     */
+    template <typename F>
+    node & on_forward_global_packet (F && f)
+    {
+        _on_forward_global_packet = std::forward<F>(f);
+        return *this;
     }
 
 public:
@@ -446,7 +555,7 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send message not found: {}", to_string(id)));
+        _on_error(tr::f_("channel for send message not found: {}", to_string(id)));
         return false;
     }
 
@@ -479,7 +588,7 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
+        _on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
         return false;
     }
 
@@ -497,7 +606,7 @@ public:
             return true;
         }
 
-        on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
+        _on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
         return false;
     }
 
@@ -637,55 +746,65 @@ private:
         auto id_opt = _channels.close_channel(sid);
 
         if (id_opt)
-            this->on_channel_destroyed(*id_opt, _index);
+            _on_channel_destroyed(*id_opt, _index);
     }
 
     void process_alive_info (socket_id sid, alive_info<node_id> const & ainfo)
     {
-        auto id_ptr = _channels.locate_reader(sid);
+        if (_on_alive_received) {
+            auto id_ptr = _channels.locate_reader(sid);
 
-        if (id_ptr != nullptr)
-            this->on_alive_received(*id_ptr, _index, ainfo);
+            if (id_ptr != nullptr)
+                _on_alive_received(*id_ptr, _index, ainfo);
+        }
     }
 
     void process_unreachable_info (socket_id sid, unreachable_info<node_id> const & uinfo)
     {
-        auto id_ptr = _channels.locate_reader(sid);
+        if (_on_unreachable_received) {
+            auto id_ptr = _channels.locate_reader(sid);
 
-        if (id_ptr != nullptr)
-            this->on_unreachable_received(*id_ptr, _index, uinfo);
+            if (id_ptr != nullptr)
+                _on_unreachable_received(*id_ptr, _index, uinfo);
+        }
     }
 
     void process_route_info (socket_id sid, bool is_response, route_info<node_id> const & rinfo)
     {
-        auto id_ptr = _channels.locate_reader(sid);
+        if (_on_route_received) {
+            auto id_ptr = _channels.locate_reader(sid);
 
-        if (id_ptr != nullptr)
-            this->on_route_received(*id_ptr, _index, is_response, rinfo);
+            if (id_ptr != nullptr)
+                _on_route_received(*id_ptr, _index, is_response, rinfo);
+        }
     }
 
     void process_message_received (socket_id sid, int priority, std::vector<char> && bytes)
     {
-        auto id_ptr = _channels.locate_reader(sid);
+        if (_on_domestic_data_received) {
+            auto id_ptr = _channels.locate_reader(sid);
 
-        if (id_ptr != nullptr)
-            this->on_domestic_data_received(*id_ptr, priority, std::move(bytes));
+            if (id_ptr != nullptr)
+                _on_domestic_data_received(*id_ptr, priority, std::move(bytes));
+        }
     }
 
     void process_message_received (socket_id sid, int priority, node_id sender_id
         , node_id receiver_id, std::vector<char> && bytes)
     {
-        auto id_ptr = _channels.locate_reader(sid);
+        if (_on_global_data_received) {
+            auto id_ptr = _channels.locate_reader(sid);
 
-        if (id_ptr != nullptr) {
-            this->on_global_data_received(*id_ptr, priority, sender_id, receiver_id, std::move(bytes));
+            if (id_ptr != nullptr)
+                _on_global_data_received(*id_ptr, priority, sender_id, receiver_id, std::move(bytes));
         }
     }
 
     void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
         , std::vector<char> && packet)
     {
-        this->on_forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
+        if (_on_forward_global_packet)
+            _on_forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
     }
 
     HandshakeController<node> & handshake_processor ()
@@ -806,69 +925,69 @@ public: // node_interface
             Node::enqueue_forward_packet(sender_id, priority, data, len);
         }
 
-        //
+        ////////////////////////////////////////////////////////////////////////////////////////////
         // Callback assign methods
-        //
+        ////////////////////////////////////////////////////////////////////////////////////////////
         void on_error (callback_t<void (std::string const &)> cb) override
         {
-            Node::on_error = std::move(cb);
+            Node::on_error(std::move(cb));
         }
 
         void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)> cb) override
         {
-            Node::on_channel_established = std::move(cb);
+            Node::on_channel_established(std::move(cb));
         }
 
         void on_channel_destroyed (callback_t<void (node_id, node_index_t)> cb) override
         {
-            Node::on_channel_destroyed = std::move(cb);
+            Node::on_channel_destroyed(std::move(cb));
         }
 
         void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
         {
-            Node::on_duplicate_id = std::move(cb);
+            Node::on_duplicate_id(std::move(cb));
         }
 
-        void on_bytes_written (callback_t<void (node_id, std::uint64_t)> cb) override
+        void on_bytes_written (callback_t<void (node_id, node_index_t, std::uint64_t)> cb) override
         {
-            Node::on_bytes_written = std::move(cb);
+            Node::on_bytes_written(std::move(cb));
         }
 
         void on_alive_received (callback_t<void (node_id, node_index_t
             , alive_info<node_id> const &)> cb) override
         {
-            Node::on_alive_received = std::move(cb);
+            Node::on_alive_received(std::move(cb));
         }
 
         void on_unreachable_received (callback_t<void (node_id, node_index_t
             , unreachable_info<node_id> const &)> cb) override
         {
-            Node::on_unreachable_received = std::move(cb);
+            Node::on_unreachable_received(std::move(cb));
         }
 
         void on_route_received (callback_t<void (node_id, node_index_t, bool
             , route_info<node_id> const &)> cb) override
         {
-            Node::on_route_received = std::move(cb);
+            Node::on_route_received(std::move(cb));
         }
 
         void on_domestic_data_received (callback_t<void (node_id, int
             , std::vector<char>)> cb) override
         {
-            Node::on_domestic_data_received = std::move(cb);
+            Node::on_domestic_data_received(std::move(cb));
         }
 
         void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
             , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/
             , std::vector<char>)> cb) override
         {
-            Node::on_global_data_received = std::move(cb);
+            Node::on_global_data_received(std::move(cb));
         }
 
         void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/
             , node_id /*receiver ID*/, std::vector<char>)> cb) override
         {
-            Node::on_forward_global_packet = std::move(cb);
+            Node::on_forward_global_packet(std::move(cb));
         }
     };
 

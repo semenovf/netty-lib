@@ -155,6 +155,8 @@ public:
                         ack_pkt.serialize(out);
                         m->enqueue_private(sender_addr, out.take(), priority);
 
+                        m->process_message_receiving_begin(sender_addr, assembler.msgid()
+                            , assembler.total_size());
                         m->process_message_receiving_progress(sender_addr, assembler.msgid()
                             , assembler.received_size(), assembler.total_size());
 

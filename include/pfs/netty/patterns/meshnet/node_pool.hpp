@@ -66,57 +66,23 @@ private:
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
 
-public:
-    /**
-     * Notify when error occurred.
-     */
-    mutable callback_t<void (std::string const &)> on_error
+private:
+    callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
-    // Notify when connection established with the remote node
-    mutable callback_t<void (node_id, bool)> on_channel_established
-        = [] (node_id, bool /*is_gateway*/) {};
-
-    // Notify when the channel is destroyed with the remote node
-    mutable callback_t<void (node_id)> on_channel_destroyed = [] (node_id) {};
-
-    // Notify when a node with identical ID is detected
-    mutable callback_t<void (node_id, socket4_addr)> on_duplicate_id
-        = [] (node_id, socket4_addr) {};
-
-    // Notify when node alive status changed
-    mutable callback_t<void (node_id)> on_node_alive = [] (node_id) {};
-
-    // Notify when node alive status changed
-    mutable callback_t<void (node_id)> on_node_expired = [] (node_id) {};
-
-    // Notify when some route ready by request or response
-    mutable callback_t<void (node_id, gateway_chain_type)> on_route_ready;
-
-    // Notify when data actually sent (written into the socket)
-    mutable callback_t<void (node_id, std::uint64_t)> on_bytes_written
-        = [] (node_id, std::uint64_t /*n*/) {};
-
-    // Notify when message received (domestic or global)
-    mutable callback_t<void (node_id, int, std::vector<char>)> on_data_received
-        = [] (node_id, int /*priority*/, std::vector<char> /*bytes*/) {};
+    callback_t<void (node_id, bool)> _on_channel_established;
+    callback_t<void (node_id)> _on_channel_destroyed;
+    callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
+    callback_t<void (node_id, std::size_t)> _on_bytes_written;
+    callback_t<void (node_id, int, std::vector<char>)> _on_data_received;
 
 public:
     node_pool (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
         , _alive_controller(id)
-    {
-        _alive_controller.on_alive = [this] (node_id id)
-        {
-            this->on_node_alive(id);
-        };
-
-        _alive_controller.on_expired = [this] (node_id id)
-        {
-            this->on_node_expired(id);
-        };
-    }
+    {}
 
     node_pool (node_pool const &) = delete;
     node_pool (node_pool &&) = delete;
@@ -126,6 +92,125 @@ public:
     ~node_pool ()
     {
         clear_all_channels();
+    }
+
+public: // Set callbacks
+    /**
+     * Sets error callback.
+     *
+     * @details Invoked when error occurred.
+     *          Callback @a f signature must match:
+     *          void (std::string const &)
+     */
+    template <typename F>
+    node_pool & on_error (F && f)
+    {
+        _on_error = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when connection established with the remote node.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id, bool is_gateway)
+     */
+    template <typename F>
+    node_pool & on_channel_established (F && f)
+    {
+        _on_channel_established = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when the channel is destroyed with the remote node.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id)
+     */
+    template <typename F>
+    node_pool & on_channel_destroyed (F && f)
+    {
+        _on_channel_destroyed = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when a node with identical ID is detected.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, socket4_addr)
+     */
+    template <typename F>
+    node_pool & on_duplicate_id (F && f)
+    {
+        _on_duplicate_id = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when node alive status changed.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id)
+     */
+    template <typename F>
+    node_pool & on_node_alive (F && f)
+    {
+        _alive_controller.on_alive(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
+     * Notify when node alive status changed.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id)
+     */
+    template <typename F>
+    node_pool & on_node_expired (F && f)
+    {
+        _alive_controller.on_expired(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
+     * Notify when some route ready by request or response.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id id, gateway_chain_type gateway_chain)
+     */
+    template <typename F>
+    node_pool & on_route_ready (F && f)
+    {
+        _on_route_ready = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when data actually sent (written into the socket).
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id receiver, std::uint64_t bytes_written_size)
+     */
+    template <typename F>
+    node_pool & on_bytes_written (F && f)
+    {
+        _on_bytes_written = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when message received (domestic or global)
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id sender, int priority, std::vector<char> bytes)
+     */
+    template <typename F>
+    node_pool & on_data_received (F && f)
+    {
+        _on_data_received = std::forward<F>(f);
+        return *this;
     }
 
 private:
@@ -172,7 +257,7 @@ private:
     node_interface_type * locate_node (node_index_t index)
     {
         if (index < 1 || index > _nodes.size()) {
-            this->on_error(tr::f_("node index is out of bounds: {}", index));
+            _on_error(tr::f_("node index is out of bounds: {}", index));
             return nullptr;
         }
 
@@ -184,7 +269,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send packet: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send packet: {}", to_string(id)));
             return false;
         }
 
@@ -197,7 +282,7 @@ private:
         auto ptr = locate_writer(id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send packet: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send packet: {}", to_string(id)));
             return false;
         }
 
@@ -245,7 +330,7 @@ private:
                 _alive_controller.expire(uinfo.receiver_id);
             } else {
                 // Stuck. Nothing can be done.
-                this->on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
+                _on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
                     , to_string(uinfo.sender_id)
                     , to_string(uinfo.receiver_id)));
             }
@@ -359,11 +444,9 @@ private:
         if (new_route_added) {
             PFS__THROW_UNEXPECTED(_id != dest_id, "Fix meshnet::node_pool algorithm");
 
-            if (this->on_route_ready) {
+            if (_on_route_ready) {
                 auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
-                this->on_route_ready(dest_id, std::move(gw_chain));
-                // NETTY__TRACE(MESHNET_TAG, "Route added: {}->{}: {}", to_string(_id), to_string(dest_id)
-                //         , to_string(*gw_chain_opt));
+                _on_route_ready(dest_id, std::move(gw_chain));
             }
         }
     }
@@ -437,12 +520,10 @@ public:
         //
         // Assign node callbacks
         //
-        node->on_error([this] (std::string const & errstr) {
-            this->on_error(errstr);
-        });
+        node->on_error(_on_error);
 
         node->on_channel_established([this] (node_id id, node_index_t, bool is_gateway) {
-            this->on_channel_established(id, is_gateway);
+            _on_channel_established(id, is_gateway);
 
             // Add direct route
             auto route_added = _rtab.add_sibling(id);
@@ -475,24 +556,30 @@ public:
             }
 
             if (route_added) {
-                if (this->on_route_ready)
-                    this->on_route_ready(id, gateway_chain_type{});
+                if (_on_route_ready)
+                    _on_route_ready(id, gateway_chain_type{});
             }
         });
 
         node->on_channel_destroyed([this] (node_id id, node_index_t /*index*/) {
-            this->on_channel_destroyed(id);
+            if (_on_channel_destroyed)
+                _on_channel_destroyed(id);
+
             _rtab.remove_sibling(id);
             _alive_controller.expire(id);
         });
 
-        node->on_duplicate_id([this](node_id id, node_index_t, socket4_addr saddr) {
-            this->on_duplicate_id(id, saddr);
-        });
+        if (_on_duplicate_id) {
+            node->on_duplicate_id([this] (node_id id, node_index_t, socket4_addr saddr) {
+               _on_duplicate_id(id, saddr);
+            });
+        }
 
-        node->on_bytes_written([this](node_id id, std::uint64_t n) {
-            this->on_bytes_written(id, n);
-        });
+        if (_on_bytes_written) {
+            node->on_bytes_written([this] (node_id id, node_index_t, std::size_t bytes_written_size) {
+                _on_bytes_written(id, bytes_written_size);
+            });
+        }
 
         node->on_alive_received([this](node_id id, node_index_t index, alive_info<node_id> const & ainfo) {
             process_alive_received(id, index, ainfo);
@@ -508,15 +595,15 @@ public:
             process_route_received(id, index, is_response, rinfo);
         });
 
-        node->on_domestic_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
-            this->on_data_received(id, priority, std::move(bytes));
-        });
+        if (_on_data_received) {
+            node->on_domestic_data_received(_on_data_received);
 
-        node->on_global_data_received([this] (node_id /*id*/, int priority
-                , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
-            PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node_pool algorithm");
-            this->on_data_received(sender_id, priority, std::move(bytes));
-        });
+            node->on_global_data_received([this] (node_id /*id*/, int priority
+                    , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
+                PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node_pool algorithm");
+                _on_data_received(sender_id, priority, std::move(bytes));
+            });
+        }
 
         node->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
                 , std::vector<char> packet) {
@@ -531,7 +618,7 @@ public:
             }
 
             // Notify sender about unreachable destination
-            this->on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
+            _on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
                 , to_string(sender_id), to_string(receiver_id)));
 
             std::vector<char> unreach_pkt = _alive_controller.serialize_unreachable(_id
@@ -544,7 +631,7 @@ public:
                 return;
             } else {
                 // Stuck. Nothing can be done.
-                this->on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
+                _on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
                     , to_string(sender_id), to_string(receiver_id)));
             }
         });
@@ -630,7 +717,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send message: {}", to_string(id)));
             return false;
         }
 
@@ -647,7 +734,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            this->on_error(tr::f_("node not found to send message: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send message: {}", to_string(id)));
             return false;
         }
 

@@ -64,25 +64,16 @@ private:
 
     writer_mutex_type _writer_mtx;
 
-public:
-    mutable callback_t<void (std::string const &)> on_error
+private: // Callbacks
+    callback_t<void (std::string const &)> _on_error
         = [] (std::string const & msg) { LOGE(TAG, "{}", msg); };
 
-    mutable callback_t<void (address_type)> on_receiver_ready = [] (address_type) {};
-
-    mutable callback_t<void (address_type, message_id, int, std::vector<char>)> on_message_received
-        = [] (address_type, message_id, int /*priority*/, std::vector<char>) {};
-
-    mutable callback_t<void (address_type, message_id)> on_message_delivered
-        = [] (address_type, message_id) {};
-
-    mutable callback_t<void (address_type, int, std::vector<char>)> on_report_received
-        = [] (address_type, int /*priority*/, std::vector<char>) {};
-
-    /**
-     * Notify receiver about message receiving progress (optional).
-     */
-    mutable callback_t<void (address_type, message_id, std::size_t, std::size_t)> on_message_receiving_progress;
+    callback_t<void (address_type)> _on_receiver_ready;
+    callback_t<void (address_type, message_id, int, std::vector<char>)> _on_message_received;
+    callback_t<void (address_type, message_id)> _on_message_delivered;
+    callback_t<void (address_type, int, std::vector<char>)> _on_report_received;
+    callback_t<void (address_type, message_id, std::size_t)> _on_message_receiving_begin;
+    callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_receiving_progress;
 
 public:
     manager (transport_type & transport)
@@ -95,6 +86,90 @@ public:
     manager & operator = (manager &&) = delete;
 
     ~manager () {}
+
+public: // Set callbacks
+    /**
+     * Sets error callback.
+     *
+     * @details Callback @a f signature must match:
+     *          void (std::string const &)
+     */
+    template <typename F>
+    manager & on_error (F && f)
+    {
+        _on_error = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (address_type)
+     */
+    template <typename F>
+    manager & on_receiver_ready (F && f)
+    {
+        _on_receiver_ready = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (address_type, message_id, int priority, std::vector<char> msg)
+     */
+    template <typename F>
+    manager & on_message_received (F && f)
+    {
+        _on_message_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (address_type, message_id)
+     */
+    template <typename F>
+    manager & on_message_delivered (F && f)
+    {
+        _on_message_delivered = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (address_type, int priority, std::vector<char> report)
+     */
+    template <typename F>
+    manager & on_report_received (F && f)
+    {
+        _on_report_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify receiver about of starting the message receiving.
+     *
+     * @details Callback @a f signature must match:
+     *          void (address_type, message_id, std::size_t total_size)
+     */
+    template <typename F>
+    manager & on_message_receiving_begin (F && f)
+    {
+        _on_message_receiving_begin = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify receiver about message receiving progress (optional).
+     *
+     * @details Callback @a f signature must match:
+     *          void (address_type, message_id, std::size_t received_size, std::size_t total_size)
+     */
+    template <typename F>
+    manager & on_message_receiving_progress (F && f)
+    {
+        _on_message_receiving_progress = std::forward<F>(f);
+        return *this;
+    }
 
 private:
     incoming_controller_type * ensure_incoming_controller (address_type addr)
@@ -146,7 +221,9 @@ private:
     {
         auto outc = ensure_outgoing_controller(sender_addr);
         outc->set_synchronized(true);
-        this->on_receiver_ready(sender_addr);
+
+        if (_on_receiver_ready)
+            _on_receiver_ready(sender_addr);
     }
 
     void process_acknowledged (address_type sender_addr, int priority, serial_number sn)
@@ -164,19 +241,28 @@ private:
     void process_message_received (address_type sender_addr, message_id msgid, int priority
         , std::vector<char> && msg)
     {
-        on_message_received(sender_addr, msgid, priority, std::move(msg));
+        if (_on_message_received)
+            _on_message_received(sender_addr, msgid, priority, std::move(msg));
     };
 
     void process_report_received (address_type sender_addr, int priority, std::vector<char> && report)
     {
-        this->on_report_received(sender_addr, priority, std::move(report));
+        if (_on_report_received)
+            _on_report_received(sender_addr, priority, std::move(report));
+    }
+
+    void process_message_receiving_begin (address_type sender_addr, message_id msgid
+        , std::size_t total_size)
+    {
+        if (_on_message_receiving_begin)
+            _on_message_receiving_begin(sender_addr, msgid, total_size);
     }
 
     void process_message_receiving_progress (address_type sender_addr, message_id msgid
         , std::size_t received_size, std::size_t total_size)
     {
-        if (on_message_receiving_progress)
-            on_message_receiving_progress(sender_addr, msgid, received_size, total_size);
+        if (_on_message_receiving_progress)
+            _on_message_receiving_progress(sender_addr, msgid, received_size, total_size);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +270,8 @@ private:
     ////////////////////////////////////////////////////////////////////////////////////////////////
     void process_message_delivered (address_type receiver_addr, message_id msgid)
     {
-        on_message_delivered(receiver_addr, msgid);
+        if (_on_message_delivered)
+            _on_message_delivered(receiver_addr, msgid);
     }
 
 public:

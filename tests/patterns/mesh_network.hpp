@@ -215,69 +215,69 @@ private:
 
         auto ptr = std::make_unique<NodePool>(p->id, p->is_gateway);
 
-        ptr->on_error = [] (std::string const & errstr)
+        ptr->on_error([] (std::string const & errstr)
         {
             LOGE(TAG, "{}", errstr);
-        };
+        });
 
-        ptr->on_channel_established = [this, source_name] (node_id id, bool is_gateway)
+        ptr->on_channel_established([this, source_name] (node_id id, bool is_gateway)
         {
             this->on_channel_established(source_name, node_name_by_id(id), is_gateway);
-        };
+        });
 
-        ptr->on_channel_destroyed = [this, source_name] (node_id id)
+        ptr->on_channel_destroyed([this, source_name] (node_id id)
         {
             this->on_channel_destroyed(source_name, node_name_by_id(id));
-        };
+        });
 
-        ptr->on_duplicate_id = [this, source_name] (node_id id, netty::socket4_addr saddr)
+        ptr->on_duplicate_id([this, source_name] (node_id id, netty::socket4_addr saddr)
         {
             this->on_duplicate_id(source_name, node_name_by_id(id), saddr);
-        };
+        });
 
-        ptr->on_node_alive = [this, source_name] (node_id id)
+        ptr->on_node_alive([this, source_name] (node_id id)
         {
             this->on_node_alive(source_name, node_name_by_id(id));
-        };
+        });
 
-        ptr->on_node_expired = [this, source_name] (node_id id)
+        ptr->on_node_expired([this, source_name] (node_id id)
         {
             this->on_node_expired(source_name, node_name_by_id(id));
-        };
+        });
 
-        ptr->on_route_ready = [this, source_name] (node_id target_id, std::vector<node_id> gw_chain)
+        ptr->on_route_ready([this, source_name] (node_id target_id, std::vector<node_id> gw_chain)
         {
             auto target_name = node_name_by_id(target_id);
             this->on_route_ready(source_name, target_name, std::move(gw_chain), index_by_name(source_name)
                 , index_by_name(target_name));
-        };
+        });
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-        ptr->on_receiver_ready = [this, source_name] (node_id receiver_id)
+        ptr->on_receiver_ready([this, source_name] (node_id receiver_id)
         {
             auto receiver_name = node_name_by_id(receiver_id);
             this->on_receiver_ready(source_name, receiver_name, index_by_name(source_name)
                 , index_by_name(receiver_name));
-        };
+        });
 
-        ptr->on_message_received = [this, source_name] (node_id sender_id, message_id msgid
+        ptr->on_message_received([this, source_name] (node_id sender_id, message_id msgid
             , int /*priority*/, std::vector<char> msg)
         {
             auto sender_name = node_name_by_id(sender_id);
             this->on_message_received(source_name, sender_name, to_string(msgid), std::move(msg));
-        };
+        });
 
-        ptr->on_message_delivered = [this, source_name] (node_id receiver_id, message_id msgid)
+        ptr->on_message_delivered([this, source_name] (node_id receiver_id, message_id msgid)
         {
             auto receiver_name = node_name_by_id(receiver_id);
             this->on_message_delivered(source_name, receiver_name, to_string(msgid));
-        };
+        });
 
-        ptr->on_report_received = [this, source_name] (node_id sender_id, int /*priority*/, std::vector<char> report)
+        ptr->on_report_received([this, source_name] (node_id sender_id, int /*priority*/, std::vector<char> report)
         {
             auto sender_name = node_name_by_id(sender_id);
             this->on_report_received(source_name, sender_name, std::move(report));
-        };
+        });
 
         ptr->on_message_receiving_progress([this, source_name] (node_id sender_id, message_id msgid
             , std::size_t received_size, std::size_t total_size)
@@ -287,13 +287,13 @@ private:
                 , received_size, total_size);
         });
 #else
-        ptr->on_data_received = [this, source_name] (node_id sender_id, int priority
+        ptr->on_data_received([this, source_name] (node_id sender_id, int priority
             , std::vector<char> bytes)
         {
             auto sender_name = node_name_by_id(sender_id);
             this->on_data_received(source_name, sender_name, priority, std::move(bytes)
                 , index_by_name(source_name), index_by_name(sender_name));
-        };
+        });
 #endif
 
         auto index = ptr->template add_node<node_t>({listener_saddr});

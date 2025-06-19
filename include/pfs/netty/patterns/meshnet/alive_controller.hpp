@@ -70,9 +70,9 @@ private:
 
     std::set<alive_item> _alive_items;
 
-public:
-    callback_t<void (node_id)> on_alive = [] (node_id) {};
-    callback_t<void (node_id)> on_expired = [] (node_id) {};
+private: // Callbacks
+    callback_t<void (node_id)> _on_alive = [] (node_id) {};
+    callback_t<void (node_id)> _on_expired = [] (node_id) {};
 
 public:
     alive_controller (node_id id, std::chrono::seconds exp_timeout = std::chrono::seconds{15}
@@ -92,6 +92,29 @@ public:
 
     ~alive_controller () = default;
 
+public: // Set callbacks
+    /**
+     * @details Callback @a f signature must match:
+     *          void (node_id)
+     */
+    template <typename F>
+    alive_controller & on_alive (F && f)
+    {
+        _on_alive = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (node_id)
+     */
+    template <typename F>
+    alive_controller & on_expired (F && f)
+    {
+        _on_expired = std::forward<F>(f);
+        return *this;
+    }
+
 private:
     void insert (node_id id)
     {
@@ -104,7 +127,7 @@ public:
     void add_sibling (node_id id)
     {
         _sibling_nodes.insert(id);
-        this->on_alive(id);
+        _on_alive(id);
     }
 
     /**
@@ -133,7 +156,7 @@ public:
         }
 
         if (count > 0)
-            this->on_expired(id);
+            _on_expired(id);
     }
 
     /**
@@ -167,7 +190,7 @@ public:
         // New alive node detected
         insert(id);
 
-        this->on_alive(id);
+        _on_alive(id);
 
         return true;
     }
@@ -242,7 +265,7 @@ public:
 
             while (!_alive_items.empty() && pos->exp_time <= now) {
                 _alive_nodes.erase(pos->id);
-                this->on_expired(pos->id);
+                _on_expired(pos->id);
                 pos = _alive_items.erase(pos);
             }
         }
