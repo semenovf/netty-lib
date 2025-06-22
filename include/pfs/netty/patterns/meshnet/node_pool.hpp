@@ -717,7 +717,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            _on_error(tr::f_("node not found to send message: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send data to: {}", to_string(id)));
             return false;
         }
 
@@ -734,7 +734,7 @@ public:
         auto ptr = locate_writer(id, & gw_id);
 
         if (ptr == nullptr) {
-            _on_error(tr::f_("node not found to send message: {}", to_string(id)));
+            _on_error(tr::f_("node not found to send data to: {}", to_string(id)));
             return false;
         }
 

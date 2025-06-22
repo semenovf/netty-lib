@@ -64,20 +64,20 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
                             break;
 
                         case EHOSTUNREACH:
-                            connection_refused(ev.data.fd, connection_refused_reason::unreachable);
+                            connection_refused(ev.data.fd, connection_failure_reason::unreachable);
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(ev.data.fd, connection_refused_reason::other);
+                            connection_refused(ev.data.fd, connection_failure_reason::refused);
                             break;
 
                         // Connection reset by peer
                         case ECONNRESET:
-                            connection_refused(ev.data.fd, connection_refused_reason::reset);
+                            connection_refused(ev.data.fd, connection_failure_reason::reset);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(ev.data.fd, connection_refused_reason::timeout);
+                            connection_refused(ev.data.fd, connection_failure_reason::timeout);
                             break;
 
                         default:
@@ -99,7 +99,7 @@ int connecting_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds m
             // a. Attempt to connect to defunct server address/port
             // b. ...
             if (ev.events & (EPOLLHUP | EPOLLRDHUP)) {
-                connection_refused(ev.data.fd, connection_refused_reason::other);
+                connection_refused(ev.data.fd, connection_failure_reason::refused);
                 continue;
             }
 

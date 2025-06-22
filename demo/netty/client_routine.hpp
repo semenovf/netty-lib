@@ -28,7 +28,7 @@ void start_client (netty::socket4_addr const & saddr)
         finish = true;
     };
 
-    poller.connection_refused = [& finish] (socket_id sock, netty::connection_refused_reason /*timedout*/) {
+    poller.connection_refused = [& finish] (socket_id sock, netty::connection_failure_reason /*timedout*/) {
         LOGD(TAG, "Connection refused: socket={}", sock);
         finish = true;
     };

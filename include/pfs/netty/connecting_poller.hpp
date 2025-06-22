@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "callback.hpp"
-#include "connection_refused_reason.hpp"
+#include "connection_failure_reason.hpp"
 #include "error.hpp"
 #include "exports.hpp"
 #include "namespace.hpp"
@@ -30,7 +30,7 @@ private:
 
 public:
     mutable callback_t<void(socket_id, error const &)> on_failure;
-    mutable callback_t<void(socket_id, connection_refused_reason reason)> connection_refused;
+    mutable callback_t<void(socket_id, connection_failure_reason reason)> connection_refused;
     mutable callback_t<void(socket_id)> connected;
 
 public:

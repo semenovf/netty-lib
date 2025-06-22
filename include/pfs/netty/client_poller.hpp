@@ -48,8 +48,8 @@ private:
 
 public:
     mutable std::function<void(socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
-    mutable std::function<void(socket_id, connection_refused_reason)> connection_refused
-        = [] (socket_id, connection_refused_reason) {};
+    mutable std::function<void(socket_id, connection_failure_reason)> connection_refused
+        = [] (socket_id, connection_failure_reason) {};
     mutable std::function<void(socket_id)> connected = [] (socket_id) {};
 
     /**
@@ -89,7 +89,7 @@ private:
             on_failure(sock, err);
         };
 
-        _connecting_poller.connection_refused = [this] (socket_id sock, connection_refused_reason reason) {
+        _connecting_poller.connection_refused = [this] (socket_id sock, connection_failure_reason reason) {
             // The socket must later be removed from monitoring
             _removable_connecting_sockets.push_back(sock);
             _removable.insert(sock);

@@ -8,7 +8,7 @@
 //      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "connection_refused_reason.hpp"
+#include "connection_failure_reason.hpp"
 #include "error.hpp"
 #include "namespace.hpp"
 #include <pfs/i18n.hpp>
@@ -50,8 +50,8 @@ private:
 public:
     mutable callback_t<void (error const &)> on_failure = [] (error const &) {};
     mutable callback_t<void (socket_type &&)> on_connected = [] (socket_type &&) {};
-    mutable callback_t<void (socket4_addr, connection_refused_reason)> on_connection_refused
-        = [] (socket4_addr, connection_refused_reason) {};
+    mutable callback_t<void (socket4_addr, connection_failure_reason)> on_connection_refused
+        = [] (socket4_addr, connection_failure_reason) {};
 
 public:
     connecting_pool ()
@@ -77,7 +77,7 @@ public:
                 this->on_failure(err);
         };
 
-        ConnectingPoller::connection_refused = [this] (socket_id id, connection_refused_reason reason) {
+        ConnectingPoller::connection_refused = [this] (socket_id id, connection_failure_reason reason) {
             error err;
             auto pos = _connecting_sockets.find(id);
             remove_later(id);
@@ -133,7 +133,7 @@ public:
             }
 
             case netty::conn_status::unreachable:
-                this->on_connection_refused(sock.saddr(), connection_refused_reason::unreachable);
+                this->on_connection_refused(sock.saddr(), connection_failure_reason::unreachable);
                 break;
 
             case netty::conn_status::failure:

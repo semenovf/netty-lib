@@ -183,6 +183,7 @@ using outgoing_controller_t = delivery_ns::outgoing_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
 
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, pfs::universal_id
-    , incoming_controller_t, outgoing_controller_t, std::mutex>;
+    , incoming_controller_t, outgoing_controller_t, std::recursive_mutex>;
 
 using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;
+using message_id = reliable_node_pool_t::message_id;

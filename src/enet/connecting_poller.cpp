@@ -56,7 +56,7 @@ int connecting_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis
 
             // Reset the peer's client information
             ev->peer->data = nullptr;
-            connection_refused(event.sock, connection_refused_reason::other);
+            connection_refused(event.sock, connection_failure_reason::refused);
             _rep->pop_event();
             n++;
         } else if (ev->type == ENET_EVENT_TYPE_RECEIVE) {

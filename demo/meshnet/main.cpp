@@ -16,6 +16,7 @@
 #include <pfs/log.hpp>
 #include <pfs/standard_paths.hpp>
 #include <pfs/string_view.hpp>
+#include <pfs/ionik/local_file.hpp>
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/startup.hpp>
 #include <atomic>
@@ -23,10 +24,12 @@
 #include <ctime>
 #include <signal.h>
 
+namespace fs = pfs::filesystem;
 using string_view = pfs::string_view;
 using pfs::to_string;
 
 static std::atomic_bool s_quit_flag {false};
+static std::atomic_bool s_already_sent {false};
 
 static void sigterm_handler (int /*sig*/)
 {
@@ -49,7 +52,7 @@ static void print_usage (pfs::filesystem::path const & programName
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
         "{0} [--reliable] [--id=NODE_ID] [--gw]\n"
-        "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}...\n\n"
+        "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}... [--send=PATH...]\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
@@ -86,10 +89,79 @@ void dumb ()
     priority_meshnet_node_t {id, is_gateway};
 }
 
-template <typename NodePool>
-void run (NodePool & node_pool, std::vector<node_item> & nodes)
+void send_file (reliable_node_pool_t & node_pool, node_t::node_id id, pfs::filesystem::path file_to_send)
 {
-    node_pool.on_channel_established([] (node_t::node_id id, bool is_gateway) {
+    if (!file_to_send.empty()) {
+        auto file = ionik::local_file::open_read_only(file_to_send);
+
+        if (file) {
+            auto msgid = pfs::generate_uuid();
+            auto data = file.read_all();
+            int priority = 1;
+            LOGD(TAG, "Send file: {}", file_to_send);
+            node_pool.enqueue_message(id, msgid, priority, false, data.data(), data.size());
+        }
+    }
+}
+
+template <typename NodePool>
+void configure_node (NodePool &, std::vector<fs::path>);
+
+template <>
+void configure_node<node_pool_t> (node_pool_t &, std::vector<fs::path>)
+{}
+
+template <>
+void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool
+    , std::vector<fs::path> files_to_send)
+{
+    node_pool.on_node_alive([& node_pool, files_to_send = std::move(files_to_send)] (node_t::node_id id)
+    {
+        LOGD(TAG, "Node alive: {}", to_string(id));
+
+        if (!s_already_sent) {
+            for (auto const & file_path: files_to_send)
+                send_file(node_pool, id, file_path);
+
+            s_already_sent = true;
+        }
+    });
+
+    node_pool.on_receiver_ready([& node_pool] (node_t::node_id id)
+    {
+        LOGD(TAG, "Receiver ready: {}", to_string(id));
+    });
+
+    node_pool.on_message_received([] (node_id id, message_id msgid
+        , int priority, std::vector<char> msg)
+    {
+        fmt::println("");
+        LOGD(TAG, "Message received from: {}: msgid={}, priority={}, size={}", to_string(id)
+            , to_string(msgid), priority, msg.size());
+    });
+
+    node_pool.on_message_delivered([] (node_id id, message_id msgid)
+    {
+        LOGD(TAG, "Message delivered to: {}: msgid={}", to_string(id), to_string(msgid));
+    });
+
+    node_pool.on_message_receiving_begin([] (node_id id, message_id msgid, std::size_t total_size)
+    {
+        LOGD(TAG, "Begin message receiving from: {}: msgid={}, size={}", to_string(id)
+            , to_string(msgid), total_size);
+    });
+
+    node_pool.on_message_receiving_progress([] (node_id id, message_id msgid, std::size_t received_size
+        , std::size_t total_size)
+    {
+        fmt::print("{} %\r", static_cast<int>(100 * (static_cast<double>(received_size)/total_size)));
+    });
+}
+
+template <typename NodePool>
+void run (NodePool & node_pool, std::vector<node_item> & nodes, std::vector<fs::path> files_to_send)
+{
+    node_pool.on_channel_established([& node_pool] (node_t::node_id id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
         LOGD(TAG, "Channel established with {}: {}", node_type, to_string(id));
     });
@@ -107,6 +179,8 @@ void run (NodePool & node_pool, std::vector<node_item> & nodes)
     node_pool.on_node_expired([] (node_t::node_id id) {
         LOGD(TAG, "Node expired: {}", to_string(id));
     });
+
+    configure_node(node_pool, std::move(files_to_send));
 
     for (auto & item: nodes) {
         auto node_index = node_pool.template add_node<node_t>(item.listener_saddrs);
@@ -134,6 +208,7 @@ int main (int argc, char * argv[])
     auto id = pfs::generate_uuid();
     bool is_gateway = false;
     std::vector<node_item> nodes;
+    std::vector<fs::path> files_to_send;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -204,6 +279,19 @@ int main (int argc, char * argv[])
                 } else {
                     expectedNodeOption = true;
                 }
+            } else if (x.is_option("send")) {
+                if (x.has_arg()) {
+                    auto path = pfs::utf8_decode_path(to_string(x.arg()));
+
+                    if (!fs::is_regular_file(path)) {
+                        LOGE(TAG, "Expected regular file to send: {}", x.arg());
+                        return EXIT_FAILURE;
+                    }
+
+                    files_to_send.push_back(std::move(path));
+                } else {
+                    expectedArgError = true;
+                }
             } else {
                 LOGE(TAG, "Bad arguments. Try --help option.");
                 return EXIT_FAILURE;
@@ -233,10 +321,10 @@ int main (int argc, char * argv[])
 
     if (is_reliable_impl) {
         reliable_node_pool_t node_pool {id, is_gateway};
-        run(node_pool, nodes);
+        run(node_pool, nodes, std::move(files_to_send));
     } else {
         node_pool_t node_pool {id, is_gateway};
-        run(node_pool, nodes);
+        run(node_pool, nodes, std::move(files_to_send));
     }
 
     return EXIT_SUCCESS;

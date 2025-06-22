@@ -10,7 +10,7 @@
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
 #include "../../conn_status.hpp"
-#include "../../connection_refused_reason.hpp"
+#include "../../connection_failure_reason.hpp"
 #include "../../error.hpp"
 #include "../../socket4_addr.hpp"
 #include "../../connecting_pool.hpp"
@@ -176,7 +176,7 @@ public:
         , _heartbeat_controller(this)
         , _input_controller(this)
     {
-        _channels.on_close_socket = [this] (socket_id sid)
+        _channels.close_socket = [this] (socket_id sid)
         {
             close_socket(sid);
         };
@@ -216,7 +216,7 @@ public:
         };
 
         _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
-                , netty::connection_refused_reason reason)
+            , netty::connection_failure_reason reason)
         {
             _on_error(tr::f_("connection refused for socket: {}: reason: {}"
                 , to_string(saddr), to_string(reason)));
@@ -286,8 +286,7 @@ public:
         _handshake_controller.on_completed = [this] (node_id id, socket_id reader_sid
             , socket_id writer_sid, bool is_gateway)
         {
-            auto success = _channels.insert_reader(id, reader_sid);
-            success = success && _channels.insert_writer(id, writer_sid);
+            auto success = _channels.insert(id, reader_sid, writer_sid);
 
             PFS__THROW_UNEXPECTED(success, "Fix handshake algorithm");
 
@@ -303,13 +302,13 @@ public:
             _on_duplicate_id(id, _index, psock->saddr());
 
             if (force_closing)
-                close_socket(sid);
+                destroy_channel(sid);
         };
 
         _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
         {
             NETTY__TRACE(MESHNET_TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
-            close_socket(sid);
+            destroy_channel(sid);
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
@@ -697,12 +696,14 @@ public: // static
 private:
     void close_socket (socket_id sid)
     {
-        _handshake_controller.cancel(sid);
-        _heartbeat_controller.remove(sid);
-        _input_controller.remove(sid);
-        _reader_pool.remove_later(sid);
-        _writer_pool.remove_later(sid);
-        _socket_pool.remove_later(sid);
+        if (_socket_pool.locate(sid) != nullptr) {
+            _handshake_controller.cancel(sid);
+            _heartbeat_controller.remove(sid);
+            _input_controller.remove(sid);
+            _reader_pool.remove_later(sid);
+            _writer_pool.remove_later(sid);
+            _socket_pool.remove_later(sid);
+        }
     }
 
     void schedule_reconnection (socket4_addr saddr)
@@ -735,18 +736,31 @@ private:
         if (reconnection_policy::supported()) {
             bool is_accepted = false;
             auto psock = _socket_pool.locate(sid, & is_accepted);
-            auto reconnecting = !is_accepted;
 
-            PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::node algorithm");
+            if (psock != nullptr) {
+                auto reconnecting = !is_accepted;
 
-            if (reconnecting)
-                schedule_reconnection(psock->saddr());
+                if (reconnecting) {
+                    // FIXME REMOVE
+                    NETTY__TRACE(MESHNET_TAG, "schedule reconnection to: {} (sid={})"
+                        , to_string(psock->saddr()), sid);
+                    schedule_reconnection(psock->saddr());
+                }
+            }
         }
 
-        auto id_opt = _channels.close_channel(sid);
+        destroy_channel(sid);
+    }
 
-        if (id_opt)
-            _on_channel_destroyed(*id_opt, _index);
+    void destroy_channel (socket_id sid)
+    {
+        auto res = _channels.has_channel(sid);
+        auto success = (res.first && _channels.close_channel(res.second));
+
+        if (success)
+            _on_channel_destroyed(res.second, _index);
+        else
+            close_socket(sid);
     }
 
     void process_alive_info (socket_id sid, alive_info<node_id> const & ainfo)

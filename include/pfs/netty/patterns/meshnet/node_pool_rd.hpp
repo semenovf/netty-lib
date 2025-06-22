@@ -34,13 +34,22 @@ private:
     transport_type _t;
     delivery_manager_type _dm;
 
+private:
+    callback_t<void (node_id)> _on_node_alive = [] (node_id) {};
+    callback_t<void (node_id)> _on_node_expired = [] (node_id) {};
+
 public:
     node_pool_rd (node_id id, bool is_gateway = false)
         : _t(id, is_gateway)
         , _dm(_t)
     {
-        _t.on_data_received([this] (node_id id, int priority, std::vector<char> bytes)
-        {
+        _t.on_node_alive([this] (node_id id) {
+            _on_node_alive(id);
+            _dm.resume(id);
+        }).on_node_expired([this] (node_id id) {
+            _dm.pause(id);
+            _on_node_expired(id);
+        }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
             _dm.process_packet(id, priority, std::move(bytes));
         });
     }
@@ -119,7 +128,7 @@ public: // Set callbacks
     template <typename F>
     node_pool_rd & on_node_alive (F && f)
     {
-        _t.on_node_alive(std::forward<F>(f));
+        _on_node_alive = std::forward<F>(f);
         return *this;
     }
 
@@ -132,7 +141,7 @@ public: // Set callbacks
     template <typename F>
     node_pool_rd & on_node_expired (F && f)
     {
-        _t.on_node_expired(std::forward<F>(f));
+        _on_node_expired = std::forward<F>(f);
         return *this;
     }
 

@@ -41,7 +41,7 @@ private:
     std::set<index_type> _free_indices;
     std::vector<account> _accounts;
     index_map_type _mapping;
-    std::vector<socket_id> _removable;
+    std::set<socket_id> _removable;
 
 private:
     void add (socket_type && sock, kind_enum kind)
@@ -95,7 +95,7 @@ public:
 
     void remove_later (socket_id sid)
     {
-        _removable.push_back(sid);
+        _removable.insert(sid);
     }
 
     void apply_remove ()
@@ -126,9 +126,15 @@ public:
         return _accounts.size() - _free_indices.size() - _removable.size();
     }
 
-    socket_type * locate (socket_id id, bool * is_accepted = nullptr)
+    /**
+     * Locates socket by ID excluding candidates for removing.
+     */
+    socket_type * locate (socket_id sid, bool * is_accepted = nullptr)
     {
-        auto pacc = locate_account(id);
+        if (_removable.find(sid) != _removable.end())
+            return nullptr;
+
+        auto pacc = locate_account(sid);
 
         if (pacc == nullptr)
             return nullptr;

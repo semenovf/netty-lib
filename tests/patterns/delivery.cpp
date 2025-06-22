@@ -157,9 +157,10 @@ TEST_CASE("delivery") {
     net.send("A0", "C0", g_text0, 0);
     net.send("A0", "C0", g_text1, 1);
     net.send("A0", "C0", g_text2, 2);
+    net.send("A0", "C0", g_text2, 2);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
-    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));
+    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 4));
 
     net.interrupt_all();
     net.join_all();

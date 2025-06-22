@@ -43,13 +43,13 @@ epoll_poller::~epoll_poller ()
     }
 }
 
-void epoll_poller::add_socket (socket_id sock, error * perr)
+void epoll_poller::add_socket (socket_id sid, error * perr)
 {
     struct epoll_event ev;
     ev.events = oevents;
-    ev.data.fd = sock;
+    ev.data.fd = sid;
 
-    int rc = epoll_ctl(eid, EPOLL_CTL_ADD, sock, & ev);
+    int rc = epoll_ctl(eid, EPOLL_CTL_ADD, sid, & ev);
 
     if (rc != 0) {
         // Is not an error
@@ -57,7 +57,7 @@ void epoll_poller::add_socket (socket_id sock, error * perr)
             return;
 
         pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
-            , tr::f_("epoll add socket ({}) failure: {}", sock, pfs::system_error_text()));
+            , tr::f_("epoll add socket failure: sid={}: {}", sid, pfs::system_error_text()));
 
         return;
     }
@@ -68,33 +68,33 @@ void epoll_poller::add_socket (socket_id sock, error * perr)
     events.resize(events.size() + 1);
 }
 
-void epoll_poller::add_listener (listener_id sock, error * perr)
+void epoll_poller::add_listener (listener_id sid, error * perr)
 {
-    add_socket(sock);
+    add_socket(sid);
 }
 
-void epoll_poller::wait_for_write (socket_id sock, error * perr)
+void epoll_poller::wait_for_write (socket_id sid, error * perr)
 {
-    add_socket(sock, perr);
+    add_socket(sid, perr);
 }
 
-void epoll_poller::remove_socket (socket_id sock, error * perr)
+void epoll_poller::remove_socket (socket_id sid, error * perr)
 {
-    auto rc = epoll_ctl(eid, EPOLL_CTL_DEL, sock, nullptr);
+    auto rc = epoll_ctl(eid, EPOLL_CTL_DEL, sid, nullptr);
 
     if (rc != 0) {
-        // ENOENT is not a failure
-        if (errno != ENOENT) {
+        // ENOENT is not a failure (and EBADF ?)
+        if (!(errno == ENOENT || errno == EBADF)) {
             pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
-                , tr::f_("epoll delete failure: {}", pfs::system_error_text()));
+                , tr::f_("epoll delete failure: eid={}, sid={}: {}", eid, sid, pfs::system_error_text()));
             return;
         }
     }
 }
 
-void epoll_poller::remove_listener (listener_id sock, error * perr)
+void epoll_poller::remove_listener (listener_id sid, error * perr)
 {
-    remove_socket(sock);
+    remove_socket(sid);
 }
 
 int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)

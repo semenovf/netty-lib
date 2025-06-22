@@ -164,7 +164,7 @@ void worker ()
     };
 
     connecting_pool.on_connection_refused = [self_port, & connecting_pool] (netty::socket4_addr saddr
-            , netty::connection_refused_reason reason) {
+            , netty::connection_failure_reason reason) {
         LOGE(TAG, "{:04}: connection refused for socket: {}: reason: {}, reconnecting"
             , self_port, to_string(saddr), to_string(reason));
 

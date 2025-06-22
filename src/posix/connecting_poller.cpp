@@ -78,20 +78,20 @@ int connecting_poller<posix::select_poller>::poll (std::chrono::milliseconds mil
                             break;
 
                         case EHOSTUNREACH:
-                            connection_refused(fd, connection_refused_reason::unreachable);
+                            connection_refused(fd, connection_failure_reason::unreachable);
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(fd, connection_refused_reason::other);
+                            connection_refused(fd, connection_failure_reason::refused);
                             break;
 
                         // Connection reset by peer
                         case ECONNRESET:
-                            connection_refused(fd, connection_refused_reason::reset);
+                            connection_refused(fd, connection_failure_reason::reset);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(fd, connection_refused_reason::timeout);
+                            connection_refused(fd, connection_failure_reason::timeout);
                             break;
 
                         default:
@@ -184,20 +184,20 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                             break;
 
                         case EHOSTUNREACH:
-                            connection_refused(ev.fd, connection_refused_reason::unreachable);
+                            connection_refused(ev.fd, connection_failure_reason::unreachable);
                             break;
 
                         case ECONNREFUSED:
-                            connection_refused(ev.fd, connection_refused_reason::other);
+                            connection_refused(ev.fd, connection_failure_reason::refused);
                             break;
 
                         // Connection reset by peer
                         case ECONNRESET:
-                            connection_refused(ev.fd, connection_refused_reason::reset);
+                            connection_refused(ev.fd, connection_failure_reason::reset);
                             break;
 
                         case ETIMEDOUT:
-                            connection_refused(ev.fd, connection_refused_reason::timeout);
+                            connection_refused(ev.fd, connection_failure_reason::timeout);
                             break;
 
                         default:
@@ -223,7 +223,7 @@ int connecting_poller<posix::poll_poller>::poll (std::chrono::milliseconds milli
                 | POLLRDHUP
 #endif
             )) {
-                connection_refused(ev.fd, connection_refused_reason::other);
+                connection_refused(ev.fd, connection_failure_reason::refused);
                 continue;
             }
 

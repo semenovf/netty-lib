@@ -10,7 +10,7 @@
 #pragma once
 #include "namespace.hpp"
 #include "callback.hpp"
-#include "connection_refused_reason.hpp"
+#include "connection_failure_reason.hpp"
 #include "error.hpp"
 #include "property.hpp"
 #include "send_result.hpp"
@@ -414,7 +414,7 @@ public:
                 this->on_failure(err);
             };
 
-            base_class::connection_refused = [this] (socket_id, connection_refused_reason) {
+            base_class::connection_refused = [this] (socket_id, connection_failure_reason) {
                 this->connection_refused();
             };
 

@@ -5,27 +5,28 @@
 //
 // Changelog:
 //      2024.12.26 Initial version.
+//      2025.06.22 `connection_refused_reason` renamed to `connection_failure_reason`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <string>
 
 namespace netty {
 
-enum class connection_refused_reason
+enum class connection_failure_reason
 {
-      other
+      refused     // Connection refused by peer
     , timeout     // Connection timed out
     , reset       // Connection reset by peer
     , unreachable // No rote to host / host down
 };
 
-inline std::string to_string (connection_refused_reason reason)
+inline std::string to_string (connection_failure_reason reason)
 {
     switch (reason) {
-        case connection_refused_reason::timeout: return "timed out";
-        case connection_refused_reason::reset: return "reset by peer";
-        case connection_refused_reason::unreachable: return "unreachable";
-        case connection_refused_reason::other:
+        case connection_failure_reason::refused: return "refused";
+        case connection_failure_reason::timeout: return "timed out";
+        case connection_failure_reason::reset: return "reset by peer";
+        case connection_failure_reason::unreachable: return "unreachable";
         default:
             break;
     }

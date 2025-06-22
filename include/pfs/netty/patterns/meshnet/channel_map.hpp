@@ -11,9 +11,9 @@
 #include "../../callback.hpp"
 #include "unordered_bimap.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/optional.hpp>
 #include <functional>
 #include <set>
+#include <utility>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -32,8 +32,8 @@ private:
     unordered_bimap<node_id, socket_id> _writers;
 
 public:
-    mutable callback_t<void(socket_id)> on_close_socket = [] (socket_id) {
-        PFS__TERMINATE(false, "Assign channel_map::on_close_socket callback");
+    mutable callback_t<void(socket_id)> close_socket = [] (socket_id) {
+        PFS__THROW_UNEXPECTED(false, "Assign channel_map::close_socket_cb callback");
     };
 
 public:
@@ -60,56 +60,19 @@ public:
         return _writers.locate_by_second(sid);
     }
 
-    bool insert_reader (node_id id, socket_id sid)
+    bool insert (node_id id, socket_id reader_sid, socket_id writer_sid)
     {
-        return _readers.insert(id, sid);
-    }
+        auto success = _readers.insert(id, reader_sid) && _writers.insert(id, writer_sid);
 
-    bool insert_writer (node_id id, socket_id sid)
-    {
-        return _writers.insert(id, sid);
-    }
-
-    bool channel_complete_for (node_id id) const
-    {
-        return locate_writer(id) != nullptr && locate_reader(id) != nullptr;
-    }
-
-    /**
-     * Returns @c non-nullopt node ID if the channel is found and was closed.
-     */
-    pfs::optional<node_id> close_channel (node_id id)
-    {
-        socket_id const * reader_sid_ptr = locate_reader(id);
-        socket_id const * writer_sid_ptr = locate_writer(id);
-
-        bool success = false;
-
-        if (reader_sid_ptr != nullptr) {
-            this->on_close_socket(*reader_sid_ptr);
+        if (!success) {
             _readers.erase_by_first(id);
-            success = true;
-        }
-
-        if (writer_sid_ptr != nullptr) {
-            if (!(reader_sid_ptr != nullptr && *writer_sid_ptr == *reader_sid_ptr)) {
-                this->on_close_socket(*writer_sid_ptr);
-            }
-
             _writers.erase_by_first(id);
-            success = true;
         }
 
-        if (!success)
-            return pfs::nullopt;
-
-        return id;
+        return success;
     }
 
-    /**
-     * Returns @c non-nullopt node ID if the channel is found and was closed.
-     */
-    pfs::optional<node_id> close_channel (socket_id sid)
+    std::pair<bool, node_id> has_channel (socket_id sid) const
     {
         node_id const * id_ptr = locate_reader(sid);
 
@@ -118,9 +81,37 @@ public:
 
         // Neither the writer nor the reader were found.
         if (id_ptr == nullptr)
-            return pfs::nullopt;
+            return std::make_pair(false, node_id{});
 
-        return close_channel(*id_ptr);
+        return std::make_pair(true, *id_ptr);
+    }
+
+    /**
+     * Returns @c true if channel is found and was closed.
+     */
+    bool close_channel (node_id id)
+    {
+        socket_id const * reader_sid_ptr = locate_reader(id);
+        socket_id const * writer_sid_ptr = locate_writer(id);
+
+        if (reader_sid_ptr != nullptr && writer_sid_ptr != nullptr) {
+            auto reader_sid = *reader_sid_ptr;
+            auto writer_sid = *writer_sid_ptr;
+
+            _readers.erase_by_first(id);
+            _writers.erase_by_first(id);
+
+            close_socket(reader_sid);
+            close_socket(writer_sid);
+
+            return true;
+        } else if (reader_sid_ptr == nullptr && writer_sid_ptr == nullptr) {
+            ;
+        } else {
+            PFS__THROW_UNEXPECTED(false, "Fix channel_map");
+        }
+
+        return false;
     }
 
     /**
