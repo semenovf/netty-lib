@@ -17,7 +17,7 @@
 #include <pfs/netty/patterns/delivery/incoming_controller.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
 #include <pfs/netty/patterns/delivery/outgoing_controller.hpp>
-#include <pfs/netty/patterns/delivery/session_manager.hpp>
+#include <pfs/netty/patterns/delivery/message_queue.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
 #include <pfs/netty/patterns/meshnet/dual_link_handshake.hpp>
@@ -182,10 +182,10 @@ using incoming_controller_t = delivery_ns::incoming_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t, priority_tracker_t::SIZE>;
 using outgoing_controller_t = delivery_ns::outgoing_controller<pfs::universal_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
+using message_queue_t = delivery_ns::message_queue;
 
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, pfs::universal_id
-    , incoming_controller_t, outgoing_controller_t, std::recursive_mutex>;
-using delivery_session_manager_t = delivery_ns::session_manager;
+    , incoming_controller_t, outgoing_controller_t, message_queue_t, std::recursive_mutex>;
 
-using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t, delivery_session_manager_t>;
+using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;
 using message_id = reliable_node_pool_t::message_id;

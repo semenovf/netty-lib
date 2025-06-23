@@ -14,7 +14,7 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace delivery {
 
-class session_manager
+class message_queue
 {};
 
 }} // namespace patterns::delivery

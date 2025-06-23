@@ -36,6 +36,7 @@ template <typename Transport
     , typename MessageId
     , typename IncomingController
     , typename OutgoingController
+    , typename MessageQueue
     , typename RecursiveWriterMutex>
 class manager
 {

@@ -19,11 +19,10 @@ namespace meshnet {
 /**
  * Node pool with reliable delivery support
  */
-template <typename DeliveryManager, typename DeliverySessionManager>
+template <typename DeliveryManager>
 class node_pool_rd
 {
     using delivery_manager_type = DeliveryManager;
-    using delivery_session_manager_type = DeliverySessionManager;
     using transport_type = typename DeliveryManager::transport_type;
 
 public:
