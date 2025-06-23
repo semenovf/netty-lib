@@ -740,12 +740,8 @@ private:
             if (psock != nullptr) {
                 auto reconnecting = !is_accepted;
 
-                if (reconnecting) {
-                    // FIXME REMOVE
-                    NETTY__TRACE(MESHNET_TAG, "schedule reconnection to: {} (sid={})"
-                        , to_string(psock->saddr()), sid);
+                if (reconnecting)
                     schedule_reconnection(psock->saddr());
-                }
             }
         }
 

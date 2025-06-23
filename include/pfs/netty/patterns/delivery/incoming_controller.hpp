@@ -15,10 +15,10 @@
 #include "protocol.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
+#include <pfs/optional.hpp>
 #include <pfs/utility.hpp>
 #include <chrono>
 #include <cstdint>
-#include <deque>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
@@ -42,7 +42,7 @@ class incoming_controller
     {
         // Expected income message part serial number
         serial_number expected_sn {0};
-        std::deque<multipart_assembler<message_id>> assemblers;
+        pfs::optional<multipart_assembler<message_id>> assembler;
     };
 
 private:
@@ -60,7 +60,7 @@ public:
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
 
-        // Data can contains more than one packet.
+        // Data can contain more than one packet.
         do {
             header h {in};
 
@@ -117,6 +117,8 @@ public:
 
                         auto & x = _items[priority];
 
+                        PFS__THROW_UNEXPECTED(!x.assembler.has_value(), "Fix meshnet::incoming_controller algorithm");
+
                         // Drop received packet and NAK expected serial number
                         if (x.expected_sn != pkt.sn()) {
                             if (x.expected_sn < pkt.sn()) {
@@ -160,7 +162,13 @@ public:
                         m->process_message_receiving_progress(sender_addr, assembler.msgid()
                             , assembler.received_size(), assembler.total_size());
 
-                        x.assemblers.push_back(std::move(assembler));
+                        x.assembler = std::move(assembler);
+
+                        if (x.assembler->is_complete()) {
+                            m->process_message_received(sender_addr, x.assembler->msgid(), priority
+                                , x.assembler->payload());
+                            x.assembler.reset();
+                        }
 
                         break;
                     }
@@ -174,30 +182,27 @@ public:
 
                         auto & x = _items[priority];
 
-                        // No any message expected, drop part, it can be received later.
-                        if (x.assemblers.empty())
-                            break;
+                        PFS__THROW_UNEXPECTED(x.assembler.has_value(), "Fix meshnet::incoming_controller algorithm");
 
-                        multipart_assembler<message_id> * assembler_ptr = nullptr;
+                        PFS__THROW_UNEXPECTED((pkt.sn() >= x.assembler->first_sn()
+                            && pkt.sn() <= x.assembler->last_sn())
+                            , "Fix meshnet::incoming_controller algorithm");
 
-                        for (auto & a: x.assemblers) {
-                            if (pkt.sn() >= a.first_sn() && pkt.sn() <= a.last_sn()) {
-                                assembler_ptr = & a;
-                                break;
-                            }
-                        }
+                        x.assembler->emplace_part(pkt.sn(), std::move(part), true);
 
-                        if (assembler_ptr != nullptr) {
-                            assembler_ptr->emplace_part(pkt.sn(), std::move(part), true);
+                        // Send ACK packet
+                        auto out = serializer_traits::make_serializer();
+                        ack_packet ack_pkt {pkt.sn()};
+                        ack_pkt.serialize(out);
+                        m->enqueue_private(sender_addr, out.take(), priority);
 
-                            // Send ACK packet
-                            auto out = serializer_traits::make_serializer();
-                            ack_packet ack_pkt {pkt.sn()};
-                            ack_pkt.serialize(out);
-                            m->enqueue_private(sender_addr, out.take(), priority);
+                        m->process_message_receiving_progress(sender_addr, x.assembler->msgid()
+                            , x.assembler->received_size(), x.assembler->total_size());
 
-                            m->process_message_receiving_progress(sender_addr, assembler_ptr->msgid()
-                                , assembler_ptr->received_size(), assembler_ptr->total_size());
+                        if (x.assembler->is_complete()) {
+                            m->process_message_received(sender_addr, x.assembler->msgid(), priority
+                                , x.assembler->payload());
+                            x.assembler.reset();
                         }
 
                         break;
@@ -231,31 +236,6 @@ public:
                 };
             }
         } while (in.available() > 0);
-    }
-
-    template <typename Manager>
-    unsigned int step (Manager * m, typename Manager::address_type sender_addr)
-    {
-        unsigned int n = 0;
-
-        // Check message receiving is complete.
-        for (int priority = 0; priority < _items.size(); priority++) {
-            auto & x = _items[priority];
-
-            while (!x.assemblers.empty()) {
-                auto & a = x.assemblers.front();
-
-                if (a.is_complete()) {
-                    m->process_message_received(sender_addr, a.msgid(), priority, a.payload());
-                    x.assemblers.pop_front();
-                    n++;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        return n;
     }
 };
 

@@ -19,10 +19,11 @@ namespace meshnet {
 /**
  * Node pool with reliable delivery support
  */
-template <typename DeliveryManager>
+template <typename DeliveryManager, typename DeliverySessionManager>
 class node_pool_rd
 {
     using delivery_manager_type = DeliveryManager;
+    using delivery_session_manager_type = DeliverySessionManager;
     using transport_type = typename DeliveryManager::transport_type;
 
 public:
@@ -45,9 +46,11 @@ public:
     {
         _t.on_node_alive([this] (node_id id) {
             _on_node_alive(id);
-            _dm.resume(id);
+
+            // TODO Restore delivery session info here
         }).on_node_expired([this] (node_id id) {
-            _dm.pause(id);
+            // TODO Save delivery session info here
+
             _on_node_expired(id);
         }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
             _dm.process_packet(id, priority, std::move(bytes));

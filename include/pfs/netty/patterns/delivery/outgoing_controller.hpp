@@ -10,12 +10,14 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../../tag.hpp"
+#include "../../trace.hpp"
 #include "../priority_tracker.hpp"
 #include "multipart_tracker.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/optional.hpp>
 #include <chrono>
 #include <cstdint>
-#include <deque>
 #include <queue>
 #include <vector>
 
@@ -32,6 +34,8 @@ template <typename MessageId
     , typename PriorityTracker = priority_tracker<single_priority_distribution>>
 class outgoing_controller
 {
+    static constexpr int RETRANSMIT_LIMIT = 30;
+
 public:
     using priority_tracker_type = PriorityTracker;
 
@@ -46,8 +50,8 @@ private:
         // Serial number of the last message part (enqueued)
         serial_number recent_sn {0};
 
-        // Window/queue to track outgoing message/report parts (need access to random element)
-        std::deque<multipart_tracker<message_id>> q;
+        // Window/queue to track outgoing message/report parts
+        std::queue<multipart_tracker<message_id>> q;
 
         // The queue stores serial numbers for retransmission.
         std::queue<serial_number> again;
@@ -81,7 +85,6 @@ private:
 
     std::vector<char> acquire_syn_packet ()
     {
-        _exp_syn = clock_type::now() + _exp_timeout;
         std::vector<serial_number> snumbers;
         snumbers.reserve(PriorityTracker::SIZE);
 
@@ -97,6 +100,9 @@ private:
         auto out = serializer_traits::make_serializer();
         syn_packet pkt {syn_way_enum::request, std::move(snumbers)};
         pkt.serialize(out);
+
+        _exp_syn = clock_type::now() + _exp_timeout;
+
         return out.take();
     }
 
@@ -112,9 +118,9 @@ public:
     bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> msg)
     {
         auto & x = _items[priority];
-        x.q.emplace_back(msgid, priority, force_checksum, _part_size, ++x.recent_sn, std::move(msg)
-            , _exp_timeout);
+        x.q.emplace(msgid, priority, force_checksum, _part_size, ++x.recent_sn, std::move(msg), _exp_timeout);
         auto & mt = x.q.back();
+
         x.recent_sn = mt.last_sn();
 
         return true;
@@ -127,7 +133,7 @@ public:
         , char const * msg, std::size_t length)
     {
         auto & x = _items[priority];
-        x.q.emplace_back(msgid, priority, force_checksum, _part_size, ++x.recent_sn, msg, length, _exp_timeout);
+        x.q.emplace(msgid, priority, force_checksum, _part_size, ++x.recent_sn, msg, length, _exp_timeout);
         auto & mt = x.q.back();
         x.recent_sn = mt.last_sn();
         return true;
@@ -157,9 +163,14 @@ public:
                 int priority = 0; // High priority
                 bool force_checksum = false; // No need checksum
 
-                auto syn_packet = acquire_syn_packet();
-                m->enqueue_private(receiver_addr, std::move(syn_packet), priority, force_checksum);
-                n++;
+                auto serialized_syn_packet = acquire_syn_packet();
+                auto success = m->enqueue_private(receiver_addr, std::move(serialized_syn_packet)
+                    , priority, force_checksum);
+
+                if (success) {
+                    NETTY__TRACE(TAG, "SYN request to: {}", to_string(receiver_addr));
+                    n++;
+                }
             }
 
             return n;
@@ -170,18 +181,23 @@ public:
 
         // Retransmit
         for (auto & x: _items) {
-            if (!x.again.empty()) {
+            for (int i = 0; i < RETRANSMIT_LIMIT && !x.again.empty(); i++) {
                 serial_number sn = x.again.front();
                 x.again.pop();
 
-                auto pos = multipart_tracker<message_id>::find(x.q.begin(), x.q.end(), sn);
-                PFS__THROW_UNEXPECTED(pos != x.q.end(), "Fix delivery::outgoing_controller algorithm");
+                auto mt = & x.q.front();
+
+                PFS__THROW_UNEXPECTED(sn >= mt->first_sn() && sn <= mt->last_sn()
+                    , "Fix delivery::outgoing_controller algorithm: serial number is out of bounds");
 
                 auto out = serializer_traits::make_serializer();
 
-                if (pos->acquire_part(out, sn)) {
-                    m->enqueue_private(receiver_addr, out.take(), pos->priority(), pos->force_checksum());
-                    n++;
+                if (mt->acquire_part(out, sn)) {
+                    auto success = m->enqueue_private(receiver_addr, out.take(), mt->priority()
+                        , mt->force_checksum());
+
+                    if (success)
+                        n++;
                 }
             }
         }
@@ -189,26 +205,6 @@ public:
         // Candidates to retransmit were found
         if (n > 0)
             return n;
-
-        // Check complete messages
-        for (auto & x: _items) {
-            if (x.q.empty())
-                continue;
-
-            auto mt = & x.q.front();
-
-            while (mt->is_complete()) {
-                m->process_message_delivered(receiver_addr, mt->msgid());
-
-                x.q.pop_front();
-                n++;
-
-                if (x.q.empty())
-                    break;
-
-                mt = & x.q.front();
-            }
-        }
 
         if (empty())
             return n;
@@ -231,8 +227,12 @@ public:
             auto out = serializer_traits::make_serializer();
 
             if (mt->acquire_part(out)) {
-                m->enqueue_private(receiver_addr, out.take(), mt->priority(), mt->force_checksum());
-                n++;
+                auto success = m->enqueue_private(receiver_addr, out.take(), mt->priority()
+                    , mt->force_checksum());
+
+                if (success)
+                    n++;
+
                 break;
             } else {
                 _priority_tracker.skip();
@@ -243,13 +243,22 @@ public:
         return n;
     }
 
-    void acknowledge (int priority, serial_number sn)
+    pfs::optional<message_id> acknowledge (int priority, serial_number sn)
     {
         auto & x = _items[priority];
+        auto mt = & x.q.front();
 
-        auto pos = multipart_tracker<message_id>::find(x.q.begin(), x.q.end(), sn);
-        PFS__THROW_UNEXPECTED(pos != x.q.end(), "Fix delivery::outgoing_controller algorithm");
-        pos->acknowledge(sn);
+        PFS__THROW_UNEXPECTED(sn >= mt->first_sn() && sn <= mt->last_sn()
+            , "Fix delivery::outgoing_controller algorithm: serial number is out of bounds");
+
+        if (!mt->acknowledge(sn))
+            return pfs::nullopt;
+
+        // The message has been delivered completely
+        auto msgid = mt->msgid();
+        x.q.pop();
+
+        return msgid;
     }
 
     void again (int priority, serial_number sn)

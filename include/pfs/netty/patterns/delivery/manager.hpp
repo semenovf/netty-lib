@@ -36,7 +36,7 @@ template <typename Transport
     , typename MessageId
     , typename IncomingController
     , typename OutgoingController
-    , typename WriterMutex>
+    , typename RecursiveWriterMutex>
 class manager
 {
     friend IncomingController;
@@ -49,7 +49,7 @@ public:
     using transport_type = Transport;
     using address_type = typename transport_type::address_type;
     using message_id = MessageId;
-    using writer_mutex_type = WriterMutex;
+    using writer_mutex_type = RecursiveWriterMutex;
 
 private:
     transport_type * _transport {nullptr};
@@ -174,7 +174,7 @@ public: // Set callbacks
 private:
     incoming_controller_type * ensure_incoming_controller (address_type addr)
     {
-        PFS__ASSERT(_transport != nullptr, "");
+        PFS__THROW_UNEXPECTED(_transport != nullptr, "Fix delivery::manager algorithm");
 
         auto pos = _icontrollers.find(addr);
 
@@ -183,7 +183,7 @@ private:
 
         auto res = _icontrollers.emplace(addr, incoming_controller_type{});
 
-        PFS__ASSERT(res.second, "");
+        PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
 
         return & res.first->second;
     }
@@ -197,7 +197,7 @@ private:
 
         auto res = _ocontrollers.insert({addr, outgoing_controller_type{}});
 
-        PFS__ASSERT(res.second, "");
+        PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
 
         return & res.first->second;
     }
@@ -209,12 +209,10 @@ private:
     // For:
     //      * send SYN and ACK packets (priority = 0 and force_checksum = true)
     //      * send messages (by outgoing controller)
-    void enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0
+    bool enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0
         , bool force_checksum = true)
     {
-        // Enqueue result is not important. In the worst case, data will be retransmitted.
-        /*auto success = */
-        _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
+        return _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
     }
 
     void process_ready (address_type sender_addr)
@@ -228,8 +226,15 @@ private:
 
     void process_acknowledged (address_type sender_addr, int priority, serial_number sn)
     {
+        message_id msgid;
         auto outc = ensure_outgoing_controller(sender_addr);
-        outc->acknowledge(priority, sn);
+        auto msgid_opt = outc->acknowledge(priority, sn);
+
+        // The message has been delivered completely
+        if (msgid_opt) {
+            if (_on_message_delivered)
+                _on_message_delivered(sender_addr, *msgid_opt);
+        }
     }
 
     void process_again (address_type sender_addr, int priority, serial_number sn)
@@ -263,15 +268,6 @@ private:
     {
         if (_on_message_receiving_progress)
             _on_message_receiving_progress(sender_addr, msgid, received_size, total_size);
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // Outgoing controller requirements
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    void process_message_delivered (address_type receiver_addr, message_id msgid)
-    {
-        if (_on_message_delivered)
-            _on_message_delivered(receiver_addr, msgid);
     }
 
 public:
@@ -336,10 +332,10 @@ public:
      */
     void process_packet (address_type sender_addr, int priority, std::vector<char> data)
     {
-        PFS__ASSERT(data.size() > 0, "");
-
-        auto inpc = ensure_incoming_controller(sender_addr);
-        inpc->process_packet(this, sender_addr, priority, std::move(data));
+        if (!data.empty()) {
+            auto inpc = ensure_incoming_controller(sender_addr);
+            inpc->process_packet(this, sender_addr, priority, std::move(data));
+        }
     }
 
     /**
@@ -352,17 +348,9 @@ public:
         unsigned int n = 0;
 
         for (auto & x: _ocontrollers) {
-            auto & receiver_addr = x.first;
             auto & outc = x.second;
-
+            auto & receiver_addr = x.first;
             n += outc.step(this, receiver_addr);
-        }
-
-        for (auto & x: _icontrollers) {
-            auto & sender_addr = x.first;
-            auto & inpc = x.second;
-
-            n += inpc.step(this, sender_addr);
         }
 
         n += _transport->step();

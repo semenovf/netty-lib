@@ -43,11 +43,11 @@ private:
     std::vector<char> _dynamic_payload;
     std::pair<char const *, std::size_t> _static_payload {nullptr, 0};
 
-    std::vector<bool> _parts_acked;              // Parts acknowledged
-    std::vector<time_point_type> _parts_expired; // Expiration time for parts
-    std::size_t _remain_parts {0};               // Number of unacknowledged parts
-    std::size_t _recent_index {0};               // Index of the first not acquired part
+    std::vector<bool> _parts_acked;      // Parts acknowledged
+    std::size_t _remain_parts_count {0}; // Number of unacknowledged parts
+    std::size_t _recent_index {0};       // Index of the first not acquired part
 
+    time_point_type _exp_timepoint;
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
 public:
@@ -102,14 +102,18 @@ private:
         //            = first_sn + size() / part_size
         _last_sn = _first_sn + size() / _part_size;
 
-        _remain_parts = _last_sn - _first_sn + 1;
-        _parts_acked.resize(_remain_parts, false);
-        _parts_expired.resize(_remain_parts);
+        _remain_parts_count = _last_sn - _first_sn + 1;
+        _parts_acked.resize(_remain_parts_count, false);
     }
 
-    std::size_t size () const noexcept
+    inline std::size_t size () const noexcept
     {
         return _is_static ? _static_payload.second : _dynamic_payload.size();
+    }
+
+    inline void update_exp_timepoint () noexcept
+    {
+        _exp_timepoint = clock_type::now() + _exp_timeout;
     }
 
 public:
@@ -141,7 +145,12 @@ public:
         return _last_sn;
     }
 
-    void acknowledge (serial_number sn)
+    /**
+     * Acknowledges message part delivering.
+     *
+     * @return @c true if the message has been delivered completely, or @c false otherwise.
+     */
+    bool acknowledge (serial_number sn)
     {
         auto index = sn - _first_sn;
 
@@ -149,15 +158,20 @@ public:
             , "Fix delivery::multipart_tracker algorithm");
 
         if (!_parts_acked[index]) {
-            PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_tracker algorithm");
+            PFS__THROW_UNEXPECTED(_remain_parts_count > 0, "Fix delivery::multipart_tracker algorithm");
             _parts_acked[index] = true;
-            _remain_parts--;
+            _remain_parts_count--;
         }
+
+        // Update expiration time point every acknowledgement
+        update_exp_timepoint();
+
+        return _remain_parts_count == 0;
     }
 
     bool is_complete () const noexcept
     {
-        return _remain_parts == 0;
+        return _remain_parts_count == 0;
     }
 
     /**
@@ -191,12 +205,13 @@ public:
             pkt.part_size  = _part_size;
             pkt.last_sn    = _last_sn;
             pkt.serialize(out, begin + _part_size * index, part_size);
+
+            // Start counting the expiration time point from sending the first part
+            update_exp_timepoint();
         } else {
             part_packet pkt {sn};
             pkt.serialize(out, begin + _part_size * index, part_size);
         }
-
-        _parts_expired[index] = clock_type::now() + _exp_timeout;
 
         return true;
     }
@@ -208,7 +223,7 @@ public:
     bool acquire_part (Serializer & out)
     {
         // Message sending completed
-        if (_remain_parts == 0)
+        if (_remain_parts_count == 0)
             return false;
 
         std::size_t index = 0;
@@ -220,12 +235,14 @@ public:
             index = _recent_index++;
             found = true;
         } else {
-            // Find first expired part.
-            for (std::size_t i = 0; i < _recent_index; i++) {
-                if (!_parts_acked[i] && _parts_expired[i] <= clock_type::now()) {
-                    index = i;
-                    found = true;
-                    break;
+            if (_exp_timepoint <= clock_type::now()) {
+                // Find first expired part.
+                for (std::size_t i = 0; i < _recent_index; i++) {
+                    if (!_parts_acked[i]) {
+                        index = i;
+                        found = true;
+                        break;
+                    }
                 }
             }
         }
@@ -236,22 +253,6 @@ public:
         auto sn = _first_sn + index;
 
         return acquire_part<Serializer>(out, sn);
-    }
-
-public: // static
-    /**
-     * Searches multipart tracker in range from @a begin to @a end (excluding) that contains
-     * specified serial number @a sn.
-     */
-    template <typename ForwardIt>
-    static ForwardIt find (ForwardIt begin, ForwardIt end, serial_number sn)
-    {
-        for (auto pos = begin; pos != end; ++pos) {
-            if (sn >= pos->_first_sn && sn <= pos->_last_sn)
-                return pos;
-        }
-
-        return end;
     }
 };
 
