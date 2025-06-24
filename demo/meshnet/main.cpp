@@ -227,9 +227,11 @@ int main (int argc, char * argv[])
                 is_reliable_impl = true;
             } else if (x.is_option("id")) {
                 if (x.has_arg()) {
-                    auto node_id_opt = pfs::parse_universal_id(x.arg().data(), x.arg().size());
+                    auto id_opt = pfs::parse_universal_id(x.arg().data(), x.arg().size());
 
-                    if (!node_id_opt) {
+                    if (id_opt) {
+                        id = *id_opt;
+                    } else {
                         LOGE(TAG, "Bad node identifier");
                         return EXIT_FAILURE;
                     }
