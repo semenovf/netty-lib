@@ -4,7 +4,7 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.27 Initial version.
+//      2025.06.25 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -15,14 +15,20 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-class reconnection_policy
+class infinite_reconnection_policy
 {
+    std::chrono::seconds _timeout {5};
     unsigned int _attempts {0};
+
+public:
+    infinite_reconnection_policy (std::chrono::seconds timeout = std::chrono::seconds{5})
+        : _timeout(timeout)
+    {}
 
 public:
     bool required () const noexcept
     {
-        return _attempts <= 30;
+        return true;
     }
 
     unsigned int attempts () const noexcept
@@ -33,17 +39,7 @@ public:
     std::chrono::seconds fetch_timeout () noexcept
     {
         _attempts++;
-
-        if (_attempts > 30)
-            return std::chrono::seconds{0};
-
-        if (_attempts > 20)
-            return std::chrono::seconds{30};
-
-        if (_attempts > 10)
-            return std::chrono::seconds{10};
-
-        return std::chrono::seconds{5};
+        return _timeout;
     }
 
 public: // static

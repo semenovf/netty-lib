@@ -26,7 +26,7 @@
 #include <pfs/netty/patterns/meshnet/node_pool_rd.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
-#include <pfs/netty/patterns/meshnet/reconnection_policy.hpp>
+#include <pfs/netty/patterns/meshnet/infinite_reconnection_policy.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/simple_input_controller.hpp>
@@ -75,7 +75,7 @@ using nopriority_meshnet_node_t = meshnet_ns::node<
     , netty::writer_queue
     , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
-    , meshnet_ns::reconnection_policy
+    , meshnet_ns::infinite_reconnection_policy
     , meshnet_ns::single_link_handshake // dual_link_handshake
     , meshnet_ns::simple_heartbeat
     , meshnet_ns::simple_input_controller>;
@@ -107,7 +107,7 @@ using priority_meshnet_node_t = meshnet_ns::node<
     , priority_writer_queue_t
     , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
-    , meshnet_ns::reconnection_policy
+    , meshnet_ns::infinite_reconnection_policy
     , meshnet_ns::single_link_handshake // dual_link_handshake
     , meshnet_ns::simple_heartbeat
     , priority_input_controller>;

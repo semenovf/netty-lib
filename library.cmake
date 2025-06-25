@@ -165,29 +165,6 @@ if (NETTY__ENABLE_UDT)
 endif(NETTY__ENABLE_UDT)
 
 if (NETTY__ENABLE_ENET)
-#     if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/enet/.git)
-#         add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/enet 3rdparty/enet)
-#     else()
-#         set(FETCHCONTENT_UPDATES_DISCONNECTED_ENET ON)
-#         message(STATUS "Fetching ENet ...")
-#         include(FetchContent)
-#         FetchContent_Declare(enet
-#             GIT_REPOSITORY https://github.com/lsalzman/enet.git
-#             GIT_TAG "v1.3.18"
-#             SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/enet
-#             SUBBUILD_DIR ${CMAKE_BINARY_DIR}/3rdparty/enet)
-#         FetchContent_MakeAvailable(enet)
-#         message(STATUS "Fetching ENet complete")
-#     endif()
-#
-#     target_include_directories(enet PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/enet/include)
-#
-#     # This link can be removed with new ENet release (> 1.3.18)
-#     if (MSVC)
-#         cmake_policy(SET CMP0079 NEW)
-#         target_link_libraries(enet PRIVATE winmm ws2_32)
-#     endif()
-#
     target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/enet/enet_listener.cpp

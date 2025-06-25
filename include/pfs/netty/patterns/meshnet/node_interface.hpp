@@ -52,6 +52,8 @@ public:
     virtual void on_error (callback_t<void (std::string const &)>) = 0;
     virtual void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)>) = 0;
     virtual void on_channel_destroyed (callback_t<void (node_id, node_index_t)>) = 0;
+    virtual void on_reconnection_started (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
+    virtual void on_reconnection_stopped (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
     virtual void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
     virtual void on_bytes_written (callback_t<void (node_id, node_index_t, std::uint64_t)>) = 0;
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;

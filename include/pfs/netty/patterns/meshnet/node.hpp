@@ -28,6 +28,7 @@
 #include "tag.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/log.hpp>
+#include <pfs/optional.hpp>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -123,6 +124,15 @@ public:
 private:
     using channel_collection_type = channel_map<node_id, socket_id>;
 
+    struct host_info
+    {
+        socket4_addr remote_saddr;
+        inet4_addr local_addr;
+        pfs::optional<reconnection_policy> reconn_policy;
+    };
+
+    using host_cache_type = std::map<socket4_addr, host_info>;
+
 private:
     // Unique node identifier
     node_id _id;
@@ -142,7 +152,8 @@ private:
     HeartbeatController<node> _heartbeat_controller;
     InputController<node> _input_controller;
 
-    std::map<socket4_addr, reconnection_policy> _reconn_policies;
+    // std::map<socket4_addr, reconnection_policy> _reconn_policies;
+    host_cache_type _hosts_cache;
 
     // Nodes for which the current node is behind NAT
     std::set<socket4_addr> _behind_nat;
@@ -159,6 +170,8 @@ private: // Callbacks
 
     callback_t<void (node_id, node_index_t, bool)> _on_channel_established = [] (node_id, node_index_t, bool) {};
     callback_t<void (node_id, node_index_t)> _on_channel_destroyed = [] (node_id, node_index_t) {};
+    callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
+    callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
     callback_t<void (node_id, node_index_t, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, node_index_t, std::size_t)> _on_bytes_written;
     callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> _on_alive_received;
@@ -208,7 +221,10 @@ public:
             if (_behind_nat.find(sock.saddr()) != _behind_nat.end())
                 behind_nat = true;
 
-            _reconn_policies.erase(sock.saddr());
+            // Stop reconnection if needed
+            //_reconn_policies.erase(sock.saddr());
+            stop_reconnection(_hosts_cache.find(sock.saddr()));
+
             _handshake_controller.start(sock.id(), behind_nat);
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
@@ -372,6 +388,32 @@ public: // Set callbacks
     }
 
     /**
+     * Notify when reconnection to remote node started.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     */
+    template <typename F>
+    node & on_reconnection_started (F && f)
+    {
+        _on_reconnection_started = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when reconnection to remote node stopped.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     */
+    template <typename F>
+    node & on_reconnection_stopped (F && f)
+    {
+        _on_reconnection_stopped = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
      * Notify when a node with identical ID is detected.
      *
      * @details Callback @a f signature must match:
@@ -518,6 +560,8 @@ public:
         if (behind_nat)
             _behind_nat.insert(remote_saddr);
 
+        cache_host(remote_saddr, inet4_addr{});
+
         return true;
     }
 
@@ -531,6 +575,8 @@ public:
 
         if (behind_nat)
             _behind_nat.insert(remote_saddr);
+
+        cache_host(remote_saddr, local_addr);
 
         return true;
     }
@@ -706,28 +752,67 @@ private:
         }
     }
 
+    void stop_reconnection (typename host_cache_type::iterator pos)
+    {
+        PFS__THROW_UNEXPECTED(pos != _hosts_cache.end(), "Fix meshnet::node algorithm");
+
+        auto & h = pos->second; // host_info instance
+
+        if (h.reconn_policy.has_value()) {
+            if (_on_reconnection_stopped)
+                _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr);
+
+            h.reconn_policy.reset();
+        }
+    }
+
+    void cache_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
+    {
+        auto pos = _hosts_cache.find(remote_saddr);
+
+        if (pos == _hosts_cache.end()) {
+            _hosts_cache.insert({remote_saddr, host_info{remote_saddr, local_addr}});
+        } else {
+            auto & h = pos->second; // host_info instance
+            h.reconn_policy.reset();
+        }
+    }
+
     void schedule_reconnection (socket4_addr saddr)
     {
         if (!reconnection_policy::supported())
             return;
 
         auto reconnecting = true;
-        auto pos = _reconn_policies.find(saddr);
 
-        if (pos == _reconn_policies.end()) {
-            pos = _reconn_policies.emplace(saddr, reconnection_policy{}).first;
+        auto pos = _hosts_cache.find(saddr);
+
+        PFS__THROW_UNEXPECTED(pos != _hosts_cache.end(), "Fix meshnet::node algorithm");
+
+        auto & h = pos->second; // host_info instance
+
+        if (!h.reconn_policy.has_value()) {
+            h.reconn_policy = reconnection_policy{};
         } else {
-            if (!pos->second.required()) {
-                _reconn_policies.erase(pos);
+            if (!h.reconn_policy->required()) {
                 reconnecting = false;
-                NETTY__TRACE(MESHNET_TAG, "stopped reconnection to: {}", to_string(saddr));
+                stop_reconnection(pos);
             }
         }
 
         if (reconnecting) {
-            auto reconn_timeout = pos->second.fetch_timeout();
-            NETTY__TRACE(MESHNET_TAG, "reconnecting to: {} after {}", to_string(saddr), reconn_timeout);
-            _connecting_pool.connect_timeout(reconn_timeout, saddr);
+            auto reconn_timeout = h.reconn_policy->fetch_timeout();
+
+            NETTY__TRACE(MESHNET_TAG, "reconnecting to: {} after {}", to_string(h.remote_saddr)
+                , reconn_timeout);
+
+            if (h.local_addr != inet4_addr{})
+                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr, h.local_addr);
+            else
+                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr);
+
+            if (_on_reconnection_started)
+                _on_reconnection_started(_index, h.remote_saddr, h.local_addr);
         }
     }
 
@@ -951,6 +1036,16 @@ public: // node_interface
         void on_channel_destroyed (callback_t<void (node_id, node_index_t)> cb) override
         {
             Node::on_channel_destroyed(std::move(cb));
+        }
+
+        void on_reconnection_started (callback_t<void (node_index_t, socket4_addr, inet4_addr)> cb) override
+        {
+            Node::on_reconnection_started(std::move(cb));
+        }
+
+        void on_reconnection_stopped (callback_t<void (node_index_t, socket4_addr, inet4_addr)> cb) override
+        {
+            Node::on_reconnection_stopped(std::move(cb));
         }
 
         void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override

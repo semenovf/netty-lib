@@ -158,7 +158,10 @@ public:
             this->connect(args...);
         };
 
-        _deferred_connections.insert(deferred_connection_item{std::chrono::steady_clock::now() + timeout, std::move(func)});
+        _deferred_connections.insert(deferred_connection_item {
+            std::chrono::steady_clock::now() + timeout
+            , std::move(func)
+        });
 
         return netty::conn_status::deferred;
     }
