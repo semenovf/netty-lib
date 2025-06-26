@@ -84,8 +84,8 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                         if (errno == ECONNRESET) {
                             on_disconnected(fd);
                         } else {
-                            on_failure(fd, error {
-                                tr::f_("read socket failure: {} (socket={})", pfs::system_error_text(errno), fd)
+                            on_failure(fd, error { make_error_code(pfs::errc::system_error)
+                                , tr::f_("read socket failure: {} (socket={})", pfs::system_error_text(errno), fd)
                             });
                         }
 #if _MSC_VER
@@ -145,8 +145,8 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.fd, error {
-                        tr::f_("get socket option failure: {} (socket={})"
+                    on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                        , tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
@@ -154,8 +154,8 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                             || error_val == ECONNRESET) {
                         on_disconnected(ev.fd);
                     } else {
-                        on_failure(ev.fd, error {
-                            tr::f_("get socket ({}) option failure: {} (error_val={})"
+                        on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                            , tr::f_("get socket ({}) option failure: {} (error_val={})"
                                 , ev.fd, pfs::system_error_text(error_val), error_val)
                         });
                     }
@@ -184,8 +184,8 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                     on_disconnected(ev.fd);
                 } else {
                     if (errno != ECONNRESET) {
-                        on_failure(ev.fd, error {
-                            tr::f_("read socket failure: {} (socket={})"
+                        on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                            , tr::f_("read socket failure: {} (socket={})"
                                 , pfs::system_error_text(errno), ev.fd)
                         });
                     } else {

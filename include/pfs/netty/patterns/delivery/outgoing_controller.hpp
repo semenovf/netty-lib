@@ -29,7 +29,8 @@ namespace delivery {
 /**
  * Outgoing messages controller.
  */
-template <typename MessageId
+template <typename Address
+    , typename MessageId
     , typename SerializerTraits
     , typename PriorityTracker = priority_tracker<single_priority_distribution>>
 class outgoing_controller
@@ -40,6 +41,7 @@ public:
     using priority_tracker_type = PriorityTracker;
 
 private:
+    using address_type = Address;
     using message_id = MessageId;
     using serializer_traits = SerializerTraits;
     using clock_type = std::chrono::steady_clock;
@@ -58,6 +60,8 @@ private:
     };
 
 private:
+    address_type _receiver_addr;
+
     // SYN packet expiration time
     time_point_type _exp_syn;
 
@@ -70,10 +74,14 @@ private:
     priority_tracker_type _priority_tracker;
     std::array<item, PriorityTracker::SIZE> _items;
 
+    //
+    bool _paused {false};
+
 public:
-    outgoing_controller (std::uint32_t part_size = 16384U // 16 Kb
+    outgoing_controller (address_type receiver_addr, std::uint32_t part_size = 16384U // 16 Kb
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
-        : _part_size(part_size)
+        : _receiver_addr(receiver_addr)
+        , _part_size(part_size)
         , _exp_timeout(exp_timeout)
     {}
 
@@ -107,6 +115,24 @@ private:
     }
 
 public:
+    bool paused () const noexcept
+    {
+        return _paused;
+    }
+
+    void pause () noexcept
+    {
+        _paused = true;
+        NETTY__TRACE(TAG, "Message sending has been paused to: {}", to_string(_receiver_addr));
+    }
+
+    void resume () noexcept
+    {
+        _synchronized = false;
+        _paused = false;
+        NETTY__TRACE(TAG, "Message sending has been resumed to: {}", to_string(_receiver_addr));
+    }
+
     void set_synchronized (bool value) noexcept
     {
         _synchronized = value;
@@ -153,7 +179,7 @@ public:
     }
 
     template <typename Manager>
-    unsigned int step (Manager * m, typename Manager::address_type receiver_addr)
+    unsigned int step (Manager * m)
     {
         unsigned int n = 0;
 
@@ -164,12 +190,15 @@ public:
                 bool force_checksum = false; // No need checksum
 
                 auto serialized_syn_packet = acquire_syn_packet();
-                auto success = m->enqueue_private(receiver_addr, std::move(serialized_syn_packet)
+                auto success = m->enqueue_private(_receiver_addr, std::move(serialized_syn_packet)
                     , priority, force_checksum);
 
                 if (success) {
-                    NETTY__TRACE(TAG, "SYN request to: {}", to_string(receiver_addr));
+                    NETTY__TRACE(TAG, "SYN request to: {}", to_string(_receiver_addr));
                     n++;
+                } else {
+                    // There is a problem in communication with the receiver
+                    _paused = true;
                 }
             }
 
@@ -193,11 +222,15 @@ public:
                 auto out = serializer_traits::make_serializer();
 
                 if (mt->acquire_part(out, sn)) {
-                    auto success = m->enqueue_private(receiver_addr, out.take(), mt->priority()
+                    auto success = m->enqueue_private(_receiver_addr, out.take(), mt->priority()
                         , mt->force_checksum());
 
-                    if (success)
+                    if (success) {
                         n++;
+                    } else {
+                        // There is a problem in communication with the receiver
+                        _paused = true;
+                    }
                 }
             }
         }
@@ -227,11 +260,15 @@ public:
             auto out = serializer_traits::make_serializer();
 
             if (mt->acquire_part(out)) {
-                auto success = m->enqueue_private(receiver_addr, out.take(), mt->priority()
+                auto success = m->enqueue_private(_receiver_addr, out.take(), mt->priority()
                     , mt->force_checksum());
 
-                if (success)
+                if (success) {
                     n++;
+                } else {
+                    // There is a problem in communication with the receiver
+                    _paused = true;
+                }
 
                 break;
             } else {

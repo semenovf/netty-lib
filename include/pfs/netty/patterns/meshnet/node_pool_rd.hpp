@@ -44,12 +44,10 @@ public:
         , _dm(_t)
     {
         _t.on_node_alive([this] (node_id id) {
+            _dm.resume(id);
             _on_node_alive(id);
-
-            // TODO Restore delivery session info here
         }).on_node_expired([this] (node_id id) {
-            // TODO Save delivery session info here
-
+            _dm.pause(id);
             _on_node_expired(id);
         }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
             _dm.process_packet(id, priority, std::move(bytes));

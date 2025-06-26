@@ -181,7 +181,7 @@ using message_id = pfs::universal_id;
 using delivery_transport_t = node_pool_t;
 using incoming_controller_t = delivery_ns::incoming_controller<message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t::SIZE>;
-using outgoing_controller_t = delivery_ns::outgoing_controller<message_id
+using outgoing_controller_t = delivery_ns::outgoing_controller<node_id, message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
 using message_queue_t = delivery_ns::message_queue<message_id, priority_tracker_t::SIZE>;
 

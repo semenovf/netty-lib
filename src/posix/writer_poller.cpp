@@ -122,8 +122,8 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.fd, error {
-                        tr::f_("get socket option failure: {} (socket={})"
+                    on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                        , tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
                     remove_later(ev.fd);
@@ -132,8 +132,8 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                         on_disconnected(ev.fd);
                         remove_later(ev.fd);
                     } else {
-                        on_failure(ev.fd, error {
-                            tr::f_("write socket failure: {} (socket={})"
+                        on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                            , tr::f_("write socket failure: {} (socket={})"
                                 , pfs::system_error_text(error_val), ev.fd)
                         });
                         remove_later(ev.fd);

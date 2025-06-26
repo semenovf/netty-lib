@@ -661,12 +661,23 @@ public:
         return add_node<Node>(listener_saddrs.begin(), listener_saddrs.end(), perr);
     }
 
+    /**
+     * Initiates listening on all nodes in the pool.
+     *
+     * @param backlog Maximum length to which the queue of pending connections may grow (see listen(2)).
+     */
     void listen (int backlog = 50)
     {
         for (auto & x: _nodes)
             x->listen(backlog);
     }
 
+    /**
+     * Initiates listening on node by @a index.
+     *
+     * @param index Node index.
+     * @param backlog Maximum length to which the queue of pending connections may grow (see listen(2)).
+     */
     void listen (node_index_t index, int backlog)
     {
         auto ptr = locate_node(index);
@@ -677,6 +688,14 @@ public:
         ptr->listen(backlog);
     }
 
+    /**
+     * Initiates a connection to a remote host.
+     *
+     * @param index Node index.
+     * @param remote_saddr Remote node socket address.
+     * @param behind_nat Remote host is behind NAT.
+     * @return @c true if connection start successfully.
+     */
     bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
     {
         auto ptr = locate_node(index);
@@ -687,6 +706,15 @@ public:
         return ptr->connect_host(remote_saddr, behind_nat);
     }
 
+    /**
+     * Initiates a connection to a remote host.
+     *
+     * @param index Node index
+     * @param remote_saddr Remote node socket address.
+     * @param local_addr Local address to bind.
+     * @param behind_nat Remote host is behind NAT.
+     * @return @c true if connection start successfully.
+     */
     bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
         , bool behind_nat = false)
     {
@@ -703,11 +731,11 @@ public:
      *
      * @param id Receiver ID.
      * @param priority Message priority.
-     * @param force_checksum Calculate checksum before sending.
+     * @param force_checksum Calculate checksum before sending if @c true.
      * @param data Message content.
      * @param len Length of the message content.
      *
-     * @return @c true if message route found for @a id.
+     * @return @c true if route found to @a id.
      */
     bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
     {
@@ -726,22 +754,19 @@ public:
         return true;
     }
 
-    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> && data)
+    /**
+     * Enqueues message for delivery to specified node ID @a id.
+     *
+     * @param id Receiver ID.
+     * @param priority Message priority.
+     * @param force_checksum Calculate checksum before sending if @c true.
+     * @param data Message content.
+     *
+     * @return @c true if route found to @a id.
+     */
+    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data)
     {
-        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
-
-        node_id gw_id;
-        auto ptr = locate_writer(id, & gw_id);
-
-        if (ptr == nullptr) {
-            _on_error(tr::f_("node not found to send data to: {}", to_string(id)));
-            return false;
-        }
-
-        auto packet = _rtab.serialize_message(_id, gw_id, id, force_checksum
-            , data.data(), data.size());
-        ptr->enqueue_packet(gw_id, priority, std::move(packet));
-        return true;
+        return enqueue(id, priority, force_checksum, data.data(), data.size());
     }
 
     /**
@@ -752,14 +777,23 @@ public:
      * @param data Message content.
      * @param len Length of the message content.
      *
-     * @return @c true if message route found for @a id.
+     * @return @c true if route found to @a id.
      */
     bool enqueue (node_id id, int priority, char const * data, std::size_t len)
     {
         return enqueue(id, priority, false, data, len);
     }
 
-    bool enqueue (node_id id, int priority, std::vector<char> && data)
+    /**
+     * Enqueues message for delivery to specified node ID @a id.
+     *
+     * @param id Receiver ID.
+     * @param priority Message priority.
+     * @param data Message content.
+     *
+     * @return @c true if route found to @a id.
+     */
+    bool enqueue (node_id id, int priority, std::vector<char> data)
     {
         return enqueue(id, priority, false, std::move(data));
     }

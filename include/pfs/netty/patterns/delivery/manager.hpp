@@ -196,7 +196,7 @@ private:
         if (pos != _ocontrollers.end())
             return & pos->second;
 
-        auto res = _ocontrollers.insert({addr, outgoing_controller_type{}});
+        auto res = _ocontrollers.insert({addr, outgoing_controller_type{addr}});
 
         PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
 
@@ -209,7 +209,7 @@ private:
 
     // For:
     //      * send SYN and ACK packets (priority = 0 and force_checksum = true)
-    //      * send messages (by outgoing controller)
+    //      * send message parts (by outgoing controller)
     bool enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0
         , bool force_checksum = true)
     {
@@ -272,6 +272,26 @@ private:
     }
 
 public:
+    void pause (address_type addr)
+    {
+        auto pos = _ocontrollers.find(addr);
+
+        if (pos != _ocontrollers.end()) {
+            auto & outc = pos->second;
+            outc.pause();
+        }
+    }
+
+    void resume (address_type addr)
+    {
+        auto pos = _ocontrollers.find(addr);
+
+        if (pos != _ocontrollers.end()) {
+            auto & outc = pos->second;
+            outc.resume();
+        }
+    }
+
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
         , std::vector<char> msg)
     {
@@ -350,8 +370,9 @@ public:
 
         for (auto & x: _ocontrollers) {
             auto & outc = x.second;
-            auto & receiver_addr = x.first;
-            n += outc.step(this, receiver_addr);
+
+            if (!outc.paused())
+                n += outc.step(this);
         }
 
         n += _transport->step();

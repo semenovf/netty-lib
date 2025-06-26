@@ -108,7 +108,9 @@ public: // static
 
             if (magic != 5) {
                 throw netty::error {
-                    tr::f_("bad priority frame: unexpected value of magic number({}): {}", 5, magic)
+                      make_error_code(pfs::errc::unexpected_error)
+                    , tr::f_("bad priority frame: expected value of magic number: {}, got: {}"
+                        , 5, magic)
                 };
             }
         }

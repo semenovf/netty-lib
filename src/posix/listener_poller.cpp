@@ -115,13 +115,13 @@ int listener_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis,
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
 
                 if (rc != 0) {
-                    on_failure(ev.fd, error {
-                        tr::f_("get socket option failure: {}, socket removed: {}"
+                    on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                        , tr::f_("get socket option failure: {}, socket removed: {}"
                             , pfs::system_error_text(), ev.fd)
                     });
                 } else {
-                    on_failure(ev.fd, error {
-                        tr::f_("accept socket error: {}, socket removed: {}"
+                    on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
+                        , tr::f_("accept socket error: {}, socket removed: {}"
                             , pfs::system_error_text(error_val), ev.fd)
                     });
                 }
