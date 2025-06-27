@@ -20,9 +20,9 @@ project(netty-lib-TESTS CXX C)
 set(TESTS inet4_addr)
 
 foreach (target ${TESTS})
-    add_executable(${target} ${target}.cpp)
-    target_link_libraries(${target} PRIVATE pfs::netty pfs::lorem)
-    add_test(NAME ${target} COMMAND ${target})
+    add_executable(${target}-tests ${target}.cpp)
+    target_link_libraries(${target}-tests PRIVATE pfs::netty pfs::lorem)
+    add_test(NAME ${target}-tests COMMAND ${target}-tests)
 endforeach()
 
 ####################################################################################################

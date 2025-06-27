@@ -70,6 +70,12 @@ if (MSVC)
     target_link_libraries(netty PRIVATE Ws2_32 Iphlpapi)
 endif(MSVC)
 
+check_include_file("netdb.h" __has_netdb_h)
+
+if (__has_netdb_h)
+    target_sources(netty PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/posix/inet4_addr.cpp)
+endif()
+
 check_include_file("poll.h" __has_poll)
 
 if (__has_poll)

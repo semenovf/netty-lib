@@ -9,12 +9,14 @@
 //      2017.07.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "error.hpp"
 #include "exports.hpp"
 #include "pfs/optional.hpp"
 #include "pfs/string_view.hpp"
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace netty {
 
@@ -161,6 +163,12 @@ public: // static
      * Parses IPv4 address from string view.
      */
     static NETTY__EXPORT pfs::optional<inet4_addr> parse (pfs::string_view s);
+
+
+    /**
+     * Resolve domain name to IPv4 address synchronously.
+     */
+    static NETTY__EXPORT std::vector<inet4_addr> resolve (std::string const & name, error * perr = nullptr);
 };
 
     /**

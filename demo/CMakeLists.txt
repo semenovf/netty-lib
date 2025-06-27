@@ -15,6 +15,7 @@ add_subdirectory(mtu)
 # add_subdirectory(netty) # FIXME
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
+add_subdirectory(resolver)
 # add_subdirectory(service) # FIXME
 
 # DEPRECATED
