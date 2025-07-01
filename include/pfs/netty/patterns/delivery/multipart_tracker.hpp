@@ -35,8 +35,8 @@ private:
     bool _force_checksum {false};
 
     std::uint32_t _part_size {0};
-    serial_number _first_sn {0};
-    serial_number _last_sn {0};
+    serial_number _first_sn {0};  // First value of serial number range
+    serial_number _last_sn {0};   // Last value of serial number range
 
     std::vector<char> _payload;
     char const * _data {nullptr};

@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2025.02.25 Initial version.
+//      2025.06.30 Added method `set_frame_size()`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -43,6 +44,7 @@ public:
     virtual void enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len) = 0;
     virtual void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data) = 0;
     virtual bool has_writer (node_id id) const = 0;
+    virtual void set_frame_size (node_id id, std::uint16_t frame_size) = 0  ;
     virtual unsigned int step () = 0;
     virtual void clear_channels () = 0;
 

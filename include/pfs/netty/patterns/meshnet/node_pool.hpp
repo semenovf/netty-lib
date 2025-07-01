@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2025.02.24 Initial version.
+//      2025.06.30 Added method `set_frame_size()`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -724,6 +725,21 @@ public:
             return false;
 
         return ptr->connect_host(remote_saddr, local_addr, behind_nat);
+    }
+
+    void set_frame_size (node_id id, std::uint16_t frame_size)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        node_id gw_id;
+        auto ptr = locate_writer(id, & gw_id);
+
+        if (ptr == nullptr) {
+            _on_error(tr::f_("node not found to set frame size: {}", to_string(id)));
+            return;
+        }
+
+        ptr->set_frame_size(id, frame_size);
     }
 
     /**

@@ -238,10 +238,10 @@ private:
         }
     }
 
-    void process_again (address_type sender_addr, int priority, serial_number sn)
+    void process_again (address_type sender_addr, int priority, serial_number sn, serial_number last_sn)
     {
         auto outc = ensure_outgoing_controller(sender_addr);
-        outc->again(priority, sn);
+        outc->again(priority, sn, last_sn);
     }
 
     void process_message_received (address_type sender_addr, message_id msgid, int priority

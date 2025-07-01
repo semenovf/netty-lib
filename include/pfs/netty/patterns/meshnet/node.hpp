@@ -719,10 +719,10 @@ public:
      */
     void set_frame_size (node_id id, std::uint16_t frame_size)
     {
-        auto sid_ptr = _channels.locate(id);
+        auto sid_ptr = _channels.locate_writer(id);
 
         if (sid_ptr != nullptr)
-            _writer_pool.ensure(*sid_ptr, frame_size);
+            _writer_pool.set_frame_size(*sid_ptr, frame_size);
     }
 
     /**
@@ -987,6 +987,11 @@ public: // node_interface
         bool has_writer (node_id id) const override
         {
             return Node::has_writer(id);
+        }
+
+        void set_frame_size (node_id id, std::uint16_t frame_size) override
+        {
+            Node::set_frame_size(id, frame_size);
         }
 
         unsigned int step () override

@@ -103,6 +103,8 @@ private:
                 syn_sn = x.q.front().first_sn();
 
             snumbers.push_back(syn_sn);
+
+            NETTY__TRACE(TAG, "SYN request send to: {}; sn={}", to_string(_receiver_addr), syn_sn);
         }
 
         auto out = serializer_traits::make_serializer();
@@ -194,7 +196,6 @@ public:
                     , priority, force_checksum);
 
                 if (success) {
-                    NETTY__TRACE(TAG, "SYN request to: {}", to_string(_receiver_addr));
                     n++;
                 } else {
                     // There is a problem in communication with the receiver
@@ -298,12 +299,13 @@ public:
         return msgid;
     }
 
-    void again (int priority, serial_number sn)
+    void again (int priority, serial_number first_sn, serial_number last_sn)
     {
         auto & x = _items[priority];
 
         // Cache serial number for part retransmission in step()
-        x.again.push(sn);
+        for (serial_number sn = first_sn; sn <= last_sn; sn++)
+            x.again.push(sn);
     }
 
 public: // static

@@ -6,6 +6,7 @@
 // Changelog:
 //      2024.12.27 Initial version.
 //      2025.05.07 Replaced `std::function` with `callback_t`.
+//      2025.06.30 Method `ensure()` renamed to `set_frame_size()`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
@@ -36,13 +37,15 @@ public:
 
     static constexpr std::uint16_t default_frame_size ()
     {
-        return 1500;
+        // FIXME UNCOMMENT
+        //return 1500;
+        return 128;
     }
 
 private:
     struct account
     {
-        socket_id id {socket_type::kINVALID_SOCKET};
+        socket_id sid {socket_type::kINVALID_SOCKET};
         bool writable {false};   // Socket is writable
         std::uint16_t frame_size {default_frame_size()}; // Initial value is default MTU size
         WriterQueue q; // Output queue
@@ -50,7 +53,7 @@ private:
 
     struct item
     {
-        socket_id id;
+        socket_id sid;
     };
 
 private:
@@ -70,18 +73,18 @@ public:
 public:
     writer_pool (): WriterPoller()
     {
-        WriterPoller::on_failure = [this] (socket_id id, error const & err) {
-            remove_later(id);
-            this->on_failure(id, err);
+        WriterPoller::on_failure = [this] (socket_id sid, error const & err) {
+            remove_later(sid);
+            this->on_failure(sid, err);
         };
 
-        WriterPoller::on_disconnected = [this] (socket_id id) {
-            remove_later(id);
-            this->on_disconnected(id);
+        WriterPoller::on_disconnected = [this] (socket_id sid) {
+            remove_later(sid);
+            this->on_disconnected(sid);
         };
 
-        WriterPoller::can_write = [this] (socket_id id) {
-            auto acc = locate_account(id);
+        WriterPoller::can_write = [this] (socket_id sid) {
+            auto acc = locate_account(sid);
 
             if (acc != nullptr)
                 acc->writable = true;
@@ -89,9 +92,9 @@ public:
     }
 
 private:
-    account * locate_account (socket_id id)
+    account * locate_account (socket_id sid)
     {
-        auto pos = _accounts.find(id);
+        auto pos = _accounts.find(sid);
 
         if (pos == _accounts.end())
             return nullptr;
@@ -99,23 +102,23 @@ private:
         auto & acc = pos->second;
 
         // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__THROW_UNEXPECTED(acc.id == id, "Fix the algorithm for a writer pool");
+        PFS__THROW_UNEXPECTED(acc.sid == sid, "Fix the algorithm for a writer pool");
 
         return & acc;
     }
 
-    account * ensure_account (socket_id id)
+    account * ensure_account (socket_id sid)
     {
-        auto acc = locate_account(id);
+        auto acc = locate_account(sid);
 
         if (acc == nullptr) {
             account a;
-            a.id = id;
+            a.sid = sid;
             a.frame_size = default_frame_size();
-            auto res = _accounts.emplace(id, std::move(a));
+            auto res = _accounts.emplace(sid, std::move(a));
 
             acc = & res.first->second;
-            WriterPoller::wait_for_write(acc->id);
+            WriterPoller::wait_for_write(acc->sid);
         }
 
         return acc;
@@ -140,13 +143,13 @@ private:
                 if (acc.q.empty())
                     continue;
 
-                auto sock = this->locate_socket(acc.id);
+                auto sock = this->locate_socket(acc.sid);
 
                 if (sock == nullptr) {
-                    remove_later(acc.id);
-                    this->on_failure(acc.id, error {
-                        tr::f_("cannot locate socket for writing by ID: {}"
-                            ", removed from writer pool", acc.id)
+                    remove_later(acc.sid);
+                    this->on_failure(acc.sid, error {
+                        tr::f_("cannot locate socket for writing by socket ID: {}"
+                            ", removing from writer pool", acc.sid)
                     });
                     continue;
                 }
@@ -162,16 +165,19 @@ private:
 
                 switch (res.status) {
                     case netty::send_status::failure:
+                        remove_later(acc.sid);
+                        this->on_failure(acc.sid, err);
+                        break;
                     case netty::send_status::network:
-                        remove_later(acc.id);
-                        this->on_failure(acc.id, err);
+                        remove_later(acc.sid);
+                        this->on_failure(acc.sid, err);
                         break;
 
                     case netty::send_status::again:
                     case netty::send_status::overflow:
                         if (acc.writable) {
                             acc.writable = false;
-                            WriterPoller::wait_for_write(acc.id);
+                            WriterPoller::wait_for_write(acc.sid);
                         }
                         break;
 
@@ -183,7 +189,7 @@ private:
                             result++;
 
                             if (this->on_bytes_written)
-                                this->on_bytes_written(acc.id, res.n);
+                                this->on_bytes_written(acc.sid, res.n);
                         }
                         break;
                 }
@@ -197,23 +203,24 @@ public:
     /**
      * Ensures the account exists and set it's frame size
      */
-    void ensure (socket_id id, std::uint16_t frame_size = default_frame_size())
+    //void ensure (socket_id sid, std::uint16_t frame_size = default_frame_size())
+    void set_frame_size (socket_id sid, std::uint16_t frame_size)
     {
-        auto pacc = ensure_account(id);
+        auto pacc = ensure_account(sid);
         pacc->frame_size = frame_size;
     }
 
-    void remove_later (socket_id id)
+    void remove_later (socket_id sid)
     {
-        _removable.push_back(id);
+        _removable.push_back(sid);
     }
 
     void apply_remove ()
     {
         if (!_removable.empty()) {
-            for (auto id: _removable) {
-                WriterPoller::remove(id);
-                _accounts.erase(id);
+            for (auto sid: _removable) {
+                WriterPoller::remove(sid);
+                _accounts.erase(sid);
             }
 
             _removable.clear();
@@ -225,40 +232,40 @@ public:
         return _remain_bytes;
     }
 
-    void enqueue (socket_id id, int priority, char const * data, std::size_t len)
+    void enqueue (socket_id sid, int priority, char const * data, std::size_t len)
     {
         if (len == 0)
             return;
 
-        auto acc = ensure_account(id);
+        auto acc = ensure_account(sid);
         acc->q.enqueue(priority, data, len);
         _remain_bytes += len;
     }
 
-    void enqueue (socket_id id, char const * data, std::size_t len)
+    void enqueue (socket_id sid, char const * data, std::size_t len)
     {
-        enqueue(id, 0, data, len);
+        enqueue(sid, 0, data, len);
     }
 
-    void enqueue (socket_id id, int priority, std::vector<char> && data)
+    void enqueue (socket_id sid, int priority, std::vector<char> && data)
     {
         if (data.empty())
             return;
 
-        auto acc = ensure_account(id);
+        auto acc = ensure_account(sid);
         _remain_bytes += data.size();
         acc->q.enqueue(priority, std::move(data));
     }
 
-    void enqueue (socket_id id, std::vector<char> && data)
+    void enqueue (socket_id sid, std::vector<char> && data)
     {
-        enqueue(id, 0, std::move(data));
+        enqueue(sid, 0, std::move(data));
     }
 
     void enqueue_broadcast (int priority, char const * data, std::size_t len)
     {
         for (auto & acc: _accounts)
-            enqueue(acc.second.id, priority, data, len);
+            enqueue(acc.second.sid, priority, data, len);
     }
 
     void enqueue_broadcast (char const * data, std::size_t len)

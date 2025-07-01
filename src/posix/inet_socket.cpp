@@ -446,8 +446,13 @@ send_result inet_socket::send (char const * data, int len, error * perr)
             return send_result{send_status::overflow, 0};
 
         if (lastWsaError == WSAECONNRESET || lastWsaError == WSAENETRESET
-            || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH)
+                || lastWsaError == WSAENETDOWN || lastWsaError == WSAENETUNREACH) {
+
+            pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+                , tr::f_("network problem while sending: {}", pfs::system_error_text()));
+
             return send_result{send_status::network, 0};
+        }
 
         if (lastWsaError == WSAEWOULDBLOCK)
             return send_result{send_status::again, 0};
@@ -461,15 +466,19 @@ send_result inet_socket::send (char const * data, int len, error * perr)
         if (errno == ENOBUFS)
             return send_result{send_status::overflow, 0};
 
-        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN
-            || errno == ENETUNREACH)
+        if (errno == ECONNRESET || errno == ENETRESET || errno == ENETDOWN || errno == ENETUNREACH) {
+            pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
+                , tr::f_("network problem while sending: {}", pfs::system_error_text()));
+
             return send_result{send_status::network, 0};
+        }
 
         if (errno == EAGAIN || (EAGAIN != EWOULDBLOCK && errno == EWOULDBLOCK))
             return send_result{send_status::again, 0};
 #endif
         pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
             , tr::f_("send failure: {}", pfs::system_error_text()));
+
         return send_result{send_status::failure, 0};
     }
 

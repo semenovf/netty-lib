@@ -306,6 +306,11 @@ public:
         return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
     }
 
+    void set_frame_size (node_id id, std::uint16_t frame_size)
+    {
+        _t.set_frame_size(id, frame_size);
+    }
+
     bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
         , std::vector<char> msg)
     {

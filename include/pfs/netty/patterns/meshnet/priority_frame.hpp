@@ -72,7 +72,7 @@ public:
      *
      * @param out Destination of serialized data.
      * @param first Start of data to be serialized.
-     *
+     * @param frame_size Frame size in bytes.
      */
     void serialize (std::vector<char> & out, char const * first, std::size_t frame_size)
     {

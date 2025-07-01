@@ -218,7 +218,10 @@ public:
     {
         PFS__THROW_UNEXPECTED(n > 0 && n <= _frame.size(), "");
 
-        _frame.erase(_frame.begin(), _frame.begin() + n);
+        if (_frame.size() == n)
+            _frame.clear();
+        else
+            _frame.erase(_frame.begin(), _frame.begin() + n);
 
         auto & x = _qpool[_priority_index];
 

@@ -17,6 +17,7 @@
 #include <pfs/standard_paths.hpp>
 #include <pfs/string_view.hpp>
 #include <pfs/ionik/local_file.hpp>
+#include <pfs/lorem/utils.hpp>
 #include <pfs/netty/socket4_addr.hpp>
 #include <pfs/netty/startup.hpp>
 #include <atomic>
@@ -24,6 +25,8 @@
 #include <ctime>
 #include <map>
 #include <queue>
+#include <set>
+#include <utility>
 #include <signal.h>
 
 namespace fs = pfs::filesystem;
@@ -32,6 +35,7 @@ using pfs::to_string;
 
 static std::atomic_bool s_quit_flag {false};
 static std::atomic_bool s_already_sent {false};
+static bool s_sending_in_loop {false};
 
 static void sigterm_handler (int /*sig*/)
 {
@@ -48,22 +52,23 @@ struct node_item
 class file_tracker
 {
 private:
-    std::map<node_id, bool> _common_files_already_sent;
-    std::vector<fs::path> _common_files_to_send;
-    std::map<node_id, std::queue<fs::path>> _items;
+    std::set<node_id> _common_files_already_sent;
+    std::vector<std::pair<int, fs::path>> _common_files_to_send;
+    std::map<node_id, std::queue<std::pair<int, fs::path>>> _items;
+    bool loop {false};
 
 public:
     file_tracker () = default;
 
 public:
-    void add (fs::path path)
+    void add (int priority, fs::path path)
     {
-        _common_files_to_send.push_back(std::move(path));
+        _common_files_to_send.push_back(std::make_pair(priority, std::move(path)));
     }
 
-    void add (node_id id, fs::path path)
+    void add (node_id id, int priority, fs::path path)
     {
-        _items[id].push(std::move(path));
+        _items[id].push(std::make_pair(priority, std::move(path)));
     }
 
     bool need_send (node_id id) const
@@ -72,8 +77,8 @@ public:
         auto pos2 = _items.find(id);
         bool result = false;
 
-        if (pos1 != _common_files_already_sent.end())
-            result = result || !pos1->second;
+        if (pos1 == _common_files_already_sent.end())
+            result = result || true;
 
         if (pos2 != _items.end())
             result = result || !pos2->second.empty();
@@ -86,12 +91,11 @@ public:
     {
         auto pos1 = _common_files_already_sent.find(id);
 
-        if (pos1 != _common_files_already_sent.end()) {
-            if (!pos1->second) {
-                for (auto const & x: _common_files_to_send)
-                    sender(id, x);
-                pos1->second = true;
-            }
+        if (pos1 == _common_files_already_sent.end()) {
+            for (auto const & x: _common_files_to_send)
+                sender(id, x.first, x.second);
+
+            _common_files_already_sent.insert(id);
         }
 
         auto pos2 = _items.find(id);
@@ -100,12 +104,22 @@ public:
             auto & q = pos2->second;
 
             while (!q.empty()) {
-                sender(id, q.front());
+                sender(id, q.front().first, q.front().second);
                 q.pop();
             }
 
             _items.erase(id);
         }
+    }
+
+    template <typename F>
+    void send_random (node_id id, F && sender)
+    {
+        if (_common_files_to_send.empty())
+            return;
+
+        auto i = lorem::unsigned_integer(0, _common_files_to_send.size() - 1);
+        sender(id, _common_files_to_send[i].first, _common_files_to_send[i].second);
     }
 };
 
@@ -120,7 +134,7 @@ static void print_usage (fs::path const & programName
     fmt::println("Usage:\n\n"
         "{0} --help | -h\n"
         "{0} [--reliable] [--id=NODE_ID] [--gw]\n"
-        "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}... [--send=PATH...] [--send-to=NODE_ID@PATH...]\n\n"
+        "\t\t{{--node --port=PORT... --nb[-nat]=ADDR:PORT...}}... [--loop] {{[--priority=PRIOR] [--send=PATH...] [--send-to=NODE_ID@PATH...]}}...\n\n"
 
         "Options:\n\n"
         "--help | -h\n"
@@ -139,6 +153,10 @@ static void print_usage (fs::path const & programName
         "--nb=ADDR:PORT...\n"
         "--nb-nat=ADDR:PORT...\n"
         "\tNeighbor nodes addresses. --nb-nat specifies the node behind NAT\n\n"
+        "--loop\n"
+        "\tSending common files in an infinite loop\n\n"
+        "--priority=PRIOR\n"
+        "\tThe priority with which subsequent files should be sent\n\n"
         "--send=PATH\n"
         "\tSend file to all nodes when first alive event occurred\n\n"
         "--send-to=NODE_ID@PATH\n"
@@ -161,7 +179,7 @@ static void dumb ()
     priority_meshnet_node_t {id, is_gateway};
 }
 
-static void send_file (reliable_node_pool_t & node_pool, node_t::node_id id
+static void send_file (reliable_node_pool_t & node_pool, node_t::node_id id, int priority
     , fs::path const & file_to_send)
 {
     if (!file_to_send.empty()) {
@@ -170,7 +188,6 @@ static void send_file (reliable_node_pool_t & node_pool, node_t::node_id id
         if (file) {
             auto msgid = pfs::generate_uuid();
             auto data = file.read_all();
-            int priority = 1;
             LOGD(TAG, "Send file: {}", file_to_send);
             node_pool.enqueue_message(id, msgid, priority, false, data.data(), data.size());
         }
@@ -192,8 +209,8 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
         LOGD(TAG, "Node alive: {}", to_string(id));
 
         if (s_file_tracker.need_send(id)) {
-            s_file_tracker.send(id, [& node_pool] (node_t::node_id id, fs::path const & path) {
-                send_file(node_pool, id, path);
+            s_file_tracker.send(id, [& node_pool] (node_t::node_id id, int priority, fs::path const & path) {
+                send_file(node_pool, id, priority, path);
             });
         }
     });
@@ -211,9 +228,15 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
             , to_string(msgid), priority, msg.size());
     });
 
-    node_pool.on_message_delivered([] (node_id id, message_id msgid)
+    node_pool.on_message_delivered([& node_pool] (node_id id, message_id msgid)
     {
         LOGD(TAG, "Message delivered to: {}: msgid={}", to_string(id), to_string(msgid));
+
+        if (s_sending_in_loop) {
+            s_file_tracker.send_random(id, [& node_pool] (node_t::node_id id, int priority, fs::path const & path) {
+                send_file(node_pool, id, priority, path);
+            });
+        }
     });
 
     node_pool.on_message_receiving_begin([] (node_id id, message_id msgid, std::size_t total_size)
@@ -225,7 +248,7 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
     node_pool.on_message_receiving_progress([] (node_id id, message_id msgid, std::size_t received_size
         , std::size_t total_size)
     {
-        fmt::print("{} %\r", static_cast<int>(100 * (static_cast<double>(received_size)/total_size)));
+        fmt::print("{}: {: 3} %\r", msgid, static_cast<int>(100 * (static_cast<double>(received_size)/total_size)));
     });
 }
 
@@ -279,6 +302,7 @@ int main (int argc, char * argv[])
     auto id = pfs::generate_uuid();
     bool is_gateway = false;
     std::vector<node_item> nodes;
+    int current_priority = 1;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();
@@ -351,6 +375,21 @@ int main (int argc, char * argv[])
                 } else {
                     expectedNodeOption = true;
                 }
+            } else if (x.is_option("loop")) {
+                s_sending_in_loop = true;
+            } else if (x.is_option("priority")) {
+                if (x.has_arg()) {
+                    std::error_code ec;
+                    current_priority = pfs::to_integer<int>(x.arg().begin(), x.arg().end(), 0
+                        , static_cast<int>(priority_tracker_t::SIZE) - 1, ec);
+
+                    if (ec) {
+                        LOGE(TAG, "Bad priority");
+                        return EXIT_FAILURE;
+                    }
+                } else {
+                    expectedArgError = true;
+                }
             } else if (x.is_option("send")) {
                 if (x.has_arg()) {
                     auto path = pfs::utf8_decode_path(to_string(x.arg()));
@@ -360,7 +399,7 @@ int main (int argc, char * argv[])
                         return EXIT_FAILURE;
                     }
 
-                    s_file_tracker.add(std::move(path));
+                    s_file_tracker.add(current_priority, std::move(path));
                 } else {
                     expectedArgError = true;
                 }
@@ -392,7 +431,7 @@ int main (int argc, char * argv[])
                         return EXIT_FAILURE;
                     }
 
-                    s_file_tracker.add(*id_opt, std::move(path));
+                    s_file_tracker.add(*id_opt, current_priority, std::move(path));
                 } else {
                     expectedArgError = true;
                 }

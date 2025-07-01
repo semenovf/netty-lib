@@ -317,8 +317,12 @@ public:
 class nak_packet: public header
 {
 public:
-    nak_packet (serial_number sn) noexcept
+    serial_number last_sn; // Last serial number in range [_h.sn; last_sn].
+
+public:
+    nak_packet (serial_number sn, serial_number last_sn) noexcept
         : header(packet_enum::nak, 0)
+        , last_sn(last_sn)
     {
         _h.sn = sn;
     }
@@ -326,13 +330,16 @@ public:
     template <typename Deserializer>
     nak_packet (header const & h, Deserializer & in)
         : header(h)
-    {}
+    {
+        in >> last_sn;
+    }
 
 public:
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
+        out << last_sn;
     }
 };
 
