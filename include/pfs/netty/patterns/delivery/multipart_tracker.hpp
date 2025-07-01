@@ -22,6 +22,19 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace delivery {
 
+// A - acknowledged parts
+// X - acquired parts (enqueued yet or sent) but not acknowledged
+// Q - acquired parts (enqueued yet or sent)
+//
+// +-------------------------------------------------------------------------------------------+
+// | A | A | A | X | X | A | A | Q | Q | Q | Q | Q | Q |   |   |   |   |   |   |   |   |   |   |
+// +-------------------------------------------------------------------------------------------+
+//   ^                           ^                       ^                                   ^
+//   |                           |                       |                                   |
+//   |                           +--- _unacked_index     |                                   |
+//   |                                                   +--- _current_index                 |
+//   +--- _first_sn                                                              _last_sn ---+
+
 template <typename MessageId>
 class multipart_tracker
 {
@@ -35,16 +48,17 @@ private:
     bool _force_checksum {false};
 
     std::uint32_t _part_size {0};
-    serial_number _first_sn {0};  // First value of serial number range
-    serial_number _last_sn {0};   // Last value of serial number range
+    serial_number _first_sn {0}; // First value of serial number range
+    serial_number _last_sn {0};  // Last value of serial number range
 
     std::vector<char> _payload;
     char const * _data {nullptr};
     std::size_t _size {0};
 
-    std::vector<bool> _parts_acked;      // Parts acknowledged
-    std::size_t _remain_parts_count {0}; // Number of unacknowledged parts
-    std::size_t _recent_index {0};       // Index of the first not acquired part
+    std::vector<bool> _parts_acked;       // Parts acknowledged
+    std::size_t _remain_parts_count {0};  // Number of unacknowledged parts
+    std::size_t _current_index {0};       // Index of the first not acquired part
+    std::size_t _unacked_index {0};       // Index of the last unacknowledged part
 
     time_point_type _exp_timepoint;
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
@@ -106,11 +120,6 @@ private:
         _parts_acked.resize(_remain_parts_count, false);
     }
 
-    // inline std::size_t size () const noexcept
-    // {
-    //     return _is_static ? _static_payload.second : _dynamic_payload.size();
-    // }
-
     inline void update_exp_timepoint () noexcept
     {
         _exp_timepoint = clock_type::now() + _exp_timeout;
@@ -132,9 +141,14 @@ public:
         return _force_checksum;
     }
 
-    serial_number first_sn () const noexcept
+    bool check_range (serial_number sn)
     {
-        return _first_sn;
+        return sn >= _first_sn && sn <= _last_sn;
+    }
+
+    serial_number expected_sn () const noexcept
+    {
+        return _first_sn + _unacked_index;
     }
 
     /**
@@ -161,9 +175,12 @@ public:
             PFS__THROW_UNEXPECTED(_remain_parts_count > 0, "Fix delivery::multipart_tracker algorithm");
             _parts_acked[index] = true;
             _remain_parts_count--;
+
+            if (_unacked_index <= index)
+                _unacked_index = index + 1;
         }
 
-        // Update expiration time point every acknowledgement
+        // Update expiration time point
         update_exp_timepoint();
 
         return _remain_parts_count == 0;
@@ -177,21 +194,19 @@ public:
     /**
      * Acquires part by serial number.
      *
-     * @return @c true if part acquired.
+     * @return @a sn.
      */
     template <typename Serializer>
-    bool acquire_part (Serializer & out, serial_number sn)
+    serial_number acquire_part (Serializer & out, serial_number sn)
     {
         if (!(sn >= _first_sn && sn <= _last_sn)) {
             throw error {
                   make_error_code(std::errc::invalid_argument)
-                , "serial number is out of bounds"
+                , tr::f_("serial number is out of bounds: {}: [{},{}]", sn, _first_sn, _last_sn)
             };
         }
 
         std::size_t index = sn - _first_sn;
-        // char const * begin = _is_static ? _static_payload.first : _dynamic_payload.data();
-
         auto part_size = _part_size;
 
         // Last part, get tail part size.
@@ -213,33 +228,43 @@ public:
             pkt.serialize(out, _data + _part_size * index, part_size);
         }
 
-        return true;
+        return sn;
     }
 
     /**
-     * Returns @c true if part acquired.
+     * Acquires next message part.
+     *
+     * @return Returns serial number of the next message part or zero if all parts was acquired
+     *         or there are no expired parts.
      */
     template <typename Serializer>
-    bool acquire_part (Serializer & out)
+    serial_number acquire_next_part (Serializer & out)
     {
         // Message sending completed
         if (_remain_parts_count == 0)
-            return false;
+            return 0;
 
-        std::size_t index = 0;
         bool found = false;
 
-        // First acquire untouched parts (not acquired before).
-        // First part.
-        if (_recent_index < _parts_acked.size()) {
-            index = _recent_index++;
-            found = true;
+        if (_current_index < _parts_acked.size()) {
+            if (!_parts_acked[_current_index]) {
+                found = true;
+            } else {
+                for (auto i = _current_index; i < _parts_acked.size(); i++) {
+                    if (!_parts_acked[i]) {
+                        _current_index = i;
+                        found = true;
+                        break;
+                    }
+                }
+            }
         } else {
+            // There are X-parts in the tracker
             if (_exp_timepoint <= clock_type::now()) {
                 // Find first expired part.
-                for (std::size_t i = 0; i < _recent_index; i++) {
+                for (auto i = 0; i < _parts_acked.size(); i++) {
                     if (!_parts_acked[i]) {
-                        index = i;
+                        _current_index = i;
                         found = true;
                         break;
                     }
@@ -248,9 +273,9 @@ public:
         }
 
         if (!found)
-            return false;
+            return 0;
 
-        auto sn = _first_sn + index;
+        auto sn = _first_sn + _current_index++;
 
         return acquire_part<Serializer>(out, sn);
     }

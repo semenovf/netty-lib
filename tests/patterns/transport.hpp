@@ -16,7 +16,7 @@
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/delivery/incoming_controller.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
-#include <pfs/netty/patterns/delivery/outgoing_controller.hpp>
+#include <pfs/netty/patterns/delivery/outgoing_controller_sync.hpp>
 #include <pfs/netty/patterns/delivery/message_queue.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
@@ -181,7 +181,7 @@ using message_id = pfs::universal_id;
 using delivery_transport_t = node_pool_t;
 using incoming_controller_t = delivery_ns::incoming_controller<message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t::SIZE>;
-using outgoing_controller_t = delivery_ns::outgoing_controller<node_id, message_id
+using outgoing_controller_t = delivery_ns::outgoing_controller_sync<node_id, message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
 using message_queue_t = delivery_ns::message_queue<message_id, priority_tracker_t::SIZE>;
 

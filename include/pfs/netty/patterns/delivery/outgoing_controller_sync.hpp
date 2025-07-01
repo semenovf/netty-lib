@@ -4,8 +4,7 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.04.17 Initial version (in_memory_processor.hpp).
-//      2025.05.06 `im_outgoing_processor` renamed to `outgoing_controller`.
+//      2025.07.70 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../error.hpp"
@@ -33,10 +32,8 @@ template <typename Address
     , typename MessageId
     , typename SerializerTraits
     , typename PriorityTracker = priority_tracker<single_priority_distribution>>
-class outgoing_controller
+class outgoing_controller_sync
 {
-    static constexpr int RETRANSMIT_LIMIT = 30;
-
 public:
     using priority_tracker_type = PriorityTracker;
 
@@ -49,14 +46,18 @@ private:
 
     struct item
     {
-        // Serial number of the last message part (enqueued)
+        // Serial number of the last message part of the last message in the queue
         serial_number recent_sn {0};
 
-        // Window/queue to track outgoing message/report parts
-        std::queue<multipart_tracker<message_id>> q;
+        // Serial number of the current enqueued part
+        serial_number current_sn {0};
 
-        // The queue stores serial numbers for retransmission.
-        std::queue<serial_number> again;
+        // Serial number of the last acknowledged part
+        // acked_sn <= current_sn
+        serial_number acked_sn {0};
+
+        // Queue to track of the outgoing messages
+        std::queue<multipart_tracker<message_id>> q;
     };
 
 private:
@@ -74,11 +75,10 @@ private:
     priority_tracker_type _priority_tracker;
     std::array<item, PriorityTracker::SIZE> _items;
 
-    //
     bool _paused {false};
 
 public:
-    outgoing_controller (address_type receiver_addr, std::uint32_t part_size = 16384U // 16 Kb
+    outgoing_controller_sync (address_type receiver_addr, std::uint32_t part_size = 16384U // 16 Kb
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
         : _receiver_addr(receiver_addr)
         , _part_size(part_size)
@@ -96,16 +96,8 @@ private:
         std::vector<serial_number> snumbers;
         snumbers.reserve(PriorityTracker::SIZE);
 
-        for (auto const & x: _items) {
-            serial_number syn_sn = x.recent_sn + 1;
-
-            if (!x.q.empty())
-                syn_sn = x.q.front().first_sn();
-
-            snumbers.push_back(syn_sn);
-
-            NETTY__TRACE(TAG, "SYN request send to: {}; sn={}", to_string(_receiver_addr), syn_sn);
-        }
+        for (auto const & x: _items)
+            snumbers.push_back(x.acked_sn + 1);
 
         auto out = serializer_traits::make_serializer();
         syn_packet pkt {syn_way_enum::request, std::move(snumbers)};
@@ -209,40 +201,6 @@ public:
         if (empty())
             return n;
 
-        // Retransmit
-        for (auto & x: _items) {
-            for (int i = 0; i < RETRANSMIT_LIMIT && !x.again.empty(); i++) {
-                serial_number sn = x.again.front();
-                x.again.pop();
-
-                auto mt = & x.q.front();
-
-                PFS__THROW_UNEXPECTED(sn >= mt->first_sn() && sn <= mt->last_sn()
-                    , "Fix delivery::outgoing_controller algorithm: serial number is out of bounds");
-
-                auto out = serializer_traits::make_serializer();
-
-                if (mt->acquire_part(out, sn)) {
-                    auto success = m->enqueue_private(_receiver_addr, out.take(), mt->priority()
-                        , mt->force_checksum());
-
-                    if (success) {
-                        n++;
-                    } else {
-                        // There is a problem in communication with the receiver
-                        _paused = true;
-                    }
-                }
-            }
-        }
-
-        // Candidates to retransmit were found
-        if (n > 0)
-            return n;
-
-        if (empty())
-            return n;
-
         auto saved_priority = _priority_tracker.current();
 
         // Try to acquire next part of the current sending message according to priority
@@ -256,11 +214,19 @@ public:
                 continue;
             }
 
+            if (x.acked_sn < x.current_sn) {
+                _priority_tracker.skip();
+                continue;
+            }
+
             auto mt = & x.q.front();
 
             auto out = serializer_traits::make_serializer();
+            auto res_sn = mt->acquire_next_part(out);
 
-            if (mt->acquire_part(out)) {
+            if (res_sn > 0) {
+                x.current_sn = res_sn;
+
                 auto success = m->enqueue_private(_receiver_addr, out.take(), mt->priority()
                     , mt->force_checksum());
 
@@ -284,10 +250,11 @@ public:
     pfs::optional<message_id> acknowledge (int priority, serial_number sn)
     {
         auto & x = _items[priority];
+        x.acked_sn = sn;
         auto mt = & x.q.front();
 
-        PFS__THROW_UNEXPECTED(sn >= mt->first_sn() && sn <= mt->last_sn()
-            , "Fix delivery::outgoing_controller algorithm: serial number is out of bounds");
+        PFS__THROW_UNEXPECTED(mt->check_range(sn)
+            , "Fix delivery::outgoing_controller_sync algorithm: serial number is out of bounds");
 
         if (!mt->acknowledge(sn))
             return pfs::nullopt;
@@ -301,11 +268,8 @@ public:
 
     void again (int priority, serial_number first_sn, serial_number last_sn)
     {
-        auto & x = _items[priority];
-
-        // Cache serial number for part retransmission in step()
-        for (serial_number sn = first_sn; sn <= last_sn; sn++)
-            x.again.push(sn);
+        PFS__THROW_UNEXPECTED(false
+            , "Fix delivery::outgoing_controller_sync algorithm: unexpected call `again()`");
     }
 
 public: // static

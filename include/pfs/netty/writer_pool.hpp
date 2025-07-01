@@ -37,9 +37,7 @@ public:
 
     static constexpr std::uint16_t default_frame_size ()
     {
-        // FIXME UNCOMMENT
-        //return 1500;
-        return 128;
+        return 1500;
     }
 
 private:

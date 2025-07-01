@@ -128,11 +128,12 @@ class syn_packet: public header
 
 public:
     syn_packet (syn_way_enum way, std::vector<serial_number> snumbers) noexcept
-        : header(packet_enum::syn, 0)
+        : header(packet_enum::syn)
         , _way(static_cast<std::uint8_t>(way))
         , _snumbers(std::move(snumbers))
     {
         PFS__TERMINATE(!_snumbers.empty(), "serial numbers vector is empty");
+
         _h.sn = _snumbers[0];
 
         if (_snumbers.size() == 1)
@@ -140,7 +141,7 @@ public:
     }
 
     syn_packet (syn_way_enum way, serial_number sn) noexcept
-        : header(packet_enum::syn, 0)
+        : header(packet_enum::syn)
         , _way(static_cast<std::uint8_t>(way))
     {
         _h.sn = sn;
@@ -214,7 +215,7 @@ public:
 
 public:
     message_packet (serial_number initial_sn) noexcept
-        : header(packet_enum::message, 0)
+        : header(packet_enum::message)
     {
         _h.sn = initial_sn;
     }
@@ -258,7 +259,7 @@ class part_packet: public header
 {
 public:
     part_packet (serial_number sn) noexcept
-        : header(packet_enum::part, 0)
+        : header(packet_enum::part)
     {
         _h.sn = sn;
     }
@@ -293,7 +294,7 @@ class ack_packet: public header
 {
 public:
     ack_packet (serial_number sn) noexcept
-        : header(packet_enum::ack, 0)
+        : header(packet_enum::ack)
     {
         _h.sn = sn;
     }
@@ -321,7 +322,7 @@ public:
 
 public:
     nak_packet (serial_number sn, serial_number last_sn) noexcept
-        : header(packet_enum::nak, 0)
+        : header(packet_enum::nak)
         , last_sn(last_sn)
     {
         _h.sn = sn;
@@ -350,7 +351,7 @@ class report_packet: public header
 {
 public:
     report_packet () noexcept
-        : header(packet_enum::report, 0)
+        : header(packet_enum::report)
     {}
 
     /**

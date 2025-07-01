@@ -248,7 +248,9 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
     node_pool.on_message_receiving_progress([] (node_id id, message_id msgid, std::size_t received_size
         , std::size_t total_size)
     {
-        fmt::print("{}: {: 3} %\r", msgid, static_cast<int>(100 * (static_cast<double>(received_size)/total_size)));
+        fmt::print("{}: {: 3} % ({}/{})\r", msgid
+            , static_cast<int>(100 * (static_cast<double>(received_size)/total_size))
+            , received_size, total_size);
     });
 }
 

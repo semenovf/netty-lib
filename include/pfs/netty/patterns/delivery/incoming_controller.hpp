@@ -23,8 +23,6 @@
 #include <cstdint>
 #include <vector>
 
-// FIXME REMOVE
-
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -56,16 +54,89 @@ public:
     incoming_controller ()
     {}
 
+private:
+    template <typename Manager>
+    void process_message_part (Manager * m, typename Manager::address_type sender_addr, int priority
+        , header * pkt, std::vector<char> && part)
+    {
+        auto initial_part = pkt->type() == packet_enum::message;
+
+        auto & x = _items[priority];
+
+        if (initial_part) {
+            PFS__THROW_UNEXPECTED(!x.assembler.has_value()
+                , tr::f_("Fix delivery::incoming_controller algorithm: priority={}; pkt->sn()={}"
+                    , priority, pkt->sn()));
+        } else {
+            PFS__THROW_UNEXPECTED(x.assembler.has_value()
+                , tr::f_("Fix delivery::incoming_controller algorithm: priority={}; pkt->sn()={}"
+                    , priority, pkt->sn()));
+        }
+
+        // Drop received packet and NAK expected serial number
+        if (x.expected_sn != pkt->sn()) {
+            if (x.expected_sn < pkt->sn()) {
+                auto diff = pkt->sn() - x.expected_sn;
+
+                // Too big number of lost parts (network problem?)
+                // NAK only expected serial number
+                if (diff > LostThreshold)
+                    diff = 0;
+
+                auto out = serializer_traits::make_serializer();
+
+                nak_packet nak_pkt {x.expected_sn, x.expected_sn + diff};
+                nak_pkt.serialize(out);
+                m->enqueue_private(sender_addr, out.take(), priority);
+            } else {
+                PFS__THROW_UNEXPECTED(x.expected_sn > pkt->sn()
+                    , tr::f_("Fix delivery::incoming_controller algorithm: expected_sn={} > pkt->sn()={}"
+                        , x.expected_sn, pkt->sn()));
+            }
+
+            return;
+        }
+
+        if (initial_part) {
+            auto concrete_pkt = static_cast<message_packet<message_id> *>(pkt);
+            multipart_assembler<message_id> assembler { concrete_pkt->msgid, concrete_pkt->total_size
+                , concrete_pkt->part_size, pkt->sn(), concrete_pkt->last_sn };
+
+            assembler.emplace_part(pkt->sn(), std::move(part));
+            x.assembler = std::move(assembler);
+        } else {
+            x.assembler->emplace_part(pkt->sn(), std::move(part), true);
+        }
+
+        x.expected_sn = pkt->sn() + 1; //x.assembler->last_sn() + 1;
+
+        // Send ACK packet
+        auto out = serializer_traits::make_serializer();
+        ack_packet ack_pkt {pkt->sn()};
+        ack_pkt.serialize(out);
+        m->enqueue_private(sender_addr, out.take(), priority);
+
+        if (initial_part) {
+            m->process_message_receiving_begin(sender_addr, x.assembler->msgid()
+                , x.assembler->total_size());
+        }
+
+        m->process_message_receiving_progress(sender_addr, x.assembler->msgid()
+            , x.assembler->received_size(), x.assembler->total_size());
+
+        if (x.assembler->is_complete()) {
+            m->process_message_received(sender_addr, x.assembler->msgid(), priority
+                , x.assembler->payload());
+
+            x.assembler.reset();
+        }
+    }
+
 public:
     template <typename Manager>
     void process_packet (Manager * m, typename Manager::address_type sender_addr, int priority
         , std::vector<char> data)
     {
-        // FIXME REMOVE
-        static std::size_t ITERATION = 0;
-
-        ITERATION++;
-
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
         in.start_transaction();
 
@@ -83,7 +154,12 @@ public:
                                 , "Incompatible priority size");
 
                             for (std::size_t i = 0; i < pkt.sn_count(); i++) {
-                                _items[i].expected_sn = pkt.sn_at(i);
+                                auto & x = _items[i];
+                                x.expected_sn = pkt.sn_at(i);
+
+                                // Sender totally reloaded/reset
+                                if (x.expected_sn == 1)
+                                    x.assembler.reset();
 
                                 NETTY__TRACE(TAG, "SYN request received from: {}; priority={}, expected_sn={}"
                                     , to_string(sender_addr), i, _items[i].expected_sn);
@@ -95,6 +171,9 @@ public:
                             response_pkt.serialize(out);
                             m->enqueue_private(sender_addr, out.take(), 0);
                         } else {
+                            NETTY__TRACE(TAG, "SYN response received from: {}; priority={}"
+                                , to_string(sender_addr), priority);
+
                             m->process_ready(sender_addr);
                         }
 
@@ -107,8 +186,6 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        NETTY__TRACE(TAG, "ACK: priority={}; sn={}", priority, pkt.sn());
-
                         m->process_acknowledged(sender_addr, priority, pkt.sn());
                         break;
                     }
@@ -118,9 +195,6 @@ public:
 
                         if (!in.commit_transaction())
                             break;
-
-                        NETTY__TRACE(TAG, "NAK: priority={}; from={}; to={}", priority, pkt.sn()
-                            , pkt.last_sn);
 
                         m->process_again(sender_addr, priority, pkt.sn(), pkt.last_sn);
                         break;
@@ -133,67 +207,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        NETTY__TRACE(TAG, "MESSAGE START: {}; priority={}; sn={}", to_string(pkt.msgid)
-                            , priority, pkt.sn());
-
-                        auto & x = _items[priority];
-
-                        PFS__THROW_UNEXPECTED(!x.assembler.has_value()
-                            , fmt::format("Fix meshnet::incoming_controller algorithm: priority={}"
-                                , priority));
-
-                        // Drop received packet and NAK expected serial number
-                        if (x.expected_sn != pkt.sn()) {
-                            if (x.expected_sn < pkt.sn()) {
-                                auto diff = pkt.sn() - x.expected_sn;
-
-                                // Too big number of lost parts (network problem?)
-                                // NAK only expected serial number
-                                if (diff > LostThreshold)
-                                    diff = 0;
-
-                                auto out = serializer_traits::make_serializer();
-
-                                nak_packet nak_pkt {x.expected_sn, x.expected_sn + diff};
-                                nak_pkt.serialize(out);
-                                m->enqueue_private(sender_addr, out.take(), priority);
-                            } else {
-                                PFS__THROW_UNEXPECTED(false, "Fix meshnet::incoming_controller algorithm");
-                            }
-
-                            break;
-                        }
-
-                        multipart_assembler<message_id> assembler { pkt.msgid, pkt.total_size
-                            , pkt.part_size, pkt.sn(), pkt.last_sn };
-
-                        assembler.emplace_part(pkt.sn(), std::move(part));
-
-                        x.expected_sn = assembler.last_sn() + 1;
-
-                        // Send ACK packet
-                        auto out = serializer_traits::make_serializer();
-                        ack_packet ack_pkt {pkt.sn()};
-                        ack_pkt.serialize(out);
-                        m->enqueue_private(sender_addr, out.take(), priority);
-
-                        m->process_message_receiving_begin(sender_addr, assembler.msgid()
-                            , assembler.total_size());
-                        m->process_message_receiving_progress(sender_addr, assembler.msgid()
-                            , assembler.received_size(), assembler.total_size());
-
-                        x.assembler = std::move(assembler);
-
-                        if (x.assembler->is_complete()) {
-                            m->process_message_received(sender_addr, x.assembler->msgid(), priority
-                                , x.assembler->payload());
-
-                            NETTY__TRACE(TAG, "MESSAGE END (1): {}; priority={}", to_string(x.assembler->msgid())
-                                , priority);
-
-                            x.assembler.reset();
-                        }
-
+                        process_message_part(m, sender_addr, priority, & pkt, std::move(part));
                         break;
                     }
 
@@ -204,40 +218,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        auto & x = _items[priority];
-
-                        PFS__THROW_UNEXPECTED(x.assembler.has_value()
-                            , fmt::format("Fix meshnet::incoming_controller algorithm: priority={}; pkt.sn()={}"
-                            "; ITERATION={}", priority, pkt.sn(), ITERATION));
-
-                        PFS__THROW_UNEXPECTED((pkt.sn() >= x.assembler->first_sn()
-                            && pkt.sn() <= x.assembler->last_sn())
-                            , "Fix meshnet::incoming_controller algorithm");
-
-                        // NETTY__TRACE(TAG, "MESSAGE PART: {}; priority={}; pkt.sn()={}; ITERATION={}"
-                        //     , to_string(x.assembler->msgid()), priority, pkt.sn(), ITERATION);
-
-                        x.assembler->emplace_part(pkt.sn(), std::move(part), true);
-
-                        // Send ACK packet
-                        auto out = serializer_traits::make_serializer();
-                        ack_packet ack_pkt {pkt.sn()};
-                        ack_pkt.serialize(out);
-                        m->enqueue_private(sender_addr, out.take(), priority);
-
-                        m->process_message_receiving_progress(sender_addr, x.assembler->msgid()
-                            , x.assembler->received_size(), x.assembler->total_size());
-
-                        if (x.assembler->is_complete()) {
-                            m->process_message_received(sender_addr, x.assembler->msgid(), priority
-                                , x.assembler->payload());
-
-                            NETTY__TRACE(TAG, "MESSAGE END (2): {}; priority={}; pkt.sn()={}; ITERATION={}"
-                                , to_string(x.assembler->msgid()), priority, pkt.sn(), ITERATION);
-
-                            x.assembler.reset();
-                        }
-
+                        process_message_part(m, sender_addr, priority, & pkt, std::move(part));
                         break;
                     }
 
