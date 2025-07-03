@@ -44,6 +44,10 @@ class incoming_controller
     {
         // Expected income message part serial number
         serial_number expected_sn {0};
+
+        // Acknowlaged serial number
+        serial_number acked_sn {0};
+
         pfs::optional<multipart_assembler<message_id>> assembler;
     };
 
@@ -102,10 +106,10 @@ private:
             multipart_assembler<message_id> assembler { concrete_pkt->msgid, concrete_pkt->total_size
                 , concrete_pkt->part_size, pkt->sn(), concrete_pkt->last_sn };
 
-            assembler.emplace_part(pkt->sn(), std::move(part));
+            assembler.acknowledge_part(pkt->sn(), std::move(part));
             x.assembler = std::move(assembler);
         } else {
-            x.assembler->emplace_part(pkt->sn(), std::move(part), true);
+            x.assembler->acknowledge_part(pkt->sn(), std::move(part), true);
         }
 
         x.expected_sn = pkt->sn() + 1; //x.assembler->last_sn() + 1;
@@ -134,7 +138,7 @@ private:
 
 public:
     template <typename Manager>
-    void process_packet (Manager * m, typename Manager::address_type sender_addr, int priority
+    void process_input (Manager * m, typename Manager::address_type sender_addr, int priority
         , std::vector<char> data)
     {
         auto in = serializer_traits::make_deserializer(data.data(), data.size());
@@ -153,13 +157,19 @@ public:
                             PFS__THROW_UNEXPECTED(pkt.sn_count() == PrioritySize
                                 , "Incompatible priority size");
 
+                            // FIXME Need to initialize values from outgoing controller
+                            std::vector<serial_number> snumbers;
+                            snumbers.reserve(PrioritySize);
+
                             for (std::size_t i = 0; i < pkt.sn_count(); i++) {
                                 auto & x = _items[i];
-                                x.expected_sn = pkt.sn_at(i);
+                                auto acked_sn = pkt.sn_at(i);
 
                                 // Sender totally reloaded/reset
-                                if (x.expected_sn == 1)
+                                if (acked_sn == 0)
                                     x.assembler.reset();
+
+                                x.expected_sn = acked_sn + 1;
 
                                 NETTY__TRACE(TAG, "SYN request received from: {}; priority={}, expected_sn={}"
                                     , to_string(sender_addr), i, _items[i].expected_sn);
@@ -185,6 +195,8 @@ public:
 
                         if (!in.commit_transaction())
                             break;
+
+                        // FIXME notify multipart_assembler
 
                         m->process_acknowledged(sender_addr, priority, pkt.sn());
                         break;

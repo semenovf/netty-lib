@@ -50,7 +50,7 @@ public:
             _dm.pause(id);
             _on_node_expired(id);
         }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
-            _dm.process_packet(id, priority, std::move(bytes));
+            _dm.process_input(id, priority, std::move(bytes));
         });
     }
 
@@ -198,7 +198,7 @@ public: // Set callbacks
     template <typename F>
     node_pool_rd & on_message_received (F && f)
     {
-        _dm.on_message_received((std::forward<F>(f)));
+        _dm.on_message_received(std::forward<F>(f));
         return *this;
     }
 
@@ -211,7 +211,20 @@ public: // Set callbacks
     template <typename F>
     node_pool_rd & on_message_delivered (F && f)
     {
-        _dm.on_message_delivered((std::forward<F>(f)));
+        _dm.on_message_delivered(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
+     * Notify receiver when message lost while receiving.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, message_id)
+     */
+    template <typename F>
+    node_pool_rd & on_message_lost (F && f)
+    {
+        _dm.on_message_lost(std::forward<F>(f));
         return *this;
     }
 
@@ -224,7 +237,7 @@ public: // Set callbacks
     template <typename F>
     node_pool_rd & on_report_received (F && f)
     {
-        _dm.on_report_received((std::forward<F>(f)));
+        _dm.on_report_received(std::forward<F>(f));
         return *this;
     }
 

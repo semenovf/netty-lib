@@ -21,6 +21,17 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace delivery {
 
+// A - Received parts
+//
+// +-------------------------------------------------------------------------------------------+
+// | A | A | A |   |   | A | A |   | A | A | A | A | A |   |   |   |   |   |   |   |   |   |   |
+// +-------------------------------------------------------------------------------------------+
+//   ^       ^                                                                               ^
+//   |       |                                                                               |
+//   |       +--- lowest_acked_sn()                                                          |
+//   |                                                                                       |
+//   +--- _first_sn                                                              _last_sn ---+
+
 template <typename MessageId>
 class multipart_assembler
 {
@@ -73,14 +84,15 @@ public:
         return _msgid;
     }
 
-    void emplace_part (serial_number sn, std::vector<char> && part, bool replace = false)
+    /**
+     * Acknowledges message part.
+     *
+     * @return @c false if @a sn is out of bounds.
+     */
+    bool acknowledge_part (serial_number sn, std::vector<char> const & part)
     {
-        if (!(sn >= _first_sn && sn <= _last_sn)) {
-            throw error {
-                  make_error_code(std::errc::invalid_argument)
-                , tr::_("serial number is out of bounds")
-            };
-        }
+        if (sn < _first_sn || sn > _last_sn)
+            return false;
 
         if (part.size() > _part_size) {
             throw error {
@@ -92,17 +104,18 @@ public:
         std::size_t index = sn - _first_sn;
 
         // Already received
-        if (_parts_received[index]) {
-            if (!replace)
-                return;
-        } else {
-            PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
-            _remain_parts--;
-            _received_size += part.size();
-        }
+        if (_parts_received[index])
+            return true;
+
+        PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
+
+        _remain_parts--;
+        _received_size += part.size();
 
         std::copy(part.begin(), part.end(), _payload.begin() + (index * _part_size));
         _parts_received[index] = true;
+
+        return true;
     }
 
     bool is_complete () const noexcept
@@ -118,6 +131,22 @@ public:
     serial_number last_sn () const noexcept
     {
         return _last_sn;
+    }
+
+    serial_number lowest_acked_sn () const // noexcept
+    {
+        PFS__THROW_UNEXPECTED(!_parts_received.empty(), "Fix delivery::multipart_assembler algorithm");
+
+        if (_parts_received[0]) {
+            for (std::size_t i = 1; i < _parts_received.size(); i++) {
+                if (!_parts_received[i])
+                    return _first_sn + (i - 1);
+            }
+
+            return _first_sn;
+        }
+
+        return 0;
     }
 
     std::vector<char> payload () noexcept

@@ -14,9 +14,8 @@
 #include <pfs/netty/callback.hpp>
 #include <pfs/netty/poller_types.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
-#include <pfs/netty/patterns/delivery/incoming_controller.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
-#include <pfs/netty/patterns/delivery/outgoing_controller_sync.hpp>
+#include <pfs/netty/patterns/delivery/delivery_controller.hpp>
 #include <pfs/netty/patterns/delivery/message_queue.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
@@ -179,13 +178,12 @@ using priority_tracker_t = netty::patterns::priority_tracker<priority_distributi
 
 using message_id = pfs::universal_id;
 using delivery_transport_t = node_pool_t;
-using incoming_controller_t = delivery_ns::incoming_controller<message_id
-    , netty::patterns::serializer_traits_t, priority_tracker_t::SIZE>;
-using outgoing_controller_t = delivery_ns::outgoing_controller_sync<node_id, message_id
+using delivery_controller_t = delivery_ns::delivery_controller<node_id, message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
+
 using message_queue_t = delivery_ns::message_queue<message_id, priority_tracker_t::SIZE>;
 
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id
-    , incoming_controller_t, outgoing_controller_t, message_queue_t, std::recursive_mutex>;
+    , delivery_controller_t, message_queue_t, std::recursive_mutex>;
 
 using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;

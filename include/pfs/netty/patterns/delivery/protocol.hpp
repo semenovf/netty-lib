@@ -33,16 +33,13 @@ enum class packet_enum: std::uint8_t
     , ack = 2
         /// Regular message receive acknowledgement.
 
-    , nak = 3
-        /// Request the retransmission of regular message.
-
-    , message = 4
+    , message = 3
         /// Initial regular message part with acknowledgement required.
 
-    , part = 5
+    , part = 4
         /// Regular message part.
 
-    , report = 6
+    , report = 5
         /// Report (message without need acknowledgement).
 };
 
@@ -121,31 +118,33 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // syn_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// syn_packet contains last acknowleged serial numbers
+//
+template <typename MessageId>
 class syn_packet: public header
 {
     std::uint8_t _way;
-    std::vector<serial_number> _snumbers;
+    std::vector<std::pair<MessageId, serial_number>> _snumbers;
 
 public:
-    syn_packet (syn_way_enum way, std::vector<serial_number> snumbers) noexcept
+    // Request constructor
+    syn_packet (std::vector<std::pair<MessageId, serial_number>> snumbers) noexcept
         : header(packet_enum::syn)
-        , _way(static_cast<std::uint8_t>(way))
+        , _way(static_cast<std::uint8_t>(syn_way_enum::request))
         , _snumbers(std::move(snumbers))
     {
         PFS__TERMINATE(!_snumbers.empty(), "serial numbers vector is empty");
 
-        _h.sn = _snumbers[0];
-
-        if (_snumbers.size() == 1)
-            _snumbers.clear();
+        // No matter value here for _h.sn
+        _h.sn = _snumbers[0].second;
     }
 
-    syn_packet (syn_way_enum way, serial_number sn) noexcept
+    // Response constructor
+    syn_packet () noexcept
         : header(packet_enum::syn)
-        , _way(static_cast<std::uint8_t>(way))
-    {
-        _h.sn = sn;
-    }
+        , _way(static_cast<std::uint8_t>(syn_way_enum::response))
+    {}
 
     template <typename Deserializer>
     syn_packet (header const & h, Deserializer & in)
@@ -153,14 +152,16 @@ public:
     {
         in >> _way;
 
-        if (!in.empty()) {
-            std::uint8_t size = 0;
-            in >> size;
+        if (_way == static_cast<std::uint8_t>(syn_way_enum::request)) {
+            if (!in.empty()) {
+                std::uint8_t size = 0;
+                in >> size;
 
-            _snumbers.resize(size);
+                _snumbers.resize(size);
 
-            for (int i = 0; i < size; i++)
-                in >> _snumbers[i];
+                for (int i = 0; i < size; i++)
+                    in >> _snumbers[i].first >> _snumbers[i].second;
+            }
         }
     }
 
@@ -175,14 +176,14 @@ public:
         return static_cast<syn_way_enum>(_way);
     }
 
-    std::size_t sn_count () const noexcept
+    std::size_t count () const noexcept
     {
         return _snumbers.empty() ? 1 : _snumbers.size();
     }
 
-    serial_number sn_at (std::size_t index) const
+    std::pair<MessageId, serial_number> at (std::size_t index) const
     {
-        return _snumbers.empty() ? sn() : _snumbers[index];
+        return _snumbers.empty() ? std::make_pair(MessageId{}, sn()) : _snumbers[index];
     }
 
     template <typename Serializer>
@@ -191,12 +192,12 @@ public:
         header::serialize(out);
         out << _way;
 
-        if (_snumbers.size() > 1) {
+        if (_way == static_cast<std::uint8_t>(syn_way_enum::request)) {
             auto size = pfs::numeric_cast<std::uint8_t>(_snumbers.size());
             out << size;
 
             for (int i = 0; i < size; i++)
-                out << _snumbers[i];
+                out << _snumbers[i].first << _snumbers[i].second;
         }
     }
 };
@@ -309,38 +310,6 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-    }
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// nak_packet
-////////////////////////////////////////////////////////////////////////////////////////////////////
-class nak_packet: public header
-{
-public:
-    serial_number last_sn; // Last serial number in range [_h.sn; last_sn].
-
-public:
-    nak_packet (serial_number sn, serial_number last_sn) noexcept
-        : header(packet_enum::nak)
-        , last_sn(last_sn)
-    {
-        _h.sn = sn;
-    }
-
-    template <typename Deserializer>
-    nak_packet (header const & h, Deserializer & in)
-        : header(h)
-    {
-        in >> last_sn;
-    }
-
-public:
-    template <typename Serializer>
-    void serialize (Serializer & out)
-    {
-        header::serialize(out);
-        out << last_sn;
     }
 };
 

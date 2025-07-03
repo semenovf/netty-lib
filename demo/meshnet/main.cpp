@@ -239,6 +239,11 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
         }
     });
 
+    node_pool.on_message_lost([& node_pool] (node_id id, message_id msgid)
+    {
+        LOGD(TAG, "Message lost from: {}: msgid={}", to_string(id), to_string(msgid));
+    });
+
     node_pool.on_message_receiving_begin([] (node_id id, message_id msgid, std::size_t total_size)
     {
         LOGD(TAG, "Begin message receiving from: {}: msgid={}, size={}", to_string(id)

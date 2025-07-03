@@ -12,8 +12,10 @@
 #include "protocol.hpp"
 #include "serial_number.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <chrono>
 #include <cstdint>
+#include <queue>
 #include <utility>
 #include <vector>
 
@@ -29,9 +31,9 @@ namespace delivery {
 // +-------------------------------------------------------------------------------------------+
 // | A | A | A | X | X | A | A | Q | Q | Q | Q | Q | Q |   |   |   |   |   |   |   |   |   |   |
 // +-------------------------------------------------------------------------------------------+
-//   ^                           ^                       ^                                   ^
-//   |                           |                       |                                   |
-//   |                           +--- _unacked_index     |                                   |
+//   ^                                                   ^                                   ^
+//   |                                                   |                                   |
+//   |                                                   |                                   |
 //   |                                                   +--- _current_index                 |
 //   +--- _first_sn                                                              _last_sn ---+
 
@@ -58,8 +60,8 @@ private:
     std::vector<bool> _parts_acked;       // Parts acknowledged
     std::size_t _remain_parts_count {0};  // Number of unacknowledged parts
     std::size_t _current_index {0};       // Index of the first not acquired part
-    std::size_t _unacked_index {0};       // Index of the last unacknowledged part
 
+    time_point_type _heading_exp_timepoint;
     time_point_type _exp_timepoint;
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
@@ -117,12 +119,28 @@ private:
         _last_sn = _first_sn + _size / _part_size;
 
         _remain_parts_count = _last_sn - _first_sn + 1;
+        _parts_acked.clear();
         _parts_acked.resize(_remain_parts_count, false);
+
+        _current_index = 0;
+
+        _exp_timepoint = clock_type::now();
+        _heading_exp_timepoint = clock_type::now();
     }
 
     inline void update_exp_timepoint () noexcept
     {
         _exp_timepoint = clock_type::now() + _exp_timeout;
+    }
+
+    inline void update_heading_exp_timepoint () noexcept
+    {
+        _heading_exp_timepoint = clock_type::now() + _exp_timeout;
+    }
+
+    bool check_range (serial_number sn)
+    {
+        return sn >= _first_sn && sn <= _last_sn;
     }
 
 public:
@@ -141,16 +159,6 @@ public:
         return _force_checksum;
     }
 
-    bool check_range (serial_number sn)
-    {
-        return sn >= _first_sn && sn <= _last_sn;
-    }
-
-    serial_number expected_sn () const noexcept
-    {
-        return _first_sn + _unacked_index;
-    }
-
     /**
      * Returns the serial number of message last part.
      */
@@ -160,30 +168,27 @@ public:
     }
 
     /**
-     * Acknowledges message part delivering.
+     * Acknowledges delivered message part.
      *
-     * @return @c true if the message has been delivered completely, or @c false otherwise.
+     * @return @c false if @a sn is out of bounds.
      */
-    bool acknowledge (serial_number sn)
+    bool acknowledge_part (serial_number sn)
     {
-        auto index = sn - _first_sn;
+        if (sn < _first_sn || sn > _last_sn)
+            return false;
 
-        PFS__THROW_UNEXPECTED(index >= 0 && index < _parts_acked.size()
-            , "Fix delivery::multipart_tracker algorithm");
+        auto index = sn - _first_sn;
 
         if (!_parts_acked[index]) {
             PFS__THROW_UNEXPECTED(_remain_parts_count > 0, "Fix delivery::multipart_tracker algorithm");
             _parts_acked[index] = true;
             _remain_parts_count--;
-
-            if (_unacked_index <= index)
-                _unacked_index = index + 1;
         }
 
         // Update expiration time point
         update_exp_timepoint();
 
-        return _remain_parts_count == 0;
+        return true;
     }
 
     bool is_complete () const noexcept
@@ -244,6 +249,21 @@ public:
         if (_remain_parts_count == 0)
             return 0;
 
+        // Heading not acknowledged yet
+        if (!_parts_acked[0]) {
+            if (_heading_exp_timepoint <= clock_type::now())
+                _current_index == 0;
+
+            // Acquiring message heading
+            if (_current_index == 0) {
+                auto sn = _first_sn + _current_index++;
+                update_heading_exp_timepoint();
+                return acquire_part<Serializer>(out, sn);
+            }
+
+            return 0;
+        }
+
         bool found = false;
 
         if (_current_index < _parts_acked.size()) {
@@ -278,6 +298,35 @@ public:
         auto sn = _first_sn + _current_index++;
 
         return acquire_part<Serializer>(out, sn);
+    }
+
+    void reset_to (message_id msgid, serial_number lowest_acked_sn)
+    {
+        if (lowest_acked_sn == 0) {
+            init();
+        } else {
+            if (msgid != _msgid) {
+                init();
+                return;
+            }
+
+            PFS__THROW_UNEXPECTED(check_range(lowest_acked_sn)
+                , tr::f_("Fix delivery::multipart_tracker algorithm:"
+                    " serial number {} is out of bounds: [{},{}], msgid={}"
+                        , lowest_acked_sn, _first_sn, _last_sn, _msgid));
+
+            std::size_t index = lowest_acked_sn - _first_sn;
+
+            for (std::size_t i = 0; i <= index; i++)
+                _parts_acked[i] = true;
+
+            _current_index = index + 1;
+
+            for (std::size_t i = _current_index; i < _parts_acked.size(); i++)
+                _parts_acked[i] = false;
+
+            _remain_parts_count = _parts_acked.size() - _current_index;
+        }
     }
 };
 

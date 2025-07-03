@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2025.04.16 Initial version.
+//      2025.07.02 Refactored.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -34,17 +35,14 @@ namespace delivery {
  */
 template <typename Transport
     , typename MessageId
-    , typename IncomingController
-    , typename OutgoingController
+    , typename ExchangeController
     , typename MessageQueue
     , typename RecursiveWriterMutex>
 class manager
 {
-    friend IncomingController;
-    friend OutgoingController;
+    friend ExchangeController;
 
-    using incoming_controller_type = IncomingController;
-    using outgoing_controller_type = OutgoingController;
+    using controller_type = ExchangeController;
 
 public:
     using transport_type = Transport;
@@ -54,24 +52,18 @@ public:
 
 private:
     transport_type * _transport {nullptr};
-
-    // Processors to handle incoming messages.
-    std::unordered_map<address_type, incoming_controller_type> _icontrollers;
-
-    // Controllers to track outgoing messages.
-    std::unordered_map<address_type, outgoing_controller_type> _ocontrollers;
-
+    std::unordered_map<address_type, controller_type> _controllers;
     std::atomic_bool _interrupted {false};
-
     writer_mutex_type _writer_mtx;
 
 private: // Callbacks
     callback_t<void (std::string const &)> _on_error
-        = [] (std::string const & msg) { LOGE(TAG, "{}", msg); };
+        = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     callback_t<void (address_type)> _on_receiver_ready;
     callback_t<void (address_type, message_id, int, std::vector<char>)> _on_message_received;
     callback_t<void (address_type, message_id)> _on_message_delivered;
+    callback_t<void (address_type, message_id)> _on_message_lost;
     callback_t<void (address_type, int, std::vector<char>)> _on_report_received;
     callback_t<void (address_type, message_id, std::size_t)> _on_message_receiving_begin;
     callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_receiving_progress;
@@ -137,6 +129,17 @@ public: // Set callbacks
 
     /**
      * @details Callback @a f signature must match:
+     *          void (address_type, message_id)
+     */
+    template <typename F>
+    manager & on_message_lost (F && f)
+    {
+        _on_message_lost = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
      *          void (address_type, int priority, std::vector<char> report)
      */
     template <typename F>
@@ -173,39 +176,27 @@ public: // Set callbacks
     }
 
 private:
-    incoming_controller_type * ensure_incoming_controller (address_type addr)
+    controller_type & ensure_controller (address_type addr)
     {
         PFS__THROW_UNEXPECTED(_transport != nullptr, "Fix delivery::manager algorithm");
 
-        auto pos = _icontrollers.find(addr);
+        auto pos = _controllers.find(addr);
 
-        if (pos != _icontrollers.end())
-            return & pos->second;
+        if (pos != _controllers.end())
+            return pos->second;
 
-        auto res = _icontrollers.emplace(addr, incoming_controller_type{});
+        // TODO Bellow parameters must be configurable
+        auto part_size = std::uint32_t{16384U};
+        auto exp_timeout = std::chrono::milliseconds{3000};
 
-        PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
-
-        return & res.first->second;
-    }
-
-    outgoing_controller_type * ensure_outgoing_controller (address_type addr)
-    {
-        auto pos = _ocontrollers.find(addr);
-
-        if (pos != _ocontrollers.end())
-            return & pos->second;
-
-        auto res = _ocontrollers.insert({addr, outgoing_controller_type{addr}});
+        auto res = _controllers.emplace(addr, controller_type{addr, part_size, exp_timeout});
 
         PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
 
-        return & res.first->second;
-    }
+        controller_type & c = res.first->second;
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // Incoming controller requirements
-    ////////////////////////////////////////////////////////////////////////////////////////////////
+        return c;
+    }
 
     // For:
     //      * send SYN and ACK packets (priority = 0 and force_checksum = true)
@@ -216,32 +207,27 @@ private:
         return _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
     }
 
+    void process_error (std::string const & errstr)
+    {
+        _on_error(errstr);
+    }
+
     void process_ready (address_type sender_addr)
     {
-        auto outc = ensure_outgoing_controller(sender_addr);
-        outc->set_synchronized(true);
-
         if (_on_receiver_ready)
             _on_receiver_ready(sender_addr);
     }
 
-    void process_acknowledged (address_type sender_addr, int priority, serial_number sn)
+    void process_message_lost (address_type sender_addr, message_id msgid)
     {
-        message_id msgid;
-        auto outc = ensure_outgoing_controller(sender_addr);
-        auto msgid_opt = outc->acknowledge(priority, sn);
-
-        // The message has been delivered completely
-        if (msgid_opt) {
-            if (_on_message_delivered)
-                _on_message_delivered(sender_addr, *msgid_opt);
-        }
+        if (_on_message_lost)
+            _on_message_lost(sender_addr, msgid);
     }
 
-    void process_again (address_type sender_addr, int priority, serial_number sn, serial_number last_sn)
+    void process_message_delivered (address_type sender_addr, message_id msgid)
     {
-        auto outc = ensure_outgoing_controller(sender_addr);
-        outc->again(priority, sn, last_sn);
+        if (_on_message_delivered)
+            _on_message_delivered(sender_addr, msgid);
     }
 
     void process_message_received (address_type sender_addr, message_id msgid, int priority
@@ -274,21 +260,21 @@ private:
 public:
     void pause (address_type addr)
     {
-        auto pos = _ocontrollers.find(addr);
+        auto pos = _controllers.find(addr);
 
-        if (pos != _ocontrollers.end()) {
-            auto & outc = pos->second;
-            outc.pause();
+        if (pos != _controllers.end()) {
+            auto & c = pos->second;
+            c.pause();
         }
     }
 
     void resume (address_type addr)
     {
-        auto pos = _ocontrollers.find(addr);
+        auto pos = _controllers.find(addr);
 
-        if (pos != _ocontrollers.end()) {
-            auto & outc = pos->second;
-            outc.resume();
+        if (pos != _controllers.end()) {
+            auto & c = pos->second;
+            c.resume();
         }
     }
 
@@ -300,8 +286,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto outc = ensure_outgoing_controller(addr);
-        return outc->enqueue_message(msgid, priority, force_checksum, std::move(msg));
+        auto & c = ensure_controller(addr);
+        return c.enqueue_message(msgid, priority, force_checksum, std::move(msg));
     }
 
     bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
@@ -318,8 +304,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto outc = ensure_outgoing_controller(addr);
-        return outc->enqueue_static_message(msgid, priority, force_checksum, msg, length);
+        auto & c = ensure_controller(addr);
+        return c.enqueue_static_message(msgid, priority, force_checksum, msg, length);
     }
 
     bool enqueue_report (address_type addr, int priority, bool force_checksum, char const * data
@@ -330,7 +316,7 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto report = outgoing_controller_type::serialize_report(data, length);
+        auto report = controller_type::serialize_report(data, length);
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
@@ -341,7 +327,7 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto report = outgoing_controller_type::serialize_report(std::move(data));
+        auto report = controller_type::serialize_report(std::move(data));
         return _transport->enqueue(addr, priority, force_checksum, std::move(report));
     }
 
@@ -351,11 +337,11 @@ public:
      * @details Must be called when data received by underlying transport (e.g. from transport
      *          callback for handle incoming data)
      */
-    void process_packet (address_type sender_addr, int priority, std::vector<char> data)
+    void process_input (address_type sender_addr, int priority, std::vector<char> data)
     {
         if (!data.empty()) {
-            auto inpc = ensure_incoming_controller(sender_addr);
-            inpc->process_packet(this, sender_addr, priority, std::move(data));
+            auto & c = ensure_controller(sender_addr);
+            c.process_input(this, priority, std::move(data));
         }
     }
 
@@ -368,11 +354,11 @@ public:
 
         unsigned int n = 0;
 
-        for (auto & x: _ocontrollers) {
-            auto & outc = x.second;
+        for (auto & x: _controllers) {
+            auto & c = x.second;
 
-            if (!outc.paused())
-                n += outc.step(this);
+            if (!c.paused())
+                n += c.step(this);
         }
 
         n += _transport->step();
