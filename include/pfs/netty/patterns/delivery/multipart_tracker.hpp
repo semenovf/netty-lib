@@ -313,7 +313,7 @@ public:
             PFS__THROW_UNEXPECTED(check_range(lowest_acked_sn)
                 , tr::f_("Fix delivery::multipart_tracker algorithm:"
                     " serial number {} is out of bounds: [{},{}], msgid={}"
-                        , lowest_acked_sn, _first_sn, _last_sn, _msgid));
+                        , lowest_acked_sn, _first_sn, _last_sn, to_string(_msgid)));
 
             std::size_t index = lowest_acked_sn - _first_sn;
 

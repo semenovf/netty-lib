@@ -4,6 +4,7 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
+//      2025.01.16 Initial version (incoming_controller).
 //      2025.07.02 Initial version (merge of `incoming_controller` and `outgoing_controller`).
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma once
