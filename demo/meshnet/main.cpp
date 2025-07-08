@@ -188,8 +188,9 @@ static void send_file (reliable_node_pool_t & node_pool, node_t::node_id id, int
         if (file) {
             auto msgid = pfs::generate_uuid();
             auto data = file.read_all();
+            bool force_checksum = true;
             LOGD(TAG, "Send file: {}", file_to_send);
-            node_pool.enqueue_message(id, msgid, priority, false, data.data(), data.size());
+            node_pool.enqueue_message(id, msgid, priority, force_checksum, data.data(), data.size());
         }
     }
 }
@@ -309,7 +310,7 @@ int main (int argc, char * argv[])
     auto id = pfs::generate_uuid();
     bool is_gateway = false;
     std::vector<node_item> nodes;
-    int current_priority = 1;
+    int current_priority = 0;
 
     auto commandLine = pfs::make_argvapi(argc, argv);
     auto programName = commandLine.program_name();

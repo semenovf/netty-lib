@@ -15,7 +15,6 @@
 #include "send_result.hpp"
 #include "tag.hpp"
 #include "trace.hpp"
-#include "writer_queue.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/stopwatch.hpp>
 #include <chrono>
@@ -28,7 +27,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename Socket, typename WriterPoller, typename WriterQueue = writer_queue>
+template <typename Socket, typename WriterPoller, typename WriterQueue>
 class writer_pool: protected WriterPoller
 {
 public:
@@ -130,17 +129,19 @@ private:
         unsigned int result = 0;
 
         do {
-            std::vector<char> frame;
-
             for (auto & item: _accounts) {
                 auto & acc = item.second;
 
                 if (!acc.writable)
                     continue;
 
-                if (acc.q.empty())
+                auto frame = acc.q.acquire_frame(acc.frame_size);
+
+                if (frame.empty())
                     continue;
 
+                // A missing socket is less common than an empty frame, so optimally locate socket
+                // after frame acquiring.
                 auto sock = this->locate_socket(acc.sid);
 
                 if (sock == nullptr) {
@@ -149,14 +150,9 @@ private:
                         tr::f_("cannot locate socket for writing by socket ID: {}"
                             ", removing from writer pool", acc.sid)
                     });
+
                     continue;
                 }
-
-                frame.clear();
-                acc.q.acquire_frame(frame, acc.frame_size);
-
-                if (frame.empty())
-                    continue;
 
                 netty::error err;
                 auto res = sock->send(frame.data(), frame.size(), & err);

@@ -39,25 +39,39 @@ public:
             _current_priority++;
         }
 
-        if (_current_priority >= PriorityDistribution::SIZE)
+        if (_current_priority == PriorityDistribution::SIZE)
             _current_priority = 0;
 
         _current_counter++;
         return _current_priority;
     }
 
-    void skip () noexcept
+    /**
+     * Jumps to next priority.
+     */
+    int skip () noexcept
     {
         _current_counter = 0;
         _current_priority++;
 
         if (_current_priority >= PriorityDistribution::SIZE)
             _current_priority = 0;
+
+        return _current_priority;
     }
 
     int current () const noexcept
     {
         return _current_priority;
+    }
+
+    /**
+     * Reset to an initial state.
+     */
+    void reset ()
+    {
+        _current_priority = 0;
+        _current_counter = 0;
     }
 };
 

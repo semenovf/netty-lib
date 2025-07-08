@@ -40,6 +40,22 @@ if (NOT TARGET pfs::ionik)
     endif()
 endif()
 
+if ((NETTY__BUILD_TESTS OR NETTY__BUILD_DEMO) AND NOT TARGET pfs::lorem)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS lorem/.git)
+        add_subdirectory(lorem)
+    else()
+        set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
+        message(STATUS "Fetching pfs::lorem ...")
+        include(FetchContent)
+        FetchContent_Declare(lorem
+            GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
+            GIT_TAG master
+            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lorem)
+        FetchContent_MakeAvailable(lorem)
+        message(STATUS "Fetching pfs::lorem complete")
+    endif()
+endif()
+
 if (NETTY__BUILD_TESTS)
     if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/lorem/.git)
         add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/lorem 2ndparty/lorem)

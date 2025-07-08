@@ -13,6 +13,7 @@
 #include <pfs/universal_id_pack.hpp>
 #include <pfs/netty/callback.hpp>
 #include <pfs/netty/poller_types.hpp>
+#include <pfs/netty/patterns/priority_tracker.hpp>
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
 #include <pfs/netty/patterns/delivery/delivery_controller.hpp>
@@ -23,29 +24,52 @@
 #include <pfs/netty/patterns/meshnet/node.hpp>
 #include <pfs/netty/patterns/meshnet/node_pool.hpp>
 #include <pfs/netty/patterns/meshnet/node_pool_rd.hpp>
-#include <pfs/netty/patterns/meshnet/priority_input_controller.hpp>
-#include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/infinite_reconnection_policy.hpp>
+#include <pfs/netty/patterns/meshnet/input_controller.hpp>
+#include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
+#include <pfs/netty/patterns/meshnet/priority_input_account.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
-#include <pfs/netty/patterns/meshnet/simple_input_controller.hpp>
+#include <pfs/netty/patterns/meshnet/simple_input_account.hpp>
 #include <pfs/netty/patterns/meshnet/single_link_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_handshake.hpp>
 #include <pfs/netty/patterns/meshnet/without_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/without_input_controller.hpp>
 #include <pfs/netty/patterns/meshnet/without_reconnection_policy.hpp>
-#include <pfs/netty/writer_queue.hpp>
+#include <pfs/netty/patterns/meshnet/writer_queue.hpp>
 #include <pfs/netty/posix/tcp_listener.hpp>
 #include <pfs/netty/posix/tcp_socket.hpp>
 
 namespace delivery_ns = netty::patterns::delivery;
 namespace meshnet_ns = netty::patterns::meshnet;
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+// Reliable delivery node pool
+////////////////////////////////////////////////////////////////////////////////////////////////////
+struct priority_distribution
+{
+    std::array<std::size_t, 3> distrib {5, 3, 1};
+
+    static constexpr std::size_t SIZE = 3;
+
+    constexpr std::size_t operator [] (std::size_t i) const noexcept
+    {
+        return distrib[i];
+    }
+};
+
+using priority_tracker_t = netty::patterns::priority_tracker<priority_distribution>;
+
 using node_id = pfs::universal_id;
-using priority_writer_queue_t = meshnet_ns::priority_writer_queue<3>;
+using writer_queue_t = meshnet_ns::writer_queue;
+using priority_writer_queue_t = meshnet_ns::priority_writer_queue<priority_tracker_t>;
 
 template <typename Node>
-using priority_input_controller = meshnet_ns::priority_input_controller<3, Node>;
+using simple_input_controller = meshnet_ns::input_controller<Node, meshnet_ns::simple_input_account>;
+
+template <typename Node>
+using priority_input_controller = meshnet_ns::input_controller<Node
+    , meshnet_ns::priority_input_account<priority_tracker_t::SIZE>>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // nopriority_meshnet_node_t
@@ -71,13 +95,13 @@ using nopriority_meshnet_node_t = meshnet_ns::node<
     , netty::reader_select_poller_t
     , netty::writer_select_poller_t
 #endif
-    , netty::writer_queue
+    , writer_queue_t
     , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
     , meshnet_ns::infinite_reconnection_policy
     , meshnet_ns::single_link_handshake // dual_link_handshake
     , meshnet_ns::simple_heartbeat
-    , meshnet_ns::simple_input_controller>;
+    , simple_input_controller>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // priority_meshnet_node_t
@@ -136,7 +160,7 @@ using bare_meshnet_node_t = meshnet_ns::node<
     , netty::reader_select_poller_t
     , netty::writer_select_poller_t
 #endif
-    , netty::writer_queue
+    , writer_queue_t
     , pfs::fake_mutex
     , netty::patterns::serializer_traits_t
     , meshnet_ns::without_reconnection_policy
@@ -148,7 +172,8 @@ using bare_meshnet_node_t = meshnet_ns::node<
 // Node pool
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Choose required type here
-//using node_t = nopriority_meshnet_node_t;
+
+// using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
 using routing_table_t = meshnet_ns::routing_table<pfs::universal_id, netty::patterns::serializer_traits_t>;
@@ -158,23 +183,6 @@ using node_pool_t = meshnet_ns::node_pool<pfs::universal_id
     , routing_table_t
     , alive_controller_t
     , std::recursive_mutex>;
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////
-// Reliable delivery node pool
-////////////////////////////////////////////////////////////////////////////////////////////////////
-struct priority_distribution
-{
-    std::array<std::size_t, 3> distrib {9, 3, 1};
-
-    static constexpr std::size_t SIZE = 3;
-
-    constexpr std::size_t operator [] (std::size_t i) const noexcept
-    {
-        return distrib[i];
-    }
-};
-
-using priority_tracker_t = netty::patterns::priority_tracker<priority_distribution>;
 
 using message_id = pfs::universal_id;
 using delivery_transport_t = node_pool_t;

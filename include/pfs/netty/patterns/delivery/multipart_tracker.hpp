@@ -9,6 +9,8 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../../tag.hpp"
+#include "../../trace.hpp"
 #include "protocol.hpp"
 #include "serial_number.hpp"
 #include <pfs/assert.hpp>
@@ -123,7 +125,6 @@ private:
         _parts_acked.resize(_remain_parts_count, false);
 
         _current_index = 0;
-
         _exp_timepoint = clock_type::now();
         _heading_exp_timepoint = clock_type::now();
     }
@@ -227,6 +228,7 @@ public:
             pkt.serialize(out, _data + _part_size * index, part_size);
 
             // Start counting the expiration time point from sending the first part
+            update_heading_exp_timepoint();
             update_exp_timepoint();
         } else {
             part_packet pkt {sn};
@@ -251,13 +253,13 @@ public:
 
         // Heading not acknowledged yet
         if (!_parts_acked[0]) {
-            if (_heading_exp_timepoint <= clock_type::now())
+            if (_heading_exp_timepoint <= clock_type::now()) {
                 _current_index == 0;
+            }
 
             // Acquiring message heading
             if (_current_index == 0) {
                 auto sn = _first_sn + _current_index++;
-                update_heading_exp_timepoint();
                 return acquire_part<Serializer>(out, sn);
             }
 

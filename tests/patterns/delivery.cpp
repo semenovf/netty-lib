@@ -71,9 +71,11 @@ TEST_CASE("simple delivery") {
         LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
     };
 
-    net.on_message_received = [& message_received_counter] (std::string const &, std::string const &
-        , std::string const &, std::vector<char>)
+    net.on_message_received = [& message_received_counter] (std::string const & source_name
+        , std::string const & sender_name, std::string const & msgid, std::vector<char> msg)
     {
+        LOGD(TAG, "{}: Message received: {}: {}: {} bytes", source_name, sender_name, msgid
+            , msg.size());
         message_received_counter++;
     };
 
@@ -95,7 +97,8 @@ TEST_CASE("simple delivery") {
     net.run_all();
     CHECK(tools::wait_atomic_counter(route_ready_counter, 1));
 
-    net.send("A0", "A1", text, 1);
+    LOGD(TAG, "Send text: {} bytes", text.size());
+    net.send("A0", "A1", text, 0);
 
     CHECK(tools::wait_atomic_counter(message_received_counter, 1));
 

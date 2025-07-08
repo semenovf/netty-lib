@@ -11,6 +11,7 @@
 #include "../../namespace.hpp"
 #include "priority_frame.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -23,136 +24,64 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <int N>
-struct frame_calculator;
-
-// Use `writer_queue` instead of `priority_writer_queue`
-template <> struct frame_calculator<0>;
-template <> struct frame_calculator<1>;
-
-template <>
-struct frame_calculator<2>
-{
-    std::size_t x[2] = {2, 1};
-};
-
-template <>
-struct frame_calculator<3>
-{
-    std::size_t x[3] = {4, 2, 1};
-};
-
-template <>
-struct frame_calculator<4>
-{
-    std::size_t x[4] = {8, 4, 2, 1};
-};
-
-template <>
-struct frame_calculator<5>
-{
-    std::size_t x[5] = {16, 8, 4, 2, 1};
-};
-
-template <>
-struct frame_calculator<6>
-{
-    std::size_t x[6] = {32, 16, 8, 4, 2, 1};
-};
-
-template <int N, typename FrameCalculator = frame_calculator<N>>
+template <typename PriorityTracker>
 class priority_writer_queue
 {
-    struct chunk
-    {
-        std::vector<char> b;
-    };
+    using priority_tracker_type = PriorityTracker;
+    using chunk_type = std::vector<char>;
+    using chunk_queue_type = std::queue<chunk_type>;
 
-    struct item
-    {
-        std::queue<chunk> q;
-        int frame_counter {0};
-    };
+    static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
+
+    static_assert(PRIORITY_COUNT > 0, "Priority count must be at least 1");
 
 private:
-    std::array<item, N> _qpool;    // queue pool
-    int _priority_index {0};       // queue pool index (same as priority value)
-    std::uint64_t _total_size {0}; // total data size excluding _frame.size()
-    std::vector<char> _frame;      // current sending frame
+    std::array<chunk_queue_type, PRIORITY_COUNT> _qpool; // Chunks queue pool
+    std::vector<char> _frame; // Current sending frame
+    bool _empty {true}; // Used for optimization
+    priority_tracker_type _priority_tracker;
 
 public:
     priority_writer_queue ()
-    {
-        reset_phase();
-    }
+    {}
 
 private:
-    void reset_phase ()
+    // Result priority points to non-empty queue (after constructor or `shift` method calling).
+    // A result of -1 indicates that all elements of the pool are empty
+    int next_priority ()
     {
-        FrameCalculator fc;
+        // !empty() already checked in acquire_frame() before calling this method.
 
-        for (int i = 0; i < N; i++) {
-            PFS__THROW_UNEXPECTED(fc.x[i] > 0, "priority_writer_queue: frame limit must be greater than zero");
-            _qpool[i].frame_counter = fc.x[i];
+        auto priority = _priority_tracker.next();
+        auto pq = & _qpool.at(priority);
+        auto initial_pq = pq;
+        int loops = 0;
+
+        while (pq->empty()) {
+            priority = _priority_tracker.skip();
+            pq = & _qpool.at(priority);
+
+            PFS__THROW_UNEXPECTED(loops <= PRIORITY_COUNT
+                , tr::f_("Fix meshnet::priority_writer_queue algorithm: loops({}) > PRIORITY_COUNT({})"
+                    , loops, PRIORITY_COUNT));
+
+            // The cycle is complete
+            if (pq == initial_pq)
+                break;
         }
 
-        _priority_index = 0;
-        _frame.clear();
-    }
+        if (pq->empty()) {
+            PFS__THROW_UNEXPECTED(pq == initial_pq
+                , tr::_("Fix meshnet::priority_writer_queue algorithm"));
 
-    void acquire_priority ()
-    {
-        PFS__THROW_UNEXPECTED(!empty(), "");
-
-        auto & x = _qpool[_priority_index];
-
-        // TODO May be optimized later
-        if (!x.q.empty()) {
-            if (x.frame_counter > 0) {
-                // Phase is not complete for the current queue
-                return;
-            } else {
-                // Phase is complete for the current queue, need to find next suitable queue
-                FrameCalculator fc;
-                x.frame_counter = fc.x[_priority_index];
+            for (auto const & q: _qpool) {
+                PFS__THROW_UNEXPECTED(q.empty(), tr::_("Fix meshnet::priority_writer_queue algorithm"));
             }
-        } else {
-            // No more data in the current queue,
-            if (x.frame_counter > 0) {
-                // Need to find next suitable queue
-                ;
-            } else {
-                // Phase is complete for the current queue, need to find next suitable queue
-                FrameCalculator fc;
-                x.frame_counter = fc.x[_priority_index];
-            }
+
+            priority = -1;
         }
 
-        _priority_index++;
-
-        if (_priority_index == N)
-            _priority_index = 0;
-
-        // Find nearest suitable queue
-        while (_priority_index < N) {
-            auto & x = _qpool[_priority_index];
-
-            if (x.frame_counter != 0 && !x.q.empty())
-                return;
-
-            _priority_index++;
-        }
-
-        // A suitable queue must be found since total size is not zero.
-        for (_priority_index = 0; _priority_index < N; _priority_index++) {
-            auto & x = _qpool[_priority_index];
-
-            if (!x.q.empty())
-                return;
-        }
-
-        // Must be unreachable
-        PFS__THROW_UNEXPECTED(false, "priority_writer_queue: fix acquire_priority() method");
+        return priority;
     }
 
 public:
@@ -161,8 +90,13 @@ public:
         if (len == 0)
             return;
 
-        _total_size += len;
-        _qpool[priority].q.push(chunk{std::vector<char>{data, data + len}});
+        if (priority >= PRIORITY_COUNT)
+            priority = PRIORITY_COUNT - 1;
+
+        auto & q = _qpool.at(priority);
+
+        q.push(chunk_type{data, data + len});
+        _empty = false;
     }
 
     void enqueue (int priority, std::vector<char> && data)
@@ -170,77 +104,64 @@ public:
         if (data.empty())
             return;
 
-        _total_size += data.size();
-        _qpool[priority].q.push(chunk{std::move(data)});
+        if (priority >= PRIORITY_COUNT)
+            priority = PRIORITY_COUNT - 1;
+
+        auto & q = _qpool.at(priority);
+
+        q.push(chunk_type{std::move(data)});
+        _empty = false;
     }
 
-    bool empty () const
-    {
-        return _total_size == 0 && _frame.empty();
-    }
-
-    bool acquire_frame (std::vector<char> & frame, std::size_t frame_size)
+    std::vector<char> const & acquire_frame (std::size_t frame_size)
     {
         if (!_frame.empty()) {
-            frame.insert(frame.end(), _frame.begin(), _frame.end());
-            return true;
+            PFS__THROW_UNEXPECTED(_frame.size() <= frame_size, "");
+            return _frame;
         }
 
-        if (empty())
-            return false;
+        if (_empty)
+            return _frame; // _frame is empty here
 
-        acquire_priority();
+        auto priority = next_priority();
 
-        // _priority_index already points to non-empty queue (after constructor or `shift` method calling)
-        auto & q = _qpool[_priority_index].q;
-        auto & b = q.front().b;
+        if (priority < 0) {
+            _empty = true;
+            return _frame; // _frame is empty here
+        }
 
-        // Recalculate actual frame size according to frame header and bytes left.
-        frame_size = (std::min)(b.size() + priority_frame::header_size(), frame_size);
+        auto & q = _qpool.at(priority);
+        auto & front = q.front();
 
-        priority_frame{_priority_index}.serialize(_frame, b.data(), frame_size);
-        b.erase(b.begin(), b.begin() + (frame_size - priority_frame::header_size()));
-
-        PFS__THROW_UNEXPECTED(_total_size >= frame_size - priority_frame::header_size(), "");
-
-        _total_size -= (frame_size - priority_frame::header_size());
-
-        frame.insert(frame.end(), _frame.begin(), _frame.end());
+        priority_frame{priority}.pack(front, _frame, frame_size);
 
         // Check topmost message is processed
-        if (b.empty())
+        if (front.empty())
             q.pop();
 
-        return true;
+        return _frame;
     }
 
     void shift (std::size_t n)
     {
-        PFS__THROW_UNEXPECTED(n > 0 && n <= _frame.size(), "");
+        PFS__THROW_UNEXPECTED(n > 0, "");
+        PFS__THROW_UNEXPECTED(n <= _frame.size(), "");
 
         if (_frame.size() == n)
             _frame.clear();
         else
             _frame.erase(_frame.begin(), _frame.begin() + n);
-
-        auto & x = _qpool[_priority_index];
-
-        // Sending message complete
-        if (_frame.empty()) {
-            x.frame_counter--;
-            PFS__THROW_UNEXPECTED(x.frame_counter >= 0, "");
-        }
-
-        if (empty())
-            reset_phase();
     }
 
 public: // static
     static constexpr int priority_count () noexcept
     {
-        return N;
+        return PRIORITY_COUNT;
     }
 };
+
+template <typename PriorityTracker>
+constexpr std::size_t priority_writer_queue<PriorityTracker>::PRIORITY_COUNT;
 
 }} // namespace patterns::meshnet
 

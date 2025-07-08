@@ -663,7 +663,7 @@ public:
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
         _channels.for_each_writer([this, priority, data, len] (node_id, socket_id sid) {
-            _writer_pool.enqueue(sid, priority, data, len);
+            enqueue_private(sid, priority, data, len);
         });
     }
 
@@ -676,7 +676,7 @@ public:
 
         _channels.for_each_writer([this, sender_id, priority, data, len] (node_id id, socket_id sid) {
             if (id != sender_id)
-                _writer_pool.enqueue(sid, priority, data, len);
+                enqueue_private(sid, priority, data, len);
         });
     }
 

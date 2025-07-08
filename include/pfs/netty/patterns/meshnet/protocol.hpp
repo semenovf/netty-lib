@@ -3,14 +3,19 @@
 //
 // This file is part of `netty-lib`.
 //
+// Protocol Version 1
+//
 // Changelog:
 //      2025.01.17 Initial version.
+//      2025.07.04 Changed protocol versioning.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../error.hpp"
 #include "../../namespace.hpp"
 #include "alive_info.hpp"
 #include "route_info.hpp"
 #include <pfs/crc32.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <pfs/optional.hpp>
 #include <cstdint>
@@ -48,7 +53,7 @@ enum class packet_way_enum
 // +-------------------------+
 // |    (V)     |     (P)    |
 // +------------+------------+
-// (V) - Packet version (0 - first, 1 - second, etc).
+// (V) - Packet version (1 - first, 2 - second, etc).
 // (P) - Packet type (see packet_enum).
 //
 // Byte 1:
@@ -62,6 +67,8 @@ enum class packet_way_enum
 
 class header
 {
+    static constexpr int VERSION = 1;
+
 protected:
     struct {
         std::uint8_t b0;
@@ -71,12 +78,12 @@ protected:
     } _h;
 
 protected:
-    header (packet_enum type, bool has_checksum, int version = 0) noexcept
+    header (packet_enum type, bool force_checksum) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
-        _h.b0 |= (static_cast<std::uint8_t>(version) << 4) & 0xF0;
+        _h.b0 |= (static_cast<std::uint8_t>(VERSION) << 4) & 0xF0;
         _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
-        _h.b1 |= (has_checksum ? 0x01 : 0x00);
+        _h.b1 |= (force_checksum ? 0x01 : 0x00);
     }
 
 public:
@@ -85,6 +92,13 @@ public:
     {
         in >> _h.b0;
         in >> _h.b1;
+
+        if (version() != VERSION) {
+            throw netty::error {
+                  make_error_code(netty::errc::protocol_version_error)
+                , tr::f_("expected meshnet protocol version: {}, got: {}", VERSION, version())
+            };
+        }
 
         if (has_checksum())
             in >> _h.crc32;
@@ -197,6 +211,8 @@ protected:
     }
 };
 
+constexpr int header::VERSION;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // handshake packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,7 +227,7 @@ public:
      * Construct handshake packet.
      */
     handshake_packet (bool is_gateway, bool behind_nat, packet_way_enum way = packet_way_enum::request) noexcept
-        : header(packet_enum::handshake, false, 0)
+        : header(packet_enum::handshake, false)
     {
         if (way == packet_way_enum::response)
             enable_f0();
@@ -268,7 +284,7 @@ public:
 
 public:
     heartbeat_packet () noexcept
-        : header(packet_enum::heartbeat, false, 0)
+        : header(packet_enum::heartbeat, false)
     {
         health_data = 0;
     }
@@ -304,7 +320,7 @@ public:
 
 public:
     alive_packet () noexcept
-        : header(packet_enum::alive, false, 0)
+        : header(packet_enum::alive, false)
     {}
 
     /**
@@ -338,7 +354,7 @@ public:
 
 public:
     unreachable_packet () noexcept
-        : header(packet_enum::unreach, false, 0)
+        : header(packet_enum::unreach, false)
     {}
 
     /**
@@ -374,7 +390,7 @@ public:
 
 public:
     route_packet (packet_way_enum way) noexcept
-        : header(packet_enum::route, false, 0)
+        : header(packet_enum::route, false)
     {
         if (way == packet_way_enum::response)
             enable_f0();
@@ -433,7 +449,7 @@ public:
 
 public:
     ddata_packet (bool has_checksum) noexcept
-        : header(packet_enum::ddata, has_checksum, 0)
+        : header(packet_enum::ddata, has_checksum)
     {}
 
     template <typename Deserializer>
@@ -485,7 +501,7 @@ public:
 
 public:
     gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum) noexcept
-        : header(packet_enum::gdata, has_checksum, 0)
+        : header(packet_enum::gdata, has_checksum)
         , sender_id(sender_id)
         , receiver_id(receiver_id)
     {}

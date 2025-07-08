@@ -13,7 +13,6 @@
 #include "../../namespace.hpp"
 #include "../../tag.hpp"
 #include "../../trace.hpp"
-#include "../priority_tracker.hpp"
 #include "multipart_assembler.hpp"
 #include "multipart_tracker.hpp"
 #include "protocol.hpp"
@@ -409,10 +408,11 @@ public:
     bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> msg)
     {
         auto & t = _trackers.at(priority);
-        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1, std::move(msg)
-            , _exp_timeout);
+        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1
+            , std::move(msg), _exp_timeout);
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
+
         return true;
     }
 
@@ -423,8 +423,8 @@ public:
         , char const * msg, std::size_t length)
     {
         auto & t = _trackers.at(priority);
-        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1, msg, length
-            , _exp_timeout);
+        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1
+            , msg, length, _exp_timeout);
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
         return true;
@@ -463,15 +463,14 @@ public:
             return n;
 
         auto saved_priority = _priority_tracker.current();
+        auto priority = _priority_tracker.current();
 
         // Try to acquire next part of the current sending message according to priority
         do {
-            auto priority = _priority_tracker.next();
-
             auto & t = _trackers.at(priority);
 
             if (t.q.empty()) {
-                _priority_tracker.skip();
+                priority = _priority_tracker.skip();
                 continue;
             }
 
@@ -481,6 +480,9 @@ public:
             auto sn = mt->acquire_next_part(out);
 
             if (sn > 0) {
+                PFS__THROW_UNEXPECTED(mt->priority() == priority
+                    , "Fix delivery::delivery_controller algorithm");
+
                 auto success = m->enqueue_private(_addr, out.take(), mt->priority()
                     , mt->force_checksum());
 
@@ -492,12 +494,12 @@ public:
                         ", message delivery paused."
                         , to_string(_addr), mt->priority(), sn));
                     pause();
-
                 }
 
+                priority = _priority_tracker.next();
                 break;
             } else {
-                _priority_tracker.skip();
+                priority = _priority_tracker.skip();
                 continue;
             }
         } while (_priority_tracker.current() != saved_priority);

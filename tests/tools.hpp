@@ -120,6 +120,7 @@ bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption
     return success;
 }
 
+
 inline std::string random_text ()
 {
     lorem::lorem_ipsum ipsum;
