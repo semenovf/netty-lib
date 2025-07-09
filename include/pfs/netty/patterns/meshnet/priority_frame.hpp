@@ -10,9 +10,6 @@
 #include "../../error.hpp"
 #include "../../namespace.hpp"
 #include <pfs/i18n.hpp>
-#include <pfs/numeric_cast.hpp>
-#include <pfs/optional.hpp>
-#include <pfs/c++support.hpp>
 #include <algorithm>
 #include <array>
 #include <cstdint>

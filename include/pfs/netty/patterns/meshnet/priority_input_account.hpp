@@ -86,6 +86,12 @@ public:
 
         return _current_priority;
     }
+
+public: // static
+    static constexpr int priority_count ()
+    {
+        return PriorityCount;
+    }
 };
 
 }} // namespace patterns::meshnet

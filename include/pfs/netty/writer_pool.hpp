@@ -16,6 +16,7 @@
 #include "tag.hpp"
 #include "trace.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
 #include <chrono>
 #include <cstdint>
@@ -89,6 +90,16 @@ public:
     }
 
 private:
+    void check_priority (int priority)
+    {
+        if (priority < 0 || priority >= WriterQueue::priority_count()) {
+            throw error { make_error_code(std::errc::invalid_argument)
+                , tr::f_("bad priority value: must be less than {}, got: {}"
+                    , WriterQueue::priority_count(), priority)
+            };
+        }
+    }
+
     account * locate_account (socket_id sid)
     {
         auto pos = _accounts.find(sid);
@@ -228,6 +239,8 @@ public:
 
     void enqueue (socket_id sid, int priority, char const * data, std::size_t len)
     {
+        check_priority(priority);
+
         if (len == 0)
             return;
 
@@ -243,6 +256,8 @@ public:
 
     void enqueue (socket_id sid, int priority, std::vector<char> && data)
     {
+        check_priority(priority);
+
         if (data.empty())
             return;
 

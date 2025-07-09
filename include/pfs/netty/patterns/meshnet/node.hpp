@@ -58,9 +58,9 @@ namespace meshnet {
  * node_t node { id, is_gateway };
  *
  * // Assign callbacks
- * node.on_error = ...;
- * node.on_channel_established = ...;
- * node.on_channel_destroyed = ...;
+ * node.on_error(...);
+ * node.on_channel_established(...);
+ * node.on_channel_destroyed(...);
  * ...
  *
  * // Run node loop
@@ -734,7 +734,12 @@ public:
     }
 
 public: // static
-    static constexpr int priority_count () noexcept
+    static constexpr int input_priority_count () noexcept
+    {
+        return InputController<node>::priority_count();
+    }
+
+    static constexpr int output_priority_count () noexcept
     {
         return writer_pool_type::priority_count();
     }

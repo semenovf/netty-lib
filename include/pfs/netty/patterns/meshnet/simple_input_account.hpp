@@ -60,6 +60,12 @@ public:
     {
         return 0;
     }
+
+public: // static
+    static constexpr int priority_count ()
+    {
+        return 1;
+    }
 };
 
 }} // namespace patterns::meshnet

@@ -103,8 +103,10 @@ public:
                     break;
             }
 
-            if (this->on_data_ready)
-                this->on_data_ready(id, std::move(inpb));
+            if (this->on_data_ready) {
+                if (!inpb.empty())
+                    this->on_data_ready(id, std::move(inpb));
+            }
         };
     }
 

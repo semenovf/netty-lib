@@ -17,7 +17,6 @@
 #include <pfs/netty/patterns/serializer_traits.hpp>
 #include <pfs/netty/patterns/delivery/manager.hpp>
 #include <pfs/netty/patterns/delivery/delivery_controller.hpp>
-#include <pfs/netty/patterns/delivery/message_queue.hpp>
 #include <pfs/netty/patterns/meshnet/alive_controller.hpp>
 #include <pfs/netty/patterns/meshnet/channel_map.hpp>
 #include <pfs/netty/patterns/meshnet/dual_link_handshake.hpp>
@@ -26,8 +25,8 @@
 #include <pfs/netty/patterns/meshnet/node_pool_rd.hpp>
 #include <pfs/netty/patterns/meshnet/infinite_reconnection_policy.hpp>
 #include <pfs/netty/patterns/meshnet/input_controller.hpp>
-#include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/priority_input_account.hpp>
+#include <pfs/netty/patterns/meshnet/priority_writer_queue.hpp>
 #include <pfs/netty/patterns/meshnet/routing_table.hpp>
 #include <pfs/netty/patterns/meshnet/simple_heartbeat.hpp>
 #include <pfs/netty/patterns/meshnet/simple_input_account.hpp>
@@ -173,7 +172,7 @@ using bare_meshnet_node_t = meshnet_ns::node<
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Choose required type here
 
-// using node_t = nopriority_meshnet_node_t;
+//using node_t = nopriority_meshnet_node_t;
 using node_t = priority_meshnet_node_t;
 
 using routing_table_t = meshnet_ns::routing_table<pfs::universal_id, netty::patterns::serializer_traits_t>;
@@ -189,9 +188,7 @@ using delivery_transport_t = node_pool_t;
 using delivery_controller_t = delivery_ns::delivery_controller<node_id, message_id
     , netty::patterns::serializer_traits_t, priority_tracker_t>;
 
-using message_queue_t = delivery_ns::message_queue<message_id, priority_tracker_t::SIZE>;
-
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id
-    , delivery_controller_t, message_queue_t, std::recursive_mutex>;
+    , delivery_controller_t, std::recursive_mutex>;
 
 using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;

@@ -13,6 +13,7 @@
 #include "../../tag.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/log.hpp>
 #include <atomic>
 #include <chrono>
@@ -35,7 +36,6 @@ namespace delivery {
 template <typename Transport
     , typename MessageId
     , typename ExchangeController
-    , typename MessageQueue
     , typename RecursiveWriterMutex>
 class manager
 {

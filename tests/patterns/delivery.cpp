@@ -158,12 +158,19 @@ TEST_CASE("delivery") {
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
 
     net.send("A0", "C0", g_text0, 0);
-    net.send("A0", "C0", g_text1, 1);
-    net.send("A0", "C0", g_text2, 2);
-    net.send("A0", "C0", g_text2, 2);
+
+    if (node_t::output_priority_count() > 1)
+        net.send("A0", "C0", g_text1, 1);
+    else
+        net.send("A0", "C0", g_text1, 0);
+
+    if (node_t::output_priority_count() > 2)
+        net.send("A0", "C0", g_text2, 2);
+    else
+        net.send("A0", "C0", g_text2, 0);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
-    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 4));
+    CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));
 
     net.interrupt_all();
     net.join_all();

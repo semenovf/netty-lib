@@ -38,6 +38,16 @@ public:
     {}
 
 private:
+    void check_priority (int priority)
+    {
+        if (priority < 0 || priority >= InputAccount::priority_count()) {
+            throw error { make_error_code(std::errc::invalid_argument)
+                , tr::f_("bad priority value: must be less than {}, got: {}"
+                    , InputAccount::priority_count(), priority)
+            };
+        }
+    }
+
     account_type * locate_account (socket_id sid)
     {
         auto pos = _accounts.find(sid);
@@ -122,6 +132,8 @@ public:
 
         while (pacc->read_frame()) {
             auto priority = pacc->priority();
+
+            check_priority(priority);
 
             auto in = serializer_traits::make_deserializer(pacc->data(), pacc->size());
             bool has_more_packets = true;
