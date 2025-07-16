@@ -43,7 +43,7 @@ public:
     {
         // Priority will be updated
         _current_priority = -1;
-        return priority_frame::parse<PriorityCount>(_frames, _pool, _current_priority);
+        return priority_frame::parse<PriorityCount>(_pool, _frames, _current_priority);
     }
 
     char const * data () const

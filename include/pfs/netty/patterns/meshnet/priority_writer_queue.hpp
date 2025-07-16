@@ -133,7 +133,7 @@ public:
         auto & q = _qpool.at(priority);
         auto & front = q.front();
 
-        priority_frame{priority}.pack(front, _frame, frame_size);
+        priority_frame{priority}.pack(_frame, front, frame_size);
 
         // Check topmost message is processed
         if (front.empty())

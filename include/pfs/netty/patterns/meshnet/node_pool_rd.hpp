@@ -324,33 +324,31 @@ public:
         _t.set_frame_size(id, frame_size);
     }
 
-    bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
-        , std::vector<char> msg)
+    bool enqueue_message (node_id id, message_id msgid, int priority, std::vector<char> msg)
     {
-        return _dm.enqueue_message(id, msgid, priority, force_checksum, std::move(msg));
+        return _dm.enqueue_message(id, msgid, priority, std::move(msg));
     }
 
-    bool enqueue_message (node_id id, message_id msgid, int priority, bool force_checksum
-        , char const * msg, std::size_t length)
-    {
-        return _dm.enqueue_message(id, msgid, priority, force_checksum, msg, length);
-    }
-
-    bool enqueue_static_message (node_id id, message_id msgid, int priority
-        , bool force_checksum, char const * msg, std::size_t length)
-    {
-        return _dm.enqueue_static_message(id, msgid, priority, force_checksum, msg, length);
-    }
-
-    bool enqueue_report (node_id id, int priority, bool force_checksum, char const * data
+    bool enqueue_message (node_id id, message_id msgid, int priority, char const * msg
         , std::size_t length)
     {
-        return _dm.enqueue_report(id, priority, force_checksum, data, length);
+        return _dm.enqueue_message(id, msgid, priority, msg, length);
     }
 
-    bool enqueue_report (node_id id, int priority, bool force_checksum, std::vector<char> data)
+    bool enqueue_static_message (node_id id, message_id msgid, int priority, char const * msg
+        , std::size_t length)
     {
-        return _dm.enqueue_report(id, priority, force_checksum, std::move(data));
+        return _dm.enqueue_static_message(id, msgid, priority, msg, length);
+    }
+
+    bool enqueue_report (node_id id, int priority, char const * data, std::size_t length)
+    {
+        return _dm.enqueue_report(id, priority, data, length);
+    }
+
+    bool enqueue_report (node_id id, int priority, std::vector<char> data)
+    {
+        return _dm.enqueue_report(id, priority, std::move(data));
     }
 
     void interrupt ()

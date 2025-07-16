@@ -8,7 +8,7 @@
 ################################################################################
 
 if (NOT TARGET pfs::common)
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS common/.git)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/common/.git)
         add_subdirectory(common)
     else()
         set(FETCHCONTENT_UPDATES_DISCONNECTED_COMMON ON)
@@ -25,7 +25,7 @@ if (NOT TARGET pfs::common)
 endif()
 
 if (NOT TARGET pfs::ionik)
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ionik/.git)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/ionik/.git)
         add_subdirectory(ionik)
     else()
         set(FETCHCONTENT_UPDATES_DISCONNECTED_IONIK ON)
@@ -41,7 +41,7 @@ if (NOT TARGET pfs::ionik)
 endif()
 
 if ((NETTY__BUILD_TESTS OR NETTY__BUILD_DEMO) AND NOT TARGET pfs::lorem)
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS lorem/.git)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/lorem/.git)
         add_subdirectory(lorem)
     else()
         set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
@@ -53,22 +53,5 @@ if ((NETTY__BUILD_TESTS OR NETTY__BUILD_DEMO) AND NOT TARGET pfs::lorem)
             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lorem)
         FetchContent_MakeAvailable(lorem)
         message(STATUS "Fetching pfs::lorem complete")
-    endif()
-endif()
-
-if (NETTY__BUILD_TESTS)
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_SOURCE_DIR}/2ndparty/lorem/.git)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/2ndparty/lorem 2ndparty/lorem)
-    else()
-        set(FETCHCONTENT_UPDATES_DISCONNECTED_LOREM ON)
-        message(STATUS "Fetching lorem ...")
-        include(FetchContent)
-        FetchContent_Declare(lorem
-            GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
-            GIT_TAG master
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/2ndparty/lorem
-            SUBBUILD_DIR ${CMAKE_BINARY_DIR}/2ndparty/lorem)
-        FetchContent_MakeAvailable(lorem)
-        message(STATUS "Fetching lorem complete")
     endif()
 endif()

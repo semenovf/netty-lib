@@ -747,13 +747,12 @@ public:
      *
      * @param id Receiver ID.
      * @param priority Message priority.
-     * @param force_checksum Calculate checksum before sending if @c true.
      * @param data Message content.
      * @param len Length of the message content.
      *
      * @return @c true if route found to @a id.
      */
-    bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
+    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -765,39 +764,9 @@ public:
             return false;
         }
 
-        auto packet = _rtab.serialize_message(_id, gw_id, id, force_checksum, data, len);
+        auto packet = _rtab.serialize_message(_id, gw_id, id, data, len);
         ptr->enqueue_packet(gw_id, priority, std::move(packet));
         return true;
-    }
-
-    /**
-     * Enqueues message for delivery to specified node ID @a id.
-     *
-     * @param id Receiver ID.
-     * @param priority Message priority.
-     * @param force_checksum Calculate checksum before sending if @c true.
-     * @param data Message content.
-     *
-     * @return @c true if route found to @a id.
-     */
-    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data)
-    {
-        return enqueue(id, priority, force_checksum, data.data(), data.size());
-    }
-
-    /**
-     * Enqueues message for delivery to specified node ID @a id.
-     *
-     * @param id Receiver ID.
-     * @param priority Message priority.
-     * @param data Message content.
-     * @param len Length of the message content.
-     *
-     * @return @c true if route found to @a id.
-     */
-    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
-    {
-        return enqueue(id, priority, false, data, len);
     }
 
     /**
@@ -811,7 +780,7 @@ public:
      */
     bool enqueue (node_id id, int priority, std::vector<char> data)
     {
-        return enqueue(id, priority, false, std::move(data));
+        return enqueue(id, priority, data.data(), data.size());
     }
 
     /**

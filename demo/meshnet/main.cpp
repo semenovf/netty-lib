@@ -188,9 +188,8 @@ static void send_file (reliable_node_pool_t & node_pool, node_t::node_id id, int
         if (file) {
             auto msgid = pfs::generate_uuid();
             auto data = file.read_all();
-            bool force_checksum = true;
             LOGD(TAG, "Send file: {}", file_to_send);
-            node_pool.enqueue_message(id, msgid, priority, force_checksum, data.data(), data.size());
+            node_pool.enqueue_message(id, msgid, priority, data.data(), data.size());
         }
     }
 }

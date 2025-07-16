@@ -33,7 +33,8 @@ public:
 
     bool read_frame ()
     {
-        return priority_frame::parse(_frames, _b);
+        int priority = 0;
+        return priority_frame::parse(_b, _frames, priority);
     }
 
     char const * data () const noexcept

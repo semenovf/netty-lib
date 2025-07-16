@@ -304,7 +304,13 @@ public:
         {
             auto success = _channels.insert(id, reader_sid, writer_sid);
 
-            PFS__THROW_UNEXPECTED(success, "Fix handshake algorithm");
+            if (!success) {
+                throw netty::error {
+                    make_error_code(pfs::errc::unexpected_error)
+                    , tr::f_("attempt to add channel again: {}, perhaps both nodes are configured behind NAT"
+                        , to_string(id))
+                };
+            }
 
             _heartbeat_controller.update(writer_sid);
 
@@ -586,7 +592,7 @@ public:
         _listener_pool.listen(backlog);
     }
 
-    bool enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len)
+    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -594,7 +600,7 @@ public:
 
         if (sid_ptr != nullptr) {
             auto out = serializer_traits::make_serializer();
-            ddata_packet pkt {force_checksum};
+            ddata_packet pkt;
             pkt.serialize(out, data, len);
             enqueue_private(*sid_ptr, priority, out.take());
             return true;
@@ -604,19 +610,9 @@ public:
         return false;
     }
 
-    bool enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data)
+    bool enqueue (node_id id, int priority, std::vector<char> data)
     {
-        return enqueue(id, priority, force_checksum, data.data(), data.size());
-    }
-
-    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
-    {
-        return this->enqueue(id, priority, false, data, len);
-    }
-
-    bool enqueue (node_id id, int priority, std::vector<char> && data)
-    {
-        return this->enqueue(id, priority, false, std::move(data));
+        return enqueue(id, priority, data.data(), data.size());
     }
 
     /**
@@ -978,15 +974,14 @@ public: // node_interface
             Node::listen(backlog);
         }
 
-        void enqueue (node_id id, int priority, bool force_checksum, char const * data
-            , std::size_t len) override
+        void enqueue (node_id id, int priority, char const * data, std::size_t len) override
         {
-            Node::enqueue(id, priority, force_checksum, data, len);
+            Node::enqueue(id, priority, data, len);
         }
 
-        void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data) override
+        void enqueue (node_id id, int priority, std::vector<char> data) override
         {
-            Node::enqueue(id, priority, force_checksum, std::move(data));
+            Node::enqueue(id, priority, std::move(data));
         }
 
         bool has_writer (node_id id) const override

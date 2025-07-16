@@ -41,8 +41,8 @@ public:
     virtual bool connect_host (netty::socket4_addr remote_saddr, bool behind_nat = false) = 0;
     virtual bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) = 0;
     virtual void listen (int backlog = 50) = 0;
-    virtual void enqueue (node_id id, int priority, bool force_checksum, char const * data, std::size_t len) = 0;
-    virtual void enqueue (node_id id, int priority, bool force_checksum, std::vector<char> data) = 0;
+    virtual void enqueue (node_id id, int priority, char const * data, std::size_t len) = 0;
+    virtual void enqueue (node_id id, int priority, std::vector<char> data) = 0;
     virtual bool has_writer (node_id id) const = 0;
     virtual void set_frame_size (node_id id, std::uint16_t frame_size) = 0  ;
     virtual unsigned int step () = 0;

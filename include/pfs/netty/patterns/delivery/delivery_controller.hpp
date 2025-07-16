@@ -405,11 +405,10 @@ public:
     /**
      * Enqueues regular message.
      */
-    bool enqueue_message (message_id msgid, int priority, bool force_checksum, std::vector<char> msg)
+    bool enqueue_message (message_id msgid, int priority, std::vector<char> msg)
     {
         auto & t = _trackers.at(priority);
-        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1
-            , std::move(msg), _exp_timeout);
+        t.q.emplace(msgid, priority, _part_size, t.last_sn + 1, std::move(msg), _exp_timeout);
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
 
@@ -419,12 +418,10 @@ public:
     /**
      * Enqueues regular message.
      */
-    bool enqueue_static_message (message_id msgid, int priority, bool force_checksum
-        , char const * msg, std::size_t length)
+    bool enqueue_static_message (message_id msgid, int priority, char const * msg, std::size_t length)
     {
         auto & t = _trackers.at(priority);
-        t.q.emplace(msgid, priority, force_checksum, _part_size, t.last_sn + 1
-            , msg, length, _exp_timeout);
+        t.q.emplace(msgid, priority, _part_size, t.last_sn + 1, msg, length, _exp_timeout);
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
         return true;
@@ -440,11 +437,8 @@ public:
         if (!_synchronized) {
             if (syn_expired()) {
                 int priority = 0; // High priority
-                bool force_checksum = false; // No need checksum
-
                 auto serialized_syn_packet = acquire_syn_packet();
-                auto success = m->enqueue_private(_addr, std::move(serialized_syn_packet)
-                    , priority, force_checksum);
+                auto success = m->enqueue_private(_addr, std::move(serialized_syn_packet), priority);
 
                 if (success) {
                     n++;
@@ -483,8 +477,7 @@ public:
                 PFS__THROW_UNEXPECTED(mt->priority() == priority
                     , "Fix delivery::delivery_controller algorithm");
 
-                auto success = m->enqueue_private(_addr, out.take(), mt->priority()
-                    , mt->force_checksum());
+                auto success = m->enqueue_private(_addr, out.take(), mt->priority());
 
                 if (success) {
                     n++;

@@ -448,7 +448,7 @@ public:
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    ddata_packet (bool has_checksum) noexcept
+    ddata_packet (bool has_checksum = true) noexcept
         : header(packet_enum::ddata, has_checksum)
     {}
 
@@ -500,7 +500,7 @@ public:
     bool bad_checksum {false}; // Used by deserializer only
 
 public:
-    gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum) noexcept
+    gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum = true) noexcept
         : header(packet_enum::gdata, has_checksum)
         , sender_id(sender_id)
         , receiver_id(receiver_id)

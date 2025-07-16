@@ -198,12 +198,11 @@ private:
     }
 
     // For:
-    //      * send SYN and ACK packets (priority = 0 and force_checksum = true)
+    //      * send SYN and ACK packets (priority = 0)
     //      * send message parts (by outgoing controller)
-    bool enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0
-        , bool force_checksum = true)
+    bool enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0)
     {
-        return _transport->enqueue(sender_addr, priority, force_checksum, std::move(data));
+        return _transport->enqueue(sender_addr, priority, std::move(data));
     }
 
     void process_error (std::string const & errstr)
@@ -277,8 +276,7 @@ public:
         }
     }
 
-    bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
-        , std::vector<char> msg)
+    bool enqueue_message (address_type addr, message_id msgid, int priority, std::vector<char> msg)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -286,17 +284,17 @@ public:
             return false;
 
         auto & c = ensure_controller(addr);
-        return c.enqueue_message(msgid, priority, force_checksum, std::move(msg));
+        return c.enqueue_message(msgid, priority, std::move(msg));
     }
 
-    bool enqueue_message (address_type addr, message_id msgid, int priority, bool force_checksum
-        , char const * msg, std::size_t length)
+    bool enqueue_message (address_type addr, message_id msgid, int priority, char const * msg
+        , std::size_t length)
     {
-        return enqueue_message(addr, msgid, priority, force_checksum, std::vector<char>(msg, msg + length));
+        return enqueue_message(addr, msgid, priority, std::vector<char>(msg, msg + length));
     }
 
     bool enqueue_static_message (address_type addr, message_id msgid, int priority
-        , bool force_checksum, char const * msg, std::size_t length)
+        , char const * msg, std::size_t length)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -304,10 +302,10 @@ public:
             return false;
 
         auto & c = ensure_controller(addr);
-        return c.enqueue_static_message(msgid, priority, force_checksum, msg, length);
+        return c.enqueue_static_message(msgid, priority, msg, length);
     }
 
-    bool enqueue_report (address_type addr, int priority, bool force_checksum, char const * data
+    bool enqueue_report (address_type addr, int priority, char const * data
         , std::size_t length)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
@@ -316,10 +314,10 @@ public:
             return false;
 
         auto report = controller_type::serialize_report(data, length);
-        return _transport->enqueue(addr, priority, force_checksum, std::move(report));
+        return _transport->enqueue(addr, priority, std::move(report));
     }
 
-    bool enqueue_report (address_type addr, int priority, bool force_checksum, std::vector<char> data)
+    bool enqueue_report (address_type addr, int priority, std::vector<char> data)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -327,7 +325,7 @@ public:
             return false;
 
         auto report = controller_type::serialize_report(std::move(data));
-        return _transport->enqueue(addr, priority, force_checksum, std::move(report));
+        return _transport->enqueue(addr, priority, std::move(report));
     }
 
     /**

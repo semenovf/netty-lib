@@ -361,8 +361,8 @@ public:
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
         message_id msgid = pfs::generate_uuid();
 
-        sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, false
-            , text.data(), text.size());
+        sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
+            , text.size());
 #else
         sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
 #endif

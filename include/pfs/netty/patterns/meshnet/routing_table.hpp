@@ -384,20 +384,20 @@ public:
      * Serializes initial custom message.
      */
     std::vector<char> serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
-        , bool force_checksum, char const * data, std::size_t len )
+        , char const * data, std::size_t len )
     {
         // Enough space for packet header -------------------v
         auto out = serializer_traits::make_serializer(len + 64);
 
         // Domestic exchange
         if (gw_id == receiver_id) {
-            ddata_packet pkt {force_checksum};
+            ddata_packet pkt;
             pkt.serialize(out, data, len);
             return out.take();
         }
 
         // Intersegment exchange
-        gdata_packet<node_id> pkt {sender_id, receiver_id, force_checksum};
+        gdata_packet<node_id> pkt {sender_id, receiver_id};
         pkt.serialize(out, data, len);
         return out.take();
     }

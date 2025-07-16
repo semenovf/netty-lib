@@ -68,12 +68,11 @@ private:
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
 public:
-    multipart_tracker (message_id msgid, int priority, bool force_checksum
-        , std::uint32_t part_size, serial_number first_sn, char const * msg, std::size_t length
+    multipart_tracker (message_id msgid, int priority, std::uint32_t part_size
+        , serial_number first_sn, char const * msg, std::size_t length
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
         : _msgid(msgid)
         , _priority(priority)
-        , _force_checksum(force_checksum)
         , _part_size(part_size)
         , _first_sn(first_sn)
         , _data(msg)
@@ -87,12 +86,11 @@ public:
      * Constructs tracker for message with content that will be valid until the message
      * is transmitted.
      */
-    multipart_tracker (message_id msgid, int priority, bool force_checksum
-        , std::uint32_t part_size, serial_number first_sn, std::vector<char> && msg
+    multipart_tracker (message_id msgid, int priority, std::uint32_t part_size
+        , serial_number first_sn, std::vector<char> && msg
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
         : _msgid(msgid)
         , _priority(priority)
-        , _force_checksum(force_checksum)
         , _part_size(part_size)
         , _first_sn(first_sn)
         , _payload(std::move(msg))
@@ -153,11 +151,6 @@ public:
     int priority () const noexcept
     {
         return _priority;
-    }
-
-    bool force_checksum () const noexcept
-    {
-        return _force_checksum;
     }
 
     /**
