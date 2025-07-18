@@ -75,7 +75,6 @@ private:
     callback_t<void (node_id)> _on_channel_destroyed;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
-    callback_t<void (node_id, std::size_t)> _on_bytes_written;
     callback_t<void (node_id, int, std::vector<char>)> _on_data_received;
 
 public:
@@ -185,19 +184,6 @@ public: // Set callbacks
     node_pool & on_route_ready (F && f)
     {
         _on_route_ready = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Notify when data actually sent (written into the socket).
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id receiver, std::uint64_t bytes_written_size)
-     */
-    template <typename F>
-    node_pool & on_bytes_written (F && f)
-    {
-        _on_bytes_written = std::forward<F>(f);
         return *this;
     }
 
@@ -573,12 +559,6 @@ public:
         if (_on_duplicate_id) {
             node->on_duplicate_id([this] (node_id id, node_index_t, socket4_addr saddr) {
                _on_duplicate_id(id, saddr);
-            });
-        }
-
-        if (_on_bytes_written) {
-            node->on_bytes_written([this] (node_id id, node_index_t, std::size_t bytes_written_size) {
-                _on_bytes_written(id, bytes_written_size);
             });
         }
 

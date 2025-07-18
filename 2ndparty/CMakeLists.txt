@@ -17,8 +17,7 @@ if (NOT TARGET pfs::common)
         FetchContent_Declare(common
             GIT_REPOSITORY https://github.com/semenovf/common-lib.git
             GIT_TAG master
-            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
-            # SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/2ndparty/common)
+            SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/common)
         FetchContent_MakeAvailable(common)
         message(STATUS "Fetching common complete")
     endif()
@@ -34,13 +33,13 @@ if (NOT TARGET pfs::ionik)
         FetchContent_Declare(ionik
             GIT_REPOSITORY https://github.com/semenovf/ionik-lib.git
             GIT_TAG master
-            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ionik)
+            SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/ionik)
         FetchContent_MakeAvailable(ionik)
         message(STATUS "Fetching pfs::ionik complete")
     endif()
 endif()
 
-if ((NETTY__BUILD_TESTS OR NETTY__BUILD_DEMO) AND NOT TARGET pfs::lorem)
+if (NETTY__BUILD_TESTS AND NOT TARGET pfs::lorem)
     if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/lorem/.git)
         add_subdirectory(lorem)
     else()
@@ -50,7 +49,7 @@ if ((NETTY__BUILD_TESTS OR NETTY__BUILD_DEMO) AND NOT TARGET pfs::lorem)
         FetchContent_Declare(lorem
             GIT_REPOSITORY https://github.com/semenovf/lorem-lib.git
             GIT_TAG master
-            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lorem)
+            SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/lorem)
         FetchContent_MakeAvailable(lorem)
         message(STATUS "Fetching pfs::lorem complete")
     endif()

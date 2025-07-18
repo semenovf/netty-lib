@@ -57,7 +57,6 @@ public:
     virtual void on_reconnection_started (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
     virtual void on_reconnection_stopped (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
     virtual void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
-    virtual void on_bytes_written (callback_t<void (node_id, node_index_t, std::uint64_t)>) = 0;
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
     virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;
     virtual void on_route_received (callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)>) = 0;

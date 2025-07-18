@@ -158,19 +158,6 @@ public: // Set callbacks
         return *this;
     }
 
-    /**
-     * Notify sender when data actually sent (written into the socket).
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id receiver, std::uint64_t bytes_written_size)
-     */
-    template <typename F>
-    node_pool_rd & on_bytes_written (F && f)
-    {
-        _t.on_bytes_written(std::forward<F>(f));
-        return *this;
-    }
-
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Reliable delivery manager specific callbacks.
     ////////////////////////////////////////////////////////////////////////////////////////////////

@@ -142,6 +142,47 @@ private:
         return sn >= _first_sn && sn <= _last_sn;
     }
 
+    /**
+     * Acquires part by serial number.
+     *
+     * @return @a sn.
+     */
+    template <typename Serializer>
+    serial_number acquire_part (Serializer & out, serial_number sn)
+    {
+        if (!(sn >= _first_sn && sn <= _last_sn)) {
+            throw error {
+                  make_error_code(std::errc::invalid_argument)
+                , tr::f_("serial number is out of bounds: {}: [{},{}]", sn, _first_sn, _last_sn)
+            };
+        }
+
+        std::size_t index = sn - _first_sn;
+        auto part_size = _part_size;
+
+        // Last part, get tail part size.
+        if (index == _parts_acked.size() - 1)
+            part_size = _size - _part_size * index;
+
+        if (index == 0) { // First part
+            message_packet<message_id> pkt {sn};
+            pkt.msgid = _msgid;
+            pkt.total_size = pfs::numeric_cast<std::uint64_t>(_size);
+            pkt.part_size  = _part_size;
+            pkt.last_sn    = _last_sn;
+            pkt.serialize(out, _data + _part_size * index, part_size);
+
+            // Start counting the expiration time point from sending the first part
+            update_heading_exp_timepoint();
+            update_exp_timepoint();
+        } else {
+            part_packet pkt {sn};
+            pkt.serialize(out, _data + _part_size * index, part_size);
+        }
+
+        return sn;
+    }
+
 public:
     message_id msgid () const noexcept
     {
@@ -191,47 +232,6 @@ public:
     }
 
     /**
-     * Acquires part by serial number.
-     *
-     * @return @a sn.
-     */
-    template <typename Serializer>
-    serial_number acquire_part (Serializer & out, serial_number sn)
-    {
-        if (!(sn >= _first_sn && sn <= _last_sn)) {
-            throw error {
-                  make_error_code(std::errc::invalid_argument)
-                , tr::f_("serial number is out of bounds: {}: [{},{}]", sn, _first_sn, _last_sn)
-            };
-        }
-
-        std::size_t index = sn - _first_sn;
-        auto part_size = _part_size;
-
-        // Last part, get tail part size.
-        if (index == _parts_acked.size() - 1)
-            part_size = _size - _part_size * index;
-
-        if (index == 0) { // First part
-            message_packet<message_id> pkt {sn};
-            pkt.msgid = _msgid;
-            pkt.total_size = pfs::numeric_cast<std::uint64_t>(_size);
-            pkt.part_size  = _part_size;
-            pkt.last_sn    = _last_sn;
-            pkt.serialize(out, _data + _part_size * index, part_size);
-
-            // Start counting the expiration time point from sending the first part
-            update_heading_exp_timepoint();
-            update_exp_timepoint();
-        } else {
-            part_packet pkt {sn};
-            pkt.serialize(out, _data + _part_size * index, part_size);
-        }
-
-        return sn;
-    }
-
-    /**
      * Acquires next message part.
      *
      * @return Returns serial number of the next message part or zero if all parts was acquired
@@ -245,14 +245,14 @@ public:
             return 0;
 
         // Heading not acknowledged yet
-        if (!_parts_acked[0]) {
-            if (_heading_exp_timepoint <= clock_type::now()) {
-                _current_index == 0;
-            }
+        if (_current_index > 0 && !_parts_acked[0]) {
+            if (_heading_exp_timepoint <= clock_type::now())
+                _current_index = 0;
 
             // Acquiring message heading
             if (_current_index == 0) {
-                auto sn = _first_sn + _current_index++;
+                auto sn = _first_sn;
+                _current_index++;
                 return acquire_part<Serializer>(out, sn);
             }
 

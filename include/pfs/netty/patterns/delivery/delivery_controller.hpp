@@ -198,6 +198,7 @@ private:
             ;
         } else {
             // May be message_packet loss before, ignore part.
+            // May be old message part received (see multipart_tracker::acquire_next_part), ignore part.
             // Waiting heading part receiving
             if (!a.assembler.has_value())
                 return;

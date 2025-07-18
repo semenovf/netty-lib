@@ -173,7 +173,6 @@ private: // Callbacks
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
     callback_t<void (node_id, node_index_t, socket4_addr)> _on_duplicate_id;
-    callback_t<void (node_id, node_index_t, std::size_t)> _on_bytes_written;
     callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> _on_alive_received;
     callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)> _on_route_received;
@@ -271,16 +270,6 @@ public:
         {
             NETTY__TRACE(MESHNET_TAG, "writer socket disconnected: #{}", sid);
             schedule_reconnection(sid);
-        };
-
-        _writer_pool.on_bytes_written = [this] (socket_id sid, std::uint64_t n)
-        {
-            if (_on_bytes_written) {
-                auto id_ptr = _channels.locate_writer(sid);
-
-                if (id_ptr != nullptr)
-                    _on_bytes_written(*id_ptr, _index, n);
-            }
         };
 
         _writer_pool.locate_socket = [this] (socket_id sid)
@@ -455,19 +444,6 @@ public: // Set callbacks
     node & on_unreachable_received (F && f)
     {
         _on_unreachable_received = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Notify when data actually sent (written into the socket).
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id id, std::uint64_t bytes_written_size)
-     */
-    template <typename F>
-    node & on_bytes_written (F && f)
-    {
-        _on_bytes_written = std::forward<F>(f);
         return *this;
     }
 
@@ -1056,11 +1032,6 @@ public: // node_interface
         void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
         {
             Node::on_duplicate_id(std::move(cb));
-        }
-
-        void on_bytes_written (callback_t<void (node_id, node_index_t, std::uint64_t)> cb) override
-        {
-            Node::on_bytes_written(std::move(cb));
         }
 
         void on_alive_received (callback_t<void (node_id, node_index_t

@@ -31,6 +31,9 @@ NETTY__NAMESPACE_BEGIN
 template <typename Socket, typename WriterPoller, typename WriterQueue>
 class writer_pool: protected WriterPoller
 {
+    using clock_type = std::chrono::steady_clock;
+    using time_point_type = clock_type::time_point;
+
 public:
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
@@ -45,7 +48,10 @@ private:
     {
         socket_id sid {socket_type::kINVALID_SOCKET};
         bool writable {false};   // Socket is writable
+        time_point_type writable_time_point;
         std::uint16_t frame_size {default_frame_size()}; // Initial value is default MTU size
+        std::uint64_t recent_bytes_sent {0};
+        time_point_type recent_time_point;
         WriterQueue q; // Output queue
     };
 
@@ -55,13 +61,11 @@ private:
     };
 
 private:
-    std::uint64_t _remain_bytes {0};
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
-    mutable callback_t<void (socket_id, std::uint64_t)> on_bytes_written;
     mutable callback_t<void (socket_id)> on_disconnected = [] (socket_id) {};
     mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
         PFS__THROW_UNEXPECTED(false, "socket location callback must be set");
@@ -84,124 +88,16 @@ public:
         WriterPoller::can_write = [this] (socket_id sid) {
             auto acc = locate_account(sid);
 
-            if (acc != nullptr)
+            if (acc != nullptr) {
                 acc->writable = true;
-        };
-    }
 
-private:
-    void check_priority (int priority)
-    {
-        if (priority < 0 || priority >= WriterQueue::priority_count()) {
-            throw error { make_error_code(std::errc::invalid_argument)
-                , tr::f_("bad priority value: must be less than {}, got: {}"
-                    , WriterQueue::priority_count(), priority)
-            };
-        }
-    }
-
-    account * locate_account (socket_id sid)
-    {
-        auto pos = _accounts.find(sid);
-
-        if (pos == _accounts.end())
-            return nullptr;
-
-        auto & acc = pos->second;
-
-        // Inconsistent data: requested socket ID is not equal to account's ID
-        PFS__THROW_UNEXPECTED(acc.sid == sid, "Fix the algorithm for a writer pool");
-
-        return & acc;
-    }
-
-    account * ensure_account (socket_id sid)
-    {
-        auto acc = locate_account(sid);
-
-        if (acc == nullptr) {
-            account a;
-            a.sid = sid;
-            a.frame_size = default_frame_size();
-            auto res = _accounts.emplace(sid, std::move(a));
-
-            acc = & res.first->second;
-            WriterPoller::wait_for_write(acc->sid);
-        }
-
-        return acc;
-    }
-
-    /**
-     * @return Number of successful frame sendings.
-     */
-    unsigned int send (error * perr = nullptr)
-    {
-        unsigned int result = 0;
-
-        do {
-            for (auto & item: _accounts) {
-                auto & acc = item.second;
-
-                if (!acc.writable)
-                    continue;
-
-                auto frame = acc.q.acquire_frame(acc.frame_size);
-
-                if (frame.empty())
-                    continue;
-
-                // A missing socket is less common than an empty frame, so optimally locate socket
-                // after frame acquiring.
-                auto sock = this->locate_socket(acc.sid);
-
-                if (sock == nullptr) {
-                    remove_later(acc.sid);
-                    this->on_failure(acc.sid, error {
-                        tr::f_("cannot locate socket for writing by socket ID: {}"
-                            ", removing from writer pool", acc.sid)
-                    });
-
-                    continue;
-                }
-
-                netty::error err;
-                auto res = sock->send(frame.data(), frame.size(), & err);
-
-                switch (res.status) {
-                    case netty::send_status::failure:
-                        remove_later(acc.sid);
-                        this->on_failure(acc.sid, err);
-                        break;
-                    case netty::send_status::network:
-                        remove_later(acc.sid);
-                        this->on_failure(acc.sid, err);
-                        break;
-
-                    case netty::send_status::again:
-                    case netty::send_status::overflow:
-                        if (acc.writable) {
-                            acc.writable = false;
-                            WriterPoller::wait_for_write(acc.sid);
-                        }
-                        break;
-
-                    case netty::send_status::good:
-                        if (res.n > 0) {
-                            _remain_bytes -= res.n;
-                            acc.q.shift(res.n);
-
-                            result++;
-
-                            if (this->on_bytes_written)
-                                this->on_bytes_written(acc.sid, res.n);
-                        }
-                        break;
-                }
+                // Do not immediately allow to write, delay writability.
+                // Let more time to socket to "drain" output buffer and peer socket to process
+                // input data.
+                // TODO Replace "magic number" with the configurable value
+                acc->writable_time_point = clock_type::now() + std::chrono::milliseconds{500};
             }
-        } while (false);
-
-        return result;
+        };
     }
 
 public:
@@ -232,11 +128,6 @@ public:
         }
     }
 
-    std::uint64_t remain_bytes () const noexcept
-    {
-        return _remain_bytes;
-    }
-
     void enqueue (socket_id sid, int priority, char const * data, std::size_t len)
     {
         check_priority(priority);
@@ -246,7 +137,6 @@ public:
 
         auto acc = ensure_account(sid);
         acc->q.enqueue(priority, data, len);
-        _remain_bytes += len;
     }
 
     void enqueue (socket_id sid, char const * data, std::size_t len)
@@ -262,7 +152,6 @@ public:
             return;
 
         auto acc = ensure_account(sid);
-        _remain_bytes += data.size();
         acc->q.enqueue(priority, std::move(data));
     }
 
@@ -306,6 +195,145 @@ public: // static
     static constexpr int priority_count () noexcept
     {
         return WriterQueue::priority_count();
+    }
+
+private:
+    void check_priority (int priority)
+    {
+        if (priority < 0 || priority >= WriterQueue::priority_count()) {
+            throw error { make_error_code(std::errc::invalid_argument)
+                , tr::f_("bad priority value: must be less than {}, got: {}"
+                    , WriterQueue::priority_count(), priority)
+            };
+        }
+    }
+
+    account * locate_account (socket_id sid)
+    {
+        auto pos = _accounts.find(sid);
+
+        if (pos == _accounts.end())
+            return nullptr;
+
+        auto & acc = pos->second;
+
+        // Inconsistent data: requested socket ID is not equal to account's ID
+        PFS__THROW_UNEXPECTED(acc.sid == sid, "Fix the algorithm for a writer pool");
+
+        return & acc;
+    }
+
+    account * ensure_account (socket_id sid)
+    {
+        auto acc = locate_account(sid);
+
+        if (acc == nullptr) {
+            account a;
+            a.sid = sid;
+            a.frame_size = default_frame_size();
+            a.recent_time_point = clock_type::now();
+            a.writable_time_point = clock_type::now();
+            auto res = _accounts.emplace(sid, std::move(a));
+
+            acc = & res.first->second;
+            WriterPoller::wait_for_write(acc->sid);
+        }
+
+        return acc;
+    }
+
+    void update_data_rate (account & acc)
+    {
+        // Calculate output byte rate
+        auto const diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            clock_type::now() - acc.recent_time_point);
+
+        if (diff_ms >= std::chrono::milliseconds{1000}) {
+            auto rate = (static_cast<double>(acc.recent_bytes_sent) / diff_ms.count()) * 1000;
+
+            LOGD("---", "RATE: {} bytes/sec", static_cast<std::uint64_t>(rate));
+            acc.recent_bytes_sent = 0;
+            acc.recent_time_point = clock_type::now();
+        }
+    }
+
+    /**
+     * @return Number of successful frame sendings.
+     */
+    unsigned int send (error * perr = nullptr)
+    {
+        unsigned int result = 0;
+
+        do {
+            for (auto & item: _accounts) {
+                auto & acc = item.second;
+
+                if (!acc.writable)
+                    continue;
+
+                if (clock_type::now() < acc.writable_time_point)
+                    continue;
+
+                auto frame = acc.q.acquire_frame(acc.frame_size);
+
+                if (frame.empty()) {
+                    if (acc.recent_bytes_sent > 0)
+                        update_data_rate(acc);
+
+                    continue;
+                }
+
+                // A missing socket is less common than an empty frame, so optimally locate socket
+                // after frame acquiring.
+                auto sock = this->locate_socket(acc.sid);
+
+                if (sock == nullptr) {
+                    remove_later(acc.sid);
+                    this->on_failure(acc.sid, error {
+                        tr::f_("cannot locate socket for writing by socket ID: {}"
+                            ", removing from writer pool", acc.sid)
+                    });
+
+                    continue;
+                }
+
+                error err;
+                auto res = sock->send(frame.data(), frame.size(), & err);
+
+                switch (res.status) {
+                    case send_status::failure:
+                        remove_later(acc.sid);
+                        this->on_failure(acc.sid, err);
+                        break;
+                    case send_status::network:
+                        remove_later(acc.sid);
+                        this->on_failure(acc.sid, err);
+                        break;
+
+                    case send_status::again:
+                    case send_status::overflow:
+                        if (acc.writable) {
+                            acc.writable = false;
+                            WriterPoller::wait_for_write(acc.sid);
+                        }
+                        break;
+
+                    case send_status::good:
+                        if (res.n > 0) {
+                            acc.q.shift(res.n);
+                            acc.recent_bytes_sent += res.n;
+
+                            update_data_rate(acc);
+
+                            result++;
+                        }
+
+                        break;
+                }
+            }
+        } while (false);
+
+        return result;
     }
 };
 

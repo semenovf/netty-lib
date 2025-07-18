@@ -195,10 +195,10 @@ void worker ()
         peer_sockets.erase(id);
     };
 
-    writer_pool.on_bytes_written = [& write_counter, self_port] (socket_id id, std::uint64_t n) {
-        LOGD(TAG, "{:04}: bytes written: id={}: {}", self_port, id, n);
-        write_counter++;
-    };
+    // writer_pool.on_bytes_written = [& write_counter, self_port] (socket_id id, std::uint64_t n) {
+    //     LOGD(TAG, "{:04}: bytes written: id={}: {}", self_port, id, n);
+    //     write_counter++;
+    // };
 
     writer_pool.locate_socket = [& connected_sockets] (socket_id id) {
         auto pos = connected_sockets.find(id);
