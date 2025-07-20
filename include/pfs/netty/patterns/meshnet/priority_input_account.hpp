@@ -24,67 +24,49 @@ template <int PriorityCount>
 class priority_input_account
 {
 private:
-    std::vector<char> _frames; // Buffers to accumulate raw data
+    std::vector<char> _in; // Buffer to accumulate raw data
     std::array<std::vector<char>, PriorityCount> _pool;
-    int _current_priority {-1};
 
 public:
     void append_chunk (std::vector<char> && chunk)
     {
-        _frames.insert(_frames.end(), chunk.begin(), chunk.end());
+        _in.insert(_in.end(), chunk.begin(), chunk.end());
+
+        while (priority_frame::parse<PriorityCount>(_pool, _in))
+            ;
     }
 
-    /**
-     * Attempt to read frame.
-     *
-     * @return @c true if data contains complete frame, or @c false otherwise.
-     */
-    bool read_frame ()
+    char const * data (int priority) const
     {
-        // Priority will be updated
-        _current_priority = -1;
-        return priority_frame::parse<PriorityCount>(_pool, _frames, _current_priority);
-    }
-
-    char const * data () const
-    {
-        PFS__THROW_UNEXPECTED(_current_priority >= 0 && _current_priority < PriorityCount
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
             , "Fix meshnet::priority_input_account algorithm: bad priority");
 
-        return _pool[_current_priority].data();
+        return _pool[priority].data();
     }
 
-    std::size_t size () const
+    std::size_t size (int priority) const
     {
-        PFS__THROW_UNEXPECTED(_current_priority >= 0 && _current_priority < PriorityCount
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
             , "Fix meshnet::priority_input_account algorithm: bad priority");
 
-        return _pool[_current_priority].size();
+        return _pool[priority].size();
     }
 
-    void clear ()
+    void clear (int priority)
     {
-        PFS__THROW_UNEXPECTED(_current_priority >= 0 && _current_priority < PriorityCount
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
             , "Fix meshnet::priority_input_account algorithm: bad priority");
 
-        return _pool[_current_priority].clear();
+        return _pool[priority].clear();
     }
 
-    void erase (std::size_t n)
+    void erase (int priority, std::size_t n)
     {
-        PFS__THROW_UNEXPECTED(_current_priority >= 0 && _current_priority < PriorityCount
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
             , "Fix meshnet::priority_input_account algorithm: bad priority");
 
-        auto & b = _pool[_current_priority];
+        auto & b = _pool[priority];
         b.erase(b.begin(), b.begin() + n);
-    }
-
-    int priority () const
-    {
-        PFS__THROW_UNEXPECTED(_current_priority >= 0 && _current_priority < PriorityCount
-            , "Fix meshnet::priority_input_account algorithm: bad priority");
-
-        return _current_priority;
     }
 
 public: // static

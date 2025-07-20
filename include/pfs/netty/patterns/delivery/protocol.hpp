@@ -57,10 +57,10 @@ enum class syn_way_enum: std::uint8_t
 // ---------------------------
 // |    (V)     |     (P)    |
 // ---------------------------
-// (V) - Packet version (0 - first, 1 - second, etc).
+// (V) - Packet version (1 - first, 2 - second, etc).
 // (P) - Packet type (see packet_enum).
 //
-// Bytes 0..7: (SN) - Regular message part serial number.
+// Bytes 1..8: (SN) - Regular message part serial number.
 
 class header
 {
@@ -71,7 +71,7 @@ protected:
     } _h;
 
 protected:
-    header (packet_enum type, int version = 0) noexcept
+    header (packet_enum type, int version = 1) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
         _h.b0 |= (static_cast<std::uint8_t>(version) << 4) & 0xF0;
@@ -205,6 +205,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // message_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// +-+--------+----------------+--------+----+--------+----+------------
+// |H|   SN   |     msgid      |  t.sz  |p.sz|last SN |len | payload
+// +-+--------+----------------+--------+----+--------+----+------------
+//  1     8           16           8       4     8      4    len bytes
+// |------------------------ 49 bytes ---------------------|
+//
 template <typename MessageId>
 class message_packet: public header
 {
@@ -256,6 +262,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // part_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// +-+--------+----+------------
+// |H|   SN   |len | payload
+// +-+--------+----+------------
+//  1     8      4   len bytes
+
 class part_packet: public header
 {
 public:

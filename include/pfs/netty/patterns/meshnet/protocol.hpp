@@ -74,7 +74,7 @@ protected:
         std::uint8_t b0;
         std::uint8_t b1;
         std::uint32_t crc32;  // Optional if checksum bit is 0
-        std::uint32_t length; // Optional if packet is a service type packet (all excluding packet_enum::data)
+        std::uint32_t length; // Mandatory for ddata and gdata
     } _h;
 
 protected:
@@ -445,7 +445,6 @@ class ddata_packet: public header
 {
 public:
     std::vector<char> bytes;   // Used by deserializer only
-    bool bad_checksum {false}; // Used by deserializer only
 
 public:
     ddata_packet (bool has_checksum = true) noexcept
@@ -467,8 +466,13 @@ public:
             auto crc32 = pfs::crc32_of_ptr(bytes.data(), bytes.size());
 
             if (crc32 != _h.crc32) {
-                bytes.clear();
-                bad_checksum = true;
+                throw error {
+                      make_error_code(netty::errc::checksum_error)
+                    , tr::f_("bad CRC32 checksum for ddata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                        ", data size: {} bytes"
+                        , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
+                        , bytes.size())
+                };
             }
         }
     }
@@ -497,7 +501,6 @@ public:
     NodeId sender_id;
     NodeId receiver_id;
     std::vector<char> bytes;   // Used by deserializer only and when need to forward message.
-    bool bad_checksum {false}; // Used by deserializer only
 
 public:
     gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum = true) noexcept
@@ -531,8 +534,13 @@ public:
             auto crc32 = pfs::crc32_of_ptr(bytes.data(), bytes.size());
 
             if (crc32 != _h.crc32) {
-                bytes.clear();
-                bad_checksum = true;
+                throw error {
+                      make_error_code(netty::errc::checksum_error)
+                    , tr::f_("bad CRC32 checksum for gdata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                        ", data size: {} bytes"
+                        , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
+                        , bytes.size())
+                };
             }
         }
     }

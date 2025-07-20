@@ -22,44 +22,36 @@ namespace meshnet {
 class simple_input_account
 {
 private:
-    std::vector<char> _frames; // Buffer to accumulate frames
+    std::vector<char> _in; // Buffer to accumulate frames
     std::vector<char> _b;
 
 public:
     void append_chunk (std::vector<char> && chunk)
     {
-        _frames.insert(_frames.end(), chunk.begin(), chunk.end());
+        _in.insert(_in.end(), chunk.begin(), chunk.end());
+
+        while (priority_frame::parse(_b, _in))
+            ;
     }
 
-    bool read_frame ()
-    {
-        int priority = 0;
-        return priority_frame::parse(_b, _frames, priority);
-    }
-
-    char const * data () const noexcept
+    char const * data (int /*priority*/) const noexcept
     {
         return _b.data();
     }
 
-    std::size_t size () const noexcept
+    std::size_t size (int /*priority*/) const noexcept
     {
         return _b.size();
     }
 
-    void clear ()
+    void clear (int /*priority*/)
     {
         _b.clear();
     }
 
-    void erase (std::size_t n)
+    void erase (int /*priority*/, std::size_t n)
     {
         _b.erase(_b.begin(), _b.begin() + n);
-    }
-
-    int priority () const noexcept
-    {
-        return 0;
     }
 
 public: // static

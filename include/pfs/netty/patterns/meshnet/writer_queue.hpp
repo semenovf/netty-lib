@@ -85,7 +85,7 @@ public:
 
         auto & front = _q.front();
 
-        priority_frame{0}.pack(_frame, front, frame_size);
+        priority_frame{}.pack(0, _frame, front, frame_size);
 
         // Check topmost message is processed
         if (front.empty())

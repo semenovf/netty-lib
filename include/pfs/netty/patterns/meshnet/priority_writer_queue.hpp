@@ -133,7 +133,9 @@ public:
         auto & q = _qpool.at(priority);
         auto & front = q.front();
 
-        priority_frame{priority}.pack(_frame, front, frame_size);
+        PFS__THROW_UNEXPECTED(_frame.empty(), "");
+
+        priority_frame{}.pack(priority, _frame, front, frame_size);
 
         // Check topmost message is processed
         if (front.empty())

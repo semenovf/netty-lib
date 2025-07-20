@@ -38,16 +38,6 @@ public:
     {}
 
 private:
-    void check_priority (int priority)
-    {
-        if (priority < 0 || priority >= InputAccount::priority_count()) {
-            throw error { make_error_code(std::errc::invalid_argument)
-                , tr::f_("bad priority value: must be less than {}, got: {}"
-                    , InputAccount::priority_count(), priority)
-            };
-        }
-    }
-
     account_type * locate_account (socket_id sid)
     {
         auto pos = _accounts.find(sid);
@@ -130,12 +120,11 @@ public:
 
         pacc->append_chunk(std::move(chunk));
 
-        while (pacc->read_frame()) {
-            auto priority = pacc->priority();
+        for (int priority = 0; priority < InputAccount::priority_count(); priority++) {
+            if (pacc->size(priority) == 0)
+                continue;
 
-            check_priority(priority);
-
-            auto in = serializer_traits::make_deserializer(pacc->data(), pacc->size());
+            auto in = serializer_traits::make_deserializer(pacc->data(priority), pacc->size(priority));
             bool has_more_packets = true;
 
             while (has_more_packets && in.available() > 0) {
@@ -207,9 +196,6 @@ public:
                     case packet_enum::ddata: {
                         ddata_packet pkt {h, in};
 
-                        // FIXME It is necessary to properly handle this situation.
-                        PFS__THROW_UNEXPECTED(!pkt.bad_checksum, "Bad checksum");
-
                         if (in.commit_transaction())
                             process(sid, priority, std::move(pkt.bytes));
                         else
@@ -220,9 +206,6 @@ public:
 
                     case packet_enum::gdata: {
                         gdata_packet<node_id> pkt {h, in};
-
-                        // FIXME It is necessary to properly handle this situation.
-                        PFS__THROW_UNEXPECTED(!pkt.bad_checksum, "Bad checksum");
 
                         if (in.commit_transaction()) {
                             if (pkt.receiver_id == _node->id()) {
@@ -256,10 +239,10 @@ public:
             }
 
             if (in.available() == 0) {
-                pacc->clear();
+                pacc->clear(priority);
             } else {
-                if (pacc->size() > in.available()) {
-                    pacc->erase(pacc->size() - in.available());
+                if (pacc->size(priority) > in.available()) {
+                    pacc->erase(priority, pacc->size(priority) - in.available());
                 }
             }
         }

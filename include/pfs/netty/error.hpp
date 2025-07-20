@@ -18,6 +18,7 @@ enum class errc
 {
       success = 0
     , protocol_version_error // Protocol version does not match
+    , checksum_error // CRC does not match
 };
 
 class error_category : public std::error_category

@@ -18,6 +18,7 @@
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -27,6 +28,13 @@
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
+
+enum class bandwidth_throttling
+{
+      unlimited
+    , adaptive
+    , custom
+};
 
 template <typename Socket, typename WriterPoller, typename WriterQueue>
 class writer_pool: protected WriterPoller
@@ -44,15 +52,24 @@ public:
     }
 
 private:
+    struct bandwidth_data
+    {
+        std::size_t recent_bytes_sent {0};
+        time_point_type recent_time_point;
+        std::uint64_t data_rate {(std::numeric_limits<std::uint64_t>::max)()};
+    };
+
     struct account
     {
         socket_id sid {socket_type::kINVALID_SOCKET};
+        std::uint16_t max_frame_size {default_frame_size()}; // Initial value is default MTU size
+        WriterQueue q; // Output queue
+
         bool writable {false};   // Socket is writable
         time_point_type writable_time_point;
-        std::uint16_t frame_size {default_frame_size()}; // Initial value is default MTU size
-        std::uint64_t recent_bytes_sent {0};
-        time_point_type recent_time_point;
-        WriterQueue q; // Output queue
+        std::uint16_t writable_counter {0};
+
+        bandwidth_data bwd;
     };
 
     struct item
@@ -63,6 +80,9 @@ private:
 private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
+    bandwidth_throttling _throttling;
+    std::size_t _data_rate_limit = (std::numeric_limits<std::size_t>::max)();
+    std::uint16_t (* _tune_frame_size) (account &, std::uint16_t) {nullptr};
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
@@ -73,8 +93,23 @@ public:
     };
 
 public:
-    writer_pool (): WriterPoller()
+    writer_pool (bandwidth_throttling bt = bandwidth_throttling::adaptive
+        , std::size_t data_rate_limit = (std::numeric_limits<std::size_t>::max)())
+        : _throttling(bt)
+        , _data_rate_limit(data_rate_limit)
     {
+        switch (_throttling) {
+            case bandwidth_throttling::unlimited:
+                _tune_frame_size = tune_frame_size_unlimited;
+                break;
+            case bandwidth_throttling::adaptive:
+                _tune_frame_size = tune_frame_size_adaptive;
+                break;
+            case bandwidth_throttling::custom:
+                _tune_frame_size = tune_frame_size_static;
+                break;
+        }
+
         WriterPoller::on_failure = [this] (socket_id sid, error const & err) {
             remove_later(sid);
             this->on_failure(sid, err);
@@ -96,6 +131,14 @@ public:
                 // input data.
                 // TODO Replace "magic number" with the configurable value
                 acc->writable_time_point = clock_type::now() + std::chrono::milliseconds{500};
+
+                acc->writable_counter++;
+
+                if (acc->writable_counter % 5 == 0) {
+                    if (_throttling == bandwidth_throttling::adaptive) {
+                        // TODO Decrement data rate here and increment after some period ()
+                    }
+                }
             }
         };
     }
@@ -108,7 +151,7 @@ public:
     void set_frame_size (socket_id sid, std::uint16_t frame_size)
     {
         auto pacc = ensure_account(sid);
-        pacc->frame_size = frame_size;
+        pacc->max_frame_size = frame_size;
     }
 
     void remove_later (socket_id sid)
@@ -230,9 +273,9 @@ private:
         if (acc == nullptr) {
             account a;
             a.sid = sid;
-            a.frame_size = default_frame_size();
-            a.recent_time_point = clock_type::now();
+            a.max_frame_size = default_frame_size();
             a.writable_time_point = clock_type::now();
+            a.bwd.recent_time_point = clock_type::now();
             auto res = _accounts.emplace(sid, std::move(a));
 
             acc = & res.first->second;
@@ -240,21 +283,6 @@ private:
         }
 
         return acc;
-    }
-
-    void update_data_rate (account & acc)
-    {
-        // Calculate output byte rate
-        auto const diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            clock_type::now() - acc.recent_time_point);
-
-        if (diff_ms >= std::chrono::milliseconds{1000}) {
-            auto rate = (static_cast<double>(acc.recent_bytes_sent) / diff_ms.count()) * 1000;
-
-            LOGD("---", "RATE: {} bytes/sec", static_cast<std::uint64_t>(rate));
-            acc.recent_bytes_sent = 0;
-            acc.recent_time_point = clock_type::now();
-        }
     }
 
     /**
@@ -274,14 +302,15 @@ private:
                 if (clock_type::now() < acc.writable_time_point)
                     continue;
 
-                auto frame = acc.q.acquire_frame(acc.frame_size);
+                auto frame_size = _tune_frame_size(acc, acc.max_frame_size);
 
-                if (frame.empty()) {
-                    if (acc.recent_bytes_sent > 0)
-                        update_data_rate(acc);
-
+                if (frame_size == 0)
                     continue;
-                }
+
+                auto frame = acc.q.acquire_frame(frame_size);
+
+                if (frame.empty())
+                    continue;
 
                 // A missing socket is less common than an empty frame, so optimally locate socket
                 // after frame acquiring.
@@ -321,9 +350,9 @@ private:
                     case send_status::good:
                         if (res.n > 0) {
                             acc.q.shift(res.n);
-                            acc.recent_bytes_sent += res.n;
+                            acc.bwd.recent_bytes_sent += res.n;
 
-                            update_data_rate(acc);
+                            // update_data_rate(acc);
 
                             result++;
                         }
@@ -334,6 +363,46 @@ private:
         } while (false);
 
         return result;
+    }
+
+private: // static
+    static std::uint16_t tune_frame_size_unlimited (account & acc, std::uint16_t initial_size)
+    {
+        return initial_size;
+    }
+
+    static std::uint16_t tune_frame_size_adaptive (account & acc, std::uint16_t initial_size)
+    {
+        // FIXME Need to implement
+        return initial_size;
+    }
+
+    static std::uint16_t tune_frame_size_static (account & acc, std::uint16_t initial_size)
+    {
+        auto const elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            clock_type::now() - acc.bwd.recent_time_point);
+
+        if (elapsed_ms <= std::chrono::milliseconds{999}) {
+            if (acc.bwd.recent_bytes_sent < acc.bwd.data_rate /* multiplied by 1 sec */) {
+                // Remain bytes in 1 second period
+                auto frame_size = static_cast<std::uint16_t>(std::min(static_cast<std::size_t>(initial_size)
+                    , acc.bwd.data_rate - acc.bwd.recent_bytes_sent));
+
+                // Avoid use too small frames
+                return std::max(frame_size, initial_size);
+            } else {
+                return 0;
+            }
+        } else {
+            // TODO How to use rate value?
+            auto rate = (static_cast<double>(acc.bwd.recent_bytes_sent) / elapsed_ms.count()) * 1000;
+            (void)rate;
+
+            acc.bwd.recent_bytes_sent = 0;
+            acc.bwd.recent_time_point = clock_type::now();
+            return static_cast<std::uint16_t>(std::min(static_cast<std::size_t>(initial_size)
+                , acc.bwd.data_rate));
+        }
     }
 };
 
