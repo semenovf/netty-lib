@@ -73,6 +73,7 @@ private:
 
     callback_t<void (node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
+    callback_t<void (node_id)> _on_expired;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, int, std::vector<char>)> _on_data_received;
@@ -82,7 +83,14 @@ public:
         : _id(id)
         , _is_gateway(is_gateway)
         , _alive_controller(id)
-    {}
+    {
+        _alive_controller.on_expired([this] (node_id id) {
+            _rtab.remove_routes(id);
+
+            if (_on_expired)
+                _on_expired(id);
+        });
+    }
 
     node_pool (node_pool const &) = delete;
     node_pool (node_pool &&) = delete;
@@ -164,13 +172,12 @@ public: // Set callbacks
     /**
      * Notify when node alive status changed.
      *
-     * @details Callback @a f signature must match:
-     *          void (node_id id)
+     * @details Callback @a f signature must match void (node_id id).
      */
     template <typename F>
     node_pool & on_node_expired (F && f)
     {
-        _alive_controller.on_expired(std::forward<F>(f));
+        _on_expired = std::forward<F>(f);
         return *this;
     }
 

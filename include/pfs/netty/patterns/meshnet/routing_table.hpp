@@ -256,6 +256,22 @@ public:
         }
     }
 
+    /**
+     * Remove all routes to node specified by @a dest_id.
+     */
+    void remove_routes (node_id dest_id)
+    {
+        if (is_sibling(dest_id))
+            remove_sibling(dest_id);
+        else
+            _route_map.erase(dest_id);
+    }
+
+    /**
+     * Iterates over all gateways and call @a f for each gateway ID.
+     *
+     * @param f Invokable object with signature void (node_id gw_id).
+     */
     template <typename F>
     void foreach_gateway (F && f) const
     {
@@ -263,6 +279,11 @@ public:
             f(gw_id);
     }
 
+    /**
+     * Iterates over all sibling nodes and call @a f for each sibling node ID.
+     *
+     * @param f Invokable object with signature void (node_id id).
+     */
     template <typename F>
     void foreach_sibling_node (F && f) const
     {
@@ -271,9 +292,9 @@ public:
     }
 
     /**
-     * Iterate over all routes, include sibling nodes.
+     * Iterates over all routes, include sibling nodes.
      *
-     * @param f Invokable object with signature void (node_id dest, gateway_chain_type const &)
+     * @param f Invokable object with signature void (node_id dest, gateway_chain_type const &).
      */
     template <typename F>
     void foreach_route (F && f) const
