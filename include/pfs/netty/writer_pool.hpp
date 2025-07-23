@@ -52,12 +52,16 @@ public:
     }
 
 private:
+    struct account;
+
     struct bandwidth_data
     {
         std::size_t recent_bytes_sent {0};
         time_point_type recent_time_point;
-        std::uint64_t data_rate {(std::numeric_limits<std::uint64_t>::max)()};
-        bandwidth_throttling throttling {bandwidth_throttling::adaptive};
+        std::size_t data_rate {(std::numeric_limits<std::size_t>::max)()};
+        std::uint16_t (* tune_frame_size) (writer_pool *, account &, std::uint16_t) {
+            tune_frame_size_unlimited
+        };
     };
 
     struct account
@@ -81,9 +85,9 @@ private:
 private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
-    bandwidth_throttling _throttling {bandwidth_throttling::adaptive};
-    std::size_t _data_rate_limit = (std::numeric_limits<std::size_t>::max)();
-    std::uint16_t (* _tune_frame_size) (writer_pool *, account &, std::uint16_t) {nullptr};
+
+    bandwidth_throttling _default_throttling {bandwidth_throttling::adaptive};
+    std::size_t _default_rate_limit = (std::numeric_limits<std::size_t>::max)();
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
@@ -95,23 +99,11 @@ public:
     mutable callback_t<void (socket_id, std::size_t)> on_data_rate;
 
 public:
-    writer_pool (bandwidth_throttling bt = bandwidth_throttling::adaptive
-        , std::size_t data_rate_limit = (std::numeric_limits<std::size_t>::max)())
-        : _throttling(bt)
-        , _data_rate_limit(data_rate_limit)
+    writer_pool (bandwidth_throttling default_throttling = bandwidth_throttling::adaptive
+        , std::size_t default_rate_limit = (std::numeric_limits<std::size_t>::max)())
+        : _default_throttling(default_throttling)
+        , _default_rate_limit(default_rate_limit)
     {
-        switch (_throttling) {
-            case bandwidth_throttling::unlimited:
-                _tune_frame_size = tune_frame_size_unlimited;
-                break;
-            case bandwidth_throttling::adaptive:
-                _tune_frame_size = tune_frame_size_adaptive;
-                break;
-            case bandwidth_throttling::custom:
-                _tune_frame_size = tune_frame_size_static;
-                break;
-        }
-
         WriterPoller::on_failure = [this] (socket_id sid, error const & err) {
             remove_later(sid);
             this->on_failure(sid, err);
@@ -139,14 +131,60 @@ public:
 
 public:
     /**
-     * Associates data rate with specified socket ID @a sid.
+     * Set default data rate and associates this value with all existing socket IDs.
+     *
+     * @param rate_limit Upper limit for data rate. Zero means unlimited value.
      */
-    void set_max_rate (socket_id sid, std::size_t rate)
+    void set_max_rate (std::size_t rate_limit)
+    {
+        _default_rate_limit = rate_limit;
+
+        for (auto & x: _accounts) {
+            auto & acc = x.second;
+            set_max_rate(acc, rate_limit);
+        }
+    }
+
+    /**
+     * Associates data rate with specified socket ID @a sid.
+     *
+     * @param sid Socket ID.
+     * @param rate_limit Upper limit for data rate. Zero means unlimited value.
+     */
+    void set_max_rate (socket_id sid, std::size_t rate_limit)
     {
         auto pacc = locate_account(sid);
 
         if (pacc != nullptr)
-            pacc->data_rate = rate;
+            set_max_rate(*pacc, rate_limit);
+    }
+
+    /**
+     * Set default data rate to adaptive and associates this value with all existing socket IDs.
+     *
+     * @param rate_limit Upper limit for data rate. Zero means unlimited value.
+     */
+    void set_adaptive_rate ()
+    {
+        _default_rate_limit = (std::numeric_limits<std::size_t>::max)();
+
+        for (auto & x: _accounts) {
+            auto & acc = x.second;
+            set_adaptive_rate(acc);
+        }
+    }
+
+    /**
+     * Associates adaptive data rate with specified socket ID @a sid.
+     *
+     * @param sid Socket ID.
+     */
+    void set_adaptive_rate (socket_id sid)
+    {
+        auto pacc = locate_account(sid);
+
+        if (pacc != nullptr)
+            set_adaptive_rate(*pacc);
     }
 
     /**
@@ -282,8 +320,20 @@ private:
             a.max_frame_size = default_frame_size();
             a.writable_time_point = clock_type::now();
             a.bwd.recent_time_point = clock_type::now();
-            a.bwd.throttling = _throttling;
-            a.bwd.data_rate = _data_rate_limit;
+            a.bwd.data_rate = _default_rate_limit;
+
+            switch (_default_throttling) {
+                case bandwidth_throttling::unlimited:
+                    a.bwd.tune_frame_size = tune_frame_size_unlimited;
+                    break;
+                case bandwidth_throttling::adaptive:
+                    a.bwd.tune_frame_size = tune_frame_size_adaptive;
+                    break;
+                case bandwidth_throttling::custom:
+                    a.bwd.tune_frame_size = tune_frame_size_static;
+                    break;
+            }
+
             auto res = _accounts.emplace(sid, std::move(a));
 
             acc = & res.first->second;
@@ -291,6 +341,26 @@ private:
         }
 
         return acc;
+    }
+
+    void set_max_rate (account & acc, std::size_t rate_limit)
+    {
+        if (rate_limit == 0)
+            rate_limit = (std::numeric_limits<std::size_t>::max)();
+
+        acc.bwd.data_rate = rate_limit;
+
+        if (rate_limit == (std::numeric_limits<std::size_t>::max)()) {
+            acc.bwd.tune_frame_size = tune_frame_size_unlimited;
+        } else {
+            acc.bwd.tune_frame_size = tune_frame_size_static;
+        }
+    }
+
+    void set_adaptive_rate (account & acc)
+    {
+        acc.bwd.data_rate = (std::numeric_limits<std::size_t>::max)();
+        acc.bwd.tune_frame_size = tune_frame_size_adaptive;
     }
 
     /**
@@ -310,7 +380,7 @@ private:
                 if (clock_type::now() < acc.writable_time_point)
                     continue;
 
-                auto frame_size = _tune_frame_size(this, acc, acc.max_frame_size);
+                auto frame_size = acc.bwd.tune_frame_size(this, acc, acc.max_frame_size);
 
                 if (frame_size == 0)
                     continue;
