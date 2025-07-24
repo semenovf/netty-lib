@@ -207,7 +207,9 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
 {
     node_pool.on_node_alive([& node_pool] (node_t::node_id id)
     {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Node alive: {}", to_string(id));
+#endif
         file_tracker::prepare_tracker_for(id, s_sending_in_loop);
         file_tracker::send_to(id, [& node_pool] (node_t::node_id id, int priority, fs::path const & path) {
             send_file(node_pool, id, priority, path);
@@ -216,21 +218,25 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
 
     node_pool.on_receiver_ready([& node_pool] (node_t::node_id id)
     {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Receiver ready: {}", to_string(id));
+#endif
     });
 
-    node_pool.on_message_received([] (node_id id, message_id msgid
-        , int priority, std::vector<char> msg)
+    node_pool.on_message_received([] (node_id id, message_id msgid, int priority, std::vector<char> msg)
     {
+#ifndef NETTY__TRACE_ENABLED
         fmt::println("");
         LOGD(TAG, "Message received from: {}: msgid={}, priority={}, size={}", to_string(id)
             , to_string(msgid), priority, msg.size());
+#endif
     });
 
     node_pool.on_message_delivered([& node_pool] (node_id id, message_id msgid)
     {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Message delivered to: {}: msgid={}", to_string(id), to_string(msgid));
-
+#endif
         file_tracker::send_to(id, [& node_pool] (node_t::node_id id, int priority, fs::path const & path) {
             send_file(node_pool, id, priority, path);
         });
@@ -238,13 +244,17 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
 
     node_pool.on_message_lost([& node_pool] (node_id id, message_id msgid)
     {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Message lost from: {}: msgid={}", to_string(id), to_string(msgid));
+#endif
     });
 
     node_pool.on_message_receiving_begin([] (node_id id, message_id msgid, std::size_t total_size)
     {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Begin message receiving from: {}: msgid={}, size={}", to_string(id)
             , to_string(msgid), total_size);
+#endif
     });
 
     node_pool.on_message_receiving_progress([] (node_id id, message_id msgid, std::size_t received_size
@@ -261,21 +271,30 @@ void run (NodePool & node_pool, std::vector<node_item> & nodes)
 {
     node_pool.on_channel_established([& node_pool] (node_t::node_id id, bool is_gateway) {
         auto node_type = is_gateway ? "gateway node" : "regular node";
+
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Channel established with {}: {}", node_type, to_string(id));
+#endif
     });
 
     node_pool.on_channel_destroyed([] (node_t::node_id id) {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Channel destroyed with {}", to_string(id));
+#endif
     });
 
     // Notify when node alive status changed
     node_pool.on_node_alive([] (node_t::node_id id) {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Node alive: {}", to_string(id));
+#endif
     });
 
     // Notify when node alive status changed
     node_pool.on_node_expired([] (node_t::node_id id) {
+#ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Node expired: {}", to_string(id));
+#endif
     });
 
     configure_node(node_pool);

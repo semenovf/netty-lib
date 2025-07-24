@@ -303,6 +303,8 @@ public:
 
             _heartbeat_controller.update(writer_sid);
 
+            NETTY__TRACE(MESHNET_TAG, "Channel established: {}", to_string(id));
+
             _on_channel_established(id, _index, is_gateway);
         };
 
@@ -318,12 +320,12 @@ public:
 
         _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
         {
-            NETTY__TRACE(MESHNET_TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
+            NETTY__TRACE(MESHNET_TAG, "Socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
             destroy_channel(sid);
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
-            NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "Socket heartbeat timeout exceeded: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -815,10 +817,12 @@ private:
         auto res = _channels.has_channel(sid);
         auto success = (res.first && _channels.close_channel(res.second));
 
-        if (success)
+        if (success) {
+            NETTY__TRACE(MESHNET_TAG, "Channel destroyed: {}", to_string(res.second));
             _on_channel_destroyed(res.second, _index);
-        else
+        } else {
             close_socket(sid);
+        }
     }
 
     void process_alive_info (socket_id sid, alive_info<node_id> const & ainfo)

@@ -149,7 +149,12 @@ public:
         return 0;
     }
 
-    std::vector<char> payload () noexcept
+    std::vector<char> const & payload () const noexcept
+    {
+        return _payload;
+    }
+
+    std::vector<char> take_payload () noexcept
     {
         auto result = std::move(_payload);
         return result;

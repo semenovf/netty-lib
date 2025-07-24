@@ -440,6 +440,10 @@ private:
 
             if (_on_route_ready) {
                 auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
+
+                NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})"
+                    , to_string(dest_id), gw_chain.size());
+
                 _on_route_ready(dest_id, std::move(gw_chain));
             }
         }
@@ -550,8 +554,10 @@ public:
             }
 
             if (route_added) {
-                if (_on_route_ready)
+                if (_on_route_ready) {
+                    NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})", to_string(id), 0);
                     _on_route_ready(id, gateway_chain_type{});
+                }
             }
         });
 

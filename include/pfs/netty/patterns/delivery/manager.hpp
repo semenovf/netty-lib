@@ -11,6 +11,7 @@
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
 #include "../../tag.hpp"
+#include "../../trace.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>

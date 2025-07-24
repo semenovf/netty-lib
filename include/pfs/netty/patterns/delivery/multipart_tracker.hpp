@@ -15,6 +15,7 @@
 #include "serial_number.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <queue>
@@ -60,12 +61,20 @@ private:
     std::size_t _size {0};
 
     std::vector<bool> _parts_acked;       // Parts acknowledged
+    std::vector<bool> _parts_acquired;    // Parts acqired
     std::size_t _remain_parts_count {0};  // Number of unacknowledged parts
+    std::size_t _parts_acquired_count {0};
     std::size_t _current_index {0};       // Index of the first not acquired part
 
     time_point_type _heading_exp_timepoint;
     time_point_type _exp_timepoint;
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
+
+    // NOTE 200 is better than 500 when exchanging bitween demo programs running on host and
+    // virtial box machines.
+    // Maybe there is some algorithm to calculate this value.
+    // Using windows size transmission may occur intermittently,
+    std::size_t _window_size {200}; // Max number of parts awaiting acknowledgement
 
 public:
     multipart_tracker (message_id msgid, int priority, std::uint32_t part_size
@@ -121,6 +130,9 @@ private:
         _remain_parts_count = _last_sn - _first_sn + 1;
         _parts_acked.clear();
         _parts_acked.resize(_remain_parts_count, false);
+
+        _parts_acquired.clear();
+        _parts_acquired.resize(_remain_parts_count, false);
 
         _current_index = 0;
         _exp_timepoint = clock_type::now();
@@ -180,6 +192,11 @@ private:
             pkt.serialize(out, _data + _part_size * index, part_size);
         }
 
+        if (!_parts_acquired[index]) {
+            _parts_acquired[index] = true;
+            _parts_acquired_count++;
+        }
+
         return sn;
     }
 
@@ -192,6 +209,14 @@ public:
     int priority () const noexcept
     {
         return _priority;
+    }
+
+    /**
+     * Returns the serial number of message first part.
+     */
+    serial_number first_sn () const noexcept
+    {
+        return _first_sn;
     }
 
     /**
@@ -243,6 +268,13 @@ public:
         // Message sending completed
         if (_remain_parts_count == 0)
             return 0;
+
+        auto acked_parts_count = _parts_acked.size() - _remain_parts_count;
+
+        if (_parts_acquired_count > acked_parts_count
+                && _parts_acquired_count - acked_parts_count > _window_size) {
+            return 0;
+        }
 
         // Heading not acknowledged yet
         if (_current_index > 0 && !_parts_acked[0]) {
