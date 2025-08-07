@@ -26,8 +26,8 @@ struct primal_serializer
 {
     using output_archive_type = std::vector<char>;
     using input_archive_type  = pfs::string_view;
-    using ostream_type = pfs::binary_ostream<Endianess>;
-    using istream_type = pfs::binary_istream<Endianess>;
+    using ostream_type = pfs::v1::binary_ostream<Endianess>;
+    using istream_type = pfs::v1::binary_istream<Endianess>;
 
     ////////////////////////////////////////////////////////////////////////////////
     // packet
@@ -199,13 +199,13 @@ struct primal_serializer
 };
 
 template <typename Packet, pfs::endian Endianess>
-inline void pack (pfs::binary_ostream<Endianess> & out, Packet const & pkt)
+inline void pack (pfs::v1::binary_ostream<Endianess> & out, Packet const & pkt)
 {
     primal_serializer<Endianess>::pack(out, pkt);
 }
 
 template <typename Packet, pfs::endian Endianess>
-inline void unpack (pfs::binary_istream<Endianess> & in, Packet & pkt)
+inline void unpack (pfs::v1::binary_istream<Endianess> & in, Packet & pkt)
 {
     primal_serializer<Endianess>::unpack(in, pkt);
 }

@@ -50,7 +50,7 @@ namespace meshnet {
 //
 
 // For debugging only
-#define NETTY__PF_SERIAL_FIELD_SUPPORT 1
+#define NETTY__PF_SERIAL_FIELD_SUPPORT 0
 
 class priority_frame
 {

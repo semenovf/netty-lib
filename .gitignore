@@ -1,3 +1,5 @@
+!.gitignore
+
 !/2ndparty/
 /2ndparty/*
 !/2ndparty/CMakeLists.txt

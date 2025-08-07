@@ -10,6 +10,7 @@
 #       2024.12.08 Removed `portable_target` dependency.
 #       2024.12.25 Added `single_channel_connection` test.
 #       2024.02.13 Added `reliable_delivery_engine` test.
+#       2025.08.06 Added `envelope` test.
 ################################################################################
 project(netty-lib-TESTS CXX C)
 
@@ -17,7 +18,8 @@ project(netty-lib-TESTS CXX C)
 # Common netty tests
 ####################################################################################################
 
-set(TESTS inet4_addr)
+set(TESTS inet4_addr
+    envelope)
 
 foreach (target ${TESTS})
     add_executable(${target}-tests ${target}.cpp)

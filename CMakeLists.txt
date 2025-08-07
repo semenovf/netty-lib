@@ -24,7 +24,8 @@ option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementati
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
-option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" OFF)
+option(NETTY__ENABLE_TELEMERTY "Enable telemetry subsystem" ON)
+option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" ON)
 
 option(NETTY__ENABLE_TRACE "Enable trace messages output" OFF)
 
@@ -39,6 +40,7 @@ endif()
 
 get_property(_runtime_output_directory GLOBAL PROPERTY RUNTIME_OUTPUT_DIRECTORY)
 get_property(_library_output_directory GLOBAL PROPERTY LIBRARY_OUTPUT_DIRECTORY)
+get_property(_archive_output_directory GLOBAL PROPERTY ARCHIVE_OUTPUT_DIRECTORY)
 
 if (NOT _runtime_output_directory)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
@@ -46,6 +48,10 @@ endif()
 
 if (NOT _library_output_directory)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
+endif()
+
+if (NOT _archive_output_directory)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 endif()
 
 add_subdirectory(3rdparty)
