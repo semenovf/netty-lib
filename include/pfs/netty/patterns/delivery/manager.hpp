@@ -53,7 +53,6 @@ public:
 private:
     transport_type * _transport {nullptr};
     std::unordered_map<address_type, controller_type> _controllers;
-    std::atomic_bool _interrupted {false};
     writer_mutex_type _writer_mtx;
 
 private: // Callbacks

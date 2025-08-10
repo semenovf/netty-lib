@@ -19,7 +19,8 @@ project(netty-lib-TESTS CXX C)
 ####################################################################################################
 
 set(TESTS inet4_addr
-    envelope)
+    envelope
+    pubsub)
 
 foreach (target ${TESTS})
     add_executable(${target}-tests ${target}.cpp)

@@ -12,7 +12,6 @@
 #include "priority_frame.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <queue>

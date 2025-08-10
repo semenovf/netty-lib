@@ -10,12 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "socket4_addr.hpp"
-#include "pfs/universal_id.hpp"
+#include <pfs/c++support.hpp>
+#include <pfs/universal_id.hpp>
 #include <string>
 
 namespace netty {
 
-struct host4_addr
+struct PFS__DEPRECATED host4_addr
 {
     pfs::universal_id host_id;
     socket4_addr saddr;

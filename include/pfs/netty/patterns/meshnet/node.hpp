@@ -10,10 +10,10 @@
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
 #include "../../conn_status.hpp"
+#include "../../connecting_pool.hpp"
 #include "../../connection_failure_reason.hpp"
 #include "../../error.hpp"
 #include "../../socket4_addr.hpp"
-#include "../../connecting_pool.hpp"
 #include "../../listener_pool.hpp"
 #include "../../reader_pool.hpp"
 #include "../../socket_pool.hpp"
@@ -152,7 +152,6 @@ private:
     HeartbeatController<node> _heartbeat_controller;
     InputController<node> _input_controller;
 
-    // std::map<socket4_addr, reconnection_policy> _reconn_policies;
     host_cache_type _hosts_cache;
 
     // Nodes for which the current node is behind NAT
@@ -203,6 +202,7 @@ public:
             NETTY__TRACE(MESHNET_TAG, "socket accepted: #{}: {}", sock.id(), to_string(sock.saddr()));
             _input_controller.add(sock.id());
             _reader_pool.add(sock.id());
+            _writer_pool.add(sock.id());
             _socket_pool.add_accepted(std::move(sock));
         };
 
@@ -528,14 +528,13 @@ public:
         return _index;
     }
 
-    void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr)
+    void add_listener (socket4_addr listener_addr, error * perr = nullptr)
     {
         _listener_pool.add(listener_addr, perr);
     }
 
-    bool connect_host (netty::socket4_addr remote_saddr, bool behind_nat = false)
+    bool connect_host (socket4_addr remote_saddr, bool behind_nat = false)
     {
-        netty::error err;
         auto rs = _connecting_pool.connect(remote_saddr);
 
         if (rs == netty::conn_status::failure)
@@ -551,7 +550,6 @@ public:
 
     bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat)
     {
-        netty::error err;
         auto rs = _connecting_pool.connect(remote_saddr, local_addr);
 
         if (rs == netty::conn_status::failure)
@@ -565,7 +563,7 @@ public:
         return true;
     }
 
-    void listen (int backlog = 50)
+    void listen (int backlog = 100)
     {
         _listener_pool.listen(backlog);
     }

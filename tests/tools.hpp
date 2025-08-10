@@ -12,6 +12,7 @@
 #include <pfs/fmt.hpp>
 #include <pfs/log.hpp>
 #include <pfs/lorem/lorem_ipsum.hpp>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <chrono>
@@ -37,6 +38,22 @@ inline void sleep (int timeout, std::string const & description = std::string{})
     std::this_thread::sleep_for(std::chrono::seconds{timeout});
 }
 
+inline void sleep_ms (int timeout)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds{timeout});
+}
+
+bool wait_atomic_bool (std::atomic_bool & flag
+    , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+{
+    pfs::countdown_timer<std::milli> timer {timelimit};
+
+    while (!flag.load() && timer.remain_count() > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+
+    return flag.load();
+}
+
 template <typename AtomicCounter>
 bool wait_atomic_counter (AtomicCounter & counter
     , typename AtomicCounter::value_type limit
@@ -50,8 +67,30 @@ bool wait_atomic_counter (AtomicCounter & counter
     return !(counter.load() < limit);
 }
 
-template <typename SyncRouteMatrix>
-bool wait_matrix_count (SyncRouteMatrix & safe_matrix, std::size_t limit
+template <typename AtomicCounter, std::size_t N>
+bool wait_atomic_counters (std::array<AtomicCounter, N> & counters
+    , typename AtomicCounter::value_type limit
+    , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
+{
+    pfs::countdown_timer<std::milli> timer {timelimit};
+
+    bool success = false;
+
+    while (!success && timer.remain_count() > 0) {
+        success = true;
+
+        for (std::size_t i = 0; success && i < N; i++)
+            success = (counters[i].load() >= limit);
+
+        if (!success)
+            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    return success;
+}
+
+template <typename SafeMatrix>
+bool wait_matrix_count (SafeMatrix & safe_matrix, std::size_t limit
     , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
 {
     pfs::countdown_timer<std::milli> timer {timelimit};
@@ -138,6 +177,17 @@ inline std::string random_text ()
     }
 
     return text;
+}
+
+inline std::string random_small_text ()
+{
+    lorem::lorem_ipsum ipsum;
+    ipsum.set_paragraph_count(1);
+    ipsum.set_sentence_count(1);
+    ipsum.set_word_count(1);
+
+    auto para = ipsum();
+    return para[0][0];
 }
 
 inline std::string random_large_text ()

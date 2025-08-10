@@ -121,8 +121,8 @@ public:
      */
     std::size_t count ()
     {
-        PFS__THROW_UNEXPECTED(_accounts.size() < (_free_indices.size() - _removable.size())
-            , "socket_pool::count(): fix implementation of socket_pool");
+        PFS__THROW_UNEXPECTED(_accounts.size() <= (_free_indices.size() - _removable.size())
+            , "Fix socket_pool algorithm");
         return _accounts.size() - _free_indices.size() - _removable.size();
     }
 

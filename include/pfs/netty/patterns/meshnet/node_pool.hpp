@@ -6,10 +6,12 @@
 // Changelog:
 //      2025.02.24 Initial version.
 //      2025.06.30 Added method `set_frame_size()`.
+//      2025.08.08 `interruptable` inheritance.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
+#include "../../interruptable.hpp"
 #include "../../trace.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
@@ -38,7 +40,7 @@ template <typename NodeId
     , typename RoutingTable
     , typename AliveController
     , typename RecursiveWriterMutex>
-class node_pool
+class node_pool: public interruptable
 {
     using node_interface_type = node_interface<NodeId>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
@@ -62,7 +64,6 @@ private:
 
     routing_table_type _rtab;
     alive_controller_type _alive_controller;
-    std::atomic_bool _interrupted {false};
 
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
@@ -484,21 +485,6 @@ public:
         return _is_gateway;
     }
 
-    void interrupt ()
-    {
-        _interrupted = true;
-    }
-
-    bool interrupted () const noexcept
-    {
-        return _interrupted.load();
-    }
-
-    void clear_interrupted ()
-    {
-        _interrupted.store(false);
-    }
-
     /**
      * Adds new node to the pool with specified listeners.
      */
@@ -807,7 +793,7 @@ public:
     {
         clear_interrupted();
 
-        while (!_interrupted) {
+        while (!interrupted()) {
             pfs::countdown_timer<std::milli> countdown_timer {loop_interval};
             auto n = step();
 

@@ -34,12 +34,12 @@ private:
     struct account
     {
         socket_id id {socket_type::kINVALID_SOCKET};
-        std::uint16_t frame_size {1500}; // Initial value is default MTU size
     };
 
 private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
+    std::uint16_t _chunk_size {1500}; // Initial value is default MTU size
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
@@ -51,7 +51,9 @@ public:
     };
 
 public:
-    reader_pool (): ReaderPoller()
+    reader_pool (std::uint16_t chunk_size = 1500)
+        : ReaderPoller()
+        , _chunk_size(chunk_size)
     {
         ReaderPoller::on_failure = [this] (socket_id id, error const & err) {
             remove_later(id);
@@ -87,9 +89,9 @@ public:
             for (;;) {
                 error err;
                 auto offset = inpb.size();
-                inpb.resize(offset + acc->frame_size);
+                inpb.resize(offset + _chunk_size);
 
-                auto n = sock->recv(inpb.data() + offset, acc->frame_size, & err);
+                auto n = sock->recv(inpb.data() + offset, _chunk_size, & err);
 
                 if (n < 0) {
                     this->on_failure(id, err);
@@ -108,6 +110,43 @@ public:
                     this->on_data_ready(id, std::move(inpb));
             }
         };
+    }
+
+public:
+    void set_chunk_size (std::uint16_t chunk_size) noexcept
+    {
+        _chunk_size = chunk_size;
+    }
+
+    void add (socket_id id)
+    {
+        /*auto acc = */ensure_account(id);
+    }
+
+    void remove_later (socket_id id)
+    {
+        _removable.push_back(id);
+    }
+
+    void apply_remove ()
+    {
+        if (!_removable.empty()) {
+            for (auto id: _removable) {
+                ReaderPoller::remove(id);
+                _accounts.erase(id);
+            }
+
+            _removable.clear();
+        }
+    }
+
+    /**
+     * @return Number of events occurred.
+     */
+    unsigned int step (error * perr = nullptr)
+    {
+        auto n = ReaderPoller::poll(std::chrono::milliseconds{0}, perr);
+        return n > 0 ? static_cast<unsigned int>(n) : 0;
     }
 
 private:
@@ -145,38 +184,6 @@ private:
         }
 
         return acc;
-    }
-
-public:
-    void add (socket_id id)
-    {
-        /*auto acc = */ensure_account(id);
-    }
-
-    void remove_later (socket_id id)
-    {
-        _removable.push_back(id);
-    }
-
-    void apply_remove ()
-    {
-        if (!_removable.empty()) {
-            for (auto id: _removable) {
-                ReaderPoller::remove(id);
-                _accounts.erase(id);
-            }
-
-            _removable.clear();
-        }
-    }
-
-    /**
-     * @return Number of events occurred.
-     */
-    unsigned int step (error * perr = nullptr)
-    {
-        auto n = ReaderPoller::poll(std::chrono::milliseconds{0}, perr);
-        return n > 0 ? static_cast<unsigned int>(n) : 0;
     }
 };
 

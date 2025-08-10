@@ -8,7 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
-#include <pfs/endian.hpp>
+#include <pfs/binary_istream.hpp>
+#include <pfs/binary_ostream.hpp>
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -28,10 +29,13 @@ NETTY__NAMESPACE_BEGIN
 // Bytes 3..len+2 - Payload
 // Byte len+3     - 0xED, end flag
 //
-template <typename SizeT>
+template <pfs::endian Endianess, typename SizeT>
 class envelope final
 {
-    static constexpr int MIN_SIZE = 2 + sizeof(SizeT);
+public:
+    static constexpr std::size_t MIN_SIZE = 2 + sizeof(SizeT);
+
+private:
     static constexpr char BEGIN_FLAG = static_cast<char>(0xBE);
     static constexpr char END_FLAG = static_cast<char>(0xED);
 
@@ -40,16 +44,14 @@ public:
 
     class parser
     {
-        char const * _data {nullptr};
-        std::size_t _size {0};
+        pfs::binary_istream<Endianess> _in;
 
         // True wnen source contains inappropriate data
         bool _bad {false};
 
     public:
         parser (char const * data, std::size_t size)
-            : _data(data)
-            , _size(size)
+            : _in(data, size)
         {}
 
     public:
@@ -60,112 +62,93 @@ public:
 
         std::size_t remain_size () const noexcept
         {
-            return _size;
+            return _bad ? 0 : _in.available();
         }
 
         /**
          * Attempts to parse next envelope from raw bytes.
          */
-        pfs::optional<envelope> next ()
+        pfs::optional<std::vector<char>> next ()
         {
-            if (_size < MIN_SIZE)
+            if (_bad)
                 return pfs::nullopt;
 
-            if (_data[0] != BEGIN_FLAG) {
+            if (!_in.is_good()) {
                 _bad = true;
                 return pfs::nullopt;
             }
 
+            if (_in.available() < MIN_SIZE)
+                return pfs::nullopt;
+
+            char begin_flag = 0;
             size_type payload_len = 0;
-            pfs::unpack_unsafe<pfs::endian::network>(_data + 1, payload_len);
 
-            if (_size < MIN_SIZE + payload_len)
-                return pfs::nullopt;
+            _in.start_transaction();
+            _in >> begin_flag >> payload_len;
 
-            if (_data[payload_len + MIN_SIZE - 1] != END_FLAG) {
+            // Bad or corrupted envelope
+            if (begin_flag != BEGIN_FLAG) {
                 _bad = true;
                 return pfs::nullopt;
             }
 
-            envelope env {payload_len};
-            env.copy(_data + 1 + sizeof(size_type), payload_len);
-            _data += payload_len + MIN_SIZE;
-            _size -= payload_len + MIN_SIZE;
+            // Not enough data
+            if (_in.available() < payload_len + 1) { // +1 is end flag
+                _in.rollback_transaction();
+                return pfs::nullopt;
+            }
 
-            return env;
+            std::vector<char> result;
+            result.reserve(payload_len);
+
+            char end_flag = 0;
+            _in >> std::make_pair(& result, static_cast<std::size_t>(payload_len)) >> end_flag;
+
+            if (!_in.commit_transaction()) {
+                _bad = true;
+                return pfs::nullopt;
+            }
+
+            if (end_flag != END_FLAG) {
+                _bad = true;
+                return pfs::nullopt;
+            }
+
+            return result;
         }
     };
 
 private:
-    std::vector<char> _data;
+    pfs::binary_ostream<std::vector<char>, Endianess> _out;
 
 public:
-    explicit envelope (size_type payload_len = 0)
-        : _data(payload_len + MIN_SIZE)
-    {
-        stamp(payload_len);
-    }
-
-    envelope (envelope const &) = default;
-    envelope (envelope &&) = default;
-    envelope & operator = (envelope const &) = default;
-    envelope & operator = (envelope &&) = default;
+    explicit envelope (std::vector<char> & buf)
+        : _out(buf)
+    {}
 
 public:
-    char const * data () const noexcept
+    void pack (char const * payload, size_type payload_len)
     {
-        return _data.empty() ? nullptr : _data.data();
-    }
-
-    std::size_t size () const noexcept
-    {
-        return _data.size();
-    }
-
-    char const * payload () const noexcept
-    {
-        auto n = _data.size();
-        return _data.size() == MIN_SIZE ? nullptr : _data.data() + MIN_SIZE - 1;
-    }
-
-    std::size_t payload_size () const noexcept
-    {
-        return _data.size() - MIN_SIZE;
-    }
-
-    bool empty () const noexcept
-    {
-        return payload_size() == 0;
-    }
-
-    void copy (char const * payload, size_type payload_len)
-    {
-        if (payload == nullptr || payload_len == 0) {
-            _data.resize(MIN_SIZE);
-            stamp(0);
-        } else {
-            if (payload_len != payload_size()) {
-                _data.resize(MIN_SIZE + payload_len);
-                stamp(payload_len);
-            }
-
-            std::copy(payload, payload + payload_len, _data.data() + MIN_SIZE - 1);
-        }
-    }
-
-private:
-    // "Stick a stamp"
-    void stamp (size_type payload_len)
-    {
-        _data[0] = BEGIN_FLAG;
-        pfs::pack_unsafe<pfs::endian::network>(_data.data() + 1, payload_len);
-        _data[payload_len + MIN_SIZE - 1] = END_FLAG;
+        _out << BEGIN_FLAG << payload_len << pfs::string_view(payload, payload_len) << END_FLAG;
     }
 };
 
-using envelope8_t  = envelope<std::uint8_t>;
-using envelope16_t = envelope<std::uint16_t>;
-using envelope32_t = envelope<std::uint32_t>;
-using envelope64_t = envelope<std::uint64_t>;
+template <pfs::endian Endianess, typename SizeT>
+constexpr std::size_t envelope<Endianess, SizeT>::MIN_SIZE;
+
+template <pfs::endian Endianess, typename SizeT>
+constexpr char envelope<Endianess, SizeT>::BEGIN_FLAG;
+
+template <pfs::endian Endianess, typename SizeT>
+constexpr char envelope<Endianess, SizeT>::END_FLAG;
+
+using envelope8_t    = envelope<pfs::endian::network, std::uint8_t>; // Endianess no matter here
+using envelope16le_t = envelope<pfs::endian::little, std::uint16_t>;
+using envelope16be_t = envelope<pfs::endian::big, std::uint16_t>;
+using envelope32le_t = envelope<pfs::endian::little, std::uint32_t>;
+using envelope32be_t = envelope<pfs::endian::big, std::uint32_t>;
+using envelope64le_t = envelope<pfs::endian::little, std::uint64_t>;
+using envelope64be_t = envelope<pfs::endian::big, std::uint64_t>;
 
 NETTY__NAMESPACE_END

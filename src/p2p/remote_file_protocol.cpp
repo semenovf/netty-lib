@@ -17,8 +17,8 @@
 namespace netty {
 namespace p2p {
 
-using binary_istream = pfs::binary_istream<pfs::endian::network>;
-using binary_ostream = pfs::binary_ostream<pfs::endian::network>;
+using binary_istream = pfs::v1::binary_istream<pfs::endian::network>;
+using binary_ostream = pfs::v1::binary_ostream<pfs::endian::network>;
 
 std::vector<char> protocol::serialize_envelope (std::vector<char> const & payload)
 {

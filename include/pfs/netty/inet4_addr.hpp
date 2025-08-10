@@ -9,6 +9,7 @@
 //      2017.07.03 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
 #include "error.hpp"
 #include "exports.hpp"
 #include "pfs/optional.hpp"
@@ -18,7 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 /**
  * @brief Satisfies Concepts:
@@ -282,4 +283,4 @@ inline std::string to_string (inet4_addr const & addr)
     return to_string(addr, std::string{}, 10);
 }
 
-} // netty
+NETTY__NAMESPACE_END

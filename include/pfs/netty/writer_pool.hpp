@@ -198,6 +198,11 @@ public:
             pacc->max_frame_size = frame_size;
     }
 
+    void add (socket_id sid)
+    {
+        (void)ensure_account(sid);
+    }
+
     void remove_later (socket_id sid)
     {
         _removable.push_back(sid);
@@ -247,20 +252,35 @@ public:
         enqueue(sid, 0, std::move(data));
     }
 
+    /**
+     * Enqueues data to broadcasting.
+     *
+     * @param priority Priority sending
+     * @param data Data to send.
+     * @param len Data length.
+     *
+     * @note Although `enqueue` is guaranteed to add the socket, `enqueue_broadcast` call requires
+     *       an explicit call to add the socket to the pool before.
+     */
     void enqueue_broadcast (int priority, char const * data, std::size_t len)
     {
         for (auto & acc: _accounts)
             enqueue(acc.second.sid, priority, data, len);
     }
 
+    /**
+     * Enqueues data to broadcasting with the highest priority (0).
+     *
+     * @param data Data to send.
+     * @param len Data length.
+     */
     void enqueue_broadcast (char const * data, std::size_t len)
     {
         enqueue_broadcast(0, data, len);
     }
 
     /**
-     * @return >= 0 - number of events occurred,
-     *          < 0 - error occurred.
+     * @return Number of events occurred.
      */
     unsigned int step (error * perr = nullptr)
     {

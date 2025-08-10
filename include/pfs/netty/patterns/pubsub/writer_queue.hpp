@@ -1,30 +1,35 @@
+
 ////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2025 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.01.08 Initial version.
-//      2025.06.07 It is a part of patterns::meshnet now.
+//      2025.08.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "priority_frame.hpp"
+#include "../../envelope.hpp"
 #include <pfs/assert.hpp>
 #include <algorithm>
 #include <queue>
-#include <utility>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
-namespace meshnet {
+namespace pubsub {
+
+// NOTE This is practically the same class as meshnet::writer_queue,
+// excluding using `envelope` instead of `priority_frame`.
+// TODO It is necessary to generalize this implementation of `writer_queue`
+//      (see `meshnet::priority_writer_queue` also)
 
 class writer_queue
 {
     using chunk_type = std::vector<char>;
     using chunk_queue_type = std::queue<chunk_type>;
+    using envelope_type = envelope16be_t;
 
 private:
     chunk_queue_type _q;
@@ -42,23 +47,7 @@ public:
         _q.push(std::vector<char>{data, data + len});
     }
 
-    void enqueue (char const * data, std::size_t len)
-    {
-        if (len == 0)
-            return;
-
-        _q.push(std::vector<char>{data, data + len});
-    }
-
-    void enqueue (int /*priority*/, std::vector<char> && data)
-    {
-        if (data.empty())
-            return;
-
-        _q.push(std::move(data));
-    }
-
-    void enqueue (std::vector<char> && data)
+    void enqueue (int /*priority*/, std::vector<char> data)
     {
         if (data.empty())
             return;
@@ -84,7 +73,18 @@ public:
 
         auto & front = _q.front();
 
-        priority_frame{}.pack(0, _frame, front, frame_size);
+        // Calculate actual frame size
+        // frame_size <= envelope::MIN_SIZE + payload_size
+        frame_size = (std::min)(front.size() + envelope_type::MIN_SIZE, frame_size);
+        std::uint16_t payload_size = frame_size - envelope_type::MIN_SIZE;
+
+        PFS__THROW_UNEXPECTED(frame_size > envelope_type::MIN_SIZE
+            , "Fix writer_queue::acquire_frame algorithm");
+
+        _frame.clear();
+        envelope_type ep {_frame};
+        ep.pack(front.data(), payload_size);
+        front.erase(front.begin(), front.begin() + payload_size);
 
         // Check topmost message is processed
         if (front.empty())
@@ -112,6 +112,6 @@ public: // static
     }
 };
 
-}} // namespace patterns::meshnet
+}} // namespace patterns::pubsub
 
 NETTY__NAMESPACE_END

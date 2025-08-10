@@ -8,9 +8,10 @@
 //      2025.05.07 Replaced `std::function` with `callback_t`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
 #include "connection_failure_reason.hpp"
 #include "error.hpp"
-#include "namespace.hpp"
+#include "socket4_addr.hpp"
 #include <pfs/i18n.hpp>
 #include <chrono>
 #include <functional>
