@@ -20,7 +20,8 @@ project(netty-lib-TESTS CXX C)
 
 set(TESTS inet4_addr
     envelope
-    pubsub)
+    pubsub
+    telemetry)
 
 foreach (target ${TESTS})
     add_executable(${target}-tests ${target}.cpp)

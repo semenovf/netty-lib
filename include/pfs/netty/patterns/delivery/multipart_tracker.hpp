@@ -9,15 +9,16 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
-#include "../../tag.hpp"
 #include "../../trace.hpp"
 #include "protocol.hpp"
 #include "serial_number.hpp"
+#include "tag.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <queue>
 #include <utility>
 #include <vector>
@@ -88,7 +89,7 @@ public:
         , _size(length)
         , _exp_timeout(exp_timeout)
     {
-        init();
+        reset(true);
     }
 
     /**
@@ -107,7 +108,7 @@ public:
     {
         _data = _payload.data();
         _size = _payload.size();
-        init();
+        reset(true);
     }
 
     multipart_tracker (multipart_tracker const &) = delete;
@@ -119,7 +120,7 @@ public:
     ~multipart_tracker () {}
 
 private:
-    void init ()
+    void reset (bool initial = false)
     {
         // part_count = 1 + size() / part_size
         // last_sn    = first_sn + part_count - 1
@@ -131,6 +132,7 @@ private:
         _parts_acked.clear();
         _parts_acked.resize(_remain_parts_count, false);
 
+        _parts_acquired_count = 0;
         _parts_acquired.clear();
         _parts_acquired.resize(_remain_parts_count, false);
 
@@ -330,10 +332,10 @@ public:
     void reset_to (message_id msgid, serial_number lowest_acked_sn)
     {
         if (lowest_acked_sn == 0) {
-            init();
+            reset();
         } else {
             if (msgid != _msgid) {
-                init();
+                reset();
                 return;
             }
 

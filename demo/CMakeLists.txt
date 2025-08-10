@@ -7,6 +7,7 @@
 #      2021.06.21 Initial version.
 #      2023.02.15 Added `iface-monitor`.
 #      2024.04.08 `available_net_interfaces` included from `ionik-lib`.
+#      2025.07.29 Added `telemetry` demo.
 ################################################################################
 add_subdirectory(available_net_interfaces)
 add_subdirectory(discovery)
@@ -16,6 +17,7 @@ add_subdirectory(mtu)
 add_subdirectory(udp)
 add_subdirectory(iface-monitor)
 add_subdirectory(resolver)
+# add_subdirectory(telemetry) FIXME UNCOMMENT
 # add_subdirectory(service) # FIXME
 
 # DEPRECATED

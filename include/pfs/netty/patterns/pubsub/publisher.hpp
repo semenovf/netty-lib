@@ -20,6 +20,7 @@
 #include "tag.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
 #include <chrono>
 #include <mutex>
 
