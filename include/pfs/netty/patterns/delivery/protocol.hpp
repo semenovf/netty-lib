@@ -238,7 +238,7 @@ public:
         in >> msgid >> total_size >> part_size >> last_sn;
 
         std::uint32_t size = 0;
-        in >> std::make_pair(& size, & bytes);
+        in >> size >> std::make_pair(& bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();
@@ -281,7 +281,7 @@ public:
         : header(h)
     {
         std::uint32_t size = 0;
-        in >> std::make_pair(& size, & bytes);
+        in >> size >> std::make_pair(& bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();
@@ -343,7 +343,7 @@ public:
         : header(h)
     {
         std::uint32_t size = 0;
-        in >> std::make_pair(& size, & bytes);
+        in >> size >> std::make_pair(& bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();

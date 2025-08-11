@@ -120,7 +120,7 @@ public:
     };
 
 private:
-    pfs::binary_ostream<std::vector<char>, Endianess> _out;
+    pfs::binary_ostream<Endianess> _out;
 
 public:
     explicit envelope (std::vector<char> & buf)

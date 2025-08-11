@@ -575,10 +575,11 @@ public:
         auto sid_ptr = _channels.locate_writer(id);
 
         if (sid_ptr != nullptr) {
-            auto out = serializer_traits::make_serializer();
+            std::vector<char> ar;
+            auto out = serializer_traits::make_serializer(ar);
             ddata_packet pkt;
             pkt.serialize(out, data, len);
-            enqueue_private(*sid_ptr, priority, out.take());
+            enqueue_private(*sid_ptr, priority, std::move(ar));
             return true;
         }
 

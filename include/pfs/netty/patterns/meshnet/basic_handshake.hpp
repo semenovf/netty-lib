@@ -52,7 +52,8 @@ protected:
 protected:
     void enqueue_request (socket_id sid, bool behind_nat)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::request};
 
         pkt.id = _node->id();
@@ -61,18 +62,19 @@ protected:
         // Cache socket ID as handshake initiator
         _cache[sid] = std::chrono::steady_clock::now() + _timeout;
 
-        enqueue_packet(sid, out.take());
+        enqueue_packet(sid, std::move(ar));
     }
 
     void enqueue_response (socket_id sid, bool behind_nat)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::response};
 
         pkt.id = _node->id();
         pkt.serialize(out);
 
-        enqueue_packet(sid, out.take());
+        enqueue_packet(sid, std::move(ar));
     }
 
     unsigned int check_expired ()

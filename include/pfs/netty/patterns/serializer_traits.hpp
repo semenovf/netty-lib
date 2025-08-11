@@ -20,8 +20,8 @@ template <pfs::endian Endianess = pfs::endian::network>
 struct serializer_traits
 {
     using archive_type = std::vector<char>;
-    using serializer_type = pfs::v1::binary_ostream<Endianess>;
-    using deserializer_type = pfs::v1::binary_istream<Endianess>;
+    using serializer_type = pfs::binary_ostream<Endianess>;
+    using deserializer_type = pfs::binary_istream<Endianess>;
 
     template <typename ...Args>
     static serializer_type make_serializer (Args &&... args)

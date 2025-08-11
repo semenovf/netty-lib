@@ -37,13 +37,13 @@ inline std::chrono::milliseconds current_millis ()
     return duration_cast<milliseconds>(clock_type::now().time_since_epoch());
 }
 
-inline std::chrono::milliseconds millis_since_epoch (clock_type::time_point const & tp)
-{
-    using std::chrono::duration_cast;
-    using std::chrono::milliseconds;
-
-    return duration_cast<milliseconds>(tp.time_since_epoch());
-}
+// inline std::chrono::milliseconds millis_since_epoch (clock_type::time_point const & tp)
+// {
+//     using std::chrono::duration_cast;
+//     using std::chrono::milliseconds;
+//
+//     return duration_cast<milliseconds>(tp.time_since_epoch());
+// }
 
 inline std::chrono::seconds seconds_since_epoch (clock_type::time_point const & tp)
 {

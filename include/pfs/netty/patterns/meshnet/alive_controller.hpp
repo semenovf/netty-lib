@@ -218,20 +218,22 @@ public:
 
     std::vector<char> serialize_alive ()
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         alive_packet<node_id> pkt;
         pkt.ainfo.id = _id;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     std::vector<char> serialize_alive (alive_info<node_id> const & ainfo)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         alive_packet<node_id> pkt;
         pkt.ainfo = ainfo;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     /**
@@ -239,22 +241,24 @@ public:
      */
     std::vector<char> serialize_unreachable (node_id gw_id, node_id sender_id, node_id receiver_id)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         unreachable_packet<node_id> pkt;
         pkt.uinfo.gw_id = gw_id;
         pkt.uinfo.sender_id = sender_id;
         pkt.uinfo.receiver_id = receiver_id;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     std::vector<char> serialize_unreachable (unreachable_info<node_id> const & uinfo)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         unreachable_packet<node_id> pkt;
         pkt.uinfo = uinfo;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     void check_expiration ()

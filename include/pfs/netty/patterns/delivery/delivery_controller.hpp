@@ -111,10 +111,11 @@ private:
     template <typename Manager>
     void enqueue_ack_packet (Manager * m, int priority, serial_number sn)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         ack_packet ack_pkt {sn};
         ack_pkt.serialize(out);
-        auto success = m->enqueue_private(_addr, out.take(), priority);
+        auto success = m->enqueue_private(_addr, std::move(ar), priority);
 
         if (!success) {
             m->process_error(tr::f_("there is a problem in communication with the"
@@ -153,10 +154,11 @@ private:
             }
 
             // Serial number is no matter for response
-            auto out = serializer_traits::make_serializer();
+            std::vector<char> ar;
+            auto out = serializer_traits::make_serializer(ar);
             syn_packet<message_id> response_pkt {};
             response_pkt.serialize(out);
-            m->enqueue_private(_addr, out.take(), 0);
+            m->enqueue_private(_addr, std::move(ar), 0);
         } else {
             NETTY__TRACE(DELIVERY_TAG, "SYN response received, receiver ready: {}", to_string(_addr));
             set_synchronized(true);
@@ -378,13 +380,14 @@ private:
                 snumbers.push_back(std::make_pair(message_id{}, serial_number{0}));
         }
 
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         syn_packet<message_id> pkt {std::move(snumbers)};
         pkt.serialize(out);
 
         _exp_syn = clock_type::now() + _exp_timeout;
 
-        return out.take();
+        return ar;
     }
 
     /**
@@ -494,14 +497,15 @@ public:
 
             auto mt = & t.q.front();
 
-            auto out = serializer_traits::make_serializer();
+            std::vector<char> ar;
+            auto out = serializer_traits::make_serializer(ar);
             auto sn = mt->acquire_next_part(out);
 
             if (sn > 0) {
                 PFS__THROW_UNEXPECTED(mt->priority() == priority
                     , "Fix delivery::delivery_controller algorithm");
 
-                auto success = m->enqueue_private(_addr, out.take(), mt->priority());
+                auto success = m->enqueue_private(_addr, std::move(ar), mt->priority());
 
                 if (success) {
                     n++;
@@ -527,10 +531,11 @@ public:
 public: // static
     static std::vector<char> serialize_report (char const * data, std::size_t length)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         report_packet pkt;
         pkt.serialize(out, data, length);
-        return out.take();
+        return ar;
     }
 
     static std::vector<char> serialize_report (std::vector<char> && data)

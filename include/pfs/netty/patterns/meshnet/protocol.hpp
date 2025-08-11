@@ -455,7 +455,7 @@ public:
     ddata_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> std::make_pair(& bytes, std::cref(_h.length));
+        in >> _h.length >> std::make_pair(& bytes, _h.length);
 
         if (!in.is_good()) {
             bytes.clear();

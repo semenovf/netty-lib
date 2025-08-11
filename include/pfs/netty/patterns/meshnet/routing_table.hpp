@@ -356,11 +356,12 @@ public:
      */
     std::vector<char> serialize_request (node_id initiator_id)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo.initiator_id = initiator_id;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     /**
@@ -368,12 +369,13 @@ public:
      */
     std::vector<char> serialize_request (node_id gw_id, route_info<node_id> const & rinfo)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo = rinfo;
         pkt.rinfo.route.push_back(gw_id);
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     /**
@@ -381,12 +383,13 @@ public:
      */
     std::vector<char> serialize_response (node_id responder_id, route_info<node_id> const & rinfo)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.rinfo.responder_id = responder_id;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     /**
@@ -394,11 +397,12 @@ public:
      */
     std::vector<char> serialize_response (route_info<node_id> const & rinfo)
     {
-        auto out = serializer_traits::make_serializer();
+        std::vector<char> ar;
+        auto out = serializer_traits::make_serializer(ar);
         route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.serialize(out);
-        return out.take();
+        return ar;
     }
 
     /**
@@ -407,20 +411,22 @@ public:
     std::vector<char> serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
         , char const * data, std::size_t len )
     {
-        // Enough space for packet header -------------------v
-        auto out = serializer_traits::make_serializer(len + 64);
+        std::vector<char> ar;
+        ar.reserve(len + 64); // Enough space for packet header
+
+        auto out = serializer_traits::make_serializer(ar);
 
         // Domestic exchange
         if (gw_id == receiver_id) {
             ddata_packet pkt;
             pkt.serialize(out, data, len);
-            return out.take();
+            return ar;
         }
 
         // Intersegment exchange
         gdata_packet<node_id> pkt {sender_id, receiver_id};
         pkt.serialize(out, data, len);
-        return out.take();
+        return ar;
     }
 };
 

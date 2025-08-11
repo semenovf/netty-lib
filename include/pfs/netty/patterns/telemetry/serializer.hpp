@@ -25,10 +25,11 @@ namespace telemetry {
 
 class serializer
 {
-    using binary_ostream_type = pfs::binary_ostream<std::vector<char>, pfs::endian::network>;
+    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
+    using archive_type = typename binary_ostream_type::archive_type;
 
 private:
-    std::vector<char> _buf;
+    archive_type _buf;
 
 public:
     serializer ()

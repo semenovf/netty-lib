@@ -214,10 +214,11 @@ public:
                                 // Need to forward the message if the node is a gateway, or discard
                                 // the message otherwise.
                                 if (_node->is_gateway()) {
-                                    auto out = serializer_traits::make_serializer();
+                                    std::vector<char> ar;
+                                    auto out = serializer_traits::make_serializer(ar);
                                     pkt.serialize(out);
                                     forward_global_packet(priority, pkt.sender_id
-                                        , pkt.receiver_id, out.take());
+                                        , pkt.receiver_id, std::move(ar));
                                 }
                             }
                         } else {

@@ -104,14 +104,15 @@ public:
             auto now = std::chrono::steady_clock::now();
             auto pos = _q.begin();
 
-            auto out = serializer_traits::make_serializer();
+            std::vector<char> ar;
+            auto out = serializer_traits::make_serializer(ar);
             heartbeat_packet pkt;
             pkt.serialize(out);
 
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node->enqueue_private(pos->sid, 0, out.data(), out.size());
+                _node->enqueue_private(pos->sid, 0, ar.data(), ar.size());
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);
