@@ -194,10 +194,11 @@ public:
                     }
 
                     case packet_enum::ddata: {
-                        ddata_packet pkt {h, in};
+                        std::vector<char> bytes_in;
+                        ddata_packet pkt {h, in, bytes_in};
 
                         if (in.commit_transaction())
-                            process(sid, priority, std::move(pkt.bytes));
+                            process(sid, priority, std::move(bytes_in));
                         else
                             has_more_packets = false;
 
@@ -205,18 +206,19 @@ public:
                     }
 
                     case packet_enum::gdata: {
-                        gdata_packet<node_id> pkt {h, in};
+                        std::vector<char> bytes_in;
+                        gdata_packet<node_id> pkt {h, in, bytes_in};
 
                         if (in.commit_transaction()) {
                             if (pkt.receiver_id == _node->id()) {
-                                process(sid, priority, pkt.sender_id, pkt.receiver_id, std::move(pkt.bytes));
+                                process(sid, priority, pkt.sender_id, pkt.receiver_id, std::move(bytes_in));
                             } else {
                                 // Need to forward the message if the node is a gateway, or discard
                                 // the message otherwise.
                                 if (_node->is_gateway()) {
                                     std::vector<char> ar;
                                     auto out = serializer_traits::make_serializer(ar);
-                                    pkt.serialize(out);
+                                    pkt.serialize(out, bytes_in.data(), bytes_in.size());
                                     forward_global_packet(priority, pkt.sender_id
                                         , pkt.receiver_id, std::move(ar));
                                 }

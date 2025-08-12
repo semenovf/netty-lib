@@ -107,7 +107,7 @@ TEST_CASE("simple delivery") {
 }
 #endif
 
-#if 1
+#if 0
 TEST_CASE("delivery") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());

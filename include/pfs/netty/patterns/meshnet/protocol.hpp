@@ -67,6 +67,7 @@ enum class packet_way_enum
 
 class header
 {
+public:
     static constexpr int VERSION = 1;
 
 protected:
@@ -200,11 +201,10 @@ protected:
         out << _h.b0 << _h.b1;
 
         // Has checksum
-        if (_h.b1 & 0x01)
+        if (has_checksum())
             out << _h.crc32;
 
-        auto has_data = static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::ddata
-            || static_cast<packet_enum>(_h.b0 & 0x0F) == packet_enum::gdata;
+        auto has_data = (type() == packet_enum::ddata || type() == packet_enum::gdata);
 
         if (has_data)
             out << _h.length;
@@ -226,7 +226,7 @@ public:
     /**
      * Construct handshake packet.
      */
-    handshake_packet (bool is_gateway, bool behind_nat, packet_way_enum way = packet_way_enum::request) noexcept
+    handshake_packet (bool is_gateway, bool behind_nat, packet_way_enum way) noexcept
         : header(packet_enum::handshake, false)
     {
         if (way == packet_way_enum::response)
@@ -280,14 +280,12 @@ public:
 class heartbeat_packet: public header
 {
 public:
-    std::uint8_t health_data;
+    std::uint8_t health_data {0};
 
 public:
     heartbeat_packet () noexcept
         : header(packet_enum::heartbeat, false)
-    {
-        health_data = 0;
-    }
+    {}
 
     /**
      * Constructs heartbeat packet from deserializer with predefined header.
@@ -444,35 +442,29 @@ public:
 class ddata_packet: public header
 {
 public:
-    std::vector<char> bytes;   // Used by deserializer only
-
-public:
     ddata_packet (bool has_checksum = true) noexcept
         : header(packet_enum::ddata, has_checksum)
     {}
 
     template <typename Deserializer>
-    ddata_packet (header const & h, Deserializer & in)
+    ddata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
         : header(h)
     {
-        in >> _h.length >> std::make_pair(& bytes, _h.length);
+        in >> std::make_pair(& bytes_in, _h.length);
 
-        if (!in.is_good()) {
-            bytes.clear();
-            return;
-        }
+        if (in.is_good()) {
+            if (has_checksum()) {
+                auto crc32 = pfs::crc32_of_ptr(bytes_in.data(), bytes_in.size());
 
-        if (has_checksum()) {
-            auto crc32 = pfs::crc32_of_ptr(bytes.data(), bytes.size());
-
-            if (crc32 != _h.crc32) {
-                throw error {
-                      make_error_code(netty::errc::checksum_error)
-                    , tr::f_("bad CRC32 checksum for ddata_packet: expected: 0x{:0X}, got: 0x{:0X}"
-                        ", data size: {} bytes"
-                        , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
-                        , bytes.size())
-                };
+                if (crc32 != _h.crc32) {
+                    throw error {
+                        make_error_code(netty::errc::checksum_error)
+                        , tr::f_("bad CRC32 checksum for ddata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                            ", data size: {} bytes"
+                            , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
+                            , bytes_in.size())
+                    };
+                }
             }
         }
     }
@@ -500,7 +492,6 @@ class gdata_packet: public header
 public:
     NodeId sender_id;
     NodeId receiver_id;
-    std::vector<char> bytes;   // Used by deserializer only and when need to forward message.
 
 public:
     gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum = true) noexcept
@@ -510,7 +501,7 @@ public:
     {}
 
     template <typename Deserializer>
-    gdata_packet (header const & h, Deserializer & in)
+    gdata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
         : header(h)
     {
         in >> sender_id;
@@ -523,24 +514,21 @@ public:
         if (!in.is_good())
             return;
 
-        in >> std::make_pair(& bytes, std::cref(_h.length));
+        in >> std::make_pair(& bytes_in, _h.length);
 
-        if (!in.is_good()) {
-            bytes.clear();
-            return;
-        }
+        if (in.is_good()) {
+            if (has_checksum()) {
+                auto crc32 = pfs::crc32_of_ptr(bytes_in.data(), bytes_in.size());
 
-        if (has_checksum()) {
-            auto crc32 = pfs::crc32_of_ptr(bytes.data(), bytes.size());
-
-            if (crc32 != _h.crc32) {
-                throw error {
-                      make_error_code(netty::errc::checksum_error)
-                    , tr::f_("bad CRC32 checksum for gdata_packet: expected: 0x{:0X}, got: 0x{:0X}"
-                        ", data size: {} bytes"
-                        , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
-                        , bytes.size())
-                };
+                if (crc32 != _h.crc32) {
+                    throw error {
+                        make_error_code(netty::errc::checksum_error)
+                        , tr::f_("bad CRC32 checksum for gdata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                            ", data size: {} bytes"
+                            , static_cast<std::uint32_t>(_h.crc32), static_cast<std::uint32_t>(crc32)
+                            , bytes_in.size())
+                    };
+                }
             }
         }
     }
@@ -557,24 +545,6 @@ public:
         header::serialize(out);
         out << sender_id << receiver_id;
         out << std::make_pair(data, len);
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out, std::vector<char> && data)
-    {
-        serialize<Serializer>(out, data.data(), data.size());
-    }
-
-    /**
-     * This serializer used when need to forward message.
-     * Expected packet is already initialized.
-     */
-    template <typename Serializer>
-    void serialize (Serializer & out)
-    {
-        header::serialize(out);
-        out << sender_id << receiver_id;
-        out << std::make_pair(bytes.data(), bytes.size());
     }
 };
 

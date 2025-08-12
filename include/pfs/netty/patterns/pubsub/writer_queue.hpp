@@ -82,8 +82,8 @@ public:
             , "Fix writer_queue::acquire_frame algorithm");
 
         _frame.clear();
-        envelope_type ep {_frame};
-        ep.pack(front.data(), payload_size);
+        envelope_type ep;
+        ep.pack(_frame, front.data(), payload_size);
         front.erase(front.begin(), front.begin() + payload_size);
 
         // Check topmost message is processed

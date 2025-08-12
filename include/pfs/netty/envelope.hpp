@@ -119,18 +119,11 @@ public:
         }
     };
 
-private:
-    pfs::binary_ostream<Endianess> _out;
-
 public:
-    explicit envelope (std::vector<char> & buf)
-        : _out(buf)
-    {}
-
-public:
-    void pack (char const * payload, size_type payload_len)
+    void pack (std::vector<char> & buf, char const * payload, size_type payload_len)
     {
-        _out << BEGIN_FLAG << payload_len << pfs::string_view(payload, payload_len) << END_FLAG;
+        pfs::binary_ostream<Endianess> out {buf};
+        out << BEGIN_FLAG << payload_len << pfs::string_view(payload, payload_len) << END_FLAG;
     }
 };
 

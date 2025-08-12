@@ -12,49 +12,18 @@
 #       2024.02.13 Added `reliable_delivery_engine` test.
 #       2025.08.06 Added `envelope` test.
 ################################################################################
-project(netty-lib-TESTS CXX C)
-
-####################################################################################################
-# Common netty tests
-####################################################################################################
-
 set(TESTS inet4_addr
     envelope
     pubsub
     telemetry)
 
 foreach (target ${TESTS})
-    add_executable(${target}-tests ${target}.cpp)
-    target_link_libraries(${target}-tests PRIVATE pfs::netty pfs::lorem)
-    add_test(NAME ${target}-tests COMMAND ${target}-tests)
+    add_executable(tests-${target} ${target}.cpp)
+    target_link_libraries(tests-${target} PRIVATE pfs::netty pfs::lorem)
+    add_test(NAME tests-${target} COMMAND tests-${target})
 endforeach()
 
-####################################################################################################
-# Patterns tests
-####################################################################################################
-add_executable(priority-tracker-tests patterns/priority_tracker.cpp)
-target_link_libraries(priority-tracker-tests PRIVATE pfs::netty)
-add_test(NAME priority-tracker-tests COMMAND priority-tracker-tests)
-
-add_executable(meshnet-handshake-tests patterns/handshake.cpp)
-target_link_libraries(meshnet-handshake-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME meshnet-handshake-tests COMMAND meshnet-handshake-tests)
-
-add_executable(meshnet-routing-table-tests patterns/routing_table.cpp)
-target_link_libraries(meshnet-routing-table-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME meshnet-routing-table-tests COMMAND meshnet-routing-table-tests)
-
-add_executable(meshnet-messaging-tests patterns/messaging.cpp)
-target_link_libraries(meshnet-messaging-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME meshnet-messaging-tests COMMAND meshnet-messaging-tests)
-
-add_executable(meshnet-unreachable-tests patterns/unreachable.cpp)
-target_link_libraries(meshnet-unreachable-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME meshnet-unreachable-tests COMMAND meshnet-unreachable-tests)
-
-add_executable(meshnet-delivery-tests patterns/delivery.cpp)
-target_link_libraries(meshnet-delivery-tests PRIVATE pfs::netty pfs::lorem)
-add_test(NAME meshnet-delivery-tests COMMAND meshnet-delivery-tests)
+add_subdirectory(meshnet_patterns)
 
 ####################################################################################################
 # Channel connection tests

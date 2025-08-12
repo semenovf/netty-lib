@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
-#include <pfs/netty/patterns/priority_tracker.hpp>
+#include "pfs/netty/patterns/priority_tracker.hpp"
 
 struct distribution
 {

@@ -13,60 +13,13 @@
 
 using envelope_t = netty::envelope16be_t;
 
-TEST_CASE("empty envelope") {
-    std::vector<char> buf;
-    envelope_t env{buf};
-
-    CHECK(buf.empty());
-}
-
 TEST_CASE("basic envelope") {
-    std::vector<char> buf;
-    envelope_t env{buf};
-
-    CHECK(buf.empty());
-
     char const * chars = "ABC";
 
-    env.pack(chars, 3);
-
-    CHECK_EQ(buf, std::vector<char>{'\xBE', '\x00', '\x03', '\x41', '\x42', '\x43', '\xED'});
-}
-
-TEST_CASE("copy constructor") {
-    CHECK(!std::is_copy_constructible<envelope_t>::value);
-}
-
-TEST_CASE("copy assigment operator") {
-    CHECK(!std::is_copy_assignable<envelope_t>::value);
-}
-
-TEST_CASE("move constructor") {
-    CHECK(std::is_move_constructible<envelope_t>::value);
-
     std::vector<char> buf;
-    envelope_t env{buf};
+    envelope_t ep;
+    ep.pack(buf, chars, 3);
 
-    envelope_t another_env {std::move(env)};
-    char const * chars = "ABC";
-
-    another_env.pack(chars, 3);
-    CHECK_EQ(buf, std::vector<char>{'\xBE', '\x00', '\x03', '\x41', '\x42', '\x43', '\xED'});
-}
-
-TEST_CASE("move assignment operator") {
-    CHECK(std::is_move_assignable<envelope_t>::value);
-
-    std::vector<char> buf;
-    envelope_t env{buf};
-
-    std::vector<char> tmp;
-    envelope_t another_env {tmp};
-    another_env = std::move(env);
-
-    char const * chars = "ABC";
-
-    another_env.pack(chars, 3);
     CHECK_EQ(buf, std::vector<char>{'\xBE', '\x00', '\x03', '\x41', '\x42', '\x43', '\xED'});
 }
 
