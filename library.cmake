@@ -193,6 +193,10 @@ if (NETTY__ENABLE_P2P)
         ${CMAKE_CURRENT_LIST_DIR}/src/p2p/posix/discovery_engine.cpp)
 
     target_link_libraries(netty PRIVATE pfs::ionik)
+    target_compile_definitions(netty PUBLIC "NETTY__TELEMETRY_ENABLED=1")
+endif()
+
+if (NETTY__ENABLE_TELEMETRY)
 endif()
 
 target_include_directories(netty

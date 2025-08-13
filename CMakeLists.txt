@@ -24,6 +24,7 @@ option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementati
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
+option(NETTY__ENABLE_TELEMETRY "Enable telemetry for meshnet and delivery patterns" ON)
 option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" ON)
 
 option(NETTY__ENABLE_TRACE "Enable trace messages output" OFF)

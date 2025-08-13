@@ -23,12 +23,12 @@ namespace telemetry {
 // Serializer requirements: see pfs/netty/patterns/telemetry/serializer.hpp
 //
 
-template <typename Publisher, typename Serializer>
+template <typename KeyT, typename Publisher, typename Serializer>
 class producer
 {
     using publisher_type = Publisher;
     using serializer_type = Serializer;
-    using key_type = std::string;
+    using key_type = KeyT;
 
 private:
     publisher_type _pub;

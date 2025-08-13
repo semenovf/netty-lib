@@ -93,7 +93,7 @@ private:
 
 private:
     callback_t<void (std::string const &)> _on_error
-        = [] (std::string const & msg) { LOGE(TAG, "{}", msg); };
+        = [] (std::string const & msg) { LOGE(DELIVERY_TAG, "{}", msg); };
 
 public:
     delivery_controller (address_type addr, std::uint32_t part_size

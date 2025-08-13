@@ -23,10 +23,34 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace telemetry {
 
+template <typename KeyT>
+struct key_serializer
+{
+    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
+
+    key_serializer (binary_ostream_type & out, KeyT const & key)
+    {
+        out << key;
+    }
+};
+
+template <>
+struct key_serializer<std::string>
+{
+    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
+
+    key_serializer (binary_ostream_type & out, std::string const & key)
+    {
+        out << pfs::numeric_cast<uint16_t>(key.size()) << key;
+    }
+};
+
+template <typename KeyT>
 class serializer
 {
     using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
     using archive_type = typename binary_ostream_type::archive_type;
+    using key_type = KeyT;
 
 private:
     archive_type _buf;
@@ -40,17 +64,22 @@ public:
 public:
     template <typename T>
     std::enable_if_t<std::is_arithmetic<T>::value, void>
-    pack (std::string const & key, T const & value)
+    pack (key_type const & key, T const & value)
     {
         binary_ostream_type out {_buf, _buf.size()};
-        out << type_of<T>() << pfs::numeric_cast<uint16_t>(key.size()) << key << value;
+
+        out << type_of<T>();
+        key_serializer<key_type>(out, key);
+        out << value;
     }
 
-    void pack (std::string const & key, string_t const & value)
+    void pack (key_type const & key, string_t const & value)
     {
         binary_ostream_type out {_buf, _buf.size()};
-        out << type_of<string_t>() << pfs::numeric_cast<uint16_t>(key.size()) << key
-            << pfs::numeric_cast<uint16_t>(value.size()) << value;
+
+        out << type_of<string_t>();
+        key_serializer<key_type>(out, key);
+        out << pfs::numeric_cast<uint16_t>(value.size()) << value;
     }
 
     void clear () noexcept
@@ -69,20 +98,47 @@ public:
     }
 };
 
-class deserializer
+template <typename KeyT>
+struct key_deserializer
 {
     using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
 
+    key_deserializer (binary_istream_type & in, KeyT & key)
+    {
+        in >> key;
+    }
+};
+
+template <>
+struct key_deserializer<std::string>
+{
+    using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
+
+    key_deserializer (binary_istream_type & in, std::string & key)
+    {
+        std::uint16_t key_size = 0;
+        in >> key_size >> std::make_pair(& key, key_size);
+    }
+};
+
+template <typename KeyT>
+class deserializer
+{
+    using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
+    using key_type = KeyT;
+    using visitor_type = visitor<KeyT>;
+
 public:
-    deserializer (char const * data, std::size_t size, std::shared_ptr<visitor> vis)
+    deserializer (char const * data, std::size_t size, std::shared_ptr<visitor_type> vis)
     {
         binary_istream_type in {data, size};
 
         while (in.is_good() && in.available() > 0) {
             std::int8_t type = 0;
-            std::uint16_t key_size = 0;
-            std::string key;
-            in >> type >> key_size >> std::make_pair(& key, key_size);
+            key_type key;
+
+            in >> type;
+            key_deserializer<key_type>(in, key);
 
             if (type == type_of<string_t>()) {
                 std::uint16_t value_size = 0;

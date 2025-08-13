@@ -21,16 +21,17 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace telemetry {
 
-template <typename Subscriber, typename Deserializer>
+template <typename KeyT, typename Subscriber, typename Deserializer>
 class consumer
 {
     using subscriber_type = Subscriber;
     using deserializer_type = Deserializer;
-    using key_type = std::string;
+    using key_type = KeyT;
+    using visitor_type = visitor<KeyT>;
 
 private:
     subscriber_type _sub;
-    std::shared_ptr<visitor> _visitor;
+    std::shared_ptr<visitor_type> _visitor;
 
 private: // Callbacks
     callback_t<void (std::string const &)> _on_error
@@ -44,7 +45,7 @@ public:
         });
     }
 
-    consumer (std::shared_ptr<visitor> v)
+    consumer (std::shared_ptr<visitor_type> v)
         : consumer()
     {
         _visitor = v;
@@ -65,8 +66,15 @@ public: // Set callbacks
         return *this;
     }
 
+    template <typename F>
+    consumer & on_disconnected (F && f)
+    {
+        _sub.on_disconnected = std::forward<F>(f);
+        return *this;
+    }
+
 public:
-    void set_visitor (std::shared_ptr<visitor> v)
+    void set_visitor (std::shared_ptr<visitor_type> v)
     {
         _visitor = v;
     }

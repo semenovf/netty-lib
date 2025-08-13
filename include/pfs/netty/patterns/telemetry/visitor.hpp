@@ -16,10 +16,11 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace telemetry {
 
+template <typename KeyT>
 class visitor
 {
 public:
-    using key_type = std::string;
+    using key_type = KeyT;
 
 public:
     virtual void on (key_type const & key, bool value) = 0;

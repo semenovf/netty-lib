@@ -39,27 +39,27 @@ public:
     /**
      * @brief Constructs invalid @c inet4_addr instance.
      */
-    inet4_addr () = default;
+    constexpr inet4_addr () = default;
 
     /**
      * @brief Copy constructor.
      */
-    inet4_addr (inet4_addr const & x) = default;
+    constexpr inet4_addr (inet4_addr const & x) = default;
 
     /**
      * @brief Move constructor.
      */
-    inet4_addr (inet4_addr && x) = default;
+    constexpr inet4_addr (inet4_addr && x) noexcept = default;
 
     /**
      * @brief Copy assignment operator.
      */
-    inet4_addr & operator = (inet4_addr const & x) = default;
+    constexpr inet4_addr & operator = (inet4_addr const & x) = default;
 
     /**
      * @brief Move assignment operator.
      */
-    inet4_addr & operator = (inet4_addr && x) = default;
+    constexpr inet4_addr & operator = (inet4_addr && x) noexcept = default;
 
     /**
      * @brief Constructs inet4_addr from four numeric parts.
@@ -72,7 +72,7 @@ public:
      * @param c Third numeric part.
      * @param d Fourth numeric part.
      */
-    inet4_addr (std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d)
+    constexpr inet4_addr (std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d) noexcept
         : _addr(0)
     {
         _addr |= (static_cast<uint32_t>(a) << 24);
@@ -93,7 +93,7 @@ public:
      * @param b Second numeric part
      * @param c Third numeric parts.
      */
-    inet4_addr (std::uint8_t a, std::uint8_t b, std::uint16_t c)
+    constexpr inet4_addr (std::uint8_t a, std::uint8_t b, std::uint16_t c) noexcept
         : _addr(0)
     {
         _addr |= (static_cast<uint32_t>(a) << 24);
@@ -113,7 +113,7 @@ public:
      * @param a First numeric part
      * @param b Second numeric part
      */
-    inet4_addr (std::uint8_t a, std::uint32_t b)
+    constexpr inet4_addr (std::uint8_t a, std::uint32_t b) noexcept
         : _addr(0)
     {
         _addr |= (static_cast<uint32_t>(a) << 24);
@@ -125,21 +125,22 @@ public:
      *
      * @param a Numeric part.
      */
-    constexpr inet4_addr (std::uint32_t a) : _addr(a)
+    constexpr inet4_addr (std::uint32_t a) noexcept
+        : _addr(a)
     {}
 
-    inet4_addr & operator = (std::uint32_t a)
+    constexpr inet4_addr & operator = (std::uint32_t a)
     {
         _addr = a;
         return *this;
     }
 
-    explicit operator std::uint32_t () const noexcept
+    explicit constexpr operator std::uint32_t () const noexcept
     {
         return _addr;
     }
 
-    std::uint32_t to_ip4 () const noexcept
+    constexpr std::uint32_t to_ip4 () const noexcept
     {
         return _addr;
     }
@@ -165,51 +166,51 @@ public: // static
      */
     static NETTY__EXPORT pfs::optional<inet4_addr> parse (pfs::string_view s);
 
-
     /**
      * Resolve domain name to IPv4 address synchronously.
      */
-    static NETTY__EXPORT std::vector<inet4_addr> resolve (std::string const & name, error * perr = nullptr);
+    static NETTY__EXPORT std::vector<inet4_addr> resolve (std::string const & name
+        , error * perr = nullptr);
 };
 
-    /**
-    * @brief Converts IPv4 address to string.
-    *
-    * @details The format specification is a null-terminated string and may
-    *      contain special character sequences called conversion specifications,
-    *      each of which is introduced by a '%' character and terminated by
-    *      some other character known as a conversion specifier character.
-    *      All other character sequences are ordinary character sequences.
-    *
-    *      The characters of ordinary character sequences (including the null byte)
-    *      are copied verbatim from format to resulting string. However,
-    *      the characters of conversion specifications are replaced as follows:
-    *
-    *      @li %a First byte of IPv4 address.
-    *      @li %A The full 32-bit representation of IPv4 address.
-    *      @li %b Second byte of IPv4 address.
-    *      @li %B 24-bit representation of last part of IPv4 address
-    *      @li %c Third byte of IPv4 address.
-    *      @li %C 16-bit representation of last part of IPv4 address
-    *      @li %d Fourth byte of IPv4 address.
-    *      @li %% '%' character.
-    *
-    * @param addr Source address for conversion.
-    * @param format Conversion format string. If @a format is empty the default format
-    *      will be used: "%a.%b.%c.%d".
-    * @param base Specifies the radix (8, 10 or 16) for output address parts.
-    * @return String representation of IPv4 address. If @a addr is not valid
-    *      result will be an empty string.
-    *
-    * @note 192.0.2.235           decimal
-    *       0xC0.0x00.0x02.0xEB   hex
-    *       0300.0000.0002.0353   octal
-    *       0xC00002EB            decimal
-    *       3221226219            hex
-    *       030000001353          octal
-    *
-    *
-    */
+/**
+ * @brief Converts IPv4 address to string.
+ *
+ * @details The format specification is a null-terminated string and may
+ *      contain special character sequences called conversion specifications,
+ *      each of which is introduced by a '%' character and terminated by
+ *      some other character known as a conversion specifier character.
+ *      All other character sequences are ordinary character sequences.
+ *
+ *      The characters of ordinary character sequences (including the null byte)
+ *      are copied verbatim from format to resulting string. However,
+ *      the characters of conversion specifications are replaced as follows:
+ *
+ *      @li %a First byte of IPv4 address.
+ *      @li %A The full 32-bit representation of IPv4 address.
+ *      @li %b Second byte of IPv4 address.
+ *      @li %B 24-bit representation of last part of IPv4 address
+ *      @li %c Third byte of IPv4 address.
+ *      @li %C 16-bit representation of last part of IPv4 address
+ *      @li %d Fourth byte of IPv4 address.
+ *      @li %% '%' character.
+ *
+ * @param addr Source address for conversion.
+ * @param format Conversion format string. If @a format is empty the default format
+ *      will be used: "%a.%b.%c.%d".
+ * @param base Specifies the radix (8, 10 or 16) for output address parts.
+ * @return String representation of IPv4 address. If @a addr is not valid
+ *      result will be an empty string.
+ *
+ * @note 192.0.2.235           decimal
+ *       0xC0.0x00.0x02.0xEB   hex
+ *       0300.0000.0002.0353   octal
+ *       0xC00002EB            decimal
+ *       3221226219            hex
+ *       030000001353          octal
+ *
+ *
+ */
 NETTY__EXPORT std::string to_string (inet4_addr const & addr, std::string const & format, int base);
 
 inline bool operator == (inet4_addr const & a, inet4_addr const & b)
