@@ -36,6 +36,10 @@
 #include <thread>
 #include <unordered_map>
 
+#if NETTY__TELEMETRY_ENABLED
+#   include "telemetry.hpp"
+#endif
+
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -163,6 +167,10 @@ private:
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
 
+#if NETTY__TELEMETRY_ENABLED
+    shared_telemetry_producer_t _telemetry_producer;
+#endif
+
 private: // Callbacks
     callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
@@ -180,6 +188,14 @@ private: // Callbacks
     callback_t<void (int, node_id, node_id, std::vector<char>)> _on_forward_global_packet;
 
 public:
+#if NETTY__TELEMETRY_ENABLED
+    node (node_id id, bool is_gateway, shared_telemetry_producer_t telemetry_producer)
+        : node(id, is_gateway)
+    {
+        _telemetry_producer = telemetry_producer;
+    }
+#endif
+
     node (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
@@ -306,6 +322,11 @@ public:
             NETTY__TRACE(MESHNET_TAG, "Channel established: {}", to_string(id));
 
             _on_channel_established(id, _index, is_gateway);
+
+#if NETTY__TELEMETRY_ENABLED
+            _telemetry_producer->push(KEY_CHANNEL_ESTABLISHED
+                , fmt::format("[{},{}]", to_string(_id), to_string(id)));
+#endif
         };
 
         _handshake_controller.on_duplicate_id = [this] (node_id id, socket_id sid, bool force_closing)
@@ -819,6 +840,12 @@ private:
         if (success) {
             NETTY__TRACE(MESHNET_TAG, "Channel destroyed: {}", to_string(res.second));
             _on_channel_destroyed(res.second, _index);
+
+#if NETTY__TELEMETRY_ENABLED
+            _telemetry_producer->push(KEY_CHANNEL_DESTROYED
+                , fmt::format("[{},{}]", to_string(_id), to_string(res.second)));
+#endif
+
         } else {
             close_socket(sid);
         }

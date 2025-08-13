@@ -13,6 +13,10 @@
 #include "tag.hpp"
 #include <pfs/log.hpp>
 
+#if NETTY__TELEMETRY_ENABLED
+#   include "telemetry.hpp"
+#endif
+
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -40,10 +44,8 @@ private:
     callback_t<void (node_id)> _on_node_alive = [] (node_id) {};
     callback_t<void (node_id)> _on_node_expired = [] (node_id) {};
 
-public:
-    node_pool_rd (node_id id, bool is_gateway = false)
-        : _t(id, is_gateway)
-        , _dm(_t)
+private:
+    void init ()
     {
         _t.on_node_alive([this] (node_id id) {
             NETTY__TRACE(MESHNET_TAG, "Node alive: {}", to_string(id));
@@ -56,6 +58,23 @@ public:
         }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
             _dm.process_input(id, priority, std::move(bytes));
         });
+    }
+
+public:
+#if NETTY__TELEMETRY_ENABLED
+    node_pool_rd (node_id id, bool is_gateway, shared_telemetry_producer_t telemetry_producer)
+        : _t(id, is_gateway, telemetry_producer)
+        , _dm(_t)
+    {
+        init();
+    }
+#endif
+
+    node_pool_rd (node_id id, bool is_gateway = false)
+        : _t(id, is_gateway)
+        , _dm(_t)
+    {
+        init();
     }
 
     node_pool_rd (node_pool_rd const &) = delete;

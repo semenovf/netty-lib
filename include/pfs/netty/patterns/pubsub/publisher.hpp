@@ -147,6 +147,11 @@ public:
     void broadcast (char const * data, std::size_t size)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        broadcast_unsafe(data, size);
+    }
+
+    void broadcast_unsafe (char const * data, std::size_t size)
+    {
         _writer_pool.enqueue_broadcast(data, size);
     }
 
@@ -156,6 +161,11 @@ public:
     unsigned int step ()
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        return step_unsafe();
+    }
+
+    unsigned int step_unsafe ()
+    {
         unsigned int result = 0;
 
         result += _listener_pool.step();

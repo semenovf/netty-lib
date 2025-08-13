@@ -31,6 +31,10 @@
 #include <type_traits>
 #include <vector>
 
+#if NETTY__TELEMETRY_ENABLED
+#   include "telemetry.hpp"
+#endif
+
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
@@ -68,6 +72,10 @@ private:
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
 
+#if NETTY__TELEMETRY_ENABLED
+    shared_telemetry_producer_t _telemetry_producer;
+#endif
+
 private:
     callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
@@ -80,6 +88,14 @@ private:
     callback_t<void (node_id, int, std::vector<char>)> _on_data_received;
 
 public:
+#if NETTY__TELEMETRY_ENABLED
+    node_pool (node_id id, bool is_gateway, shared_telemetry_producer_t telemetry_producer)
+        : node_pool(id, is_gateway)
+    {
+        _telemetry_producer = telemetry_producer;
+    }
+#endif
+
     node_pool (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
@@ -491,7 +507,11 @@ public:
     template <typename Node, typename ListenerIt>
     node_index_t add_node (ListenerIt first, ListenerIt last, error * perr = nullptr)
     {
+#if NETTY__TELEMETRY_ENABLED
+        auto node = Node::template make_interface(_id, _is_gateway, _telemetry_producer);
+#else
         auto node = Node::template make_interface(_id, _is_gateway);
+#endif
         error err;
 
         for (ListenerIt pos = first; pos != last; ++pos) {
