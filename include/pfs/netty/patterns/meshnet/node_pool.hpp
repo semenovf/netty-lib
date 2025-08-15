@@ -97,7 +97,8 @@ public:
 #endif
 
     node_pool (node_id id, bool is_gateway = false)
-        : _id(id)
+        : interruptable()
+        , _id(id)
         , _is_gateway(is_gateway)
         , _alive_controller(id)
     {

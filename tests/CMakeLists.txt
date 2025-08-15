@@ -14,8 +14,7 @@
 ################################################################################
 set(TESTS inet4_addr
     envelope
-    pubsub
-    telemetry)
+    pubsub)
 
 foreach (target ${TESTS})
     add_executable(tests-${target} ${target}.cpp)
@@ -24,6 +23,7 @@ foreach (target ${TESTS})
 endforeach()
 
 add_subdirectory(meshnet_patterns)
+add_subdirectory(telemetry_patterns)
 
 ####################################################################################################
 # Channel connection tests

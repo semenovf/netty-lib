@@ -27,7 +27,7 @@ class consumer
     using subscriber_type = Subscriber;
     using deserializer_type = Deserializer;
     using key_type = KeyT;
-    using visitor_type = visitor<KeyT>;
+    using visitor_type = visitor_interface<KeyT>;
 
 private:
     subscriber_type _sub;
@@ -67,9 +67,16 @@ public: // Set callbacks
     }
 
     template <typename F>
+    consumer & on_connected (F && f)
+    {
+        _sub.on_connected(std::forward<F>(f));
+        return *this;
+    }
+
+    template <typename F>
     consumer & on_disconnected (F && f)
     {
-        _sub.on_disconnected = std::forward<F>(f);
+        _sub.on_disconnected(std::forward<F>(f));
         return *this;
     }
 

@@ -126,7 +126,7 @@ class deserializer
 {
     using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
     using key_type = KeyT;
-    using visitor_type = visitor<KeyT>;
+    using visitor_type = visitor_interface<KeyT>;
 
 public:
     deserializer (char const * data, std::size_t size, std::shared_ptr<visitor_type> vis)

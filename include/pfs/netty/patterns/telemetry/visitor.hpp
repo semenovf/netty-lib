@@ -17,7 +17,7 @@ namespace patterns {
 namespace telemetry {
 
 template <typename KeyT>
-class visitor
+class visitor_interface
 {
 public:
     using key_type = KeyT;

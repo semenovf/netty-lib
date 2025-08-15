@@ -63,10 +63,12 @@ private:
     callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(PUBSUB_TAG, "{}", errstr); };
 
+    callback_t<void (socket4_addr)> _on_connected;
     callback_t<void (socket4_addr)> _on_disconnected;
 
 public:
     subscriber ()
+        : interruptable()
     {
         _connecting_pool.on_failure = [this] (netty::error const & err)
         {
@@ -81,8 +83,13 @@ public:
 
             PFS__THROW_UNEXPECTED(_socket_pool.count() == 0, "Fix pubsub::subscriber algorithm");
 
+            auto saddr = sock.saddr();
+
             _reader_pool.add(sock.id());
             _socket_pool.add_connected(std::move(sock));
+
+            if (_on_connected)
+                _on_connected(saddr);
         };
 
         _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
@@ -107,10 +114,12 @@ public:
             NETTY__TRACE(PUBSUB_TAG, "reader socket disconnected: {} (#{})"
                 , to_string(psock->saddr()), sid);
 
-            if (_on_disconnected)
-                _on_disconnected(psock->saddr());
+            auto saddr = psock->saddr();
 
             close_socket(sid);
+
+            if (_on_disconnected)
+                _on_disconnected(saddr);
         };
 
         _reader_pool.on_data_ready = [this] (socket_id /*sid*/, std::vector<char> && data)
@@ -147,6 +156,13 @@ public: // Set callbacks
     subscriber & on_error (F && f)
     {
         _on_error = std::forward<F>(f);
+        return *this;
+    }
+
+    template <typename F>
+    subscriber & on_connected (F && f)
+    {
+        _on_connected = std::forward<F>(f);
         return *this;
     }
 

@@ -23,6 +23,7 @@
 #include <pfs/log.hpp>
 #include <chrono>
 #include <mutex>
+#include <thread>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -74,6 +75,7 @@ private: // Callbacks
 
 public:
     publisher (socket4_addr listener_saddr, int backlog = 100)
+        : interruptable()
     {
         _listener_pool.on_failure = [this] (netty::error const & err)
         {

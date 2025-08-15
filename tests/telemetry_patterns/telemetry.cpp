@@ -7,16 +7,13 @@
 //      2025.08.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
-#include "tools.hpp"
+#include "../doctest.h"
+#include "../tools.hpp"
 #include "pfs/netty/startup.hpp"
 #include "pfs/netty/patterns/telemetry/telemetry.hpp"
 #include <pfs/log.hpp>
 #include <chrono>
 #include <thread>
-
-// using consumer_t = netty::patterns::telemetry::consumer_t;
-// using producer_t = netty::patterns::telemetry::producer_t;
 
 constexpr std::uint16_t PORT1 = 4242;
 constexpr int CONSUMER_LIMIT = 1;
@@ -28,7 +25,7 @@ std::atomic_int g_received_counter {0};
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // visitor
 /////////////////////////////////////////////////////////////////////////////////////////////////
-class visitor: public netty::patterns::telemetry::visitor<std::string>
+class visitor: public netty::patterns::telemetry::visitor_interface_t
 {
 public:
     void on (std::string const & key, bool value) override
@@ -105,7 +102,7 @@ constexpr std::uint16_t F32_KEY  = 6;
 constexpr std::uint16_t F64_KEY  = 7;
 constexpr std::uint16_t STR_KEY  = 8;
 
-class visitor_u16: public netty::patterns::telemetry::visitor<std::uint16_t>
+class visitor_u16: public netty::patterns::telemetry::visitor_interface_u16_t
 {
 public:
     void on (std::uint16_t const & key, bool value) override
