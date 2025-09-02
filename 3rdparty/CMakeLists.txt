@@ -34,8 +34,10 @@ endif(NETTY__ENABLE_ENET)
 
 if (NETTY__BUILD_DEMO)
     # ZeroMQ options
-    set(ENABLE_DRADTS OFF CACHE BOOL "" FORCE)
-    set(ZMQ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_DRADTS OFF) # CACHE BOOL "" FORCE)
+    set(ZMQ_BUILD_TESTS OFF) # CACHE BOOL "" FORCE)
+    set(WITH_DOC OFF)
+    set(WITH_DOCS OFF)
 
     if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/libzmq/.git)
         add_subdirectory(libzmq)
@@ -51,7 +53,7 @@ if (NETTY__BUILD_DEMO)
         message(STATUS "Fetching libzmq complete")
     endif()
 
-    set(CPPZMQ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CPPZMQ_BUILD_TESTS OFF) # CACHE BOOL "" FORCE)
 
     if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/cppzmq/.git)
         add_subdirectory(cppzmq)

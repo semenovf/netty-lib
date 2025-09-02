@@ -22,7 +22,7 @@ foreach (_dep ${_deps})
         else()
             message(STATUS "Fetching ${_dep} ...")
             FetchContent_Declare(${_dep}
-                GIT_REPOSITORY git@github.com:semenovf/${_dep}-lib.git
+                GIT_REPOSITORY https://github.com/semenovf/${_dep}-lib.git
                 GIT_TAG master
                 SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/${_dep})
             FetchContent_MakeAvailable(${_dep})
