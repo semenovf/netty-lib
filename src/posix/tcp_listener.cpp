@@ -78,7 +78,11 @@ tcp_socket tcp_listener::accept (error * perr)
         }
     }
 
+#if defined(EAGAIN) && defined(EWOULDBLOCK) && EAGAIN != EWOULDBLOCK
     if (errno == EAGAIN || errno == EWOULDBLOCK)
+#else
+    if (errno == EAGAIN)
+#endif
         return tcp_socket{};
 
     pfs::throw_or(perr, error {tr::f_("socket accept failure: {}", pfs::system_error_text())});

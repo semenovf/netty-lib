@@ -39,8 +39,8 @@ std::vector<inet4_addr> inet4_addr::resolve (std::string const & hostname, error
     std::vector<inet4_addr> result;
 
     for (struct addrinfo * p = ai; p != nullptr; p = p->ai_next) {
-        void * addr = nullptr;
-        char ip [INET_ADDRSTRLEN];
+        // void * addr = nullptr;
+        // char ip [INET_ADDRSTRLEN];
 
         if (p->ai_family == AF_INET) {
             struct sockaddr_in * ipv4 = reinterpret_cast<struct sockaddr_in *>(p->ai_addr);

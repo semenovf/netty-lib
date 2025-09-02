@@ -73,11 +73,11 @@ int reader_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds milli
             if (ev.events & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND)) {
                 res++;
                 char buf[1];
-                auto n = ::recv(ev.data.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+                auto n1 = ::recv(ev.data.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
-                if (n > 0) {
+                if (n1 > 0) {
                     on_ready_read(ev.data.fd);
-                } else if (n == 0) {
+                } else if (n1 == 0) {
                     on_disconnected(ev.data.fd);
                 } else {
                     if (errno == ECONNRESET) {

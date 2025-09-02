@@ -349,7 +349,7 @@ private:
         }
     }
 
-    void process_route_received (node_id id, node_index_t idx, bool is_response
+    void process_route_received (node_id id, node_index_t /*idx*/, bool is_response
         , route_info<node_id> const & rinfo)
     {
         bool new_route_added = false;
@@ -446,8 +446,8 @@ private:
                     auto opt_index = rinfo.gateway_index(_id);
 
                     if (!opt_index) {
-                        std::vector<char> msg = _rtab.serialize_request(_id, rinfo);
-                        forward_packet(id, std::move(msg));
+                        std::vector<char> msg1 = _rtab.serialize_request(_id, rinfo);
+                        forward_packet(id, std::move(msg1));
                     }
                 }
             }
@@ -463,6 +463,9 @@ private:
                     , to_string(dest_id), gw_chain.size());
 
                 _on_route_ready(dest_id, std::move(gw_chain));
+
+                // Force set alive flag with new route obtained
+                _alive_controller.update_if(dest_id);
             }
         }
     }
@@ -553,8 +556,8 @@ public:
                         if (initiator_id != id) {
                             route_info<node_id> rinfo;
                             rinfo.initiator_id = initiator_id;
-                            std::vector<char> msg = _rtab.serialize_request(_id, rinfo);
-                            this->enqueue_packet(id, 0, std::move(msg));
+                            std::vector<char> msg1 = _rtab.serialize_request(_id, rinfo);
+                            this->enqueue_packet(id, 0, std::move(msg1));
                         }
                     });
                 }
@@ -564,6 +567,9 @@ public:
                 if (_on_route_ready) {
                     NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})", to_string(id), 0);
                     _on_route_ready(id, gateway_chain_type{});
+
+                    // Force set alive flag with new route obtained
+                    _alive_controller.update_if(id);
                 }
             }
         });

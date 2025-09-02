@@ -9,7 +9,7 @@
 include(FetchContent)
 
 if (NETTY__ENABLE_ENET)
-    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS enet/.git)
+    if (NETTY__DISABLE_FETCH_CONTENT AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/enet/.git)
         add_subdirectory(enet 3rdparty/enet)
     else()
         set(FETCHCONTENT_UPDATES_DISCONNECTED_ENET ON)

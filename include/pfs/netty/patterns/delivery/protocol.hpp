@@ -312,7 +312,7 @@ public:
     }
 
     template <typename Deserializer>
-    ack_packet (header const & h, Deserializer & in)
+    ack_packet (header const & h, Deserializer & /*in*/)
         : header(h)
     {}
 

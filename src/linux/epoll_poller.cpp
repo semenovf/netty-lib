@@ -70,7 +70,7 @@ void epoll_poller::add_socket (socket_id sid, error * perr)
 
 void epoll_poller::add_listener (listener_id sid, error * perr)
 {
-    add_socket(sid);
+    add_socket(sid, perr);
 }
 
 void epoll_poller::wait_for_write (socket_id sid, error * perr)
@@ -94,7 +94,7 @@ void epoll_poller::remove_socket (socket_id sid, error * perr)
 
 void epoll_poller::remove_listener (listener_id sid, error * perr)
 {
-    remove_socket(sid);
+    remove_socket(sid, perr);
 }
 
 int epoll_poller::poll (std::chrono::milliseconds millis, error * perr)

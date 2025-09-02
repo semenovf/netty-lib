@@ -77,11 +77,6 @@ private:
         bandwidth_data bwd;
     };
 
-    struct item
-    {
-        socket_id sid;
-    };
-
 private:
     std::unordered_map<socket_id, account> _accounts;
     std::vector<socket_id> _removable;
@@ -285,7 +280,7 @@ public:
     unsigned int step (error * perr = nullptr)
     {
         auto result = 0;
-        result += send(perr);
+        result += send();
         auto n = WriterPoller::poll(std::chrono::milliseconds{0}, perr);
 
         result += n > 0 ? n : 0;
@@ -386,7 +381,7 @@ private:
     /**
      * @return Number of successful frame sendings.
      */
-    unsigned int send (error * perr = nullptr)
+    unsigned int send ()
     {
         unsigned int result = 0;
 

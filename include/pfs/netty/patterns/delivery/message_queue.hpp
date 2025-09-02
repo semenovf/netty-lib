@@ -33,18 +33,18 @@ private:
         char const * data {nullptr};
         std::size_t size {0};
 
-        item (message_id msgid, std::vector<char> msg)
+        item (message_id msgid, std::vector<char> m)
             : msgid(msgid)
-            , msg(std::move(msg))
+            , msg(std::move(m))
         {
             data = msg.data();
             size = msg.size();
         }
 
-        item (message_id msgid, char const * msg, std::size_t size)
+        item (message_id msgid, char const * m, std::size_t sz)
             : msgid(msgid)
-            , data(msg)
-            , size(size)
+            , data(m)
+            , size(sz)
         {}
     };
 

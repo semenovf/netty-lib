@@ -17,13 +17,13 @@ namespace meshnet {
 
 class infinite_reconnection_policy
 {
-    std::chrono::seconds _timeout {5};
     unsigned int _attempts {0};
 
 public:
-    infinite_reconnection_policy (std::chrono::seconds timeout = std::chrono::seconds{5})
-        : _timeout(timeout)
-    {}
+    infinite_reconnection_policy (bool is_gateway)
+    {
+        (void)is_gateway;
+    }
 
 public:
     bool required () const noexcept
@@ -39,7 +39,14 @@ public:
     std::chrono::seconds fetch_timeout () noexcept
     {
         _attempts++;
-        return _timeout;
+
+        if (_attempts > 30)
+            return std::chrono::seconds{15};
+
+        if (_attempts > 15)
+            return std::chrono::seconds{10};
+
+        return std::chrono::seconds{5};
     }
 
 public: // static

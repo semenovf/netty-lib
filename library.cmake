@@ -209,6 +209,11 @@ target_include_directories(netty
 
 target_link_libraries(netty PUBLIC pfs::common)
 
+if (NETTY__ENABLE_AGGRESSIVE_COMPILE_CHECK)
+    include(AggressiveCheckOpts)
+    aggressive_check_opts(netty)
+endif()
+
 if (ANDROID)
     find_package(Java "1.8" COMPONENTS Development REQUIRED)
 

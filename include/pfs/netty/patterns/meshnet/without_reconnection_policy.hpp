@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2025.02.04 Initial version.
+//      2025.08.19 Added constructor.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -15,21 +16,34 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-struct without_reconnection_policy
+class without_reconnection_policy
 {
-    static bool supported () noexcept
+public:
+    without_reconnection_policy (bool is_gateway)
     {
-        return false;
+        (void)is_gateway;
     }
 
+public:
     bool required () noexcept
     {
         return false;
     }
 
+    unsigned int attempts () const noexcept
+    {
+        return 0;
+    }
+
     std::chrono::seconds fetch_timeout () const noexcept
     {
         return std::chrono::seconds{0};
+    }
+
+public:
+    static bool supported () noexcept
+    {
+        return false;
     }
 };
 

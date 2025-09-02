@@ -176,11 +176,11 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 res++;
 
                 char buf[1];
-                auto n = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+                auto n1 = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
 
-                if (n > 0) {
+                if (n1 > 0) {
                     on_ready_read(ev.fd);
-                } else if (n == 0) {
+                } else if (n1 == 0) {
                     on_disconnected(ev.fd);
                 } else {
                     if (errno != ECONNRESET) {

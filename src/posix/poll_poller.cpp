@@ -23,8 +23,10 @@ poll_poller::poll_poller (short int observable_events)
 poll_poller::~poll_poller ()
 {}
 
-void poll_poller::add_socket (socket_id sock, error * /*perr*/)
+void poll_poller::add_socket (socket_id sock, error * perr)
 {
+    (void)perr;
+
     auto pos = std::find_if(events.begin(), events.end()
         , [& sock] (pollfd const & p) { return sock == p.fd;});
 

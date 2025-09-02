@@ -12,12 +12,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-#if _MSC_VER
 template <typename T>
 using callback_t = std::function<T>;
-#else
-template <typename R, typename ...Args>
-using callback_t = std::function<R, Args...>;
-#endif
 
 NETTY__NAMESPACE_END

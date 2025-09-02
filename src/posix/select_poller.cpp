@@ -33,6 +33,8 @@ select_poller::~select_poller ()
 
 void select_poller::add_socket (socket_id sock, error * perr)
 {
+    (void)perr;
+
     auto pos = std::find(sockets.begin(), sockets.end(), sock);
 
     // Already exists
@@ -48,8 +50,6 @@ void select_poller::add_socket (socket_id sock, error * perr)
         *pos = sock;
 
     ++count;
-
-    (void)perr;
 
     if (observe_read) {
         if (!FD_ISSET(sock, & readfds)) {
@@ -70,7 +70,7 @@ void select_poller::add_socket (socket_id sock, error * perr)
 
 void select_poller::add_listener (listener_id sock, error * perr)
 {
-    add_socket(sock);
+    add_socket(sock, perr);
 }
 
 void select_poller::wait_for_write (socket_id sock, error * perr)
@@ -78,8 +78,10 @@ void select_poller::wait_for_write (socket_id sock, error * perr)
     add_socket(sock, perr);
 }
 
-void select_poller::remove_socket (socket_id sock, error * /*perr*/)
+void select_poller::remove_socket (socket_id sock, error * perr)
 {
+    (void)perr;
+
     if (observe_read) {
         FD_CLR(sock, & readfds);
     }
@@ -104,7 +106,7 @@ void select_poller::remove_socket (socket_id sock, error * /*perr*/)
 
 void select_poller::remove_listener (listener_id sock, error * perr)
 {
-    remove_socket(sock);
+    remove_socket(sock, perr);
 }
 
 int select_poller::poll (fd_set * rfds, fd_set * wfds, std::chrono::milliseconds millis, error * perr)

@@ -17,12 +17,19 @@ namespace meshnet {
 
 class reconnection_policy
 {
+    bool _is_gateway {false};
     unsigned int _attempts {0};
+
+public:
+    reconnection_policy (bool is_gateway)
+        : _is_gateway(is_gateway)
+    {}
 
 public:
     bool required () const noexcept
     {
-        return _attempts <= 30;
+        // Infinite for gateway
+        return _is_gateway ? true : _attempts <= 30;
     }
 
     unsigned int attempts () const noexcept
@@ -35,12 +42,9 @@ public:
         _attempts++;
 
         if (_attempts > 30)
-            return std::chrono::seconds{0};
+            return std::chrono::seconds{15};
 
-        if (_attempts > 20)
-            return std::chrono::seconds{30};
-
-        if (_attempts > 10)
+        if (_attempts > 15)
             return std::chrono::seconds{10};
 
         return std::chrono::seconds{5};

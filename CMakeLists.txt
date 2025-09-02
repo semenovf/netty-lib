@@ -26,7 +26,7 @@ option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OF
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
 option(NETTY__ENABLE_TELEMETRY "Enable telemetry for meshnet and delivery patterns" ON)
 option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" ON)
-
+option(NETTY__ENABLE_AGGRESSIVE_COMPILE_CHECK "Use aggressive check compile options (g++ only)" OFF)
 option(NETTY__ENABLE_TRACE "Enable trace messages output" OFF)
 
 if (NETTY__BUILD_STRICT)
@@ -56,6 +56,7 @@ endif()
 
 add_subdirectory(3rdparty)
 add_subdirectory(2ndparty)
+
 include(${CMAKE_CURRENT_LIST_DIR}/library.cmake)
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)

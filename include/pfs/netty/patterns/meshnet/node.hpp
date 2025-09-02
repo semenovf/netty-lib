@@ -249,8 +249,12 @@ public:
         _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
             , netty::connection_failure_reason reason)
         {
-            _on_error(tr::f_("connection refused for socket: {}: reason: {}"
-                , to_string(saddr), to_string(reason)));
+            // Suppress error output if reconnection supported
+            if (!reconnection_policy::supported()) {
+                _on_error(tr::f_("connection refused for socket: {}: reason: {}"
+                    , to_string(saddr), to_string(reason)));
+            }
+
             schedule_reconnection(saddr);
         };
 
@@ -319,7 +323,7 @@ public:
 
             _heartbeat_controller.update(writer_sid);
 
-            NETTY__TRACE(MESHNET_TAG, "Channel established: {}", to_string(id));
+            NETTY__TRACE(MESHNET_TAG, "channel established: {}", to_string(id));
 
             _on_channel_established(id, _index, is_gateway);
 
@@ -341,12 +345,12 @@ public:
 
         _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
         {
-            NETTY__TRACE(MESHNET_TAG, "Socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
+            NETTY__TRACE(MESHNET_TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
             destroy_channel(sid);
         };
 
         _heartbeat_controller.on_expired = [this] (socket_id sid) {
-            NETTY__TRACE(MESHNET_TAG, "Socket heartbeat timeout exceeded: #{}", sid);
+            NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
             schedule_reconnection(sid);
         };
 
@@ -758,11 +762,13 @@ private:
         auto & h = pos->second; // host_info instance
 
         if (h.reconn_policy.has_value()) {
+            h.reconn_policy.reset();
+
+            NETTY__TRACE(MESHNET_TAG, "reconnecting stopped to: {}", to_string(h.remote_saddr));
+
             if (_on_reconnection_stopped)
                 _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr);
-
-            h.reconn_policy.reset();
-        }
+       }
     }
 
     void cache_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
@@ -791,7 +797,7 @@ private:
         auto & h = pos->second; // host_info instance
 
         if (!h.reconn_policy.has_value()) {
-            h.reconn_policy = reconnection_policy{};
+            h.reconn_policy = reconnection_policy{_is_gateway};
         } else {
             if (!h.reconn_policy->required()) {
                 reconnecting = false;
@@ -800,18 +806,21 @@ private:
         }
 
         if (reconnecting) {
-            auto reconn_timeout = h.reconn_policy->fetch_timeout();
+            bool initial_reconnecting = h.reconn_policy->attempts() == 0;
 
-            NETTY__TRACE(MESHNET_TAG, "reconnecting to: {} after {}", to_string(h.remote_saddr)
-                , reconn_timeout);
+            auto reconn_timeout = h.reconn_policy->fetch_timeout();
 
             if (h.local_addr != inet4_addr{})
                 _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr, h.local_addr);
             else
                 _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr);
 
-            if (_on_reconnection_started)
-                _on_reconnection_started(_index, h.remote_saddr, h.local_addr);
+            if (initial_reconnecting) {
+                NETTY__TRACE(MESHNET_TAG, "reconnecting started to: {}", to_string(h.remote_saddr));
+
+                if (_on_reconnection_started)
+                    _on_reconnection_started(_index, h.remote_saddr, h.local_addr);
+            }
         }
     }
 
@@ -838,7 +847,7 @@ private:
         auto success = (res.first && _channels.close_channel(res.second));
 
         if (success) {
-            NETTY__TRACE(MESHNET_TAG, "Channel destroyed: {}", to_string(res.second));
+            NETTY__TRACE(MESHNET_TAG, "channel destroyed: {}", to_string(res.second));
             _on_channel_destroyed(res.second, _index);
 
 #if NETTY__TELEMETRY_ENABLED

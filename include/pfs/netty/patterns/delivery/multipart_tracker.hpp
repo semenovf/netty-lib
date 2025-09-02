@@ -89,7 +89,7 @@ public:
         , _size(length)
         , _exp_timeout(exp_timeout)
     {
-        reset(true);
+        reset();
     }
 
     /**
@@ -108,7 +108,7 @@ public:
     {
         _data = _payload.data();
         _size = _payload.size();
-        reset(true);
+        reset();
     }
 
     multipart_tracker (multipart_tracker const &) = delete;
@@ -120,7 +120,7 @@ public:
     ~multipart_tracker () {}
 
 private:
-    void reset (bool initial = false)
+    void reset ()
     {
         // part_count = 1 + size() / part_size
         // last_sn    = first_sn + part_count - 1
@@ -311,7 +311,7 @@ public:
             // There are X-parts in the tracker
             if (_exp_timepoint <= clock_type::now()) {
                 // Find first expired part.
-                for (auto i = 0; i < _parts_acked.size(); i++) {
+                for (std::size_t i = 0; i < _parts_acked.size(); i++) {
                     if (!_parts_acked[i]) {
                         _current_index = i;
                         found = true;

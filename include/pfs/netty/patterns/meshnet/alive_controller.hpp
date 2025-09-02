@@ -172,15 +172,15 @@ public:
 
         auto now = std::chrono::steady_clock::now();
 
-        for (auto pos = _alive_items.begin(); pos != _alive_items.end(); ++pos) {
-            if (pos->id == id) {
+        for (auto pos1 = _alive_items.begin(); pos1 != _alive_items.end(); ++pos1) {
+            if (pos1->id == id) {
                 // Looping or duplication detected
-                if (now < pos->looping_threshold)
+                if (now < pos1->looping_threshold)
                     return false;
 
                 // Erase only from _alive_items to insert new value in insert() method below.
                 // No need to erase from _alive_nodes here.
-                _alive_items.erase(pos);
+                _alive_items.erase(pos1);
 
                 insert(id);
                 return true;
