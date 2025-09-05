@@ -72,7 +72,8 @@ TEST_CASE("simple delivery") {
     };
 
     net.on_message_received = [& message_received_counter] (std::string const & source_name
-        , std::string const & sender_name, std::string const & msgid, std::vector<char> msg)
+        , std::string const & sender_name, std::string const & msgid, std::vector<char> msg
+        , std::size_t, std::size_t)
     {
         LOGD(TAG, "{}: Message received: {}: {}: {} bytes", source_name, sender_name, msgid
             , msg.size());
@@ -98,7 +99,7 @@ TEST_CASE("simple delivery") {
     CHECK(tools::wait_atomic_counter(route_ready_counter, 1));
 
     LOGD(TAG, "Send text: {} bytes", text.size());
-    net.send("A0", "A1", text, 0);
+    net.send_message("A0", "A1", text, 0);
 
     CHECK(tools::wait_atomic_counter(message_received_counter, 1));
 
@@ -107,7 +108,7 @@ TEST_CASE("simple delivery") {
 }
 #endif
 
-#if 0
+#if 1
 TEST_CASE("delivery") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
@@ -157,17 +158,17 @@ TEST_CASE("delivery") {
     CHECK(tools::wait_matrix_count(g_route_matrix, 20));
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "A0", "C0"}));
 
-    net.send("A0", "C0", g_text0, 0);
+    net.send_message("A0", "C0", g_text0, 0);
 
     if (node_t::output_priority_count() > 1)
-        net.send("A0", "C0", g_text1, 1);
+        net.send_message("A0", "C0", g_text1, 1);
     else
-        net.send("A0", "C0", g_text1, 0);
+        net.send_message("A0", "C0", g_text1, 0);
 
     if (node_t::output_priority_count() > 2)
-        net.send("A0", "C0", g_text2, 2);
+        net.send_message("A0", "C0", g_text2, 2);
     else
-        net.send("A0", "C0", g_text2, 0);
+        net.send_message("A0", "C0", g_text2, 0);
 
     CHECK(tools::wait_matrix_count(g_receiver_ready_matrix, 1));
     CHECK(tools::wait_atomic_counter(g_message_delivered_counter, 3));

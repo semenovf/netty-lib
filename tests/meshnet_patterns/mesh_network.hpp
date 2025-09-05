@@ -154,17 +154,18 @@ public:
             , std::size_t /*source_index*/, std::size_t /*receiver_index*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::string const &
-        , std::vector<char>)> on_message_received
-        = [] (std::string const &, std::string const &, std::string const &, std::vector<char>) {};
+        , std::vector<char>, std::size_t, std::size_t)> on_message_received
+        = [] (std::string const &, std::string const &, std::string const &, std::vector<char>
+            , std::size_t, std::size_t) {};
 
     netty::callback_t<void (std::string const &, std::string const &
         , std::string const &)> on_message_delivered
         = [] (std::string const & /*source_name*/, std::string const & /*receiver_name*/
             , std::string const & /*msgid*/) {};
 
-    netty::callback_t<void (std::string const &, std::string const &
-        , std::vector<char>)> on_report_received
-        = [] (std::string const &, std::string const &, std::vector<char>) {};
+    netty::callback_t<void (std::string const &, std::string const &, std::vector<char>
+        , std::size_t, std::size_t)> on_report_received
+        = [] (std::string const &, std::string const &, std::vector<char>, std::size_t, std::size_t) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::string const &
         , std::size_t, std::size_t)> on_message_receiving_progress
@@ -264,7 +265,8 @@ private:
             , int /*priority*/, std::vector<char> msg)
         {
             auto sender_name = node_name_by_id(sender_id);
-            this->on_message_received(source_name, sender_name, to_string(msgid), std::move(msg));
+            this->on_message_received(source_name, sender_name, to_string(msgid), std::move(msg)
+                , index_by_name(source_name), index_by_name(sender_name));
         });
 
         ptr->on_message_delivered([this, source_name] (node_id receiver_id, message_id msgid)
@@ -276,7 +278,8 @@ private:
         ptr->on_report_received([this, source_name] (node_id sender_id, int /*priority*/, std::vector<char> report)
         {
             auto sender_name = node_name_by_id(sender_id);
-            this->on_report_received(source_name, sender_name, std::move(report));
+            this->on_report_received(source_name, sender_name, std::move(report)
+                , index_by_name(source_name), index_by_name(sender_name));
         });
 
         ptr->on_message_receiving_progress([this, source_name] (node_id sender_id, message_id msgid
@@ -353,7 +356,8 @@ public:
         initiator_ctx->node_pool_ptr->connect_host(index, target_saddr, behind_nat);
     }
 
-    void send (std::string const & src, std::string const & dest, std::string const & text, int priority = 0)
+    void send_message (std::string const & src, std::string const & dest, std::string const & text
+        , int priority = 0)
     {
         auto sender_ctx = locate_by_name(src);
         auto receiver_id = node_id_by_name(dest);
@@ -363,6 +367,19 @@ public:
 
         sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
             , text.size());
+#else
+        sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+#endif
+    }
+
+    void send_report (std::string const & src, std::string const & dest, std::string const & text
+        , int priority = 0)
+    {
+        auto sender_ctx = locate_by_name(src);
+        auto receiver_id = node_id_by_name(dest);
+
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+        sender_ctx->node_pool_ptr->enqueue_report(receiver_id, priority, text.data(), text.size());
 #else
         sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
 #endif

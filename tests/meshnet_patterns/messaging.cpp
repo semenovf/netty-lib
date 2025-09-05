@@ -7,6 +7,7 @@
 //      2025.04.08 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
 #include "../doctest.h"
 #include "../tools.hpp"
 #include "mesh_network.hpp"
@@ -37,11 +38,20 @@
 //                     D0   D1
 //
 
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+using mesh_network_t = test::meshnet::network<reliable_node_pool_t>;
+#else
 using mesh_network_t = test::meshnet::network<node_pool_t>;
+#endif
 
 std::atomic_int g_channels_established_counter {0};
 pfs::synchronized<bit_matrix<12>> g_route_matrix;
 pfs::synchronized<bit_matrix<12>> g_message_matrix;
+
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+pfs::synchronized<bit_matrix<12>> g_report_matrix;
+#endif
+
 std::string g_text;
 
 static void sigterm_handler (int sig)
@@ -76,6 +86,33 @@ TEST_CASE("messaging") {
         g_route_matrix.wlock()->set(source_index, target_index, true);
     };
 
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+    net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
+        , std::string const & msgid, std::vector<char> msg, std::size_t source_index
+        , std::size_t target_index)
+    {
+        LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
+
+        std::string text(msg.data(), msg.size());
+
+        REQUIRE_EQ(text, g_text);
+
+        g_message_matrix.wlock()->set(source_index, target_index, true);
+    };
+
+    net.on_report_received = [] (std::string const & receiver_name, std::string const & sender_name
+        , std::vector<char> msg, std::size_t source_index, std::size_t target_index)
+    {
+        LOGD(TAG, "Report received by {} from {}", receiver_name, sender_name);
+
+        std::string text(msg.data(), msg.size());
+
+        REQUIRE_EQ(text, g_text);
+
+        g_report_matrix.wlock()->set(source_index, target_index, true);
+    };
+
+#else
     net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
         , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
     {
@@ -89,6 +126,7 @@ TEST_CASE("messaging") {
 
         g_message_matrix.wlock()->set(source_index, target_index, true);
     };
+#endif
 
     constexpr bool BEHIND_NAT = true;
     g_text = tools::random_text();
@@ -138,18 +176,32 @@ TEST_CASE("messaging") {
     CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "d"
         , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"}));
 
-    net.send("A0", "B1", g_text);
-    net.send("B1", "D1", g_text);
-    net.send("D0", "A0", g_text);
-    net.send("D0", "A1", g_text);
-    net.send("D0", "B0", g_text);
-    net.send("D0", "B1", g_text);
-    net.send("D0", "C0", g_text);
-    net.send("D0", "C1", g_text);
-    net.send("D0", "D1", g_text);
+    net.send_message("A0", "B1", g_text);
+    net.send_message("B1", "D1", g_text);
+    net.send_message("D0", "A0", g_text);
+    net.send_message("D0", "A1", g_text);
+    net.send_message("D0", "B0", g_text);
+    net.send_message("D0", "B1", g_text);
+    net.send_message("D0", "C0", g_text);
+    net.send_message("D0", "C1", g_text);
+    net.send_message("D0", "D1", g_text);
 
+    net.send_report("A0", "B1", g_text);
+    net.send_report("B1", "D1", g_text);
+    net.send_report("D0", "A0", g_text);
+    net.send_report("D0", "A1", g_text);
+    net.send_report("D0", "B0", g_text);
+    net.send_report("D0", "B1", g_text);
+    net.send_report("D0", "C0", g_text);
+    net.send_report("D0", "C1", g_text);
+    net.send_report("D0", "D1", g_text);
+
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
     REQUIRE(tools::wait_matrix_count(g_message_matrix, 9));
-
+    REQUIRE(tools::wait_matrix_count(g_report_matrix, 9));
+#else
+    REQUIRE(tools::wait_matrix_count(g_message_matrix, 18));
+#endif
     net.interrupt_all();
     net.join_all();
 }

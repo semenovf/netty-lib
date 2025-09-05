@@ -132,13 +132,13 @@ TEST_CASE("unreachable") {
 
     net.print_routing_table("A0");
 
-    net.send("A0", "C0", g_text);
+    net.send_message("A0", "C0", g_text);
 
     CHECK(tools::wait_matrix_count(g_message_matrix, 1));
 
     net.destroy("C0");
 
-    net.send("A0", "C0", g_text);
+    net.send_message("A0", "C0", g_text);
     CHECK(tools::wait_atomic_counter(g_expired_counter, 1));
 
     net.print_routing_table("A0");
