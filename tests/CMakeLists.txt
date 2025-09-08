@@ -11,9 +11,12 @@
 #       2024.12.25 Added `single_channel_connection` test.
 #       2024.02.13 Added `reliable_delivery_engine` test.
 #       2025.08.06 Added `envelope` test.
+#       2025.08.06 Added `chunk` test.
 ################################################################################
-set(TESTS inet4_addr
+set(TESTS
+    chunk
     envelope
+    inet4_addr
     pubsub)
 
 foreach (target ${TESTS})

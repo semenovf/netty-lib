@@ -6,9 +6,11 @@
 // Changelog:
 //      2025.01.20 Initial version.
 //      2025.02.04 It is a part of patterns::meshnet now.
+//      2025.09.08 Using chunk type.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../chunk.hpp"
 #include "priority_frame.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
@@ -27,7 +29,7 @@ template <typename PriorityTracker>
 class priority_writer_queue
 {
     using priority_tracker_type = PriorityTracker;
-    using chunk_type = std::vector<char>;
+    using chunk_type = chunk;
     using chunk_queue_type = std::queue<chunk_type>;
 
     static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;

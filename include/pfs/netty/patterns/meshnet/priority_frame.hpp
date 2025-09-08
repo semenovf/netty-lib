@@ -7,8 +7,9 @@
 //      2025.02.04 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../../chunk.hpp"
+#include "../../error.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/crc32.hpp>
 #include <pfs/i18n.hpp>
@@ -74,7 +75,7 @@ public:
     /**
      * Pack data into frame.
      */
-    void pack (int priority, std::vector<char> & out, std::vector<char> & in, std::size_t frame_size)
+    void pack (int priority, std::vector<char> & out, chunk & in, std::size_t frame_size)
     {
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
         static std::uint32_t serial = 0;

@@ -6,9 +6,11 @@
 // Changelog:
 //      2025.01.08 Initial version.
 //      2025.06.07 It is a part of patterns::meshnet now.
+//      2025.09.08 Using chunk type.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "../../chunk.hpp"
 #include "priority_frame.hpp"
 #include <pfs/assert.hpp>
 #include <algorithm>
@@ -23,7 +25,7 @@ namespace meshnet {
 
 class writer_queue
 {
-    using chunk_type = std::vector<char>;
+    using chunk_type = chunk;
     using chunk_queue_type = std::queue<chunk_type>;
 
 private:
