@@ -328,7 +328,7 @@ public:
             _on_channel_established(id, _index, is_gateway);
 
 #if NETTY__TELEMETRY_ENABLED
-            _telemetry_producer->push(KEY_CHANNEL_ESTABLISHED
+            _telemetry_producer->broadcast(KEY_CHANNEL_ESTABLISHED
                 , fmt::format("[{},{}]", to_string(_id), to_string(id)));
 #endif
         };
@@ -851,7 +851,7 @@ private:
             _on_channel_destroyed(res.second, _index);
 
 #if NETTY__TELEMETRY_ENABLED
-            _telemetry_producer->push(KEY_CHANNEL_DESTROYED
+            _telemetry_producer->broadcast(KEY_CHANNEL_DESTROYED
                 , fmt::format("[{},{}]", to_string(_id), to_string(res.second)));
 #endif
 
