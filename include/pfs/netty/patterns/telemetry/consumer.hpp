@@ -95,7 +95,7 @@ public:
     }
 
     /**
-     * Connects to publisher.
+     * Connects to producer.
      */
     bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
     {
