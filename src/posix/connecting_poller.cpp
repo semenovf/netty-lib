@@ -10,11 +10,11 @@
 #include <pfs/i18n.hpp>
 
 #if NETTY__SELECT_ENABLED
-#   include "pfs/netty/posix/select_poller.hpp"
+#   include "netty/posix/select_poller.hpp"
 #endif
 
 #if NETTY__POLL_ENABLED
-#   include "pfs/netty/posix/poll_poller.hpp"
+#   include "netty/posix/poll_poller.hpp"
 #endif
 
 #if _MSC_VER

@@ -9,7 +9,7 @@
 ################################################################################
 include(FetchContent)
 
-list(APPEND _deps common ionik)
+set(_deps common ionik)
 
 if (NETTY__BUILD_TESTS)
     list(APPEND _deps lorem)
