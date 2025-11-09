@@ -33,6 +33,8 @@ if (NETTY__ENABLE_ENET)
 endif(NETTY__ENABLE_ENET)
 
 if (NETTY__BUILD_DEMO)
+# TODO Remove below dependencies and dependent code in Demo
+if (FALSE)
     # ZeroMQ options
     set(ENABLE_DRADTS OFF) # CACHE BOOL "" FORCE)
     set(ZMQ_BUILD_TESTS OFF) # CACHE BOOL "" FORCE)
@@ -84,4 +86,5 @@ if (NETTY__BUILD_DEMO)
         FetchContent_MakeAvailable(msgpack)
         message(STATUS "Fetching msgpack-c complete")
     endif()
+endif()
 endif(NETTY__BUILD_DEMO)
