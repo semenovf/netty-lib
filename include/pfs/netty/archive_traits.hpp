@@ -8,21 +8,25 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
-#include <vector>
+#include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename ArchiveType = std::vector<char>>
+template <typename ArchiveType>
 struct archive_traits
 {
+    using size_type = std::size_t;
     using archive_type = ArchiveType;
+    using iterator = typename archive_type::iterator;
+    using const_iterator = typename archive_type::const_iterator;
 
-    static archive_type make_archive (char const * data, std::size_t length)
-    {
-        return archive_type(data, data + length);
-    }
+    static archive_type make_archive (char const * data, size_type length);
+    static archive_type make_archive (iterator first, iterator last);
+    static archive_type make_archive (const_iterator first, const_iterator last);
+
+    static size_type size (archive_type const &);
+    static void assign (archive_type & target, archive_type const & source);
+    static void assign (archive_type & target, archive_type && source) noexcept;
 };
-
-} // namespace patterns
 
 NETTY__NAMESPACE_END

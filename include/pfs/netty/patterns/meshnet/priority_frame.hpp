@@ -53,8 +53,12 @@ namespace meshnet {
 // For debugging only
 #define NETTY__PF_SERIAL_FIELD_SUPPORT 0
 
+template <typename ArchiveTraites>
 class priority_frame
 {
+    using archive_traits = ArchiveTraites;
+    using archive_type = typename archive_traits::archive_type;
+
 private:
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
     static constexpr std::uint16_t header_size () { return 4 + 4; } // flag + pr + serial + size
@@ -75,7 +79,7 @@ public:
     /**
      * Pack data into frame.
      */
-    void pack (int priority, std::vector<char> & out, chunk & in, std::size_t frame_size)
+    void pack (int priority, archive_type & out, chunk & in, std::size_t frame_size)
     {
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
         static std::uint32_t serial = 0;

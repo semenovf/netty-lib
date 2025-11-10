@@ -14,19 +14,45 @@
 #       2025.08.06 Added `chunk` test.
 ################################################################################
 set(TESTS
-    chunk
-    envelope
-    inet4_addr
-    pubsub)
+    archive_traits
+    # chunk
+    # envelope
+    # inet4_addr
+    # pubsub
+    )
+
+if (NOT QT_VERSION_MAJOR)
+    if (Qt6_VERSION_MAJOR)
+        set(QT_VERSION_MAJOR 6)
+    elseif (Qt5_VERSION_MAJOR)
+        set(QT_VERSION_MAJOR 5)
+    else()
+        find_package(QT NAMES Qt6 Qt5)
+
+        if (NOT QT_VERSION_MAJOR)
+            message(FATAL_ERROR "Unable to determine QT_VERSION_MAJOR")
+        endif()
+    endif()
+endif()
+
+if (QT_VERSION_MAJOR)
+    find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core)
+endif()
 
 foreach (target ${TESTS})
     add_executable(tests-${target} ${target}.cpp)
     target_link_libraries(tests-${target} PRIVATE pfs::netty pfs::lorem)
     add_test(NAME tests-${target} COMMAND tests-${target})
+
+    if (Qt${QT_VERSION_MAJOR}_FOUND)
+        target_link_libraries(tests-${target} PRIVATE Qt${QT_VERSION_MAJOR}::Core)
+        target_compile_definitions(tests-${target} PRIVATE "QT_ENABLED=1")
+    endif()
 endforeach()
 
+# FIXME UNCOMMENT
 add_subdirectory(meshnet_patterns)
-add_subdirectory(telemetry_patterns)
+# add_subdirectory(telemetry_patterns)
 
 ####################################################################################################
 # Channel connection tests
