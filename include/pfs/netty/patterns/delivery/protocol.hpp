@@ -153,7 +153,7 @@ public:
         in >> _way;
 
         if (_way == static_cast<std::uint8_t>(syn_way_enum::request)) {
-            if (!in.empty()) {
+            if (!in.at_end()) {
                 std::uint8_t size = 0;
                 in >> size;
 
@@ -211,7 +211,7 @@ public:
 //  1     8           16           8       4     8      4    len bytes
 // |------------------------ 49 bytes ---------------------|
 //
-template <typename MessageId>
+template <typename MessageId, typename ArchiveType>
 class message_packet: public header
 {
 public:
@@ -232,7 +232,7 @@ public:
      * Header can be read before from the deserializer.
      */
     template <typename Deserializer>
-    message_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    message_packet (header const & h, Deserializer & in, ArchiveType & bytes)
         : header(h)
     {
         in >> msgid >> total_size >> part_size >> last_sn;
@@ -266,7 +266,7 @@ public:
 // |H|   SN   |len | payload
 // +-+--------+----+------------
 //  1     8      4   len bytes
-
+template <typename ArchiveType>
 class part_packet: public header
 {
 public:
@@ -277,7 +277,7 @@ public:
     }
 
     template <typename Deserializer>
-    part_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    part_packet (header const & h, Deserializer & in, ArchiveType & bytes)
         : header(h)
     {
         std::uint32_t size = 0;
@@ -327,6 +327,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // report_packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename ArchiveType>
 class report_packet: public header
 {
 public:
@@ -339,7 +340,7 @@ public:
      * Header can be read before from the deserializer.
      */
     template <typename Deserializer>
-    report_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    report_packet (header const & h, Deserializer & in, ArchiveType & bytes)
         : header(h)
     {
         std::uint32_t size = 0;

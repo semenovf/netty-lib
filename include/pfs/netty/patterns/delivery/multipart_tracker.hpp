@@ -41,10 +41,11 @@ namespace delivery {
 //   |                                                   +--- _current_index                 |
 //   +--- _first_sn                                                              _last_sn ---+
 
-template <typename MessageId>
+template <typename MessageId, typename ArchiveType>
 class multipart_tracker
 {
     using message_id = MessageId;
+    using archive_type = ArchiveType;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
@@ -179,7 +180,7 @@ private:
             part_size = _size - _part_size * index;
 
         if (index == 0) { // First part
-            message_packet<message_id> pkt {sn};
+            message_packet<message_id, archive_type> pkt {sn};
             pkt.msgid = _msgid;
             pkt.total_size = pfs::numeric_cast<std::uint64_t>(_size);
             pkt.part_size  = _part_size;
@@ -190,7 +191,7 @@ private:
             update_heading_exp_timepoint();
             update_exp_timepoint();
         } else {
-            part_packet pkt {sn};
+            part_packet<archive_type> pkt {sn};
             pkt.serialize(out, _data + _part_size * index, part_size);
         }
 

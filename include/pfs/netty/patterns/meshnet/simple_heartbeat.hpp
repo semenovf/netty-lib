@@ -26,6 +26,8 @@ class simple_heartbeat
 {
     using socket_id = typename Node::socket_id;
     using serializer_traits = typename Node::serializer_traits;
+    using archive_type = typename serializer_traits::archive_type;
+    using serializer_type = typename serializer_traits::serializer_type;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct heartbeat_item
@@ -104,8 +106,8 @@ public:
             auto now = std::chrono::steady_clock::now();
             auto pos = _q.begin();
 
-            std::vector<char> ar;
-            auto out = serializer_traits::make_serializer(ar);
+            archive_type ar;
+            serializer_type out{ar};
             heartbeat_packet pkt;
             pkt.serialize(out);
 

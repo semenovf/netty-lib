@@ -23,12 +23,13 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename Socket, typename ReaderPoller>
+template <typename Socket, typename ReaderPoller, typename ArchiveType>
 class reader_pool: protected ReaderPoller
 {
 public:
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
+    using archive_type = ArchiveType;
 
 private:
     struct account
@@ -43,7 +44,7 @@ private:
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
-    mutable callback_t<void (socket_id, std::vector<char>)> on_data_ready;
+    mutable callback_t<void (socket_id, archive_type)> on_data_ready;
     mutable callback_t<void (socket_id)> on_disconnected;
     mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
@@ -83,7 +84,7 @@ public:
                 return;
             }
 
-            std::vector<char> inpb;
+            archive_type inpb;
 
             // Read all received data and put it into input buffer.
             for (;;) {
@@ -106,7 +107,7 @@ public:
             }
 
             if (this->on_data_ready) {
-                if (!inpb.empty())
+                if (inpb.size() > 0)
                     this->on_data_ready(id, std::move(inpb));
             }
         };

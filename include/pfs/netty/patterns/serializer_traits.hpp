@@ -7,7 +7,7 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/namespace.hpp>
+#include "../../namespace.hpp"
 #include <pfs/endian.hpp>
 #include <pfs/binary_istream.hpp>
 #include <pfs/binary_ostream.hpp>

@@ -15,6 +15,7 @@
 #include "pfs/netty/patterns/pubsub/publisher.hpp"
 #include "pfs/netty/patterns/pubsub/subscriber.hpp"
 #include "pfs/netty/patterns/pubsub/writer_queue.hpp"
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -49,7 +50,7 @@ using subscriber_t = netty::patterns::pubsub::subscriber<
     , netty::connecting_select_poller_t
     , netty::reader_select_poller_t
 #endif
-    , netty::patterns::pubsub::input_controller>;
+    , netty::patterns::pubsub::input_controller<std::vector<char>>>;
 
 }} // namespace patterns::pubsub
 

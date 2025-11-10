@@ -25,7 +25,7 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename PriorityTracker>
+template <typename PriorityTracker, typename ArchiveType>
 class priority_writer_queue
 {
     using priority_tracker_type = PriorityTracker;
@@ -35,6 +35,9 @@ class priority_writer_queue
     static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
 
     static_assert(PRIORITY_COUNT > 0, "Priority count must be at least 1");
+
+public:
+    using archive_type = ArchiveType;
 
 private:
     std::array<chunk_queue_type, PRIORITY_COUNT> _qpool; // Chunks queue pool

@@ -46,16 +46,19 @@ template <typename NodeId
     , typename RecursiveWriterMutex>
 class node_pool: public interruptable
 {
-    using node_interface_type = node_interface<NodeId>;
+public:
+    using node_id = NodeId;
+    using serializer_traits = typename RoutingTable::serializer_traits;
+    using archive_type = typename serializer_traits::archive_type;
+    using address_type = node_id;
+    using gateway_chain_type = typename RoutingTable::gateway_chain_type;
+
+private:
+    using node_interface_type = node_interface<NodeId, archive_type>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
     using alive_controller_type = AliveController;
     using writer_mutex_type = RecursiveWriterMutex;
-
-public:
-    using node_id = NodeId;
-    using address_type = node_id;
-    using gateway_chain_type = typename routing_table_type::gateway_chain_type;
 
 private:
     node_id _id;
@@ -85,7 +88,7 @@ private:
     callback_t<void (node_id)> _on_expired;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
-    callback_t<void (node_id, int, std::vector<char>)> _on_data_received;
+    callback_t<void (node_id, int, archive_type)> _on_data_received;
 
 public:
 #if NETTY__TELEMETRY_ENABLED
@@ -216,7 +219,7 @@ public: // Set callbacks
      * Notify when message received (domestic or global)
      *
      * @details Callback @a f signature must match:
-     *          void (node_id sender, int priority, std::vector<char> bytes)
+     *          void (node_id sender, int priority, archive_type bytes)
      */
     template <typename F>
     node_pool & on_data_received (F && f)
@@ -276,7 +279,7 @@ private:
         return & *_nodes[index - 1];
     }
 
-    bool enqueue_packet (node_id id, int priority, std::vector<char> && data)
+    bool enqueue_packet (node_id id, int priority, archive_type && data)
     {
         auto ptr = locate_writer(id);
 
@@ -309,7 +312,7 @@ private:
 
         if (updated && _is_gateway) {
             // Forward packet to nearest nodes
-            std::vector<char> msg = _alive_controller.serialize_alive(ainfo);
+            archive_type msg = _alive_controller.serialize_alive(ainfo);
             forward_packet(id, std::move(msg));
         }
     }
@@ -332,7 +335,7 @@ private:
             // Need an example when such situation could happen.
             PFS__THROW_UNEXPECTED(gw_id != id, "Fix meshnet::node_pool algorithm");
 
-            std::vector<char> msg = _alive_controller.serialize_unreachable(uinfo);
+            archive_type msg = _alive_controller.serialize_unreachable(uinfo);
             ptr->enqueue_packet(gw_id, 0, std::move(msg));
             return;
         } else {
@@ -401,7 +404,7 @@ private:
 
                     // Serialize response and send to previous gateway (if index > 0)
                     // or to the initiator node
-                    std::vector<char> msg = _rtab.serialize_response(rinfo);
+                    archive_type msg = _rtab.serialize_response(rinfo);
 
                     if (index > 0) {
                         auto addressee_id = rinfo.route[index - 1];
@@ -437,7 +440,7 @@ private:
                 }
 
                 // Initiate response and transmit it by the reverse route
-                std::vector<char> msg = _rtab.serialize_response(_id, rinfo);
+                archive_type msg = _rtab.serialize_response(_id, rinfo);
                 enqueue_packet(id, 0, std::move(msg));
 
                 // Forward request to nearest nodes if this gateway is not present in the received route
@@ -446,7 +449,7 @@ private:
                     auto opt_index = rinfo.gateway_index(_id);
 
                     if (!opt_index) {
-                        std::vector<char> msg1 = _rtab.serialize_request(_id, rinfo);
+                        archive_type msg1 = _rtab.serialize_request(_id, rinfo);
                         forward_packet(id, std::move(msg1));
                     }
                 }
@@ -475,7 +478,7 @@ private:
      *
      * @param data Serialized packet.
      */
-    void forward_packet (node_id sender_id, std::vector<char> && data)
+    void forward_packet (node_id sender_id, archive_type && data)
     {
         for (node_index_t i = 0; i < _nodes.size(); i++)
             _nodes[i]->enqueue_forward_packet(sender_id, 0, data.data(), data.size());
@@ -544,7 +547,7 @@ public:
             if (is_gateway) {
                 _rtab.add_gateway(id);
 
-                std::vector<char> msg = _rtab.serialize_request(_id);
+                archive_type msg = _rtab.serialize_request(_id);
                 this->enqueue_packet(id, 0, std::move(msg));
 
                 // Send available routes to connected gateway on behalf of destination (according to
@@ -556,7 +559,7 @@ public:
                         if (initiator_id != id) {
                             route_info<node_id> rinfo;
                             rinfo.initiator_id = initiator_id;
-                            std::vector<char> msg1 = _rtab.serialize_request(_id, rinfo);
+                            archive_type msg1 = _rtab.serialize_request(_id, rinfo);
                             this->enqueue_packet(id, 0, std::move(msg1));
                         }
                     });
@@ -606,14 +609,14 @@ public:
             node->on_domestic_data_received(_on_data_received);
 
             node->on_global_data_received([this] (node_id /*id*/, int priority
-                    , node_id sender_id, node_id receiver_id, std::vector<char> bytes) {
+                    , node_id sender_id, node_id receiver_id, archive_type bytes) {
                 PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node_pool algorithm");
                 _on_data_received(sender_id, priority, std::move(bytes));
             });
         }
 
         node->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
-                , std::vector<char> packet) {
+                , archive_type packet) {
             PFS__THROW_UNEXPECTED(_id != receiver_id && _is_gateway, "Fix meshnet::node_pool algorithm");
 
             node_id gw_id;
@@ -628,7 +631,7 @@ public:
             _on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
                 , to_string(sender_id), to_string(receiver_id)));
 
-            std::vector<char> unreach_pkt = _alive_controller.serialize_unreachable(_id
+            archive_type unreach_pkt = _alive_controller.serialize_unreachable(_id
                 , sender_id, receiver_id);
 
             ptr = locate_writer(sender_id, & gw_id);
@@ -784,7 +787,7 @@ public:
      *
      * @return @c true if route found to @a id.
      */
-    bool enqueue (node_id id, int priority, std::vector<char> data)
+    bool enqueue (node_id id, int priority, archive_type data)
     {
         return enqueue(id, priority, data.data(), data.size());
     }

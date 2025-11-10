@@ -13,27 +13,38 @@
 #include "../../namespace.hpp"
 #include "priority_frame.hpp"
 #include <pfs/assert.hpp>
-#include <vector>
+#include <array>
+#include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
-template <int PriorityCount>
+template <int PriorityCount, typename ArchiveType>
 class priority_input_account
 {
+    using archive_type = ArchiveType;
+
 private:
-    std::vector<char> _in; // Buffer to accumulate raw data
-    std::array<std::vector<char>, PriorityCount> _pool;
+    archive_type _in; // Buffer to accumulate raw data
+    std::array<archive_type, PriorityCount> _pool;
 
 public:
-    void append_chunk (std::vector<char> && chunk)
+    void append_chunk (archive_type && chunk)
     {
         _in.insert(_in.end(), chunk.begin(), chunk.end());
 
         while (priority_frame::parse<PriorityCount>(_pool, _in))
             ;
+    }
+
+    archive_type const & archive (int priority) const
+    {
+        PFS__THROW_UNEXPECTED(priority >= 0 && priority < PriorityCount
+            , "Fix meshnet::priority_input_account algorithm: bad priority");
+
+        return _pool[priority];
     }
 
     char const * data (int priority) const

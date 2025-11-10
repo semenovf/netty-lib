@@ -437,6 +437,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // ddata packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename ArchiveType>
 class ddata_packet: public header
 {
 public:
@@ -445,7 +446,7 @@ public:
     {}
 
     template <typename Deserializer>
-    ddata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
+    ddata_packet (header const & h, Deserializer & in, ArchiveType & bytes_in)
         : header(h)
     {
         in >> std::make_pair(& bytes_in, _h.length);
@@ -483,7 +484,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // gdata packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-template <typename NodeId>
+template <typename NodeId, typename ArchiveType>
 class gdata_packet: public header
 {
 public:
@@ -498,7 +499,7 @@ public:
     {}
 
     template <typename Deserializer>
-    gdata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
+    gdata_packet (header const & h, Deserializer & in, ArchiveType & bytes_in)
         : header(h)
     {
         in >> sender_id;

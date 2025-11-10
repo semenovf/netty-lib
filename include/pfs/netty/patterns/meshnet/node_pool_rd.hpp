@@ -35,6 +35,7 @@ public:
     using node_id = typename transport_type::node_id;
     using message_id = typename DeliveryManager::message_id;
     using gateway_chain_type = typename transport_type::gateway_chain_type;
+    using archive_type = typename delivery_manager_type::archive_type;
 
 private:
     transport_type _t;
@@ -55,7 +56,7 @@ private:
             NETTY__TRACE(MESHNET_TAG, "Node expired: {}", to_string(id));
             _dm.pause(id);
             _on_node_expired(id);
-        }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
+        }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
             _dm.process_input(id, priority, std::move(bytes));
         });
     }
@@ -203,7 +204,7 @@ public: // Set callbacks
      * Notify receiver when message received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, message_id, int priority, std::vector<char> msg)
+     *          void (node_id, message_id, int priority, archive_type msg)
      */
     template <typename F>
     node_pool_rd & on_message_received (F && f)
@@ -242,7 +243,7 @@ public: // Set callbacks
      * Notify receiver when report received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id sender, int priority, std::vector<char> report)
+     *          void (node_id sender, int priority, archive_type report)
      */
     template <typename F>
     node_pool_rd & on_report_received (F && f)
@@ -334,7 +335,7 @@ public:
         _t.set_frame_size(id, frame_size);
     }
 
-    bool enqueue_message (node_id id, message_id msgid, int priority, std::vector<char> msg)
+    bool enqueue_message (node_id id, message_id msgid, int priority, archive_type msg)
     {
         return _dm.enqueue_message(id, msgid, priority, std::move(msg));
     }
@@ -356,7 +357,7 @@ public:
         return _dm.enqueue_report(id, priority, data, length);
     }
 
-    bool enqueue_report (node_id id, int priority, std::vector<char> data)
+    bool enqueue_report (node_id id, int priority, archive_type data)
     {
         return _dm.enqueue_report(id, priority, std::move(data));
     }

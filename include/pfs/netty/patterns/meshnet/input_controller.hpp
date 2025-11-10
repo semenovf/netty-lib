@@ -24,8 +24,11 @@ template <typename Node, typename InputAccount>
 class input_controller
 {
     using socket_id = typename Node::socket_id;
-    using serializer_traits = typename Node::serializer_traits;
     using node_id = typename Node::node_id;
+    using serializer_traits = typename Node::serializer_traits;
+    using archive_type = typename serializer_traits::archive_type;
+    using serializer_type = typename serializer_traits::serializer_type;
+    using deserializer_type = typename serializer_traits::deserializer_type;
     using account_type = InputAccount;
 
 protected:
@@ -75,19 +78,19 @@ private:
         _node->process_route_info(sid, pkt.is_response(), pkt.rinfo);
     }
 
-    void process (socket_id sid, int priority, std::vector<char> && bytes)
+    void process (socket_id sid, int priority, archive_type && bytes)
     {
         _node->process_message_received(sid, priority, std::move(bytes));
     }
 
     void process (socket_id sid, int priority, node_id sender_id
-        , node_id receiver_id, std::vector<char> && bytes)
+        , node_id receiver_id, archive_type && bytes)
     {
         _node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
     }
 
     void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
-        , std::vector<char> && bytes)
+        , archive_type && bytes)
     {
         _node->forward_global_packet(priority, sender_id, receiver_id, std::move(bytes));
     }
@@ -109,9 +112,9 @@ public:
         _accounts.erase(sid);
     }
 
-    void process_input (socket_id sid, std::vector<char> && chunk)
+    void process_input (socket_id sid, archive_type && chunk)
     {
-        if (chunk.empty())
+        if (chunk.size() == 0)
             return;
 
         auto * pacc = locate_account(sid);
@@ -124,10 +127,10 @@ public:
             if (pacc->size(priority) == 0)
                 continue;
 
-            auto in = serializer_traits::make_deserializer(pacc->data(priority), pacc->size(priority));
+            deserializer_type in {pacc->archive(priority)};
             bool has_more_packets = true;
 
-            while (has_more_packets && in.available() > 0) {
+            while (has_more_packets && !in.at_end()) {
                 in.start_transaction();
                 header h {in};
 
@@ -194,8 +197,8 @@ public:
                     }
 
                     case packet_enum::ddata: {
-                        std::vector<char> bytes_in;
-                        ddata_packet pkt {h, in, bytes_in};
+                        archive_type bytes_in;
+                        ddata_packet<archive_type> pkt {h, in, bytes_in};
 
                         if (in.commit_transaction())
                             process(sid, priority, std::move(bytes_in));
@@ -206,8 +209,8 @@ public:
                     }
 
                     case packet_enum::gdata: {
-                        std::vector<char> bytes_in;
-                        gdata_packet<node_id> pkt {h, in, bytes_in};
+                        archive_type bytes_in;
+                        gdata_packet<node_id, archive_type> pkt {h, in, bytes_in};
 
                         if (in.commit_transaction()) {
                             if (pkt.receiver_id == _node->id()) {
@@ -216,8 +219,8 @@ public:
                                 // Need to forward the message if the node is a gateway, or discard
                                 // the message otherwise.
                                 if (_node->is_gateway()) {
-                                    std::vector<char> ar;
-                                    auto out = serializer_traits::make_serializer(ar);
+                                    archive_type ar;
+                                    serializer_type out {ar};
                                     pkt.serialize(out, bytes_in.data(), bytes_in.size());
                                     forward_global_packet(priority, pkt.sender_id
                                         , pkt.receiver_id, std::move(ar));
@@ -241,7 +244,7 @@ public:
                 }
             }
 
-            if (in.available() == 0) {
+            if (in.at_end()) {
                 pacc->clear(priority);
             } else {
                 if (pacc->size(priority) > in.available()) {

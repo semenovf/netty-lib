@@ -16,14 +16,17 @@ NETTY__NAMESPACE_BEGIN
 /**
  * The main purpose of this class is to implement a lightweight erase method.
  */
+template <typename ArchiveType>
 class chunk
 {
+    using archive_type = ArchiveType;
+
 public:
-    using iterator = std::vector<char>::iterator;
-    using const_iterator = std::vector<char>::const_iterator;
+    using iterator = typename archive_type::iterator;
+    using const_iterator = typename archive_type::const_iterator;
 
 private:
-    std::vector<char> _data;
+    archive_type _data;
     std::size_t _offset {0};
 
 public:

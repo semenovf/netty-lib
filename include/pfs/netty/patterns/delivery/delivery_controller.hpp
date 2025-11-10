@@ -37,13 +37,14 @@ class delivery_controller
 {
 public:
     using priority_tracker_type = PriorityTracker;
-
-    static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
+    using serializer_traits = SerializerTraits;
 
 private:
+    using archive_type = typename serializer_traits::archive_type;
+    using serializer_type = typename serializer_traits::serializer_type;
+    using deserializer_type = typename serializer_traits::deserializer_type;
     using address_type = Address;
     using message_id = MessageId;
-    using serializer_traits = SerializerTraits;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
@@ -52,7 +53,7 @@ private:
         // Serial number of the last message part of the last message received
         serial_number last_sn {0};
 
-        pfs::optional<multipart_assembler<message_id>> assembler;
+        pfs::optional<multipart_assembler<message_id, archive_type>> assembler;
     };
 
     struct tracker_item
@@ -61,8 +62,11 @@ private:
         serial_number last_sn {0};
 
         // Queue to track of the outgoing messages
-        std::queue<multipart_tracker<message_id>> q;
+        std::queue<multipart_tracker<message_id, archive_type>> q;
     };
+
+public:
+    static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
 
 private:
     address_type _addr;
@@ -111,8 +115,8 @@ private:
     template <typename Manager>
     void enqueue_ack_packet (Manager * m, int priority, serial_number sn)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         ack_packet ack_pkt {sn};
         ack_pkt.serialize(out);
         auto success = m->enqueue_private(_addr, std::move(ar), priority);
@@ -154,8 +158,8 @@ private:
             }
 
             // Serial number is no matter for response
-            std::vector<char> ar;
-            auto out = serializer_traits::make_serializer(ar);
+            archive_type ar;
+            serializer_type out{ar};
             syn_packet<message_id> response_pkt {};
             response_pkt.serialize(out);
             m->enqueue_private(_addr, std::move(ar), 0);
@@ -194,7 +198,7 @@ private:
     }
 
     template <typename Manager>
-    void process_message_part (Manager * m, int priority, header * h, std::vector<char> && part)
+    void process_message_part (Manager * m, int priority, header * h, archive_type && part)
     {
         auto heading_part = h->type() == packet_enum::message;
 
@@ -211,7 +215,7 @@ private:
         }
 
         if (heading_part) {
-            auto pkt = static_cast<message_packet<message_id> *>(h);
+            auto pkt = static_cast<message_packet<message_id, archive_type> *>(h);
 
             if (a.assembler.has_value()) {
                 if (a.assembler->msgid() != pkt->msgid) {
@@ -229,7 +233,7 @@ private:
                 a.assembler.reset();
             }
 
-            multipart_assembler<message_id> assembler { pkt->msgid, pkt->total_size, pkt->part_size
+            multipart_assembler<message_id, archive_type> assembler { pkt->msgid, pkt->total_size, pkt->part_size
                 , h->sn(), pkt->last_sn };
 
             assembler.acknowledge_part(h->sn(), part);
@@ -267,9 +271,9 @@ private:
 
 public:
     template <typename Manager>
-    void process_input (Manager * m, int priority, std::vector<char> const & data)
+    void process_input (Manager * m, int priority, archive_type const & ar)
     {
-        auto in = serializer_traits::make_deserializer(data.data(), data.size());
+        deserializer_type in {ar};
         in.start_transaction();
 
         // Data can contain more than one packet.
@@ -299,8 +303,8 @@ public:
                     }
 
                     case packet_enum::message: {
-                        std::vector<char> part;
-                        message_packet<message_id> pkt {h, in, part};
+                        archive_type part;
+                        message_packet<message_id, archive_type> pkt {h, in, part};
 
                         if (!in.commit_transaction())
                             break;
@@ -310,8 +314,8 @@ public:
                     }
 
                     case packet_enum::part: {
-                        std::vector<char> part;
-                        part_packet pkt {h, in, part};
+                        archive_type part;
+                        part_packet<archive_type> pkt {h, in, part};
 
                         if (!in.commit_transaction())
                             break;
@@ -321,8 +325,8 @@ public:
                     }
 
                     case packet_enum::report: {
-                        std::vector<char> bytes;
-                        report_packet pkt {h, in, bytes};
+                        archive_type bytes;
+                        report_packet<archive_type> pkt {h, in, bytes};
 
                         if (!in.commit_transaction())
                             break;
@@ -350,7 +354,7 @@ public:
                     , tr::_("bad or corrupted header for reliable delivery packet")
                 };
             }
-        } while (in.available() > 0);
+        } while (!in.at_end());
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -368,7 +372,7 @@ private:
         return _exp_syn <= clock_type::now();
     }
 
-    std::vector<char> acquire_syn_packet ()
+    archive_type acquire_syn_packet ()
     {
         std::vector<std::pair<message_id, serial_number>> snumbers;
         snumbers.reserve(PRIORITY_COUNT);
@@ -380,8 +384,8 @@ private:
                 snumbers.push_back(std::make_pair(message_id{}, serial_number{0}));
         }
 
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out{ar};
         syn_packet<message_id> pkt {std::move(snumbers)};
         pkt.serialize(out);
 
@@ -425,7 +429,7 @@ public:
     /**
      * Enqueues regular message.
      */
-    bool enqueue_message (message_id msgid, int priority, std::vector<char> msg)
+    bool enqueue_message (message_id msgid, int priority, archive_type msg)
     {
         auto & t = _trackers.at(priority);
         t.q.emplace(msgid, priority, _part_size, t.last_sn + 1, std::move(msg), _exp_timeout);
@@ -497,8 +501,8 @@ public:
 
             auto mt = & t.q.front();
 
-            std::vector<char> ar;
-            auto out = serializer_traits::make_serializer(ar);
+            archive_type ar;
+            serializer_type out{ar};
             auto sn = mt->acquire_next_part(out);
 
             if (sn > 0) {
@@ -529,16 +533,16 @@ public:
     }
 
 public: // static
-    static std::vector<char> serialize_report (char const * data, std::size_t length)
+    static archive_type serialize_report (char const * data, std::size_t length)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
-        report_packet pkt;
+        archive_type ar;
+        serializer_type out{ar};
+        report_packet<archive_type> pkt;
         pkt.serialize(out, data, length);
         return ar;
     }
 
-    static std::vector<char> serialize_report (std::vector<char> && data)
+    static archive_type serialize_report (archive_type && data)
     {
         return serialize_report(data.data(), data.size());
     }

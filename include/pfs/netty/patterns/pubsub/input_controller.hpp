@@ -18,9 +18,13 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace pubsub {
 
+template <typename ArchiveType>
 class input_controller
 {
     using account_type = input_account;
+
+public:
+    using archive_type = ArchiveType;
 
 protected:
     account_type _acc;
@@ -29,10 +33,10 @@ public:
     input_controller () = default;
 
 public: // Callbacks
-    mutable callback_t<void (std::vector<char> &&)> on_data_ready = [] (std::vector<char> &&) {};
+    mutable callback_t<void (archive_type &&)> on_data_ready = [] (archive_type &&) {};
 
 public:
-    void process_input (std::vector<char> && chunk)
+    void process_input (archive_type && chunk)
     {
         if (chunk.empty())
             return;

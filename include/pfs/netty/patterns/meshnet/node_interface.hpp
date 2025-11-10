@@ -22,7 +22,7 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
-template <typename NodeId>
+template <typename NodeId, typename ArchiveType>
 class node_interface
 {
 public:
@@ -42,7 +42,7 @@ public:
     virtual bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) = 0;
     virtual void listen (int backlog = 50) = 0;
     virtual void enqueue (node_id id, int priority, char const * data, std::size_t len) = 0;
-    virtual void enqueue (node_id id, int priority, std::vector<char> data) = 0;
+    virtual void enqueue (node_id id, int priority, ArchiveType data) = 0;
     virtual bool has_writer (node_id id) const = 0;
     virtual void set_frame_size (node_id id, std::uint16_t frame_size) = 0  ;
     virtual unsigned int step () = 0;
@@ -60,16 +60,16 @@ public:
     virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
     virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;
     virtual void on_route_received (callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)>) = 0;
-    virtual void on_domestic_data_received (callback_t<void (node_id, int, std::vector<char>)>) = 0;
+    virtual void on_domestic_data_received (callback_t<void (node_id, int, ArchiveType)>) = 0;
     virtual void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
-        , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/, std::vector<char>)>) = 0;
+        , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/, ArchiveType)>) = 0;
     virtual void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/
-        , node_id /*receiver ID*/, std::vector<char>)>) = 0;
+        , node_id /*receiver ID*/, ArchiveType)>) = 0;
 
     //
     // For internal use only
     //
-    virtual bool enqueue_packet (node_id id, int priority, std::vector<char> data) = 0;
+    virtual bool enqueue_packet (node_id id, int priority, ArchiveType data) = 0;
     virtual bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len) = 0;
     virtual void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) = 0;
     virtual void enqueue_forward_packet (node_id sender_id, int priority

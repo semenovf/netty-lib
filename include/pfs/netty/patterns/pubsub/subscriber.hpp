@@ -46,9 +46,10 @@ class subscriber: public interruptable
 private:
     using socket_type = Socket;
     using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
-    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using input_controller_type = InputController;
+    using archive_type = typename input_controller_type::archive_type;
     using socket_pool_type = netty::socket_pool<socket_type>;
+    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
 
 public:
     using socket_id = typename socket_type::socket_id;
@@ -122,9 +123,9 @@ public:
                 _on_disconnected(saddr);
         };
 
-        _reader_pool.on_data_ready = [this] (socket_id /*sid*/, std::vector<char> && data)
+        _reader_pool.on_data_ready = [this] (socket_id /*sid*/, archive_type ar)
         {
-            _input_controller.process_input(std::move(data));
+            _input_controller.process_input(std::move(ar));
         };
 
         _reader_pool.locate_socket = [this] (socket_id sid)

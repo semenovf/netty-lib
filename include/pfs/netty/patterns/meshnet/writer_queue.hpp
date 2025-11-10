@@ -23,14 +23,18 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+template <typename ArchiveType>
 class writer_queue
 {
     using chunk_type = chunk;
     using chunk_queue_type = std::queue<chunk_type>;
 
+public:
+    using archive_type = ArchiveType;
+
 private:
     chunk_queue_type _q;
-    std::vector<char> _frame; // Current sending frame
+    archive_type _frame; // Current sending frame
 
 public:
     writer_queue () {}

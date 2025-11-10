@@ -12,26 +12,34 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "priority_frame.hpp"
-#include <vector>
+#include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace meshnet {
 
+template <typename ArchiveType>
 class simple_input_account
 {
+    using archive_type = ArchiveType;
+
 private:
-    std::vector<char> _in; // Buffer to accumulate frames
-    std::vector<char> _b;
+    archive_type _in; // Buffer to accumulate frames
+    archive_type _b;
 
 public:
-    void append_chunk (std::vector<char> && chunk)
+    void append_chunk (archive_type && chunk)
     {
         _in.insert(_in.end(), chunk.begin(), chunk.end());
 
         while (priority_frame::parse(_b, _in))
             ;
+    }
+
+    archive_type const & archive (int /*priority*/) const
+    {
+        return _b;
     }
 
     char const * data (int /*priority*/) const noexcept

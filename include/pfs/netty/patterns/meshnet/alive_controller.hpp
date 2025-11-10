@@ -33,6 +33,8 @@ class alive_controller
 {
     using node_id = NodeId;
     using serializer_traits = SerializerTraits;
+    using archive_type = typename serializer_traits::archive_type;
+    using serializer_type = typename serializer_traits::serializer_type;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct alive_item
@@ -216,20 +218,20 @@ public:
         return false;
     }
 
-    std::vector<char> serialize_alive ()
+    archive_type serialize_alive ()
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out{ar};
         alive_packet<node_id> pkt;
         pkt.ainfo.id = _id;
         pkt.serialize(out);
         return ar;
     }
 
-    std::vector<char> serialize_alive (alive_info<node_id> const & ainfo)
+    archive_type serialize_alive (alive_info<node_id> const & ainfo)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out{ar};
         alive_packet<node_id> pkt;
         pkt.ainfo = ainfo;
         pkt.serialize(out);
@@ -239,10 +241,10 @@ public:
     /**
      * Serializes initial custom message.
      */
-    std::vector<char> serialize_unreachable (node_id gw_id, node_id sender_id, node_id receiver_id)
+    archive_type serialize_unreachable (node_id gw_id, node_id sender_id, node_id receiver_id)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out{ar};
         unreachable_packet<node_id> pkt;
         pkt.uinfo.gw_id = gw_id;
         pkt.uinfo.sender_id = sender_id;
@@ -251,10 +253,10 @@ public:
         return ar;
     }
 
-    std::vector<char> serialize_unreachable (unreachable_info<node_id> const & uinfo)
+    archive_type serialize_unreachable (unreachable_info<node_id> const & uinfo)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out{ar};
         unreachable_packet<node_id> pkt;
         pkt.uinfo = uinfo;
         pkt.serialize(out);

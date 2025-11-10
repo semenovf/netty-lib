@@ -47,6 +47,8 @@ class manager
 public:
     using transport_type = Transport;
     using address_type = typename transport_type::address_type;
+    using serializer_traits = typename controller_type::serializer_traits;
+    using archive_type = typename serializer_traits::archive_type;
     using message_id = MessageId;
     using writer_mutex_type = RecursiveWriterMutex;
 
@@ -60,10 +62,10 @@ private: // Callbacks
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     callback_t<void (address_type)> _on_receiver_ready;
-    callback_t<void (address_type, message_id, int, std::vector<char>)> _on_message_received;
+    callback_t<void (address_type, message_id, int, archive_type)> _on_message_received;
     callback_t<void (address_type, message_id)> _on_message_delivered;
     callback_t<void (address_type, message_id)> _on_message_lost;
-    callback_t<void (address_type, int, std::vector<char>)> _on_report_received;
+    callback_t<void (address_type, int, archive_type)> _on_report_received;
     callback_t<void (address_type, message_id, std::size_t)> _on_message_receiving_begin;
     callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_receiving_progress;
 
@@ -106,7 +108,7 @@ public: // Set callbacks
 
     /**
      * @details Callback @a f signature must match:
-     *          void (address_type, message_id, int priority, std::vector<char> msg)
+     *          void (address_type, message_id, int priority, archive_type msg)
      */
     template <typename F>
     manager & on_message_received (F && f)
@@ -139,7 +141,7 @@ public: // Set callbacks
 
     /**
      * @details Callback @a f signature must match:
-     *          void (address_type, int priority, std::vector<char> report)
+     *          void (address_type, int priority, archive_type report)
      */
     template <typename F>
     manager & on_report_received (F && f)
@@ -200,7 +202,7 @@ private:
     // For:
     //      * send SYN and ACK packets (priority = 0)
     //      * send message parts (by outgoing controller)
-    bool enqueue_private (address_type sender_addr, std::vector<char> && data, int priority = 0)
+    bool enqueue_private (address_type sender_addr, archive_type && data, int priority = 0)
     {
         return _transport->enqueue(sender_addr, priority, std::move(data));
     }
@@ -229,13 +231,13 @@ private:
     }
 
     void process_message_received (address_type sender_addr, message_id msgid, int priority
-        , std::vector<char> && msg)
+        , archive_type && msg)
     {
         if (_on_message_received)
             _on_message_received(sender_addr, msgid, priority, std::move(msg));
     };
 
-    void process_report_received (address_type sender_addr, int priority, std::vector<char> && report)
+    void process_report_received (address_type sender_addr, int priority, archive_type && report)
     {
         if (_on_report_received)
             _on_report_received(sender_addr, priority, std::move(report));
@@ -276,7 +278,7 @@ public:
         }
     }
 
-    bool enqueue_message (address_type addr, message_id msgid, int priority, std::vector<char> msg)
+    bool enqueue_message (address_type addr, message_id msgid, int priority, archive_type msg)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -290,7 +292,7 @@ public:
     bool enqueue_message (address_type addr, message_id msgid, int priority, char const * msg
         , std::size_t length)
     {
-        return enqueue_message(addr, msgid, priority, std::vector<char>(msg, msg + length));
+        return enqueue_message(addr, msgid, priority, serializer_traits::make_archive(msg, length));
     }
 
     bool enqueue_static_message (address_type addr, message_id msgid, int priority
@@ -317,7 +319,7 @@ public:
         return _transport->enqueue(addr, priority, std::move(report));
     }
 
-    bool enqueue_report (address_type addr, int priority, std::vector<char> data)
+    bool enqueue_report (address_type addr, int priority, archive_type data)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -334,9 +336,11 @@ public:
      * @details Must be called when data received by underlying transport (e.g. from transport
      *          callback for handle incoming data)
      */
-    void process_input (address_type sender_addr, int priority, std::vector<char> data)
+    void process_input (address_type sender_addr, int priority, archive_type data)
     {
-        if (!data.empty()) {
+        // size() call is more interoperable than empty(): valid for std::vector and QByteArray,
+        // for example.
+        if (data.size() != 0) {
             auto & c = ensure_controller(sender_addr);
             c.process_input(this, priority, std::move(data));
         }
