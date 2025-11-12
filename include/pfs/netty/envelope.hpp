@@ -29,9 +29,12 @@ NETTY__NAMESPACE_BEGIN
 // Bytes 3..len+2 - Payload
 // Byte len+3     - 0xED, end flag
 //
-template <pfs::endian Endianess, typename SizeT>
+template <pfs::endian Endianess, typename SizeT, typename Archive = std::vector<char>>
 class envelope final
 {
+public:
+    using archive_type = Archive;
+
 public:
     static constexpr std::size_t MIN_SIZE = 2 + sizeof(SizeT);
 
@@ -68,7 +71,7 @@ public:
         /**
          * Attempts to parse next envelope from raw bytes.
          */
-        pfs::optional<std::vector<char>> next ()
+        pfs::optional<archive_type> next ()
         {
             if (_bad)
                 return pfs::nullopt;
@@ -99,7 +102,7 @@ public:
                 return pfs::nullopt;
             }
 
-            std::vector<char> result;
+            archive_type result;
             result.reserve(payload_len);
 
             char end_flag = 0;
@@ -120,21 +123,21 @@ public:
     };
 
 public:
-    void pack (std::vector<char> & buf, char const * payload, size_type payload_len)
+    void pack (archive_type & ar, char const * payload, size_type payload_len)
     {
-        pfs::binary_ostream<Endianess> out {buf};
+        pfs::binary_ostream<Endianess> out {ar};
         out << BEGIN_FLAG << payload_len << pfs::string_view(payload, payload_len) << END_FLAG;
     }
 };
 
-template <pfs::endian Endianess, typename SizeT>
-constexpr std::size_t envelope<Endianess, SizeT>::MIN_SIZE;
+template <pfs::endian Endianess, typename SizeT, typename Archive>
+constexpr std::size_t envelope<Endianess, SizeT, Archive>::MIN_SIZE;
 
-template <pfs::endian Endianess, typename SizeT>
-constexpr char envelope<Endianess, SizeT>::BEGIN_FLAG;
+template <pfs::endian Endianess, typename SizeT, typename Archive>
+constexpr char envelope<Endianess, SizeT, Archive>::BEGIN_FLAG;
 
-template <pfs::endian Endianess, typename SizeT>
-constexpr char envelope<Endianess, SizeT>::END_FLAG;
+template <pfs::endian Endianess, typename SizeT, typename Archive>
+constexpr char envelope<Endianess, SizeT, Archive>::END_FLAG;
 
 using envelope8_t    = envelope<pfs::endian::network, std::uint8_t>; // Endianess no matter here
 using envelope16le_t = envelope<pfs::endian::little, std::uint16_t>;
