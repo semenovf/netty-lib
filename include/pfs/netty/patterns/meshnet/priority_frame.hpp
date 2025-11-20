@@ -5,10 +5,10 @@
 //
 // Changelog:
 //      2025.02.04 Initial version.
+//      2025.11.17 `chunk` renamed to `buffer`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
-#include "../../chunk.hpp"
 #include "../../error.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/crc32.hpp>
@@ -20,19 +20,19 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 //
 // Priority frame structure
+//                                  n   n+1  n+2  n+3  n+4  n+5
+//   0    1    2    3    4     4+size-1
 // +----+----+----+----+-------...-----+----+----+----+----+----+
 // | BE | pr |   size  |    payload    |       crc32       | ED |
 // +----+----+----+----+-------...-----+----+----+----+----+----+
 //
-// First Byte (frame start flag):
-// 0xBE
+// First Byte (frame start flag): 0xBE
 //
-// pr:
+// 'pr' (1 byte):
 // +-------------------------+
 // | 7  6  5  4 | 3  2  1  0 |
 // +------------+------------+
@@ -40,22 +40,27 @@ namespace meshnet {
 // +-------------------------+
 // (Pr) - Priority (0 - max, 7 - min).
 //
-// size:
-// Frame payload size
-//
-// crc32
-// CRC32 checksum of the payload
-//
-// Last Byte (frame end flag):
-// 0xED
+// 'size'    : Frame payload size (2 bytes)
+// 'payload' : Frame payload ('size' bytes)
+// 'crc32'   : CRC32 checksum of the payload (4 bytes)
+// Last Byte (frame end flag): 0xED
 //
 
 // For debugging only
 #define NETTY__PF_SERIAL_FIELD_SUPPORT 0
 
+/**
+ * Priority frame traits
+ */
+template <int PriorityCount, typename SerializerTraits>
 class priority_frame
 {
-private:
+    using serializer_traits_type = SerializerTraits;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+    using deserializer_type = typename serializer_traits_type::deserializer_type;
+
+public:
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
     static constexpr std::uint16_t header_size () { return 4 + 4; } // flag + pr + serial + size
 #else
@@ -68,126 +73,84 @@ private:
     static constexpr char end_flag () { return static_cast<char>(0xED); }
 
 public:
-    priority_frame ()
-    {}
+    priority_frame () = delete;
 
 public:
     /**
-     * Pack data into frame.
+     * Partially pack data into frame from the source.
+     *
+     * @param priority Priority value.
+     * @param ar [out] Target to pack data.
+     * @param inp [in,out] Data source.
+     * @param frame_size Maximum frame size. Must be greater than empty_frame_size().
      */
-    void pack (int priority, std::vector<char> & out, chunk & in, std::size_t frame_size)
+    static void pack (int priority, archive_type & ar, archive_type & inp, std::size_t frame_size)
     {
+        if (inp.empty())
+            return;
+
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
         static std::uint32_t serial = 0;
 #endif
-        frame_size = (std::min)(in.size() + empty_frame_size(), frame_size);
+        frame_size = (std::min)(inp.size() + empty_frame_size(), frame_size);
 
         PFS__THROW_UNEXPECTED(frame_size > empty_frame_size(), "Fix priority_frame::pack algorithm");
 
         std::uint16_t payload_size = frame_size - empty_frame_size();
-        auto crc32 = pfs::crc32_of_ptr(in.data(), payload_size);
+        auto crc32 = pfs::crc32_of_ptr(inp.data(), payload_size);
 
-        // Size increment
-        auto new_size = out.size() + frame_size;
-
-        out.reserve(new_size);
-
-        out.push_back(begin_flag());
-        out.push_back(static_cast<char>(priority & 0x0F));
+        serializer_type out {ar};
+        out << begin_flag();
+        out << static_cast<char>(priority & 0x0F);
 
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
         ++serial;
-        out.push_back(static_cast<char>((serial >> 24) & 0xFF));
-        out.push_back(static_cast<char>((serial >> 16) & 0xFF));
-        out.push_back(static_cast<char>((serial >> 8) & 0xFF));
-        out.push_back(static_cast<char>(serial & 0xFF));
+        out << serial;
 #endif
 
-        // `size` in network order
-        out.push_back(static_cast<char>(payload_size >> 8));
-        out.push_back(static_cast<char>(payload_size & 0x00FF));
+        out << payload_size;
+        out.write(inp.data(), inp.size());
+        out << crc32;
+        out << end_flag();
 
-        out.insert(out.end(), in.begin(), in.begin() + payload_size);
-
-        // CRC32 in network order
-        out.push_back(static_cast<char>((crc32 >> 24) & 0xFF));
-        out.push_back(static_cast<char>((crc32 >> 16) & 0xFF));
-        out.push_back(static_cast<char>((crc32 >> 8) & 0xFF));
-        out.push_back(static_cast<char>(crc32 & 0xFF));
-
-        out.push_back(end_flag());
-
-        in.erase(in.begin(), in.begin() + payload_size);
+        inp.erase_front(payload_size);
     }
 
-public: // static
-    static bool parse (std::vector<char> & out, std::vector<char> & in)
+public:
+    /**
+     * Parses serialized frame with extracting of the payload.
+     *
+     * @param pool [out] Priority pool stored payloads extracted from the frame.
+     * @param inp [in] Serialized frame data.
+     *
+     * @return @c true if frame is complete and parsed successfully, @c false if frame is incomplete.
+     *
+     * @throw netty::error if frame is invalid or corrupted
+     */
+    static bool parse (std::array<archive_type, PriorityCount> & pool, archive_type & inp)
     {
-        int priority = parse_header(in);
+        // archive_type & payload
 
-        if (priority < 0)
+        // Incomplete frame
+        if (inp.size() < header_size() + footer_size())
             return false;
 
-#if NETTY__PF_SERIAL_FIELD_SUPPORT
-        std::uint32_t serial = ((static_cast<std::uint32_t>(in[2]) << 24) & 0xFF000000)
-            | (static_cast<std::uint32_t>(in[3] << 16) & 0x00FF0000)
-            | (static_cast<std::uint32_t>(in[4] << 8) & 0x0000FF00)
-            | (static_cast<std::uint32_t>(in[5]) & 0x000000FF);
+        deserializer_type in {inp.data(), inp.size()};
 
-        std::uint16_t payload_size = ((static_cast<std::uint16_t>(in[6]) << 8) & 0xFF00)
-            | (static_cast<std::uint16_t>(in[7]) & 0x00FF);
-#else
-        std::uint16_t payload_size = ((static_cast<std::uint16_t>(in[2]) << 8) & 0xFF00)
-            | (static_cast<std::uint16_t>(in[3]) & 0x00FF);
-#endif
+        char byte = 0;
 
-        if (in.size() < empty_frame_size() + payload_size)
-            return false;
+        in >> byte;
 
-        // Index of the last byte
-        auto j = empty_frame_size() + payload_size - 1;
-
-        if (in[j] != end_flag()) {
+        if (byte != begin_flag()) {
             throw error {
                   make_error_code(pfs::errc::unexpected_error)
-                , tr::f_("bad end flag: expected: 0x{:0X}, got: 0x{:0X}", end_flag(), in[j])
+                , tr::f_("bad begin flag: expected 0x{:0X}, got 0x{:0X}", begin_flag(), byte)
             };
         }
 
-        // Index of the first byte of CRC32 field
-        std::uint16_t k = header_size() + payload_size;
+        in >> byte;
 
-        std::int32_t crc32_sample = ((static_cast<std::int32_t>(in[k + 0]) << 24) & 0xFF000000)
-            | (static_cast<std::int32_t>(in[k + 1] << 16) & 0x00FF0000)
-            | (static_cast<std::int32_t>(in[k + 2] << 8) & 0x0000FF00)
-            | (static_cast<std::int32_t>(in[k + 3]) & 0x000000FF);
-
-        std::int32_t crc32 = pfs::crc32_of_ptr(in.data() + header_size(), payload_size);
-
-        if (crc32 != crc32_sample) {
-            throw error {
-                  make_error_code(netty::errc::checksum_error)
-                , tr::f_("bad CRC32 checksum: expected: 0x{:0X}, got: 0x{:0X}, priority: {}"
-                    ", payload_size: {} bytes"
-                    , static_cast<std::uint32_t>(crc32_sample), static_cast<std::uint32_t>(crc32)
-                    , priority, payload_size)
-            };
-        }
-
-        out.insert(out.end(), in.begin() + header_size(), in.begin() + header_size() + payload_size);
-
-        in.erase(in.begin(), in.begin() + empty_frame_size() + payload_size);
-
-        return true;
-    }
-
-    template <int PriorityCount>
-    static bool parse (std::array<std::vector<char>, PriorityCount> & pool, std::vector<char> & in)
-    {
-        int priority = parse_header(in);
-
-        if (priority < 0)
-            return false;
+        auto priority = static_cast<int>(byte & 0x0F);
 
         if (priority >= pool.size()) {
             throw error { make_error_code(std::errc::result_out_of_range)
@@ -196,27 +159,58 @@ public: // static
             };
         }
 
-        return parse(pool[priority], in);
-    }
+        archive_type & payload = pool[priority];
 
-private: // static
-    static int parse_header (std::vector<char> & in)
-    {
-        if (in.size() < header_size() + footer_size())
-            return -1;
+#if NETTY__PF_SERIAL_FIELD_SUPPORT
+        std::uint32_t serial = 0;
+        in >> serial;
+#endif
 
-        if (in[0] != begin_flag()) {
+        std::uint16_t payload_size = 0;
+        in >> payload_size;
+
+        // Incomplete frame
+        if (inp.size() < empty_frame_size() + payload_size)
+            return false;
+
+        in.read(payload, payload_size);
+
+        std::int32_t crc32 = pfs::crc32_of_ptr(payload.data(), payload.size());
+        std::int32_t crc32_sample = 0;
+        in >> crc32_sample;
+
+        if (crc32 != crc32_sample) {
             throw error {
-                  make_error_code(pfs::errc::unexpected_error)
-                , tr::f_("bad begin flag: expected: 0x{:0X}, got: 0x{:0X}", begin_flag(), in[0])
+                  make_error_code(netty::errc::checksum_error)
+                , tr::f_("bad CRC32 checksum: expected 0x{:0X}, got 0x{:0X}, priority: {}"
+                    ", payload_size: {} bytes"
+                    , static_cast<std::uint32_t>(crc32_sample), static_cast<std::uint32_t>(crc32)
+                    , priority, payload_size)
             };
         }
 
-        auto priority = static_cast<int>(in[1] & 0x0F);
-        return priority;
+        in >> byte;
+
+        if (byte != end_flag()) {
+            throw error {
+                  make_error_code(pfs::errc::unexpected_error)
+                , tr::f_("bad end flag: expected 0x{:0X}, got 0x{:0X}", end_flag(), byte)
+            };
+        }
+
+        if (!in.is_good()) {
+            throw error {
+                  make_error_code(pfs::errc::unexpected_error)
+                , tr::_("invalid or corrupted priority frame")
+            };
+        }
+
+        inp.erase_front(empty_frame_size() + payload_size);
+
+        return true;
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

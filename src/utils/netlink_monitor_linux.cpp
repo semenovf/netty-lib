@@ -96,7 +96,7 @@ inline bool has_more_attrs (nlmsghdr const * nlh, nlattr const * curr_attr)
 #else
     auto tail_ptr = reinterpret_cast<char const *>(nlh) + NLMSG_ALIGN(nlh->nlmsg_len);
     auto len = tail_ptr - reinterpret_cast<char const *>(curr_attr);
-    bool success = len >= sizeof(nlattr)
+    bool success = static_cast<std::size_t>(len) >= sizeof(nlattr)
         && curr_attr->nla_len >= sizeof(nlattr)
         && curr_attr->nla_len <= len;
 
@@ -183,7 +183,7 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
             auto nlmsg_type = nlh->nlmsg_type;
 
             ret = foreach_attr(nlh, sizeof(*ifa), [ifa, nlmsg_type] (nlattr const * pattr
-                , netlink_monitor * pmonitor) {
+                , netlink_monitor * pmon) {
 
                 auto attrtype = attr_type(pattr);
 
@@ -195,11 +195,11 @@ static callback_result parser_callback (nlmsghdr const * nlh, netlink_monitor * 
                             auto ip = inet4_addr{pfs::to_native_order(*value.first)};
 
                             if (nlmsg_type == RTM_NEWADDR) {
-                                if (pmonitor->inet4_addr_added)
-                                    pmonitor->inet4_addr_added(ip, ifa->ifa_index);
+                                if (pmon->inet4_addr_added)
+                                    pmon->inet4_addr_added(ip, ifa->ifa_index);
                             } else {
-                                if (pmonitor->inet4_addr_removed)
-                                    pmonitor->inet4_addr_removed(ip, ifa->ifa_index);
+                                if (pmon->inet4_addr_removed)
+                                    pmon->inet4_addr_removed(ip, ifa->ifa_index);
                             }
                         } else if (ifa->ifa_family == AF_INET6) {
                             // TODO Not implemented yet (cause: inet6_addr not implemented too)

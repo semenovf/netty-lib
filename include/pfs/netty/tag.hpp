@@ -14,4 +14,3 @@ NETTY__NAMESPACE_BEGIN
 constexpr char const * TAG = "netty";
 
 NETTY__NAMESPACE_END
-

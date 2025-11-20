@@ -13,7 +13,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 template <typename NodeId>
@@ -30,6 +29,6 @@ struct unreachable_info
     NodeId receiver_id; // Unreachable node ID
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

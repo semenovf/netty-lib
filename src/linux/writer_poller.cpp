@@ -23,8 +23,7 @@ writer_poller<linux_os::epoll_poller>::writer_poller ()
 template <>
 int writer_poller<linux_os::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    if (!_removable.empty())
-        apply_removable();
+    apply_removable();
 
     auto n = _rep->poll(millis, perr);
 

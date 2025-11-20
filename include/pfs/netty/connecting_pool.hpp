@@ -45,7 +45,7 @@ private:
 
 private:
     std::map<socket_id, socket_type> _connecting_sockets;
-    std::vector<socket_id> _removable;
+    std::vector<socket_id> _removed;
     std::set<deferred_connection_item> _deferred_connections;
 
 public:
@@ -95,18 +95,18 @@ public:
 public:
     void remove_later (socket_id id)
     {
-        _removable.push_back(id);
+        _removed.push_back(id);
     }
 
     void apply_remove ()
     {
-        if (!_removable.empty()) {
-            for (auto id: _removable) {
+        if (!_removed.empty()) {
+            for (auto id: _removed) {
                 ConnectingPoller::remove(id);
                 _connecting_sockets.erase(id);
             }
 
-            _removable.clear();
+            _removed.clear();
         }
     }
 

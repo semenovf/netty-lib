@@ -51,9 +51,11 @@ private:
 
     void apply_removable ()
     {
-        for (auto sid: _removable)
-            remove(sid);
-        _removable.clear();
+        if (!_removable.empty()) {
+            for (auto sid: _removable)
+                remove(sid);
+            _removable.clear();
+        }
     }
 
 public:

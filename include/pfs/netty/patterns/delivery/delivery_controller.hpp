@@ -17,6 +17,7 @@
 #include "protocol.hpp"
 #include "tag.hpp"
 #include <pfs/log.hpp>
+#include <pfs/optional.hpp>
 #include <pfs/utility.hpp>
 #include <chrono>
 #include <cstdint>

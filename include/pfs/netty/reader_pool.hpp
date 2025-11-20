@@ -11,6 +11,7 @@
 #include "namespace.hpp"
 #include "callback.hpp"
 #include "error.hpp"
+#include "traits/archive_traits.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
@@ -23,10 +24,13 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename Socket, typename ReaderPoller>
+template <typename Socket, typename ReaderPoller, typename Archive/* = std::vector<char>*/>
 class reader_pool: protected ReaderPoller
 {
+    using archive_traits_type = archive_traits<Archive>;
+
 public:
+    using archive_type = typename archive_traits_type::archive_type;
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
 
@@ -38,12 +42,12 @@ private:
 
 private:
     std::unordered_map<socket_id, account> _accounts;
-    std::vector<socket_id> _removable;
+    std::vector<socket_id> _removed;
     std::uint16_t _chunk_size {1500}; // Initial value is default MTU size
 
 public:
     mutable callback_t<void (socket_id, error const &)> on_failure = [] (socket_id, error const &) {};
-    mutable callback_t<void (socket_id, std::vector<char>)> on_data_ready;
+    mutable callback_t<void (socket_id, archive_type)> on_data_ready;
     mutable callback_t<void (socket_id)> on_disconnected;
     mutable callback_t<Socket *(socket_id)> locate_socket = [] (socket_id) -> Socket * {
         PFS__TERMINATE(false, "socket location callback must be set");
@@ -83,15 +87,17 @@ public:
                 return;
             }
 
-            std::vector<char> inpb;
+            archive_type inpb;
+            archive_traits_type::resize(inpb, _chunk_size);
+            std::vector<char> chunk(_chunk_size);
 
             // Read all received data and put it into input buffer.
             for (;;) {
                 error err;
-                auto offset = inpb.size();
-                inpb.resize(offset + _chunk_size);
-
-                auto n = sock->recv(inpb.data() + offset, _chunk_size, & err);
+                // auto offset = archive_traits_type::size(inpb);
+                // archive_traits_type::resize(inpb, offset + _chunk_size);
+                // auto buf = archive_traits_type::data(inpb) + offset;
+                auto n = sock->recv(chunk.data(), chunk.size(), & err);
 
                 if (n < 0) {
                     this->on_failure(id, err);
@@ -99,14 +105,15 @@ public:
                     return;
                 }
 
-                inpb.resize(offset + n);
+                // archive_traits_type::resize(inpb, offset + n);
+                archive_traits_type::append(inpb, chunk.data(), n);
 
                 if (n == 0)
                     break;
             }
 
             if (this->on_data_ready) {
-                if (!inpb.empty())
+                if (!archive_traits_type::empty(inpb))
                     this->on_data_ready(id, std::move(inpb));
             }
         };
@@ -125,18 +132,18 @@ public:
 
     void remove_later (socket_id id)
     {
-        _removable.push_back(id);
+        _removed.push_back(id);
     }
 
     void apply_remove ()
     {
-        if (!_removable.empty()) {
-            for (auto id: _removable) {
+        if (!_removed.empty()) {
+            for (auto id: _removed) {
                 ReaderPoller::remove(id);
                 _accounts.erase(id);
             }
 
-            _removable.clear();
+            _removed.clear();
         }
     }
 

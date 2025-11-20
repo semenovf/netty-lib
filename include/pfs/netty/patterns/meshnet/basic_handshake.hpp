@@ -28,7 +28,9 @@ class basic_handshake
 protected:
     using node_id = typename Node::node_id;
     using socket_id = typename Node::socket_id;
-    using serializer_traits = typename Node::serializer_traits;
+    using serializer_traits_type = typename Node::serializer_traits_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+    using archive_type = typename serializer_traits_type::archive_type;
     using time_point_type = std::chrono::steady_clock::time_point;
 
 protected:
@@ -38,7 +40,7 @@ protected:
 
 public:
     mutable callback_t<void (socket_id)> on_expired;
-    mutable callback_t<void (socket_id, std::vector<char> &&)> enqueue_packet;
+    mutable callback_t<void (socket_id, archive_type)> enqueue_packet;
     mutable callback_t<void (node_id, socket_id /*reader_sid*/, socket_id /*writer_sid*/
         , bool /*is_gateway*/)> on_completed;
     mutable callback_t<void (node_id, socket_id /*sid*/, bool /*force_closing*/)> on_duplicate_id;
@@ -52,8 +54,8 @@ protected:
 protected:
     void enqueue_request (socket_id sid, bool behind_nat)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::request};
 
         pkt.id = _node->id();
@@ -67,8 +69,8 @@ protected:
 
     void enqueue_response (socket_id sid, bool behind_nat)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::response};
 
         pkt.id = _node->id();

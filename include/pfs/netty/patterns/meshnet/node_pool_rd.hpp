@@ -31,6 +31,10 @@ class node_pool_rd
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
 
+#if NETTY__TELEMETRY_ENABLED
+    using shared_telemetry_producer_type = shared_telemetry_producer_t;
+#endif
+
 public:
     using node_id = typename transport_type::node_id;
     using message_id = typename DeliveryManager::message_id;
@@ -62,7 +66,7 @@ private:
 
 public:
 #if NETTY__TELEMETRY_ENABLED
-    node_pool_rd (node_id id, bool is_gateway, shared_telemetry_producer_t telemetry_producer)
+    node_pool_rd (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
         : _t(id, is_gateway, telemetry_producer)
         , _dm(_t)
     {

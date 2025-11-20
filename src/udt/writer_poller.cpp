@@ -20,8 +20,7 @@ writer_poller<udt::epoll_poller>::writer_poller ()
 template <>
 int writer_poller<udt::epoll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    if (!_removable.empty())
-        apply_removable();
+    apply_removable();
 
     auto n = _rep->poll(_rep->eid, nullptr, & _rep->writefds, millis, perr);
 

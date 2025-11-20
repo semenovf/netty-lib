@@ -117,7 +117,8 @@ struct key_deserializer<std::string>
     key_deserializer (binary_istream_type & in, std::string & key)
     {
         std::uint16_t key_size = 0;
-        in >> key_size >> std::make_pair(& key, key_size);
+        in >> key_size;
+        in.read(key, key_size);
     }
 };
 
@@ -143,7 +144,8 @@ public:
             if (type == type_of<string_t>()) {
                 std::uint16_t value_size = 0;
                 std::string value;
-                in >> value_size >> std::make_pair(& value, value_size);
+                in >> value_size;
+                in.read(value, value_size);
                 vis->on(key, value);
             } else {
                 switch (type) {

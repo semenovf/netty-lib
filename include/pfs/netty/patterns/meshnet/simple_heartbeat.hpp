@@ -7,9 +7,10 @@
 //      2025.01.17 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "protocol.hpp"
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
-#include "protocol.hpp"
+#include "../../traits/archive_traits.hpp"
 #include <chrono>
 #include <functional>
 #include <set>
@@ -25,7 +26,10 @@ template <typename Node>
 class simple_heartbeat
 {
     using socket_id = typename Node::socket_id;
-    using serializer_traits = typename Node::serializer_traits;
+    using serializer_traits_type = typename Node::serializer_traits_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using archive_traits_type = archive_traits<archive_type>;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct heartbeat_item
@@ -104,15 +108,16 @@ public:
             auto now = std::chrono::steady_clock::now();
             auto pos = _q.begin();
 
-            std::vector<char> ar;
-            auto out = serializer_traits::make_serializer(ar);
+            archive_type ar;
+            serializer_type out {ar};
             heartbeat_packet pkt;
             pkt.serialize(out);
 
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node->enqueue_private(pos->sid, 0, ar.data(), ar.size());
+                _node->enqueue_private(pos->sid, 0
+                    , archive_traits_type::data(ar), archive_traits_type::size(ar));
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);

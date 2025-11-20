@@ -7,11 +7,13 @@
 //      2025.01.08 Initial version.
 //      2025.06.07 It is a part of patterns::meshnet now.
 //      2025.09.08 Using chunk type.
+//      2025.11.17 `chunk` renamed to `buffer`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
-#include "../../chunk.hpp"
 #include "priority_frame.hpp"
+#include "../../namespace.hpp"
+#include "../../buffer.hpp"
+#include "../../traits/archive_traits.hpp"
 #include <pfs/assert.hpp>
 #include <algorithm>
 #include <queue>
@@ -23,14 +25,20 @@ NETTY__NAMESPACE_BEGIN
 namespace patterns {
 namespace meshnet {
 
+template <typename Archive>
 class writer_queue
 {
-    using chunk_type = chunk;
+    using archive_traits_type = archive_traits<Archive>;
+    using priority_frame_type = priority_frame<Archive>;
+    using chunk_type = buffer<Archive>;
     using chunk_queue_type = std::queue<chunk_type>;
+
+public:
+    using archive_type = typename archive_traits_type::archive_type;
 
 private:
     chunk_queue_type _q;
-    std::vector<char> _frame; // Current sending frame
+    archive_type _frame; // Current sending frame
 
 public:
     writer_queue () {}
@@ -41,7 +49,7 @@ public:
         if (len == 0)
             return;
 
-        _q.push(std::vector<char>{data, data + len});
+        _q.push(archive_traits_type::make(data, len));
     }
 
     void enqueue (char const * data, std::size_t len)
@@ -49,20 +57,20 @@ public:
         if (len == 0)
             return;
 
-        _q.push(std::vector<char>{data, data + len});
+        _q.push(archive_traits_type::make(data, len));
     }
 
-    void enqueue (int /*priority*/, std::vector<char> && data)
+    void enqueue (int /*priority*/, archive_type data)
     {
-        if (data.empty())
+        if (archive_traits_type::empty(data))
             return;
 
         _q.push(std::move(data));
     }
 
-    void enqueue (std::vector<char> && data)
+    void enqueue (archive_type data)
     {
-        if (data.empty())
+        if (archive_traits_type::empty(data))
             return;
 
         _q.push(std::move(data));
@@ -74,10 +82,10 @@ public:
      * @param frame_size Requested (initial) frame size.
      * @return bool @c true if frame acquired and stored into @a frame.
      */
-    std::vector<char> const & acquire_frame (std::size_t frame_size)
+    archive_type const & acquire_frame (std::size_t frame_size)
     {
-        if (!_frame.empty()) {
-            PFS__THROW_UNEXPECTED(_frame.size() <= frame_size, "");
+        if (!archive_traits_type::empty(_frame)) {
+            PFS__THROW_UNEXPECTED(archive_traits_type::size(_frame) <= frame_size, "");
             return _frame;
         }
 
@@ -86,10 +94,10 @@ public:
 
         auto & front = _q.front();
 
-        priority_frame{}.pack(0, _frame, front, frame_size);
+        priority_frame_type{}.pack(0, _frame, front, frame_size);
 
         // Check topmost message is processed
-        if (front.empty())
+        if (archive_traits_type::empty(front))
             _q.pop();
 
         return _frame;
@@ -98,12 +106,13 @@ public:
     void shift (std::size_t n)
     {
         PFS__THROW_UNEXPECTED(n > 0, "");
-        PFS__THROW_UNEXPECTED(n <= _frame.size(), "");
+        PFS__THROW_UNEXPECTED(n <= archive_traits_type::size(_frame), "");
 
-        if (_frame.size() == n) {
-            _frame.clear();
+        if (archive_traits_type::size(_frame) == n) {
+            archive_traits_type::clear(_frame);
         } else {
-            _frame.erase(_frame.begin(), _frame.begin() + n);
+            // _frame.erase(_frame.begin(), _frame.begin() + n);
+            archive_traits_type::erase(_frame, 0, n);
         }
     }
 

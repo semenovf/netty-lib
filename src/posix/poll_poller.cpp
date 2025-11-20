@@ -41,7 +41,7 @@ void poll_poller::add_socket (socket_id sock, error * perr)
     ev.events = oevents;
 }
 
-void poll_poller::add_listener (listener_id sock, error * perr)
+void poll_poller::add_listener (listener_id sock, error * /*perr*/)
 {
     add_socket(sock);
 }

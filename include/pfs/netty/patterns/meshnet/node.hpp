@@ -93,6 +93,9 @@ class node
     friend class HeartbeatController<node>;
     friend /*class */InputController<node>;
 
+public:
+    using archive_type = typename WriterQueue::archive_type;
+
 private:
     using node_class = node<NodeId
         , Socket
@@ -114,19 +117,24 @@ private:
     using socket_pool_type = netty::socket_pool<socket_type>;
     using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
-    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
+    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using writer_mutex_type = RecursiveWriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
 
+#if NETTY__TELEMETRY_ENABLED
+    using shared_telemetry_producer_type = shared_telemetry_producer_t;
+#endif
+
 public:
     using socket_id = typename socket_type::socket_id;
-    using serializer_traits = SerializerTraits;
+    using serializer_traits_type = SerializerTraits;
     using node_id = NodeId;
 
 private:
     using channel_collection_type = channel_map<node_id, socket_id>;
+    using serializer_type = typename serializer_traits_type::serializer_type;
 
     struct host_info
     {
@@ -168,7 +176,7 @@ private:
     writer_mutex_type _writer_mtx;
 
 #if NETTY__TELEMETRY_ENABLED
-    shared_telemetry_producer_t _telemetry_producer;
+    shared_telemetry_producer_type _telemetry_producer;
 #endif
 
 private: // Callbacks
@@ -183,13 +191,13 @@ private: // Callbacks
     callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> _on_alive_received;
     callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)> _on_route_received;
-    callback_t<void (node_id, int, std::vector<char>)> _on_domestic_data_received;
-    callback_t<void (node_id, int, node_id, node_id, std::vector<char>)> _on_global_data_received;
-    callback_t<void (int, node_id, node_id, std::vector<char>)> _on_forward_global_packet;
+    callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
+    callback_t<void (node_id, int, node_id, node_id, archive_type)> _on_global_data_received;
+    callback_t<void (int, node_id, node_id, archive_type)> _on_forward_global_packet;
 
 public:
 #if NETTY__TELEMETRY_ENABLED
-    node (node_id id, bool is_gateway, shared_telemetry_producer_t telemetry_producer)
+    node (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
         : node(id, is_gateway)
     {
         _telemetry_producer = telemetry_producer;
@@ -270,7 +278,7 @@ public:
             schedule_reconnection(sid);
         };
 
-        _reader_pool.on_data_ready = [this] (socket_id sid, std::vector<char> && data)
+        _reader_pool.on_data_ready = [this] (socket_id sid, archive_type data)
         {
             _input_controller.process_input(sid, std::move(data));
         };
@@ -303,7 +311,7 @@ public:
             schedule_reconnection(sid);
         };
 
-        _handshake_controller.enqueue_packet = [this] (socket_id sid, std::vector<char> && data)
+        _handshake_controller.enqueue_packet = [this] (socket_id sid, archive_type data)
         {
             enqueue_private(sid, 0, std::move(data));
         };
@@ -491,7 +499,7 @@ public: // Set callbacks
      * On domestic message received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, int priority, std::vector<char> bytes/)
+     *          void (node_id, int priority, archive_type bytes/)
      */
     template <typename F>
     node & on_domestic_data_received (F && f)
@@ -505,7 +513,7 @@ public: // Set callbacks
      *
      * @details Callback @a f signature must match:
      *          void (node_id last_transmitter, int priority, node_id sender
-     *              , node_id receiver, std::vector<char> data)
+     *              , node_id receiver, archive_type data)
      */
     template <typename F>
     node & on_global_data_received (F && f)
@@ -518,7 +526,7 @@ public: // Set callbacks
      * On global (intersubnet) message received
      *
      * @details Callback @a f signature must match:
-     *          void (int priority, node_id sender, node_id receiver, std::vector<char> data)
+     *          void (int priority, node_id sender, node_id receiver, archive_type data)
      */
     template <typename F>
     node & on_forward_global_packet (F && f)
@@ -600,8 +608,8 @@ public:
         auto sid_ptr = _channels.locate_writer(id);
 
         if (sid_ptr != nullptr) {
-            std::vector<char> ar;
-            auto out = serializer_traits::make_serializer(ar);
+            archive_type ar;
+            serializer_type out {ar};
             ddata_packet pkt;
             pkt.serialize(out, data, len);
             enqueue_private(*sid_ptr, priority, std::move(ar));
@@ -612,7 +620,7 @@ public:
         return false;
     }
 
-    bool enqueue (node_id id, int priority, std::vector<char> data)
+    bool enqueue (node_id id, int priority, archive_type const & data)
     {
         return enqueue(id, priority, data.data(), data.size());
     }
@@ -620,7 +628,7 @@ public:
     /**
      * Enqueue serialized packet to send.
      */
-    bool enqueue_packet (node_id id, int priority, std::vector<char> && data)
+    bool enqueue_packet (node_id id, int priority, archive_type data)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
@@ -890,7 +898,7 @@ private:
         }
     }
 
-    void process_message_received (socket_id sid, int priority, std::vector<char> && bytes)
+    void process_message_received (socket_id sid, int priority, archive_type && bytes)
     {
         if (_on_domestic_data_received) {
             auto id_ptr = _channels.locate_reader(sid);
@@ -901,7 +909,7 @@ private:
     }
 
     void process_message_received (socket_id sid, int priority, node_id sender_id
-        , node_id receiver_id, std::vector<char> && bytes)
+        , node_id receiver_id, archive_type && bytes)
     {
         if (_on_global_data_received) {
             auto id_ptr = _channels.locate_reader(sid);
@@ -912,7 +920,7 @@ private:
     }
 
     void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
-        , std::vector<char> && packet)
+        , archive_type && packet)
     {
         if (_on_forward_global_packet)
             _on_forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
@@ -934,15 +942,16 @@ public: // Below methods are for internal use only
         _writer_pool.enqueue(sid, priority, data, len);
     }
 
-    void enqueue_private (socket_id sid, int priority, std::vector<char> data)
+    void enqueue_private (socket_id sid, int priority, archive_type && data)
     {
         _writer_pool.enqueue(sid, priority, std::move(data));
     }
 
 public: // node_interface
     template <class Node>
-    class node_interface_impl: public node_interface<node_id>, protected Node
+    class node_interface_impl: public node_interface<node_id, archive_type>, protected Node
     {
+        using archive_type = typename Node::archive_type;
         using node_id = typename Node::node_id;
 
     public:
@@ -994,7 +1003,7 @@ public: // node_interface
             Node::enqueue(id, priority, data, len);
         }
 
-        void enqueue (node_id id, int priority, std::vector<char> data) override
+        void enqueue (node_id id, int priority, archive_type data) override
         {
             Node::enqueue(id, priority, std::move(data));
         }
@@ -1019,7 +1028,7 @@ public: // node_interface
             Node::clear_channels();
         }
 
-        bool enqueue_packet (node_id id, int priority, std::vector<char> data) override
+        bool enqueue_packet (node_id id, int priority, archive_type data) override
         {
             return Node::enqueue_packet(id, priority, std::move(data));
         }
@@ -1091,31 +1100,30 @@ public: // node_interface
             Node::on_route_received(std::move(cb));
         }
 
-        void on_domestic_data_received (callback_t<void (node_id, int
-            , std::vector<char>)> cb) override
+        void on_domestic_data_received (callback_t<void (node_id, int, archive_type)> cb) override
         {
             Node::on_domestic_data_received(std::move(cb));
         }
 
         void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
             , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/
-            , std::vector<char>)> cb) override
+            , archive_type)> cb) override
         {
             Node::on_global_data_received(std::move(cb));
         }
 
         void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/
-            , node_id /*receiver ID*/, std::vector<char>)> cb) override
+            , node_id /*receiver ID*/, archive_type)> cb) override
         {
             Node::on_forward_global_packet(std::move(cb));
         }
     };
 
     template <typename ...Args>
-    static std::unique_ptr<node_interface<node_id>>
+    static std::unique_ptr<node_interface<node_id, archive_type>>
     make_interface (Args &&... args)
     {
-        return std::unique_ptr<node_interface<node_id>>(
+        return std::unique_ptr<node_interface<node_id, archive_type>>(
             new node_interface_impl<node_class>(std::forward<Args>(args)...));
     }
 };

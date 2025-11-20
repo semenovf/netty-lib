@@ -23,8 +23,7 @@ writer_poller<enet::enet_poller>::writer_poller ()
 template <>
 int writer_poller<enet::enet_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    if (!_removable.empty())
-        apply_removable();
+    apply_removable();
 
     auto n = _rep->poll(millis, perr);
 

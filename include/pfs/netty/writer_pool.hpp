@@ -15,6 +15,7 @@
 #include "send_result.hpp"
 #include "tag.hpp"
 #include "trace.hpp"
+#include "traits/archive_traits.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
@@ -39,6 +40,9 @@ enum class bandwidth_throttling
 template <typename Socket, typename WriterPoller, typename WriterQueue>
 class writer_pool: protected WriterPoller
 {
+    using archive_type = typename WriterQueue::archive_type;
+    using archive_traits_type = archive_traits<archive_type>;
+
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
@@ -231,18 +235,18 @@ public:
         enqueue(sid, 0, data, len);
     }
 
-    void enqueue (socket_id sid, int priority, std::vector<char> && data)
+    void enqueue (socket_id sid, int priority, archive_type data)
     {
         check_priority(priority);
 
-        if (data.empty())
+        if (archive_traits_type::empty(data))
             return;
 
         auto acc = ensure_account(sid);
         acc->q.enqueue(priority, std::move(data));
     }
 
-    void enqueue (socket_id sid, std::vector<char> && data)
+    void enqueue (socket_id sid, archive_type data)
     {
         enqueue(sid, 0, std::move(data));
     }
@@ -400,9 +404,9 @@ private:
                 if (frame_size == 0)
                     continue;
 
-                auto frame = acc.q.acquire_frame(frame_size);
+                auto const & frame = acc.q.acquire_frame(frame_size);
 
-                if (frame.empty())
+                if (archive_traits_type::empty(frame))
                     continue;
 
                 // A missing socket is less common than an empty frame, so optimally locate socket
@@ -420,7 +424,7 @@ private:
                 }
 
                 error err;
-                auto res = sock->send(frame.data(), frame.size(), & err);
+                auto res = sock->send(archive_traits_type::data(frame), archive_traits_type::size(frame), & err);
 
                 switch (res.status) {
                     case send_status::failure:

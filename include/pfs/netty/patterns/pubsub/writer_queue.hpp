@@ -8,32 +8,37 @@
 //      2025.08.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "envelope.hpp"
 #include "../../namespace.hpp"
-#include "../../envelope.hpp"
+#include "../../traits/archive_traits.hpp"
 #include <pfs/assert.hpp>
 #include <algorithm>
 #include <queue>
-#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
 namespace patterns {
 namespace pubsub {
 
-// NOTE This is practically the same class as meshnet::writer_queue,
-// excluding using `envelope` instead of `priority_frame`.
+// NOTE This is practically the same class as meshnet::writer_queue, excluding using `envelope`
+//      instead of `priority_frame`.
 // TODO It is necessary to generalize this implementation of `writer_queue`
 //      (see `meshnet::priority_writer_queue` also)
 
+template <typename Archive>
 class writer_queue
 {
-    using chunk_type = std::vector<char>;
+    using archive_traits_type = archive_traits<Archive>;
+    using chunk_type = typename archive_traits_type::archive_type;;
     using chunk_queue_type = std::queue<chunk_type>;
-    using envelope_type = envelope16be_t;
+    using envelope_type = envelope<Archive>;
+
+public:
+    using archive_type = typename archive_traits_type::archive_type;
 
 private:
     chunk_queue_type _q;
-    std::vector<char> _frame; // Current sending frame
+    archive_type _frame; // Current sending frame
 
 public:
     writer_queue () {}
@@ -44,12 +49,12 @@ public:
         if (len == 0)
             return;
 
-        _q.push(std::vector<char>{data, data + len});
+        _q.push(archive_traits_type::make(data, len));
     }
 
-    void enqueue (int /*priority*/, std::vector<char> data)
+    void enqueue (int /*priority*/, archive_type data)
     {
-        if (data.empty())
+        if (archive_traits_type::empty(data))
             return;
 
         _q.push(std::move(data));
@@ -61,10 +66,10 @@ public:
      * @param frame_size Requested (initial) frame size.
      * @return bool @c true if frame acquired and stored into @a frame.
      */
-    std::vector<char> const & acquire_frame (std::size_t frame_size)
+    archive_type const & acquire_frame (std::size_t frame_size)
     {
-        if (!_frame.empty()) {
-            PFS__THROW_UNEXPECTED(_frame.size() <= frame_size, "");
+        if (!archive_traits_type::empty(_frame)) {
+            PFS__THROW_UNEXPECTED(archive_traits_type::size(_frame) <= frame_size, "");
             return _frame;
         }
 
@@ -74,20 +79,22 @@ public:
         auto & front = _q.front();
 
         // Calculate actual frame size
-        // frame_size <= envelope::MIN_SIZE + payload_size
-        frame_size = (std::min)(front.size() + envelope_type::MIN_SIZE, frame_size);
-        std::uint16_t payload_size = frame_size - envelope_type::MIN_SIZE;
+        // frame_size <= envelope::min_size() + payload_size
+        frame_size = (std::min)(archive_traits_type::size(front) + envelope_type::min_size(), frame_size);
+        std::uint16_t payload_size = frame_size - envelope_type::min_size();
 
-        PFS__THROW_UNEXPECTED(frame_size > envelope_type::MIN_SIZE
+        PFS__THROW_UNEXPECTED(frame_size > envelope_type::min_size()
             , "Fix writer_queue::acquire_frame algorithm");
 
-        _frame.clear();
+        archive_traits_type::clear(_frame);
         envelope_type ep;
-        ep.pack(_frame, front.data(), payload_size);
-        front.erase(front.begin(), front.begin() + payload_size);
+        ep.pack(_frame, archive_traits_type::data(front), payload_size);
+
+        //front.erase(front.begin(), front.begin() + payload_size);
+        archive_traits_type::erase(front, 0, payload_size);
 
         // Check topmost message is processed
-        if (front.empty())
+        if (archive_traits_type::empty(front))
             _q.pop();
 
         return _frame;
@@ -96,12 +103,13 @@ public:
     void shift (std::size_t n)
     {
         PFS__THROW_UNEXPECTED(n > 0, "");
-        PFS__THROW_UNEXPECTED(n <= _frame.size(), "");
+        PFS__THROW_UNEXPECTED(n <= archive_traits_type::size(_frame), "");
 
-        if (_frame.size() == n) {
-            _frame.clear();
+        if (archive_traits_type::size(_frame) == n) {
+            archive_traits_type::clear(_frame);
         } else {
-            _frame.erase(_frame.begin(), _frame.begin() + n);
+            //_frame.erase(_frame.begin(), _frame.begin() + n);
+            archive_traits_type::erase(_frame, 0, n);
         }
     }
 

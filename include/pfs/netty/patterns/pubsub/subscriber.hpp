@@ -17,6 +17,7 @@
 #include "../../socket_pool.hpp"
 #include "../../socket4_addr.hpp"
 #include "../../trace.hpp"
+#include "../../traits/archive_traits.hpp"
 #include "tag.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
@@ -43,12 +44,13 @@ template <typename Socket
     , typename InputController>
 class subscriber: public interruptable
 {
-private:
     using socket_type = Socket;
     using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
-    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller>;
     using input_controller_type = InputController;
+    using archive_type = typename input_controller_type::archive_type;
+    using archive_traits_type = archive_traits<archive_type>;
     using socket_pool_type = netty::socket_pool<socket_type>;
+    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
 
 public:
     using socket_id = typename socket_type::socket_id;
@@ -122,7 +124,7 @@ public:
                 _on_disconnected(saddr);
         };
 
-        _reader_pool.on_data_ready = [this] (socket_id /*sid*/, std::vector<char> && data)
+        _reader_pool.on_data_ready = [this] (socket_id /*sid*/, archive_type data)
         {
             _input_controller.process_input(std::move(data));
         };

@@ -11,7 +11,7 @@
 ################################################################################
 add_subdirectory(available_net_interfaces)
 add_subdirectory(discovery)
-add_subdirectory(meshnet)
+#add_subdirectory(meshnet) #FIXME UNCOMMENT
 add_subdirectory(mtu)
 # add_subdirectory(netty) # FIXME
 add_subdirectory(udp)

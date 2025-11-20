@@ -36,8 +36,7 @@ writer_poller<posix::select_poller>::writer_poller ()
 template <>
 int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    if (!_removable.empty())
-        apply_removable();
+    apply_removable();
 
     fd_set wfds;
 
@@ -93,8 +92,7 @@ writer_poller<posix::poll_poller>::writer_poller ()
 template <>
 int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, error * perr)
 {
-    if (!_removable.empty())
-        apply_removable();
+    apply_removable();
 
     auto n = _rep->poll(millis, perr);
 

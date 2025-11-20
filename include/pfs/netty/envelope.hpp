@@ -8,12 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
-#include <pfs/binary_istream.hpp>
-#include <pfs/binary_ostream.hpp>
+#include "traits/archive_traits.hpp"
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
-#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -29,27 +27,32 @@ NETTY__NAMESPACE_BEGIN
 // Bytes 3..len+2 - Payload
 // Byte len+3     - 0xED, end flag
 //
-template <pfs::endian Endianess, typename SizeT, typename Archive = std::vector<char>>
+// SizeT determines how large the envelope can be.
+//
+template <typename SizeT, typename SerializerTraits>
 class envelope final
 {
-public:
-    using archive_type = Archive;
+    using serializer_traits_type = SerializerTraits;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using deserializer_type = typename serializer_traits_type::deserializer_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+    using archive_traits_type = archive_traits<archive_type>;
 
 public:
-    static constexpr std::size_t MIN_SIZE = 2 + sizeof(SizeT);
+    static constexpr std::size_t min_size() { return 2 + sizeof(SizeT); }
 
 private:
-    static constexpr char BEGIN_FLAG = static_cast<char>(0xBE);
-    static constexpr char END_FLAG = static_cast<char>(0xED);
+    static constexpr char begin_flag () { return static_cast<char>(0xBE); }
+    static constexpr char end_flag () { return static_cast<char>(0xED); }
 
 public:
     using size_type = SizeT;
 
     class parser
     {
-        pfs::binary_istream<Endianess> _in;
+        deserializer_type _in;
 
-        // True wnen source contains inappropriate data
+        // True when source contains inappropriate data
         bool _bad {false};
 
     public:
@@ -81,17 +84,17 @@ public:
                 return pfs::nullopt;
             }
 
-            if (_in.available() < MIN_SIZE)
+            if (_in.available() < min_size())
                 return pfs::nullopt;
 
-            char begin_flag = 0;
+            char bflag = 0;
             size_type payload_len = 0;
 
             _in.start_transaction();
-            _in >> begin_flag >> payload_len;
+            _in >> bflag >> payload_len;
 
             // Bad or corrupted envelope
-            if (begin_flag != BEGIN_FLAG) {
+            if (bflag != begin_flag()) {
                 _bad = true;
                 return pfs::nullopt;
             }
@@ -102,49 +105,38 @@ public:
                 return pfs::nullopt;
             }
 
-            archive_type result;
-            result.reserve(payload_len);
+            char eflag = 0;
 
-            char end_flag = 0;
-            _in >> std::make_pair(& result, static_cast<std::size_t>(payload_len)) >> end_flag;
+            // FIXME REMOVE
+            //_in >> std::make_pair(archive_traits_type::data(result), static_cast<std::size_t>(payload_len)) >> end_flag;
+            // auto result = archive_traits_type::make(_in.begin(), payload_len);
+
+            archive_type ar;
+            _in.read(ar, payload_len);
+            _in >> eflag;
 
             if (!_in.commit_transaction()) {
                 _bad = true;
                 return pfs::nullopt;
             }
 
-            if (end_flag != END_FLAG) {
+            if (eflag != end_flag()) {
                 _bad = true;
                 return pfs::nullopt;
             }
 
-            return result;
+            return ar;
         }
     };
 
 public:
     void pack (archive_type & ar, char const * payload, size_type payload_len)
     {
-        pfs::binary_ostream<Endianess> out {ar};
-        out << BEGIN_FLAG << payload_len << pfs::string_view(payload, payload_len) << END_FLAG;
+        serializer_type out {ar};
+        out << begin_flag() << payload_len;
+        out.write(payload, payload_len);
+        out << end_flag();
     }
 };
-
-template <pfs::endian Endianess, typename SizeT, typename Archive>
-constexpr std::size_t envelope<Endianess, SizeT, Archive>::MIN_SIZE;
-
-template <pfs::endian Endianess, typename SizeT, typename Archive>
-constexpr char envelope<Endianess, SizeT, Archive>::BEGIN_FLAG;
-
-template <pfs::endian Endianess, typename SizeT, typename Archive>
-constexpr char envelope<Endianess, SizeT, Archive>::END_FLAG;
-
-using envelope8_t    = envelope<pfs::endian::network, std::uint8_t>; // Endianess no matter here
-using envelope16le_t = envelope<pfs::endian::little, std::uint16_t>;
-using envelope16be_t = envelope<pfs::endian::big, std::uint16_t>;
-using envelope32le_t = envelope<pfs::endian::little, std::uint32_t>;
-using envelope32be_t = envelope<pfs::endian::big, std::uint32_t>;
-using envelope64le_t = envelope<pfs::endian::little, std::uint64_t>;
-using envelope64be_t = envelope<pfs::endian::big, std::uint64_t>;
 
 NETTY__NAMESPACE_END

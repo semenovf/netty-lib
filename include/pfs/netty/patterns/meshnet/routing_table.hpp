@@ -9,17 +9,17 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
-#include "../serializer_traits.hpp"
+#include "../../traits/serializer_traits.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -30,10 +30,12 @@ template <typename NodeId, typename SerializerTraits>
 class routing_table
 {
     using node_id = NodeId;
-    using serializer_traits = SerializerTraits;
+    using serializer_traits_type = SerializerTraits;
+    using serializer_type = typename serializer_traits_type::serializer_type;
     using route_map_type = std::unordered_multimap<node_id, std::size_t>;
 
 public:
+    using archive_type = typename serializer_traits_type::archive_type;
     using gateway_chain_type = std::vector<node_id>;
 
 private:
@@ -354,10 +356,10 @@ public:
     /**
      * Serializes initial request
      */
-    std::vector<char> serialize_request (node_id initiator_id)
+    archive_type serialize_request (node_id initiator_id)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo.initiator_id = initiator_id;
         pkt.serialize(out);
@@ -367,10 +369,10 @@ public:
     /**
      * Serializes request to forward.
      */
-    std::vector<char> serialize_request (node_id gw_id, route_info<node_id> const & rinfo)
+    archive_type serialize_request (node_id gw_id, route_info<node_id> const & rinfo)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         route_packet<node_id> pkt {packet_way_enum::request};
         pkt.rinfo = rinfo;
         pkt.rinfo.route.push_back(gw_id);
@@ -381,10 +383,10 @@ public:
     /**
      * Serializes initial response
      */
-    std::vector<char> serialize_response (node_id responder_id, route_info<node_id> const & rinfo)
+    archive_type serialize_response (node_id responder_id, route_info<node_id> const & rinfo)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.rinfo.responder_id = responder_id;
@@ -395,10 +397,10 @@ public:
     /**
      * Serializes response to forward.
      */
-    std::vector<char> serialize_response (route_info<node_id> const & rinfo)
+    archive_type serialize_response (route_info<node_id> const & rinfo)
     {
-        std::vector<char> ar;
-        auto out = serializer_traits::make_serializer(ar);
+        archive_type ar;
+        serializer_type out {ar};
         route_packet<node_id> pkt {packet_way_enum::response};
         pkt.rinfo = rinfo;
         pkt.serialize(out);
@@ -408,13 +410,13 @@ public:
     /**
      * Serializes initial custom message.
      */
-    std::vector<char> serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
+    archive_type serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
         , char const * data, std::size_t len )
     {
-        std::vector<char> ar;
+        archive_type ar;
         ar.reserve(len + 64); // Enough space for packet header
 
-        auto out = serializer_traits::make_serializer(ar);
+        serializer_type out {ar};
 
         // Domestic exchange
         if (gw_id == receiver_id) {

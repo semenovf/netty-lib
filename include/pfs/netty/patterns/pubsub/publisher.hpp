@@ -16,7 +16,6 @@
 #include "../../socket4_addr.hpp"
 #include "../../trace.hpp"
 #include "../../writer_pool.hpp"
-#include "envelope.hpp"
 #include "tag.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
@@ -53,6 +52,7 @@ private:
     using listener_type = Listener;
     using socket_pool_type = netty::socket_pool<socket_type>;
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
+    using archive_type = typename WriterQueue::archive_type;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using writer_mutex_type = RecursiveWriterMutex;
 

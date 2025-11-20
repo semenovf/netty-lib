@@ -21,11 +21,13 @@
 
 namespace tools {
 
+#ifdef DOCTEST_VERSION
 // See https://github.com/doctest/doctest/issues/345
 inline char const * current_doctest_name ()
 {
     return doctest::detail::g_cs->currentTest->m_name;
 }
+#endif
 
 inline void sleep (int timeout, std::string const & description = std::string{})
 {

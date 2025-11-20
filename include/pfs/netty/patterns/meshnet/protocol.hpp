@@ -10,10 +10,10 @@
 //      2025.07.04 Changed protocol versioning.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../error.hpp"
-#include "../../namespace.hpp"
 #include "alive_info.hpp"
 #include "route_info.hpp"
+#include "../../error.hpp"
+#include "../../namespace.hpp"
 #include <pfs/crc32.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/numeric_cast.hpp>
@@ -25,7 +25,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 /// Packet type
@@ -216,6 +215,8 @@ constexpr int header::VERSION;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // handshake packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Bytes 2..9: Node ID
+
 template <typename NodeId>
 class handshake_packet: public header
 {
@@ -277,6 +278,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // heartbeat packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte 3: Health data (unused yet)
 class heartbeat_packet: public header
 {
 public:
@@ -310,6 +312,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // alive packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Bytes 2..9: Alive Node ID
 template <typename NodeId>
 class alive_packet: public header
 {
@@ -342,8 +345,11 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// alive packet
+// unreachable packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Bytes 2..9  : Node ID of the responder gateway
+// Bytes 10..17: Node ID of the sender
+// Bytes 18..25: Node ID of the receiver
 template <typename NodeId>
 class unreachable_packet: public header
 {
@@ -378,6 +384,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // route packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Bytes 2..9  : Node ID of the initiator node
+// ...
 template <typename NodeId>
 class route_packet: public header
 {
@@ -444,22 +452,23 @@ public:
         : header(packet_enum::ddata, has_checksum)
     {}
 
-    template <typename Deserializer>
-    ddata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
+    template <typename Deserializer, typename Archive>
+    ddata_packet (header const & h, Deserializer & in, Archive & ar)
         : header(h)
     {
-        in >> std::make_pair(& bytes_in, _h.length);
+        // _h.length already has been read before
+        in.read(ar, _h.length);
 
         if (in.is_good()) {
             if (has_checksum()) {
-                auto crc32 = pfs::crc32_of_ptr(bytes_in.data(), bytes_in.size());
+                auto crc32 = pfs::crc32_of_ptr(ar.data(), ar.size());
 
                 if (crc32 != _h.crc32) {
                     throw error {
                           make_error_code(netty::errc::checksum_error)
-                        , tr::f_("bad CRC32 checksum for ddata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                        , tr::f_("bad CRC32 checksum for ddata_packet: expected 0x{:0X}, got 0x{:0X}"
                             ", data size: {} bytes"
-                            , _h.crc32, crc32, bytes_in.size())
+                            , _h.crc32, crc32, ar.size())
                     };
                 }
             }
@@ -476,7 +485,7 @@ public:
         _h.length = pfs::numeric_cast<decltype(_h.length)>(len);
 
         header::serialize(out);
-        out << std::make_pair(data, len);
+        out.write(data, len);
     }
 };
 
@@ -497,8 +506,8 @@ public:
         , receiver_id(rcv_id)
     {}
 
-    template <typename Deserializer>
-    gdata_packet (header const & h, Deserializer & in, std::vector<char> & bytes_in)
+    template <typename Deserializer, typename Archive>
+    gdata_packet (header const & h, Deserializer & in, Archive & ar)
         : header(h)
     {
         in >> sender_id;
@@ -511,18 +520,19 @@ public:
         if (!in.is_good())
             return;
 
-        in >> std::make_pair(& bytes_in, _h.length);
+        // _h.length already has been read before
+        in.read(ar, _h.length);
 
         if (in.is_good()) {
             if (has_checksum()) {
-                auto crc32 = pfs::crc32_of_ptr(bytes_in.data(), bytes_in.size());
+                auto crc32 = pfs::crc32_of_ptr(ar.data(), ar.size());
 
                 if (crc32 != _h.crc32) {
                     throw error {
                         make_error_code(netty::errc::checksum_error)
-                        , tr::f_("bad CRC32 checksum for gdata_packet: expected: 0x{:0X}, got: 0x{:0X}"
+                        , tr::f_("bad CRC32 checksum for gdata_packet: expected 0x{:0X}, got 0x{:0X}"
                             ", data size: {} bytes"
-                            , _h.crc32, crc32, bytes_in.size())
+                            , _h.crc32, crc32, ar.size())
                     };
                 }
             }
@@ -540,10 +550,10 @@ public:
 
         header::serialize(out);
         out << sender_id << receiver_id;
-        out << std::make_pair(data, len);
+        out.write(data, len);
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END
