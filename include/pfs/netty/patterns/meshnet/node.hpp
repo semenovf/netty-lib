@@ -86,12 +86,11 @@ template <typename NodeId
     , typename ReconnectionPolicy
     , template <typename> class HandshakeController
     , template <typename> class HeartbeatController
-    , template <typename> class InputController>
+    , typename InputController>
 class node
 {
     friend class HandshakeController<node>;
     friend class HeartbeatController<node>;
-    friend /*class */InputController<node>;
 
 public:
     using archive_type = typename WriterQueue::archive_type;
@@ -122,6 +121,7 @@ private:
     using writer_mutex_type = RecursiveWriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
+    using input_controller_type = InputController;
 
 #if NETTY__TELEMETRY_ENABLED
     using shared_telemetry_producer_type = shared_telemetry_producer_t;
@@ -162,7 +162,7 @@ private:
 
     HandshakeController<node> _handshake_controller;
     HeartbeatController<node> _heartbeat_controller;
-    InputController<node> _input_controller;
+    input_controller_type     _input_controller;
 
     host_cache_type _hosts_cache;
 
@@ -305,6 +305,9 @@ public:
             return _socket_pool.locate(sid);
         };
 
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Handshake controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
         _handshake_controller.on_expired = [this] (socket_id sid)
         {
             NETTY__TRACE(MESHNET_TAG, "handshake expired for socket: #{}", sid);
@@ -357,9 +360,89 @@ public:
             destroy_channel(sid);
         };
 
-        _heartbeat_controller.on_expired = [this] (socket_id sid) {
+        _heartbeat_controller.on_expired = [this] (socket_id sid)
+        {
             NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
             schedule_reconnection(sid);
+        };
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Input controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        _input_controller.on_handshake = [this] (socket_id sid, handshake_packet<node_id> && pkt)
+        {
+            _handshake_controller.process(sid, pkt);
+        };
+
+        _input_controller.on_heartbeat = [this] (socket_id sid, heartbeat_packet && pkt)
+        {
+            _heartbeat_controller.process(sid, pkt);
+        };
+
+        _input_controller.on_alive = [this] (socket_id sid, alive_packet<node_id> && pkt)
+        {
+            if (_on_alive_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_alive_received(*id_ptr, _index, pkt.info());
+            }
+        };
+
+        _input_controller.on_unreachable = [this] (socket_id sid, unreachable_packet<node_id> && pkt)
+        {
+            if (_on_unreachable_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_unreachable_received(*id_ptr, _index, pkt.info());
+            }
+        };
+
+        _input_controller.on_route = [this] (socket_id sid, bool is_response, route_packet<node_id> && pkt)
+        {
+            if (_on_route_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_route_received(*id_ptr, _index, pkt.is_response(), pkt.info());
+            }
+        };
+
+        _input_controller.on_ddata = [this] (socket_id sid, int priority, archive_type && bytes)
+        {
+            if (_on_domestic_data_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_domestic_data_received(*id_ptr, priority, std::move(bytes));
+            }
+        };
+
+        _input_controller.on_gdata = [this] (socket_id, int priority, gdata_packet<node_id> && pkt
+            , archive_type && bytes)
+        {
+            if (pkt.receiver_id() == _id) {
+                if (_on_global_data_received) {
+                    auto id_ptr = _channels.locate_reader(sid);
+
+                    if (id_ptr != nullptr) {
+                        _on_global_data_received(*id_ptr, priority, pkt.sender_id()
+                            , pkt.receiver_id(), std::move(bytes));
+                    }
+                }
+            } else {
+                // Need to forward the message if the node is a gateway, or discard
+                // the message otherwise.
+                if (_is_gateway) {
+                    if (_on_forward_global_packet) {
+                        archive_type ar;
+                        serializer_type out {ar};
+                        pkt.serialize(out, bytes_in.data(), bytes_in.size());
+                        _on_forward_global_packet(priority, sender_id, receiver_id, std::move(ar));
+                    }
+                }
+            }
         };
 
         NETTY__TRACE(MESHNET_TAG, "node constructed (id={}, gateway={})", to_string(_id)
@@ -866,74 +949,6 @@ private:
         } else {
             close_socket(sid);
         }
-    }
-
-    void process_alive_info (socket_id sid, alive_info<node_id> const & ainfo)
-    {
-        if (_on_alive_received) {
-            auto id_ptr = _channels.locate_reader(sid);
-
-            if (id_ptr != nullptr)
-                _on_alive_received(*id_ptr, _index, ainfo);
-        }
-    }
-
-    void process_unreachable_info (socket_id sid, unreachable_info<node_id> const & uinfo)
-    {
-        if (_on_unreachable_received) {
-            auto id_ptr = _channels.locate_reader(sid);
-
-            if (id_ptr != nullptr)
-                _on_unreachable_received(*id_ptr, _index, uinfo);
-        }
-    }
-
-    void process_route_info (socket_id sid, bool is_response, route_info<node_id> const & rinfo)
-    {
-        if (_on_route_received) {
-            auto id_ptr = _channels.locate_reader(sid);
-
-            if (id_ptr != nullptr)
-                _on_route_received(*id_ptr, _index, is_response, rinfo);
-        }
-    }
-
-    void process_message_received (socket_id sid, int priority, archive_type && bytes)
-    {
-        if (_on_domestic_data_received) {
-            auto id_ptr = _channels.locate_reader(sid);
-
-            if (id_ptr != nullptr)
-                _on_domestic_data_received(*id_ptr, priority, std::move(bytes));
-        }
-    }
-
-    void process_message_received (socket_id sid, int priority, node_id sender_id
-        , node_id receiver_id, archive_type && bytes)
-    {
-        if (_on_global_data_received) {
-            auto id_ptr = _channels.locate_reader(sid);
-
-            if (id_ptr != nullptr)
-                _on_global_data_received(*id_ptr, priority, sender_id, receiver_id, std::move(bytes));
-        }
-    }
-
-    void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
-        , archive_type && packet)
-    {
-        if (_on_forward_global_packet)
-            _on_forward_global_packet(priority, sender_id, receiver_id, std::move(packet));
-    }
-
-    HandshakeController<node> & handshake_processor ()
-    {
-        return _handshake_controller;
-    }
-
-    HeartbeatController<node> & heartbeat_processor ()
-    {
-        return _heartbeat_controller;
     }
 
 public: // Below methods are for internal use only

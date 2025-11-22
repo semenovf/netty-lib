@@ -65,6 +65,11 @@ public:
     archive & operator = (archive const &) = delete;
 
 public:
+    container_type && container () &
+    {
+        return std::move(_c);
+    }
+
     /**
      * @return @c nullptr on empty.
      */
@@ -81,6 +86,16 @@ public:
     std::size_t size () const noexcept
     {
         return size(_c) - _offset;
+    }
+
+    void append (archive const & ar)
+    {
+        append(_c, ar.data(), ar.size());
+    }
+
+    void append (container_type const & c)
+    {
+        append(_c, c.data(), c.size());
     }
 
     void append (char const * data, std::size_t n)

@@ -9,8 +9,7 @@
 set(TESTS
     protocol
     priority_frame
-    input_account
-    # input_controller
+    input_controller
     # delivery
     # handshake
     # messaging

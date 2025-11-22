@@ -80,11 +80,11 @@ public:
      * Partially pack data into frame from the source.
      *
      * @param priority Priority value.
-     * @param ar [out] Target to pack data.
-     * @param inp [in,out] Data source.
+     * @param outp Target to pack data.
+     * @param inp Data source.
      * @param frame_size Maximum frame size. Must be greater than empty_frame_size().
      */
-    static void pack (int priority, archive_type & ar, archive_type & inp, std::size_t frame_size)
+    static void pack (int priority, archive_type & outp, archive_type & inp, std::size_t frame_size)
     {
         if (inp.empty())
             return;
@@ -99,7 +99,7 @@ public:
         std::uint16_t payload_size = frame_size - empty_frame_size();
         auto crc32 = pfs::crc32_of_ptr(inp.data(), payload_size);
 
-        serializer_type out {ar};
+        serializer_type out {outp};
         out << begin_flag();
         out << static_cast<char>(priority & 0x0F);
 

@@ -7,41 +7,70 @@
 //      2025.02.05 Initial version.
 //      2025.05.07 Renamed from basic_input_processor.hpp to basic_input_controller.hpp.
 //                 Class `basic_input_processor` renamed to `basic_input_controller`.
+//      2025.11.20 Added callbacks.
+//                 Merged with input_account.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "protocol.hpp"
 #include "../../error.hpp"
 #include "../../namespace.hpp"
+#include "../../callback.hpp"
+#include "priority_frame.hpp"
+#include "protocol.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/utility.hpp>
+#include <array>
+#include <unordered_map>
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
-template <typename Node, typename InputAccount>
+template <int PriorityCount, typename SocketId, typename NodeId, typename SerializerTraits>
 class input_controller
 {
-    using socket_id = typename Node::socket_id;
-    using serializer_traits_type = typename Node::serializer_traits_type;
+    using socket_id = SocketId;
+    using node_id = NodeId;
+    using serializer_traits_type = SerializerTraits;
     using archive_type = typename serializer_traits_type::archive_type;
-    using serializer_type = typename serializer_traits_type::serializer_type;
     using deserializer_type = typename serializer_traits_type::deserializer_type;
-    using node_id = typename Node::node_id;
-    using account_type = InputAccount;
+    using priority_frame_type = priority_frame<PriorityCount, serializer_traits_type>;
+
+    class account
+    {
+        archive_type _raw; // Buffer to accumulate raw data
+
+    public:
+        std::array<archive_type, PriorityCount> pool;
+
+    public:
+        // Called from input_controller while process input
+        void append_chunk (archive_type && chunk)
+        {
+            _raw.append(std::move(chunk));
+
+            while (priority_frame_type::parse(pool, _raw)) {
+                ; // empty body
+            }
+        }
+    };
 
 protected:
-    Node * _node {nullptr};
-    std::unordered_map<socket_id, account_type> _accounts;
+    std::unordered_map<socket_id, account> _accounts;
 
 public:
-    input_controller (Node * node)
-        : _node(node)
-    {}
+    mutable callback_t<void (socket_id, handshake_packet<node_id> &&)> on_handshake;
+    mutable callback_t<void (socket_id, heartbeat_packet &&)> on_heartbeat;
+    mutable callback_t<void (socket_id, alive_packet<node_id> &&)> on_alive;
+    mutable callback_t<void (socket_id, unreachable_packet<node_id> &&)> on_unreachable;
+    mutable callback_t<void (socket_id, route_packet<node_id> &&)> on_route;
+    mutable callback_t<void (socket_id, int /*priority*/, archive_type &&)> on_ddata;
+    mutable callback_t<void (socket_id, int /*priority*/, gdata_packet<node_id> &&, archive_type &&)> on_gdata;
+
+public:
+    input_controller () = default;
 
 private:
-    account_type * locate_account (socket_id sid)
+    account * locate_account (socket_id sid)
     {
         auto pos = _accounts.find(sid);
 
@@ -49,50 +78,7 @@ private:
             return nullptr;
 
         auto & acc = pos->second;
-
         return & acc;
-    }
-
-    void process (socket_id sid, handshake_packet<node_id> const & pkt)
-    {
-        _node->handshake_processor().process(sid, pkt);
-    }
-
-    void process (socket_id sid, heartbeat_packet const & pkt)
-    {
-        _node->heartbeat_processor().process(sid, pkt);
-    }
-
-    void process (socket_id sid, alive_packet<node_id> const & pkt)
-    {
-        _node->process_alive_info(sid, pkt.ainfo);
-    }
-
-    void process (socket_id sid, unreachable_packet<node_id> const & pkt)
-    {
-        _node->process_unreachable_info(sid, pkt.uinfo);
-    }
-
-    void process (socket_id sid, route_packet<node_id> const & pkt)
-    {
-        _node->process_route_info(sid, pkt.is_response(), pkt.rinfo);
-    }
-
-    void process (socket_id sid, int priority, archive_type && bytes)
-    {
-        _node->process_message_received(sid, priority, std::move(bytes));
-    }
-
-    void process (socket_id sid, int priority, node_id sender_id
-        , node_id receiver_id, archive_type && bytes)
-    {
-        _node->process_message_received(sid, priority, sender_id, receiver_id, std::move(bytes));
-    }
-
-    void forward_global_packet (int priority, node_id sender_id, node_id receiver_id
-        , archive_type && bytes)
-    {
-        _node->forward_global_packet(priority, sender_id, receiver_id, std::move(bytes));
     }
 
 public:
@@ -103,7 +89,7 @@ public:
         if (pacc != nullptr)
             remove(sid);
 
-        account_type a;
+        account a;
         /*auto res = */_accounts.emplace(sid, std::move(a));
     }
 
@@ -114,20 +100,22 @@ public:
 
     void process_input (socket_id sid, archive_type && chunk)
     {
-        if (archive_traits_type::empty(chunk))
+        if (chunk.empty())
             return;
 
         auto * pacc = locate_account(sid);
 
         PFS__THROW_UNEXPECTED(pacc != nullptr, "account not found, fix");
 
-        pacc->append_chunk(chunk);
+        pacc->append_chunk(std::move(chunk));
 
-        for (int priority = 0; priority < InputAccount::priority_count(); priority++) {
-            if (pacc->size(priority) == 0)
+        for (int priority = 0; priority < PriorityCount; priority++) {
+            auto & ar = pacc->pool[priority];
+
+            if (ar.empty())
                 continue;
 
-            deserializer_type in {pacc->data(priority), pacc->size(priority)};
+            deserializer_type in {ar.data(), ar.size()};
             bool has_more_packets = true;
 
             while (has_more_packets && in.available() > 0) {
@@ -145,7 +133,7 @@ public:
                         handshake_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
-                            process(sid, pkt);
+                            on_handshake(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 
@@ -156,7 +144,7 @@ public:
                         heartbeat_packet pkt {h, in};
 
                         if (in.commit_transaction())
-                            process(sid, pkt);
+                            on_heartbeat(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 
@@ -167,7 +155,7 @@ public:
                         alive_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
-                            process(sid, pkt);
+                            on_alive(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 
@@ -178,7 +166,7 @@ public:
                         unreachable_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
-                            process(sid, pkt);
+                            on_unreachable(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 
@@ -189,7 +177,7 @@ public:
                         route_packet<node_id> pkt {h, in};
 
                         if (in.commit_transaction())
-                            process(sid, pkt);
+                            on_route(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 
@@ -201,7 +189,7 @@ public:
                         ddata_packet pkt {h, in, bytes_in};
 
                         if (in.commit_transaction())
-                            process(sid, priority, std::move(bytes_in));
+                            on_ddata(sid, priority, std::move(bytes_in));
                         else
                             has_more_packets = false;
 
@@ -212,23 +200,10 @@ public:
                         archive_type bytes_in;
                         gdata_packet<node_id> pkt {h, in, bytes_in};
 
-                        if (in.commit_transaction()) {
-                            if (pkt.receiver_id == _node->id()) {
-                                process(sid, priority, pkt.sender_id, pkt.receiver_id, std::move(bytes_in));
-                            } else {
-                                // Need to forward the message if the node is a gateway, or discard
-                                // the message otherwise.
-                                if (_node->is_gateway()) {
-                                    archive_type ar;
-                                    serializer_type out {ar};
-                                    pkt.serialize(out, bytes_in.data(), bytes_in.size());
-                                    forward_global_packet(priority, pkt.sender_id
-                                        , pkt.receiver_id, std::move(ar));
-                                }
-                            }
-                        } else {
+                        if (in.commit_transaction())
+                            on_gdata(sid, priority, std::move(pkt), std::move(bytes_in));
+                        else
                             has_more_packets = false;
-                        }
 
                         break;
                     }
@@ -245,16 +220,15 @@ public:
             }
 
             if (in.available() == 0) {
-                pacc->clear(priority);
+                ar.clear();
             } else {
-                if (pacc->size(priority) > in.available()) {
-                    pacc->erase(priority, pacc->size(priority) - in.available());
-                }
+                auto n = ar.size() - in.available();
+                ar.erase_front(n);
             }
         }
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

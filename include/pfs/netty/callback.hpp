@@ -12,7 +12,7 @@
 
 NETTY__NAMESPACE_BEGIN
 
-template <typename T>
-using callback_t = std::function<T>;
+template <typename F>
+using callback_t = std::function<F>;
 
 NETTY__NAMESPACE_END

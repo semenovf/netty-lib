@@ -220,15 +220,15 @@ constexpr int header::VERSION;
 template <typename NodeId>
 class handshake_packet: public header
 {
-public:
-    NodeId id;
+    NodeId _id;
 
 public:
     /**
      * Construct handshake packet.
      */
-    handshake_packet (bool is_gateway, bool behind_nat, packet_way_enum way) noexcept
+    handshake_packet (NodeId id, bool is_gateway, bool behind_nat, packet_way_enum way) noexcept
         : header(packet_enum::handshake, false)
+        , _id(id)
     {
         if (way == packet_way_enum::response)
             enable_f0();
@@ -248,10 +248,15 @@ public:
     handshake_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> id;
+        in >> _id;
     }
 
 public:
+    NodeId id () const noexcept
+    {
+        return _id;
+    }
+
     bool is_response () const noexcept
     {
         return is_f0();
@@ -271,7 +276,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << id;
+        out << _id;
     }
 };
 
@@ -281,12 +286,12 @@ public:
 // Byte 3: Health data (unused yet)
 class heartbeat_packet: public header
 {
-public:
-    std::uint8_t health_data {0};
+    std::uint8_t _health_data {0};
 
 public:
-    heartbeat_packet () noexcept
+    heartbeat_packet (std::uint8_t health_data) noexcept
         : header(packet_enum::heartbeat, false)
+        , _health_data(health_data)
     {}
 
     /**
@@ -297,15 +302,20 @@ public:
     heartbeat_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> health_data;
+        in >> _health_data;
     }
 
 public:
+    std::uint8_t health_data () const noexcept
+    {
+        return _health_data;
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << health_data;
+        out << _health_data;
     }
 };
 
@@ -316,12 +326,12 @@ public:
 template <typename NodeId>
 class alive_packet: public header
 {
-public:
-    alive_info<NodeId> ainfo;
+    alive_info<NodeId> _ainfo;
 
 public:
-    alive_packet () noexcept
+    alive_packet (alive_info<NodeId> ainfo) noexcept
         : header(packet_enum::alive, false)
+        , _ainfo(std::move(ainfo))
     {}
 
     /**
@@ -332,15 +342,20 @@ public:
     alive_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> ainfo.id;
+        in >> _ainfo.id;
     }
 
 public:
+    alive_info<NodeId> const & info () const noexcept
+    {
+        return _ainfo;
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << ainfo.id;
+        out << _ainfo.id;
     }
 };
 
@@ -353,12 +368,12 @@ public:
 template <typename NodeId>
 class unreachable_packet: public header
 {
-public:
-    unreachable_info<NodeId> uinfo;
+    unreachable_info<NodeId> _uinfo;
 
 public:
-    unreachable_packet () noexcept
+    unreachable_packet (unreachable_info<NodeId> uinfo) noexcept
         : header(packet_enum::unreach, false)
+        , _uinfo(std::move(uinfo))
     {}
 
     /**
@@ -369,15 +384,20 @@ public:
     unreachable_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> uinfo.gw_id >> uinfo.sender_id >> uinfo.receiver_id;
+        in >> _uinfo.gw_id >> _uinfo.sender_id >> _uinfo.receiver_id;
     }
 
 public:
+    unreachable_info<NodeId> const & info () const noexcept
+    {
+        return _uinfo;
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << uinfo.gw_id << uinfo.sender_id << uinfo.receiver_id;
+        out << _uinfo.gw_id << _uinfo.sender_id << _uinfo.receiver_id;
     }
 };
 
@@ -389,12 +409,12 @@ public:
 template <typename NodeId>
 class route_packet: public header
 {
-public:
-    route_info<NodeId> rinfo;
+    route_info<NodeId> _rinfo;
 
 public:
-    route_packet (packet_way_enum way) noexcept
+    route_packet (packet_way_enum way, route_info<NodeId> rinfo) noexcept
         : header(packet_enum::route, false)
+        , _rinfo(std::move(rinfo))
     {
         if (way == packet_way_enum::response)
             enable_f0();
@@ -404,10 +424,10 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> rinfo.initiator_id;
+        in >> _rinfo.initiator_id;
 
         if (is_response())
-            in >> rinfo.responder_id;
+            in >> _rinfo.responder_id;
 
         std::uint8_t count = 0;
         in >> count;
@@ -415,7 +435,7 @@ public:
         for (int i = 0; i < static_cast<int>(count); i++) {
             NodeId id {};
             in >> id;
-            rinfo.route.push_back(id);
+            _rinfo.route.push_back(id);
         }
     }
 
@@ -425,19 +445,24 @@ public:
         return is_f0();
     }
 
+    route_info<NodeId> const & info () const noexcept
+    {
+        return _rinfo;
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out)
     {
         header::serialize(out);
 
-        out << rinfo.initiator_id;
+        out << _rinfo.initiator_id;
 
         if (is_response())
-            out << rinfo.responder_id;
+            out << _rinfo.responder_id;
 
-        out << pfs::numeric_cast<std::uint8_t>(rinfo.route.size());
+        out << pfs::numeric_cast<std::uint8_t>(_rinfo.route.size());
 
-        for (auto const & id: rinfo.route)
+        for (auto const & id: _rinfo.route)
             out << id;
     }
 };
@@ -495,27 +520,21 @@ public:
 template <typename NodeId>
 class gdata_packet: public header
 {
-public:
-    NodeId sender_id;
-    NodeId receiver_id;
+    NodeId _sender_id;
+    NodeId _receiver_id;
 
 public:
-    gdata_packet (NodeId snd_id, NodeId rcv_id, bool has_checksum = true) noexcept
+    gdata_packet (NodeId sender_id, NodeId receiver_id, bool has_checksum = true) noexcept
         : header(packet_enum::gdata, has_checksum)
-        , sender_id(snd_id)
-        , receiver_id(rcv_id)
+        , _sender_id(sender_id)
+        , _receiver_id(receiver_id)
     {}
 
     template <typename Deserializer, typename Archive>
     gdata_packet (header const & h, Deserializer & in, Archive & ar)
         : header(h)
     {
-        in >> sender_id;
-
-        if (!in.is_good())
-            return;
-
-        in >> receiver_id;
+        in >> _sender_id >> _receiver_id;
 
         if (!in.is_good())
             return;
@@ -540,6 +559,16 @@ public:
     }
 
 public:
+    NodeId sender_id () const noexcept
+    {
+        return _sender_id;
+    }
+
+    NodeId receiver_id () const noexcept
+    {
+        return _receiver_id;
+    }
+
     template <typename Serializer>
     void serialize (Serializer & out, char const * data, std::size_t len)
     {
@@ -549,7 +578,7 @@ public:
         _h.length = pfs::numeric_cast<decltype(_h.length)>(len);
 
         header::serialize(out);
-        out << sender_id << receiver_id;
+        out << _sender_id << _receiver_id;
         out.write(data, len);
     }
 };
