@@ -19,22 +19,22 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
-template <typename Node>
+template <typename SocketId, typename NodeId, typename SerializerTraits>
 class basic_handshake
 {
 protected:
-    using node_id = typename Node::node_id;
-    using socket_id = typename Node::socket_id;
-    using serializer_traits_type = typename Node::serializer_traits_type;
+    using socket_id = SocketId;
+    using node_id = NodeId;
+    using serializer_traits_type = SerializerTraits;
     using serializer_type = typename serializer_traits_type::serializer_type;
     using archive_type = typename serializer_traits_type::archive_type;
     using time_point_type = std::chrono::steady_clock::time_point;
 
 protected:
-    Node * _node {nullptr};
+    node_id _id;
+    bool _is_gateway {false};
     std::map<socket_id, time_point_type> _cache;
     std::chrono::seconds _timeout {3};
 
@@ -47,8 +47,10 @@ public:
     mutable callback_t<void (node_id, socket_id /*sid*/)> on_discarded;
 
 protected:
-    basic_handshake (Node * node)
-        : _node(node)
+    basic_handshake (node_id id, bool is_gateway, std::chrono::seconds timeout = std::chrono::seconds{3})
+        : _id(id)
+        , _is_gateway(is_gateway)
+        , _timeout(timeout)
     {}
 
 protected:
@@ -56,9 +58,8 @@ protected:
     {
         archive_type ar;
         serializer_type out {ar};
-        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::request};
+        handshake_packet<node_id> pkt {_id, _is_gateway, behind_nat, packet_way_enum::request};
 
-        pkt.id = _node->id();
         pkt.serialize(out);
 
         // Cache socket ID as handshake initiator
@@ -71,9 +72,8 @@ protected:
     {
         archive_type ar;
         serializer_type out {ar};
-        handshake_packet<node_id> pkt {_node->is_gateway(), behind_nat, packet_way_enum::response};
+        handshake_packet<node_id> pkt {_id, _is_gateway, behind_nat, packet_way_enum::response};
 
-        pkt.id = _node->id();
         pkt.serialize(out);
 
         enqueue_packet(sid, std::move(ar));
@@ -119,6 +119,6 @@ public:
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

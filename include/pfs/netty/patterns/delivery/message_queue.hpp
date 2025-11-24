@@ -16,7 +16,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace delivery {
 
 template <typename MessageId, std::size_t PrioritySize = 1>
@@ -90,6 +89,6 @@ public:
 
 };
 
-}} // namespace patterns::delivery
+} // namespace delivery
 
 NETTY__NAMESPACE_END

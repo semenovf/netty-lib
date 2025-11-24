@@ -19,7 +19,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 template <typename NodeId, typename Archive>
@@ -77,6 +76,6 @@ public:
         , char const * data, std::size_t len) = 0;
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

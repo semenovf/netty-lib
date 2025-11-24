@@ -13,8 +13,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
-
 struct single_priority_distribution {};
 
 template <typename PriorityDistribution>
@@ -95,7 +93,5 @@ public:
         return 0;
     }
 };
-
-} // namespace patterns
 
 NETTY__NAMESPACE_END

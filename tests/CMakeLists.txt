@@ -17,9 +17,11 @@
 set(TESTS
     archive
     # envelope # FIXME FIX AND UNCOMMENT
-    inet4_addr)
+    inet4_addr
+    reader_pool
+    writer_pool)
 
-set(TESTS_QT archive) #buffer envelope)  # FIXME FIX AND UNCOMMENT
+set(TESTS_QT archive reader_pool writer_pool) #buffer envelope)  # FIXME FIX AND UNCOMMENT
 
 if (NOT QT_VERSION_MAJOR)
     if (Qt6_VERSION_MAJOR)

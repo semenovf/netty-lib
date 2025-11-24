@@ -11,7 +11,6 @@
 #include "../../poller_types.hpp"
 #include "../../posix/tcp_listener.hpp"
 #include "../../posix/tcp_socket.hpp"
-#include "../../traits/vector_archive_traits.hpp"
 #include "input_controller.hpp"
 #include "publisher.hpp"
 #include "subscriber.hpp"

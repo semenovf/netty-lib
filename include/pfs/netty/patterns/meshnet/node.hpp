@@ -42,7 +42,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 /**
@@ -84,14 +83,11 @@ template <typename NodeId
     , typename RecursiveWriterMutex
     , typename SerializerTraits
     , typename ReconnectionPolicy
-    , template <typename> class HandshakeController
-    , template <typename> class HeartbeatController
+    , typename HandshakeController
+    , typename HeartbeatController
     , typename InputController>
 class node
 {
-    friend class HandshakeController<node>;
-    friend class HeartbeatController<node>;
-
 public:
     using archive_type = typename WriterQueue::archive_type;
 
@@ -121,6 +117,8 @@ private:
     using writer_mutex_type = RecursiveWriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
+    using handshake_controller_type = HandshakeController;
+    using heartbeat_controller_type = HeartbeatController;
     using input_controller_type = InputController;
 
 #if NETTY__TELEMETRY_ENABLED
@@ -160,8 +158,8 @@ private:
     // True if the node is a part of gateway
     bool _is_gateway {false};
 
-    HandshakeController<node> _handshake_controller;
-    HeartbeatController<node> _heartbeat_controller;
+    handshake_controller_type _handshake_controller;
+    heartbeat_controller_type _heartbeat_controller;
     input_controller_type     _input_controller;
 
     host_cache_type _hosts_cache;
@@ -207,9 +205,9 @@ public:
     node (node_id id, bool is_gateway = false)
         : _id(id)
         , _is_gateway(is_gateway)
-        , _handshake_controller(this)
-        , _heartbeat_controller(this)
-        , _input_controller(this)
+        , _handshake_controller(id, is_gateway)
+        , _heartbeat_controller()
+        , _input_controller()
     {
         _channels.close_socket = [this] (socket_id sid)
         {
@@ -360,6 +358,14 @@ public:
             destroy_channel(sid);
         };
 
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Heartbeat controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        _heartbeat_controller.enqueue_packet = [this] (socket_id sid, archive_type data)
+        {
+            enqueue_private(sid, 0, std::move(data));
+        };
+
         _heartbeat_controller.on_expired = [this] (socket_id sid)
         {
             NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
@@ -399,7 +405,7 @@ public:
             }
         };
 
-        _input_controller.on_route = [this] (socket_id sid, bool is_response, route_packet<node_id> && pkt)
+        _input_controller.on_route = [this] (socket_id sid, route_packet<node_id> && pkt)
         {
             if (_on_route_received) {
                 auto id_ptr = _channels.locate_reader(sid);
@@ -419,7 +425,7 @@ public:
             }
         };
 
-        _input_controller.on_gdata = [this] (socket_id, int priority, gdata_packet<node_id> && pkt
+        _input_controller.on_gdata = [this] (socket_id sid, int priority, gdata_packet<node_id> && pkt
             , archive_type && bytes)
         {
             if (pkt.receiver_id() == _id) {
@@ -438,8 +444,8 @@ public:
                     if (_on_forward_global_packet) {
                         archive_type ar;
                         serializer_type out {ar};
-                        pkt.serialize(out, bytes_in.data(), bytes_in.size());
-                        _on_forward_global_packet(priority, sender_id, receiver_id, std::move(ar));
+                        pkt.serialize(out, bytes.data(), bytes.size());
+                        _on_forward_global_packet(priority, pkt.sender_id(), pkt.receiver_id(), std::move(ar));
                     }
                 }
             }
@@ -825,7 +831,7 @@ public:
 public: // static
     static constexpr int input_priority_count () noexcept
     {
-        return InputController<node>::priority_count();
+        return input_controller_type::priority_count();
     }
 
     static constexpr int output_priority_count () noexcept
@@ -1143,6 +1149,6 @@ public: // node_interface
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

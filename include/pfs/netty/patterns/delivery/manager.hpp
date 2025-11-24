@@ -27,7 +27,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace delivery {
 
 /**
@@ -364,6 +363,6 @@ public:
     }
 };
 
-}} // namespace patterns::delivery
+} // namespace delivery
 
 NETTY__NAMESPACE_END

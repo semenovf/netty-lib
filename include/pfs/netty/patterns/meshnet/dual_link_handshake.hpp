@@ -13,7 +13,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 #if FIXME // Need fixing (see single_link_handshake)
@@ -80,6 +79,6 @@ public:
 
 #endif
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

@@ -18,7 +18,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace delivery {
 
 // A - Received parts
@@ -171,6 +170,6 @@ public:
     }
 };
 
-}} // namespace patterns::delivery
+} // namespace delivery
 
 NETTY__NAMESPACE_END

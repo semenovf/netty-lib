@@ -12,12 +12,11 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace delivery {
 
 // Serial number starts from 1 (0 - invalid serial number, value for initialization)
 using serial_number = std::uint64_t;
 
-}} // namespace patterns::delivery
+} // namespace delivery
 
 NETTY__NAMESPACE_END

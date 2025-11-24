@@ -26,7 +26,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace delivery {
 
 template <typename Address
@@ -553,6 +552,6 @@ template <typename Address
 constexpr std::size_t delivery_controller<Address, MessageId, SerializerTraits, PriorityTracker
     , LostThreshold>::PRIORITY_COUNT;
 
-}} // namespace patterns::delivery
+} // namespace delivery
 
 NETTY__NAMESPACE_END

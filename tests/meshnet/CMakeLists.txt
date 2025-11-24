@@ -8,15 +8,18 @@
 ################################################################################
 set(TESTS
     protocol
+    priority_tracker
     priority_frame
+    alive_controller
     input_controller
-    # delivery
-    # handshake
+    handshake_controller
+    heartbeat_controller
+    priority_writer_queue
+    handshake
+    routing_table
+    unreachable
+    delivery
     # messaging
-    # priority_tracker
-    #
-    # routing_table
-    # unreachable
     )
 
 foreach (target ${TESTS})

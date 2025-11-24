@@ -22,7 +22,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 //
@@ -222,20 +221,23 @@ public:
 
     archive_type serialize_alive ()
     {
+        alive_info<NodeId> info;
+        info.id = _id;
+
         archive_type ar;
         serializer_type out {ar};
-        alive_packet<node_id> pkt;
-        pkt.ainfo.id = _id;
+        alive_packet<node_id> pkt {std::move(info)};
         pkt.serialize(out);
         return ar;
     }
 
-    archive_type serialize_alive (alive_info<node_id> const & ainfo)
+    archive_type serialize_alive (alive_info<node_id> const & initial_info)
     {
+        alive_info<NodeId> info = initial_info;
+
         archive_type ar;
         serializer_type out {ar};
-        alive_packet<node_id> pkt;
-        pkt.ainfo = ainfo;
+        alive_packet<node_id> pkt {std::move(info)};
         pkt.serialize(out);
         return ar;
     }
@@ -245,22 +247,25 @@ public:
      */
     archive_type serialize_unreachable (node_id gw_id, node_id sender_id, node_id receiver_id)
     {
+        unreachable_info<NodeId> info;
+        info.gw_id = gw_id;
+        info.sender_id = sender_id;
+        info.receiver_id = receiver_id;
+
         archive_type ar;
         serializer_type out {ar};
-        unreachable_packet<node_id> pkt;
-        pkt.uinfo.gw_id = gw_id;
-        pkt.uinfo.sender_id = sender_id;
-        pkt.uinfo.receiver_id = receiver_id;
+        unreachable_packet<node_id> pkt {std::move(info)};
         pkt.serialize(out);
         return ar;
     }
 
-    archive_type serialize_unreachable (unreachable_info<node_id> const & uinfo)
+    archive_type serialize_unreachable (unreachable_info<node_id> const & initial_info)
     {
+        unreachable_info<NodeId> info = initial_info;
+
         archive_type ar;
         serializer_type out {ar};
-        unreachable_packet<node_id> pkt;
-        pkt.uinfo = uinfo;
+        unreachable_packet<node_id> pkt {std::move(info)};
         pkt.serialize(out);
         return ar;
     }
@@ -280,6 +285,6 @@ public:
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

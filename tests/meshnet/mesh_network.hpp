@@ -104,6 +104,7 @@ template <typename NodePool>
 class network
 {
 public:
+    using archive_type = archive_t;
     using node_id = typename NodePool::node_id;
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
@@ -309,7 +310,7 @@ protected:
     context const * locate_by_name (std::string const & name) const
     {
         auto pos = _node_pools.find(name);
-        PFS__ASSERT(pos != _node_pools.end(), "");
+        PFS__THROW_UNEXPECTED(pos != _node_pools.end(), fmt::format("Unable to locate node: {}", name));
         return & pos->second;
     }
 

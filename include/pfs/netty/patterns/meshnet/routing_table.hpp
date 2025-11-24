@@ -9,7 +9,6 @@
 #pragma once
 #include "../../error.hpp"
 #include "../../namespace.hpp"
-#include "../../traits/serializer_traits.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include <pfs/i18n.hpp>
@@ -23,7 +22,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 template <typename NodeId, typename SerializerTraits>
@@ -31,11 +29,11 @@ class routing_table
 {
     using node_id = NodeId;
     using serializer_traits_type = SerializerTraits;
-    using serializer_type = typename serializer_traits_type::serializer_type;
     using route_map_type = std::unordered_multimap<node_id, std::size_t>;
 
 public:
     using archive_type = typename serializer_traits_type::archive_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
     using gateway_chain_type = std::vector<node_id>;
 
 private:
@@ -358,10 +356,12 @@ public:
      */
     archive_type serialize_request (node_id initiator_id)
     {
+        route_info<node_id> info;
+        info.initiator_id = initiator_id;
+
         archive_type ar;
         serializer_type out {ar};
-        route_packet<node_id> pkt {packet_way_enum::request};
-        pkt.rinfo.initiator_id = initiator_id;
+        route_packet<node_id> pkt {packet_way_enum::request, std::move(info)};
         pkt.serialize(out);
         return ar;
     }
@@ -369,13 +369,14 @@ public:
     /**
      * Serializes request to forward.
      */
-    archive_type serialize_request (node_id gw_id, route_info<node_id> const & rinfo)
+    archive_type serialize_request (node_id gw_id, route_info<node_id> const & initial_info)
     {
+        route_info<node_id> info = initial_info;
+        info.route.push_back(gw_id);
+
         archive_type ar;
         serializer_type out {ar};
-        route_packet<node_id> pkt {packet_way_enum::request};
-        pkt.rinfo = rinfo;
-        pkt.rinfo.route.push_back(gw_id);
+        route_packet<node_id> pkt {packet_way_enum::request, std::move(info)};
         pkt.serialize(out);
         return ar;
     }
@@ -383,13 +384,14 @@ public:
     /**
      * Serializes initial response
      */
-    archive_type serialize_response (node_id responder_id, route_info<node_id> const & rinfo)
+    archive_type serialize_response (node_id responder_id, route_info<node_id> const & initial_info)
     {
+        route_info<node_id> info = initial_info;
+        info.responder_id = responder_id;
+
         archive_type ar;
         serializer_type out {ar};
-        route_packet<node_id> pkt {packet_way_enum::response};
-        pkt.rinfo = rinfo;
-        pkt.rinfo.responder_id = responder_id;
+        route_packet<node_id> pkt {packet_way_enum::response, std::move(info)};
         pkt.serialize(out);
         return ar;
     }
@@ -397,41 +399,18 @@ public:
     /**
      * Serializes response to forward.
      */
-    archive_type serialize_response (route_info<node_id> const & rinfo)
+    archive_type serialize_response (route_info<node_id> const & initial_info)
     {
+        route_info<node_id> info = initial_info;
+
         archive_type ar;
         serializer_type out {ar};
-        route_packet<node_id> pkt {packet_way_enum::response};
-        pkt.rinfo = rinfo;
+        route_packet<node_id> pkt {packet_way_enum::response, std::move(info)};
         pkt.serialize(out);
-        return ar;
-    }
-
-    /**
-     * Serializes initial custom message.
-     */
-    archive_type serialize_message (node_id sender_id, node_id gw_id, node_id receiver_id
-        , char const * data, std::size_t len )
-    {
-        archive_type ar;
-        ar.reserve(len + 64); // Enough space for packet header
-
-        serializer_type out {ar};
-
-        // Domestic exchange
-        if (gw_id == receiver_id) {
-            ddata_packet pkt;
-            pkt.serialize(out, data, len);
-            return ar;
-        }
-
-        // Intersegment exchange
-        gdata_packet<node_id> pkt {sender_id, receiver_id};
-        pkt.serialize(out, data, len);
         return ar;
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

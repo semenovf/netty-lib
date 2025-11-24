@@ -13,6 +13,7 @@
 #include "../../callback.hpp"
 #include "../../interruptable.hpp"
 #include "../../trace.hpp"
+#include "protocol.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
 #include "route_info.hpp"
@@ -37,7 +38,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 template <typename NodeId
@@ -47,6 +47,7 @@ template <typename NodeId
 class node_pool: public interruptable
 {
     using archive_type = typename RoutingTable::archive_type;
+    using serializer_type = typename RoutingTable::serializer_type;
     using node_interface_type = node_interface<NodeId, archive_type>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
@@ -756,42 +757,56 @@ public:
     /**
      * Enqueues message for delivery to specified node ID @a id.
      *
-     * @param id Receiver ID.
+     * @param receiver_id Receiver ID.
      * @param priority Message priority.
      * @param data Message content.
      * @param len Length of the message content.
      *
-     * @return @c true if route found to @a id.
+     * @return @c true if route found to @a receiver_id.
      */
-    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
+    bool enqueue (node_id receiver_id, int priority, char const * data, std::size_t len)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
         node_id gw_id;
-        auto ptr = locate_writer(id, & gw_id);
+        auto wr = locate_writer(receiver_id, & gw_id);
 
-        if (ptr == nullptr) {
-            _on_error(tr::f_("node not found to send data to: {}", to_string(id)));
+        if (wr == nullptr) {
+            _on_error(tr::f_("node not found to send data to: {}", to_string(receiver_id)));
             return false;
         }
 
-        auto packet = _rtab.serialize_message(_id, gw_id, id, data, len);
-        ptr->enqueue_packet(gw_id, priority, std::move(packet));
+        // Serialize initial custom message.
+
+        archive_type ar;
+        serializer_type out {ar};
+
+        // Domestic exchange
+        if (gw_id == receiver_id) {
+            ddata_packet pkt;
+            pkt.serialize(out, data, len);
+        } else {
+            // Intersegment exchange
+            gdata_packet<node_id> pkt {_id, receiver_id};
+            pkt.serialize(out, data, len);
+        }
+
+        wr->enqueue_packet(gw_id, priority, std::move(ar));
         return true;
     }
 
     /**
      * Enqueues message for delivery to specified node ID @a id.
      *
-     * @param id Receiver ID.
+     * @param receiver_id Receiver ID.
      * @param priority Message priority.
      * @param data Message content.
      *
-     * @return @c true if route found to @a id.
+     * @return @c true if route found to @a receiver_id.
      */
-    bool enqueue (node_id id, int priority, archive_type const & data)
+    bool enqueue (node_id receiver_id, int priority, archive_type const & data)
     {
-        return enqueue(id, priority, data.data(), data.size());
+        return enqueue(receiver_id, priority, data.data(), data.size());
     }
 
     /**
@@ -894,6 +909,6 @@ public:
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

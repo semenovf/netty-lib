@@ -66,7 +66,7 @@ public:
      * @param frame_size Requested (initial) frame size.
      * @return bool @c true if frame acquired and stored into @a frame.
      */
-    archive_type const & acquire_frame (std::size_t frame_size)
+    archive_type acquire_frame (std::size_t frame_size)
     {
         if (!archive_traits_type::empty(_frame)) {
             PFS__THROW_UNEXPECTED(archive_traits_type::size(_frame) <= frame_size, "");

@@ -32,11 +32,24 @@
 
 using mesh_network_t = test::meshnet::network<node_pool_t>;
 
-std::atomic_int g_channels_established_counter {0};
-std::atomic_int g_expired_counter {0};
-pfs::synchronized<bit_matrix<6>> g_route_matrix;
-pfs::synchronized<bit_matrix<6>> g_message_matrix;
-std::string g_text;
+std::atomic_int g_channels_established_counter3 {0};
+std::atomic_int g_channels_established_counter6 {0};
+std::atomic_int g_expired_counter3 {0};
+std::atomic_int g_expired_counter6 {0};
+pfs::synchronized<bit_matrix<3>> g_route_matrix3;
+pfs::synchronized<bit_matrix<6>> g_route_matrix6;
+pfs::synchronized<bit_matrix<3>> g_message_matrix3;
+pfs::synchronized<bit_matrix<6>> g_message_matrix6;
+std::string g_text3;
+std::string g_text6;
+
+#ifdef DOCTEST_VERSION
+// See https://github.com/doctest/doctest/issues/345
+inline char const * current_doctest_name ()
+{
+    return doctest::detail::g_cs->currentTest->m_name;
+}
+#endif
 
 static void sigterm_handler (int sig)
 {
@@ -63,7 +76,87 @@ static std::string random_text ()
     return text;
 }
 
-TEST_CASE("unreachable") {
+#if 1
+TEST_CASE("short chain unreachable") {
+    LOGD(TAG, "==========================================");
+    LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
+    LOGD(TAG, "==========================================");
+
+    netty::startup_guard netty_startup;
+
+    mesh_network_t net {"a", "A0", "C0"};
+
+    net.on_channel_established = [] (std::string const & source_name, std::string const & target_name
+        , bool /*is_gateway*/)
+    {
+        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
+        ++g_channels_established_counter3;
+    };
+
+    net.on_node_expired = [] (std::string const & source_name, std::string const & target_name)
+    {
+        LOGD(TAG, "{}: Node expired: {}", source_name, target_name);
+        ++g_expired_counter3;
+    };
+
+    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
+        , std::vector<node_id> /*gw_chain*/, std::size_t source_index, std::size_t target_index)
+    {
+        g_route_matrix3.wlock()->set(source_index, target_index, true);
+    };
+
+    net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
+        , int priority, archive_t bytes, std::size_t source_index, std::size_t target_index)
+    {
+        LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
+
+        std::string text(bytes.data(), bytes.size());
+
+        REQUIRE_EQ(text, g_text3);
+
+        // fmt::println(text);
+
+        g_message_matrix3.wlock()->set(source_index, target_index, true);
+    };
+
+    constexpr bool BEHIND_NAT = true;
+    g_text3 = random_text();
+
+    net.connect_host("A0", "a", BEHIND_NAT);
+    net.connect_host("C0", "a", BEHIND_NAT);
+
+    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+
+    net.run_all();
+
+    CHECK(tools::wait_atomic_counter(g_channels_established_counter3, 2));
+    CHECK(tools::wait_matrix_count(g_route_matrix3, 6));
+    CHECK(tools::print_matrix_with_check(*g_route_matrix3.rlock(), {"a", "A0", "C0"}));
+
+    net.print_routing_table("A0");
+
+    net.send_message("A0", "C0", g_text3);
+
+    CHECK(tools::wait_matrix_count(g_message_matrix3, 1));
+
+    net.destroy("C0");
+
+    net.send_message("A0", "C0", g_text3);
+    CHECK(tools::wait_atomic_counter(g_expired_counter3, 1));
+
+    net.print_routing_table("A0");
+
+    net.interrupt_all();
+    net.join_all();
+}
+#endif
+
+#if 1
+TEST_CASE("long chain unreachable") {
+    LOGD(TAG, "==========================================");
+    LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
+    LOGD(TAG, "==========================================");
+
     netty::startup_guard netty_startup;
 
     mesh_network_t net {"a", "b", "c", "d", "A0", "C0"};
@@ -72,37 +165,37 @@ TEST_CASE("unreachable") {
         , bool /*is_gateway*/)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
-        ++g_channels_established_counter;
+        ++g_channels_established_counter6;
     };
 
     net.on_node_expired = [] (std::string const & source_name, std::string const & target_name)
     {
         LOGD(TAG, "{}: Node expired: {}", source_name, target_name);
-        ++g_expired_counter;
+        ++g_expired_counter6;
     };
 
     net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
         , std::vector<node_id> /*gw_chain*/, std::size_t source_index, std::size_t target_index)
     {
-        g_route_matrix.wlock()->set(source_index, target_index, true);
+        g_route_matrix6.wlock()->set(source_index, target_index, true);
     };
 
     net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
+        , int priority, archive_t bytes, std::size_t source_index, std::size_t target_index)
     {
         LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
 
         std::string text(bytes.data(), bytes.size());
 
-        REQUIRE_EQ(text, g_text);
+        REQUIRE_EQ(text, g_text6);
 
         // fmt::println(text);
 
-        g_message_matrix.wlock()->set(source_index, target_index, true);
+        g_message_matrix6.wlock()->set(source_index, target_index, true);
     };
 
     constexpr bool BEHIND_NAT = true;
-    g_text = random_text();
+    g_text6 = random_text();
 
     // Connect gateways
     net.connect_host("a", "b");
@@ -126,23 +219,24 @@ TEST_CASE("unreachable") {
 
     net.run_all();
 
-    CHECK(tools::wait_atomic_counter(g_channels_established_counter, 14));
-    CHECK(tools::wait_matrix_count(g_route_matrix, 30));
-    CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "d", "A0", "C0"}));
+    CHECK(tools::wait_atomic_counter(g_channels_established_counter6, 14));
+    CHECK(tools::wait_matrix_count(g_route_matrix6, 30));
+    CHECK(tools::print_matrix_with_check(*g_route_matrix6.rlock(), {"a", "b", "c", "d", "A0", "C0"}));
 
     net.print_routing_table("A0");
 
-    net.send_message("A0", "C0", g_text);
+    net.send_message("A0", "C0", g_text6);
 
-    CHECK(tools::wait_matrix_count(g_message_matrix, 1));
+    CHECK(tools::wait_matrix_count(g_message_matrix6, 1));
 
     net.destroy("C0");
 
-    net.send_message("A0", "C0", g_text);
-    CHECK(tools::wait_atomic_counter(g_expired_counter, 1));
+    net.send_message("A0", "C0", g_text6);
+    CHECK(tools::wait_atomic_counter(g_expired_counter6, 1));
 
     net.print_routing_table("A0");
 
     net.interrupt_all();
     net.join_all();
 }
+#endif

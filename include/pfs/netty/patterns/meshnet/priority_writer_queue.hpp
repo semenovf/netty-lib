@@ -12,8 +12,7 @@
 #pragma once
 #include "priority_frame.hpp"
 #include "../../namespace.hpp"
-#include "../../buffer.hpp"
-#include "../../traits/archive_traits.hpp"
+#include "../../archive.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <array>
@@ -24,24 +23,24 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
-template <typename PriorityTracker, typename Archive>
+template <typename PriorityTracker, typename SerializerTraits>
 class priority_writer_queue
 {
-    using archive_traits_type = archive_traits<Archive>;
-    using priority_frame_type = priority_frame<Archive>;
+    using serializer_traits_type = SerializerTraits;
+    using priority_frame_type = priority_frame<PriorityTracker::SIZE, SerializerTraits>;
     using priority_tracker_type = PriorityTracker;
-    using chunk_type = buffer<Archive>;
-    using chunk_queue_type = std::queue<chunk_type>;
+
+public:
+    using archive_type = typename serializer_traits_type::archive_type;
+
+private:
+    using chunk_queue_type = std::queue<archive_type>;
 
     static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
 
     static_assert(PRIORITY_COUNT > 0, "Priority count must be at least 1");
-
-public:
-    using archive_type = typename archive_traits_type::archive_type;
 
 private:
     std::array<chunk_queue_type, PRIORITY_COUNT> _qpool; // Chunks queue pool
@@ -59,6 +58,9 @@ private:
     int next_priority ()
     {
         // !empty() already checked in acquire_frame() before calling this method.
+
+        if (PRIORITY_COUNT == 1)
+            return 0;
 
         auto priority = _priority_tracker.next();
         auto pq = & _qpool.at(priority);
@@ -103,13 +105,13 @@ public:
 
         auto & q = _qpool.at(priority);
 
-        q.push(chunk_type{data, len});
+        q.push(archive_type{data, len});
         _empty = false;
     }
 
     void enqueue (int priority, archive_type data)
     {
-        if (archive_traits_type::empty(data))
+        if (data.empty())
             return;
 
         if (priority >= PRIORITY_COUNT)
@@ -117,14 +119,14 @@ public:
 
         auto & q = _qpool.at(priority);
 
-        q.push(chunk_type{std::move(data)});
+        q.push(std::move(data));
         _empty = false;
     }
 
-    archive_type const & acquire_frame (std::size_t frame_size)
+    archive_type acquire_frame (std::size_t frame_size)
     {
-        if (!archive_traits_type::empty(_frame)) {
-            PFS__THROW_UNEXPECTED(archive_traits_type::size(_frame) <= frame_size, "");
+        if (!_frame.empty()) {
+            PFS__THROW_UNEXPECTED(_frame.size() <= frame_size, "");
             return _frame;
         }
 
@@ -141,9 +143,9 @@ public:
         auto & q = _qpool.at(priority);
         auto & front = q.front();
 
-        PFS__THROW_UNEXPECTED(archive_traits_type::empty(_frame), "");
+        PFS__THROW_UNEXPECTED(_frame.empty(), "");
 
-        priority_frame_type{}.pack(priority, _frame, front, frame_size);
+        priority_frame_type::pack(priority, _frame, front, frame_size);
 
         // Check topmost message is processed
         if (front.empty())
@@ -155,13 +157,12 @@ public:
     void shift (std::size_t n)
     {
         PFS__THROW_UNEXPECTED(n > 0, "");
-        PFS__THROW_UNEXPECTED(n <= archive_traits_type::size(_frame), "");
+        PFS__THROW_UNEXPECTED(n <= _frame.size(), "");
 
-        if (archive_traits_type::size(_frame) == n) {
-            archive_traits_type::clear(_frame);
+        if (_frame.size() == n) {
+            _frame.clear();
         } else {
-            //_frame.erase(_frame.begin(), _frame.begin() + n);
-            archive_traits_type::erase(_frame, 0, n);
+            _frame.erase_front(n);
         }
     }
 
@@ -175,6 +176,6 @@ public: // static
 template <typename PriorityTracker, typename Archive>
 constexpr std::size_t priority_writer_queue<PriorityTracker, Archive>::PRIORITY_COUNT;
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

@@ -10,7 +10,6 @@
 #include "protocol.hpp"
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
-#include "../../traits/archive_traits.hpp"
 #include <chrono>
 #include <functional>
 #include <set>
@@ -19,17 +18,15 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
-template <typename Node>
-class simple_heartbeat
+template <typename SocketId, typename SerializerTraits>
+class heartbeat_controller
 {
-    using socket_id = typename Node::socket_id;
-    using serializer_traits_type = typename Node::serializer_traits_type;
+    using socket_id = SocketId;
+    using serializer_traits_type = SerializerTraits;
     using serializer_type = typename serializer_traits_type::serializer_type;
     using archive_type = typename serializer_traits_type::archive_type;
-    using archive_traits_type = archive_traits<archive_type>;
     using time_point_type = std::chrono::steady_clock::time_point;
 
     struct heartbeat_item
@@ -45,8 +42,6 @@ class simple_heartbeat
     }
 
 private:
-    Node * _node {nullptr};
-
     // Expiration timeout
     std::chrono::seconds _exp_timeout {15};
 
@@ -59,14 +54,13 @@ private:
     std::unordered_map<socket_id, time_point_type> _limits;
 
 public:
+    mutable callback_t<void (socket_id, archive_type)> enqueue_packet;
     mutable callback_t<void (socket_id)> on_expired = [] (socket_id) {};
 
 public:
-    simple_heartbeat (Node * node
-        , std::chrono::seconds exp_timeout = std::chrono::seconds{15}
+    heartbeat_controller (std::chrono::seconds exp_timeout = std::chrono::seconds{15}
         , std::chrono::seconds interval = std::chrono::seconds{5})
-        : _node(node)
-        , _exp_timeout(exp_timeout)
+        : _exp_timeout(exp_timeout)
         , _interval(interval)
     {}
 
@@ -110,14 +104,13 @@ public:
 
             archive_type ar;
             serializer_type out {ar};
-            heartbeat_packet pkt;
+            heartbeat_packet pkt {0};
             pkt.serialize(out);
 
             _tmp.clear();
 
             while (!_q.empty() && pos->t <= now) {
-                _node->enqueue_private(pos->sid, 0
-                    , archive_traits_type::data(ar), archive_traits_type::size(ar));
+                enqueue_packet(pos->sid, std::move(ar));
                 auto sid = pos->sid;
                 pos = _q.erase(pos);
                 _tmp.push_back(sid);
@@ -151,6 +144,6 @@ public:
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END

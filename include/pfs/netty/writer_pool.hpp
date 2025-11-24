@@ -15,7 +15,6 @@
 #include "send_result.hpp"
 #include "tag.hpp"
 #include "trace.hpp"
-#include "traits/archive_traits.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/stopwatch.hpp>
@@ -41,8 +40,6 @@ template <typename Socket, typename WriterPoller, typename WriterQueue>
 class writer_pool: protected WriterPoller
 {
     using archive_type = typename WriterQueue::archive_type;
-    using archive_traits_type = archive_traits<archive_type>;
-
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
@@ -239,7 +236,7 @@ public:
     {
         check_priority(priority);
 
-        if (archive_traits_type::empty(data))
+        if (data.empty())
             return;
 
         auto acc = ensure_account(sid);
@@ -278,6 +275,11 @@ public:
         enqueue_broadcast(0, data, len);
     }
 
+    bool empty () const noexcept
+    {
+        return _accounts.empty();
+    }
+
     /**
      * @return Number of events occurred.
      */
@@ -290,11 +292,6 @@ public:
         result += n > 0 ? n : 0;
 
         return result;
-    }
-
-    bool empty () const noexcept
-    {
-        return _accounts.empty();
     }
 
 public: // static
@@ -404,9 +401,9 @@ private:
                 if (frame_size == 0)
                     continue;
 
-                auto const & frame = acc.q.acquire_frame(frame_size);
+                auto frame = acc.q.acquire_frame(frame_size);
 
-                if (archive_traits_type::empty(frame))
+                if (frame.empty())
                     continue;
 
                 // A missing socket is less common than an empty frame, so optimally locate socket
@@ -424,7 +421,7 @@ private:
                 }
 
                 error err;
-                auto res = sock->send(archive_traits_type::data(frame), archive_traits_type::size(frame), & err);
+                auto res = sock->send(frame.data(), frame.size(), & err);
 
                 switch (res.status) {
                     case send_status::failure:

@@ -9,7 +9,6 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
-#include "../../traits/archive_traits.hpp"
 #include "input_account.hpp"
 #include "tag.hpp"
 #include <unordered_map>

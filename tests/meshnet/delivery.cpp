@@ -72,7 +72,7 @@ TEST_CASE("simple delivery") {
     };
 
     net.on_message_received = [& message_received_counter] (std::string const & source_name
-        , std::string const & sender_name, std::string const & msgid, std::vector<char> msg
+        , std::string const & sender_name, std::string const & msgid, archive_t msg
         , std::size_t, std::size_t)
     {
         LOGD(TAG, "{}: Message received: {}: {}: {} bytes", source_name, sender_name, msgid

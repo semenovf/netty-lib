@@ -6,9 +6,8 @@
 // Changelog:
 //      2025.06.04 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-// FIXME UNCOMMENT
-// #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-// #include "../doctest.h"
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "../doctest.h"
 #include "../tools.hpp"
 #include "mesh_network.hpp"
 #include <pfs/synchronized.hpp>
@@ -39,37 +38,6 @@ auto on_channel_destroyed = [] (std::string const & source_name, std::string con
     LOGD(TAG, "{}: Channel destroyed with {}", source_name, target_name);
 };
 
-// FIXME REMOVE
-int main ()
-{
-    netty::startup_guard netty_startup;
-    std::atomic_int id_duplication_flag {0};
-
-    mesh_network_t net { "A0", "A0_dup" };
-
-    net.on_duplicate_id = [& id_duplication_flag] (std::string const & source_name
-        , std::string const & target_name, netty::socket4_addr saddr)
-    {
-        LOGE(TAG, "{}: Node ID duplication with: {} ({})", source_name, target_name, to_string(saddr));
-        ++id_duplication_flag;
-    };
-
-    net.connect_host("A0", "A0_dup", BEHIND_NAT);
-
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
-
-    net.run_all();
-    tools::wait_atomic_counter(id_duplication_flag, 2);
-    LOGD(TAG, "=== INTERRUPT ===");
-    net.interrupt_all();
-    LOGD(TAG, "=== JOIN ===");
-    net.join_all();
-    LOGD(TAG, "=== EXIT ===");
-
-    return 0;
-}
-
-#if 0 // FIXME REMOVE #if
 TEST_CASE("handshake behind NAT") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
@@ -97,9 +65,8 @@ TEST_CASE("handshake behind NAT") {
     net.interrupt_all();
     net.join_all();
 }
-#endif
 
-#if 0 // FIXME REMOVE #if
+// FIXME SIGABRT for Qt version: tcache_thread_shutdown(): unaligned tcache chunk detected
 TEST_CASE("duplication behind NAT") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
@@ -123,15 +90,11 @@ TEST_CASE("duplication behind NAT") {
 
     net.run_all();
     CHECK(tools::wait_atomic_counter(id_duplication_flag, 2));
-    LOGD(TAG, "=== INTERRUPT ===");
     net.interrupt_all();
-    LOGD(TAG, "=== JOIN ===");
     net.join_all();
-    LOGD(TAG, "=== EXIT ===");
 }
-#endif
 
-#if 0 // FIXME REMOVE #if
+// FIXME SIGABRT for Qt version: tcache_thread_shutdown(): unaligned tcache chunk detected
 TEST_CASE("single link handshake") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
@@ -160,4 +123,3 @@ TEST_CASE("single link handshake") {
     net.interrupt_all();
     net.join_all();
 }
-#endif

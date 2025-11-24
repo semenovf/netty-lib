@@ -17,7 +17,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace meshnet {
 
 template <typename NodeId, typename SocketId>
@@ -146,8 +145,6 @@ public:
     }
 };
 
-}} // namespace patterns::meshnet
+} // namespace meshnet
 
 NETTY__NAMESPACE_END
-
-

@@ -61,7 +61,10 @@ public:
         return *this;
     }
 
-    archive (archive const &) = delete;
+    archive (archive const & other)
+        : archive(other.data(), other.size())
+    {}
+
     archive & operator = (archive const &) = delete;
 
 public:
@@ -95,7 +98,7 @@ public:
 
     void append (container_type const & c)
     {
-        append(_c, c.data(), c.size());
+        append(_c, data(c), size(c));
     }
 
     void append (char const * data, std::size_t n)

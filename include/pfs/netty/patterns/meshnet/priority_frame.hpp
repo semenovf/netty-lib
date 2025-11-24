@@ -129,8 +129,6 @@ public:
      */
     static bool parse (std::array<archive_type, PriorityCount> & pool, archive_type & inp)
     {
-        // archive_type & payload
-
         // Incomplete frame
         if (inp.size() < header_size() + footer_size())
             return false;
@@ -159,7 +157,7 @@ public:
             };
         }
 
-        archive_type & payload = pool[priority];
+        archive_type payload;
 
 #if NETTY__PF_SERIAL_FIELD_SUPPORT
         std::uint32_t serial = 0;
@@ -205,6 +203,7 @@ public:
             };
         }
 
+        pool[priority].append(payload);
         inp.erase_front(empty_frame_size() + payload_size);
 
         return true;

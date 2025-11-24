@@ -7,6 +7,7 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../serializer_traits.hpp"
 #include "pfs/netty/callback.hpp"
 #include "pfs/netty/poller_types.hpp"
 #include "pfs/netty/patterns/priority_tracker.hpp"
@@ -22,40 +23,17 @@
 #include "pfs/netty/patterns/meshnet/input_controller.hpp"
 #include "pfs/netty/patterns/meshnet/priority_writer_queue.hpp"
 #include "pfs/netty/patterns/meshnet/routing_table.hpp"
-#include "pfs/netty/patterns/meshnet/simple_heartbeat.hpp"
-#include "pfs/netty/patterns/meshnet/simple_input_account.hpp"
+#include "pfs/netty/patterns/meshnet/heartbeat_controller.hpp"
 #include "pfs/netty/patterns/meshnet/single_link_handshake.hpp"
-#include "pfs/netty/patterns/meshnet/without_handshake.hpp"
-#include "pfs/netty/patterns/meshnet/without_heartbeat.hpp"
-#include "pfs/netty/patterns/meshnet/without_input_controller.hpp"
-#include "pfs/netty/patterns/meshnet/without_reconnection_policy.hpp"
-#include "pfs/netty/patterns/meshnet/writer_queue.hpp"
 #include "pfs/netty/posix/tcp_listener.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
-#include "pfs/netty/traits/serializer_traits.hpp"
 #include <pfs/fake_mutex.hpp>
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_hash.hpp>
 #include <pfs/universal_id_pack.hpp>
 
-#if NETTY__QT_ENABLED
-// #   include "pfs/netty/traits/qbytearray_archive_traits.hpp" // FIXME UNCOMMENT
-#   include "../byte_array.hpp" // FIXME REMOVE
-#else
-// #   include "pfs/netty/traits/vector_archive_traits.hpp" // FIXME UNCOMMENT
-#   include "../byte_array.hpp" // FIXME REMOVE
-#endif
-
-namespace delivery_ns = netty::patterns::delivery;
-namespace meshnet_ns = netty::patterns::meshnet;
-
-#if NETTY__QT_ENABLED
-// using archive_type = QByteArray; // FIXME UNCOMMENT
-using archive_type = byte_array;
-#else
-//using archive_type = std::vector<char>;  // FIXME UNCOMMENT
-using archive_type = byte_array;
-#endif
+namespace delivery_ns = netty::delivery;
+namespace meshnet_ns = netty::meshnet;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // Reliable delivery node pool
@@ -72,19 +50,20 @@ struct priority_distribution
     }
 };
 
-using serializer_traits_t = netty::serializer_traits<true, archive_type>;
-using priority_tracker_t = netty::patterns::priority_tracker<priority_distribution>;
+using priority_tracker_t = netty::priority_tracker<priority_distribution>;
 using node_id = pfs::universal_id;
 using socket_id = netty::posix::tcp_socket::socket_id;
 
-using writer_queue_t = meshnet_ns::writer_queue<archive_type>;
-using priority_writer_queue_t = meshnet_ns::priority_writer_queue<priority_tracker_t, archive_type>;
-
+using priority_writer_queue_t = meshnet_ns::priority_writer_queue<priority_tracker_t, serializer_traits_t>;
 using input_controller_t = meshnet_ns::input_controller<
       priority_tracker_t::SIZE
     , socket_id
     , node_id
     , serializer_traits_t>;
+
+using handshake_controller_t = meshnet_ns::single_link_handshake<socket_id, node_id, serializer_traits_t>;
+using heartbeat_controller_t = meshnet_ns::heartbeat_controller<socket_id, serializer_traits_t>;
+using reconnection_policy_t  = meshnet_ns::infinite_reconnection_policy;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // node_t
@@ -113,9 +92,9 @@ using node_t = meshnet_ns::node<
     , priority_writer_queue_t
     , pfs::fake_mutex
     , serializer_traits_t
-    , meshnet_ns::infinite_reconnection_policy
-    , meshnet_ns::single_link_handshake // dual_link_handshake
-    , meshnet_ns::simple_heartbeat
+    , reconnection_policy_t
+    , handshake_controller_t
+    , heartbeat_controller_t
     , input_controller_t>;
 
 

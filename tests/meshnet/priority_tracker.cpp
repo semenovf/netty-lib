@@ -26,7 +26,7 @@ TEST_CASE("default")
 {
     std::array<std::size_t, 7> distribution_sample = {7, 6, 5, 4, 3, 2, 1};
 
-    using priority_tracker_t = netty::patterns::priority_tracker<distribution>;
+    using priority_tracker_t = netty::priority_tracker<distribution>;
 
     priority_tracker_t t;
 
@@ -60,7 +60,7 @@ TEST_CASE("default")
 
 TEST_CASE("single priority tracker")
 {
-    using priority_tracker_t = netty::patterns::priority_tracker<netty::patterns::single_priority_distribution>;
+    using priority_tracker_t = netty::priority_tracker<netty::single_priority_distribution>;
     priority_tracker_t t;
 
     for (int i = 0; i < 30; i++)
