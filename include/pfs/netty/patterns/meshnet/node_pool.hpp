@@ -86,7 +86,7 @@ private:
     callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
-    callback_t<void (node_id, bool)> _on_channel_established;
+    callback_t<void (node_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
     callback_t<void (node_id)> _on_expired;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
@@ -145,7 +145,7 @@ public: // Set callbacks
      * Notify when connection established with the remote node.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id id, bool is_gateway)
+     *          void (node_index_t, node_id peer_id, bool is_gateway)
      */
     template <typename F>
     node_pool & on_channel_established (F && f)
@@ -238,9 +238,8 @@ private:
             return & *_nodes[0];
 
         for (int i = 1; i < _nodes.size(); i++) {
-            if (_nodes[i]->id() == id) {
+            if (_nodes[i]->id() == id)
                 return & *_nodes[i];
-            }
         }
 
         return nullptr;
@@ -308,7 +307,7 @@ private:
         return true;
     }
 
-    void process_alive_received (node_id id, node_index_t /*idx*/, alive_info<node_id> const & ainfo)
+    void process_alive_received (node_index_t /*idx*/, node_id id, alive_info<node_id> const & ainfo)
     {
         auto initiator_id = ainfo.id;
         auto updated = _alive_controller.update_if(initiator_id);
@@ -320,7 +319,7 @@ private:
         }
     }
 
-    void process_unreachable_received (node_id id, node_index_t /*idx*/
+    void process_unreachable_received (node_index_t /*idx*/, node_id id
         , unreachable_info<node_id> const & uinfo)
     {
         // Receiver cannot be reached through the specified gateway.
@@ -355,7 +354,7 @@ private:
         }
     }
 
-    void process_route_received (node_id id, node_index_t /*idx*/, bool is_response
+    void process_route_received (node_index_t /*idx*/, node_id id, bool is_response
         , route_info<node_id> const & rinfo)
     {
         bool new_route_added = false;
@@ -536,34 +535,34 @@ public:
         //
         node->on_error(_on_error);
 
-        node->on_channel_established([this] (node_id id, node_index_t, bool is_gateway) {
-            _on_channel_established(id, is_gateway);
+        node->on_channel_established([this] (node_index_t index, node_id peer_id, bool is_gateway) {
+            _on_channel_established(index, peer_id, is_gateway);
 
             // Add direct route
-            auto route_added = _rtab.add_sibling(id);
+            auto route_added = _rtab.add_sibling(peer_id);
 
             // Add sibling node as alive
-            _alive_controller.add_sibling(id);
+            _alive_controller.add_sibling(peer_id);
 
             // Start routes discovery and initiate alive exchange if channel established
             // with gateway
             if (is_gateway) {
-                _rtab.add_gateway(id);
+                _rtab.add_gateway(peer_id);
 
                 archive_type msg = _rtab.serialize_request(_id);
-                this->enqueue_packet(id, 0, std::move(msg));
+                this->enqueue_packet(peer_id, 0, std::move(msg));
 
                 // Send available routes to connected gateway on behalf of destination (according to
                 // routing table) nodes.
                 if (_is_gateway) {
                     // TODO Should all known routes be sent or only sibling nodes are sufficient?
 
-                    _rtab.foreach_sibling_node([this, id] (node_id initiator_id) {
-                        if (initiator_id != id) {
+                    _rtab.foreach_sibling_node([this, peer_id] (node_id initiator_id) {
+                        if (initiator_id != peer_id) {
                             route_info<node_id> rinfo;
                             rinfo.initiator_id = initiator_id;
                             archive_type msg1 = _rtab.serialize_request(_id, rinfo);
-                            this->enqueue_packet(id, 0, std::move(msg1));
+                            this->enqueue_packet(peer_id, 0, std::move(msg1));
                         }
                     });
                 }
@@ -571,41 +570,41 @@ public:
 
             if (route_added) {
                 if (_on_route_ready) {
-                    NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})", to_string(id), 0);
-                    _on_route_ready(id, gateway_chain_type{});
+                    NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})", to_string(peer_id), 0);
+                    _on_route_ready(peer_id, gateway_chain_type{});
 
                     // Force set alive flag with new route obtained
-                    _alive_controller.update_if(id);
+                    _alive_controller.update_if(peer_id);
                 }
             }
         });
 
-        node->on_channel_destroyed([this] (node_id id, node_index_t /*index*/) {
+        node->on_channel_destroyed([this] (node_index_t index, node_id peer_id) {
             if (_on_channel_destroyed)
-                _on_channel_destroyed(id);
+                _on_channel_destroyed(peer_id);
 
-            _rtab.remove_sibling(id);
-            _alive_controller.expire(id);
+            _rtab.remove_sibling(peer_id);
+            _alive_controller.expire(peer_id);
         });
 
         if (_on_duplicate_id) {
-            node->on_duplicate_id([this] (node_id id, node_index_t, socket4_addr saddr) {
+            node->on_duplicate_id([this] (node_index_t, node_id id, socket4_addr saddr) {
                _on_duplicate_id(id, saddr);
             });
         }
 
-        node->on_alive_received([this](node_id id, node_index_t index, alive_info<node_id> const & ainfo) {
-            process_alive_received(id, index, ainfo);
+        node->on_alive_received([this](node_index_t index, node_id id, alive_info<node_id> const & ainfo) {
+            process_alive_received(index, id, ainfo);
         });
 
-        node->on_unreachable_received([this] (node_id id, node_index_t index
+        node->on_unreachable_received([this] (node_index_t index, node_id id
                 , unreachable_info<node_id> const & uinfo) {
-            process_unreachable_received(id, index, uinfo);
+            process_unreachable_received(index, id, uinfo);
         });
 
-        node->on_route_received([this] (node_id id, node_index_t index
+        node->on_route_received([this] (node_index_t index, node_id id
                 , bool is_response, route_info<node_id> const & rinfo) {
-            process_route_received(id, index, is_response, rinfo);
+            process_route_received(index, id, is_response, rinfo);
         });
 
         if (_on_data_received) {
@@ -693,12 +692,12 @@ public:
      */
     void listen (node_index_t index, int backlog)
     {
-        auto ptr = locate_node(index);
+        auto node_ptr = locate_node(index);
 
-        if (ptr == nullptr)
+        if (node_ptr == nullptr)
             return;
 
-        ptr->listen(backlog);
+        node_ptr->listen(backlog);
     }
 
     /**
@@ -711,18 +710,18 @@ public:
      */
     bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
     {
-        auto ptr = locate_node(index);
+        auto node_ptr = locate_node(index);
 
-        if (ptr == nullptr)
+        if (node_ptr == nullptr)
             return false;
 
-        return ptr->connect_host(remote_saddr, behind_nat);
+        return node_ptr->connect_host(remote_saddr, behind_nat);
     }
 
     /**
      * Initiates a connection to a remote host.
      *
-     * @param index Node index
+     * @param index Node index in the pool.
      * @param remote_saddr Remote node socket address.
      * @param local_addr Local address to bind.
      * @param behind_nat Remote host is behind NAT.
@@ -731,27 +730,30 @@ public:
     bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
         , bool behind_nat = false)
     {
-        auto ptr = locate_node(index);
+        auto node_ptr = locate_node(index);
 
-        if (ptr == nullptr)
+        if (node_ptr == nullptr)
             return false;
 
-        return ptr->connect_host(remote_saddr, local_addr, behind_nat);
+        return node_ptr->connect_host(remote_saddr, local_addr, behind_nat);
     }
 
-    void set_frame_size (node_id id, std::uint16_t frame_size)
+    /**
+     * Sets maximum frame size @a frame_size for exchange with node specified by
+     * identifier @a peer_id.
+     */
+    void set_frame_size (node_index_t index, node_id peer_id, std::uint16_t frame_size)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
 
-        node_id gw_id;
-        auto ptr = locate_writer(id, & gw_id);
+        auto node_ptr = locate_node(index);
 
-        if (ptr == nullptr) {
-            _on_error(tr::f_("node not found to set frame size: {}", to_string(id)));
+        if (node_ptr == nullptr) {
+            _on_error(tr::f_("unable to set frame size: node index={}, peer id={}", index, peer_id));
             return;
         }
 
-        ptr->set_frame_size(id, frame_size);
+        node_ptr->set_frame_size(peer_id, frame_size);
     }
 
     /**

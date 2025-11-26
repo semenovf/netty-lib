@@ -109,7 +109,7 @@ public:
 #endif
 
         out << payload_size;
-        out.write(inp.data(), inp.size());
+        out.write(inp.data(), payload_size);
         out << crc32;
         out << end_flag();
 

@@ -127,8 +127,8 @@ protected:
     std::map<NodePool *, std::thread> _threads;
 
 public:
-    netty::callback_t<void (std::string const &, std::string const &, bool)> on_channel_established
-        = [] (std::string const & /*source_name*/, std::string const & /*target_name*/, bool /*is_gateway*/) {};
+    netty::callback_t<void (std::string const &, meshnet_ns::node_index_t, std::string const &, bool)> on_channel_established
+        = [] (std::string const & /*source_name*/, meshnet_ns::node_index_t, std::string const & /*target_name*/, bool /*is_gateway*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &)> on_channel_destroyed
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
@@ -222,9 +222,10 @@ private:
             LOGE(TAG, "{}", errstr);
         });
 
-        ptr->on_channel_established([this, source_name] (node_id id, bool is_gateway)
+        ptr->on_channel_established([this, source_name] (meshnet_ns::node_index_t index, node_id id
+            , bool is_gateway)
         {
-            this->on_channel_established(source_name, node_name_by_id(id), is_gateway);
+            this->on_channel_established(source_name, index, node_name_by_id(id), is_gateway);
         });
 
         ptr->on_channel_destroyed([this, source_name] (node_id id)
@@ -354,6 +355,14 @@ public:
 
         netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_entry_ptr->port};
         initiator_ctx->node_pool_ptr->connect_host(index, target_saddr, behind_nat);
+    }
+
+    void set_frame_size (std::string const & source_name, meshnet_ns::node_index_t source_index
+        , std::string const & peer_name, std::uint16_t frame_size)
+    {
+        auto source_ctx = locate_by_name(source_name);
+        auto peer_id = node_id_by_name(peer_name);
+        source_ctx->node_pool_ptr->set_frame_size(source_index, peer_id, frame_size);
     }
 
     void send_message (std::string const & src, std::string const & dest, std::string const & text

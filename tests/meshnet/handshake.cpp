@@ -49,7 +49,7 @@ TEST_CASE("handshake behind NAT") {
     mesh_network_t net { "A0", "B0" };
 
     net.on_channel_established = [& channel_established_flag] (std::string const & source_name
-        , std::string const & target_name, bool)
+        , meshnet_ns::node_index_t, std::string const & target_name, bool)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
         ++channel_established_flag;
@@ -106,7 +106,7 @@ TEST_CASE("single link handshake") {
     mesh_network_t net { "A0", "B0" };
 
     net.on_channel_established = [& channel_established_flag] (std::string const & source_name
-        , std::string const & target_name, bool)
+        , meshnet_ns::node_index_t, std::string const & target_name, bool)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
         ++channel_established_flag;

@@ -9,6 +9,7 @@
 #pragma once
 #include "namespace.hpp"
 #include <pfs/i18n.hpp>
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -155,12 +156,27 @@ public:
             clear();
     }
 
+    void resize (std::size_t n)
+    {
+        resize(_c, n);
+    }
+
+    /**
+     * Copy @a data with length @a n to archive starting from position @a pos.
+     */
+    void copy (char const * data, std::size_t n, std::size_t pos)
+    {
+        copy(_c, data, n, pos);
+    }
+
 private:
     static char const * data (container_type const & c);
     static std::size_t size (container_type const & c);
     static void append (container_type & c, char const * data, std::size_t n);
     static void clear (container_type & c);
     static void erase (container_type & c, std::size_t pos, std::size_t n);
+    static void resize (container_type & c, std::size_t n);
+    static void copy (container_type & c, char const * data, std::size_t n, std::size_t pos);
 };
 
 template <>
@@ -191,6 +207,19 @@ template <>
 inline void archive<std::vector<char>>::erase (container_type & c, std::size_t pos, std::size_t n)
 {
     c.erase(c.begin() + pos, c.begin() + pos + n);
+}
+
+template <>
+inline void archive<std::vector<char>>::resize (container_type & c, std::size_t n)
+{
+    c.resize(n);
+}
+
+template <>
+inline void archive<std::vector<char>>::copy (container_type & c, char const * data, std::size_t n
+    , std::size_t pos)
+{
+    std::copy(data, data + n, c.begin() + pos);
 }
 
 NETTY__NAMESPACE_END

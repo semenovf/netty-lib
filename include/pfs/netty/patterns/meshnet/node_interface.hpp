@@ -52,14 +52,14 @@ public:
     // Callback assign methods
     //
     virtual void on_error (callback_t<void (std::string const &)>) = 0;
-    virtual void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)>) = 0;
-    virtual void on_channel_destroyed (callback_t<void (node_id, node_index_t)>) = 0;
+    virtual void on_channel_established (callback_t<void (node_index_t, node_id, bool /*is_gateway*/)>) = 0;
+    virtual void on_channel_destroyed (callback_t<void (node_index_t, node_id)>) = 0;
     virtual void on_reconnection_started (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
     virtual void on_reconnection_stopped (callback_t<void (node_index_t, socket4_addr, inet4_addr)>) = 0;
-    virtual void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)>) = 0;
-    virtual void on_alive_received (callback_t<void (node_id, node_index_t, alive_info<node_id> const &)>) = 0;
-    virtual void on_unreachable_received (callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)>) = 0;
-    virtual void on_route_received (callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)>) = 0;
+    virtual void on_duplicate_id (callback_t<void (node_index_t, node_id, socket4_addr)>) = 0;
+    virtual void on_alive_received (callback_t<void (node_index_t, node_id, alive_info<node_id> const &)>) = 0;
+    virtual void on_unreachable_received (callback_t<void (node_index_t, node_id, unreachable_info<node_id> const &)>) = 0;
+    virtual void on_route_received (callback_t<void (node_index_t, node_id, bool, route_info<node_id> const &)>) = 0;
     virtual void on_domestic_data_received (callback_t<void (node_id, int, archive_type)>) = 0;
     virtual void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
         , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/, archive_type)>) = 0;

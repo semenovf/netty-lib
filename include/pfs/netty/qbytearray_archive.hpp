@@ -45,4 +45,17 @@ inline void archive<QByteArray>::erase (container_type & c, std::size_t pos, std
     c.remove(pfs::numeric_cast<qsizetype>(pos), pfs::numeric_cast<qsizetype>(n));
 }
 
+template <>
+inline void archive<QByteArray>::resize (container_type & c, std::size_t n)
+{
+    c.resize(pfs::numeric_cast<qsizetype>(n));
+}
+
+template <>
+inline void archive<QByteArray>::copy (container_type & c, char const * data, std::size_t n
+    , std::size_t pos)
+{
+    std::copy(data, data + n, c.data() + pos);
+}
+
 NETTY__NAMESPACE_END

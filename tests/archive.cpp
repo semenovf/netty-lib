@@ -9,6 +9,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 #include "serializer_traits.hpp"
+#include <algorithm>
 
 constexpr char const * ABC = "ABC";
 
@@ -96,4 +97,24 @@ TEST_CASE("erase_front") {
         archive_t ar {ABC, 3};
         CHECK_THROWS_AS(ar.erase_front(4), std::range_error);
     }
+}
+
+TEST_CASE("resize and copy") {
+    std::string abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    archive_t ar;
+
+    CHECK_EQ(ar.size(), 0);
+
+    ar.resize(abc.size());
+
+    CHECK_EQ(ar.size(), abc.size());
+
+    std::size_t step = 4;
+
+    for (std::size_t i = 0; i < abc.size(); i += std::min(step, abc.size() - i)) {
+        auto n = std::min(step, abc.size() - i);
+        ar.copy(abc.data() + i, n, i);
+    }
+
+    CHECK_EQ(abc, std::string(ar.data(), ar.size()));
 }

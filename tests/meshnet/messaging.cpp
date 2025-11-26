@@ -68,8 +68,8 @@ TEST_CASE("messaging") {
         "a", "b", "c", "d", "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"
     };
 
-    net.on_channel_established = [] (std::string const & source_name, std::string const & target_name
-        , bool /*is_gateway*/)
+    net.on_channel_established = [] (std::string const & source_name, meshnet_ns::node_index_t
+        , std::string const & target_name, bool /*is_gateway*/)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
         ++g_channels_established_counter;
@@ -88,7 +88,7 @@ TEST_CASE("messaging") {
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
     net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , std::string const & msgid, std::vector<char> msg, std::size_t source_index
+        , std::string const & msgid, archive_t msg, std::size_t source_index
         , std::size_t target_index)
     {
         LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
@@ -101,7 +101,7 @@ TEST_CASE("messaging") {
     };
 
     net.on_report_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , std::vector<char> msg, std::size_t source_index, std::size_t target_index)
+        , archive_t msg, std::size_t source_index, std::size_t target_index)
     {
         LOGD(TAG, "Report received by {} from {}", receiver_name, sender_name);
 
@@ -114,7 +114,7 @@ TEST_CASE("messaging") {
 
 #else
     net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , int priority, std::vector<char> bytes, std::size_t source_index, std::size_t target_index)
+        , int priority, archive_t bytes, std::size_t source_index, std::size_t target_index)
     {
         LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
 

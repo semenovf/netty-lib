@@ -181,14 +181,14 @@ private: // Callbacks
     callback_t<void (std::string const &)> _on_error
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
-    callback_t<void (node_id, node_index_t, bool)> _on_channel_established = [] (node_id, node_index_t, bool) {};
-    callback_t<void (node_id, node_index_t)> _on_channel_destroyed = [] (node_id, node_index_t) {};
+    callback_t<void (node_index_t, node_id, bool)> _on_channel_established = [] (node_index_t, node_id, bool) {};
+    callback_t<void (node_index_t, node_id)> _on_channel_destroyed = [] (node_index_t, node_id) {};
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
-    callback_t<void (node_id, node_index_t, socket4_addr)> _on_duplicate_id;
-    callback_t<void (node_id, node_index_t, alive_info<node_id> const &)> _on_alive_received;
-    callback_t<void (node_id, node_index_t, unreachable_info<node_id> const &)> _on_unreachable_received;
-    callback_t<void (node_id, node_index_t, bool, route_info<node_id> const &)> _on_route_received;
+    callback_t<void (node_index_t, node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (node_index_t, node_id, alive_info<node_id> const &)> _on_alive_received;
+    callback_t<void (node_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
+    callback_t<void (node_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
     callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
     callback_t<void (node_id, int, node_id, node_id, archive_type)> _on_global_data_received;
     callback_t<void (int, node_id, node_id, archive_type)> _on_forward_global_packet;
@@ -334,7 +334,7 @@ public:
 
             NETTY__TRACE(MESHNET_TAG, "channel established: {}", to_string(id));
 
-            _on_channel_established(id, _index, is_gateway);
+            _on_channel_established(_index, id, is_gateway);
 
 #if NETTY__TELEMETRY_ENABLED
             _telemetry_producer->broadcast(KEY_CHANNEL_ESTABLISHED
@@ -346,7 +346,7 @@ public:
         {
             auto psock = _socket_pool.locate(sid);
             PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::node algorithm");
-            _on_duplicate_id(id, _index, psock->saddr());
+            _on_duplicate_id(_index, id, psock->saddr());
 
             if (force_closing)
                 destroy_channel(sid);
@@ -391,7 +391,7 @@ public:
                 auto id_ptr = _channels.locate_reader(sid);
 
                 if (id_ptr != nullptr)
-                    _on_alive_received(*id_ptr, _index, pkt.info());
+                    _on_alive_received(_index, *id_ptr, pkt.info());
             }
         };
 
@@ -401,7 +401,7 @@ public:
                 auto id_ptr = _channels.locate_reader(sid);
 
                 if (id_ptr != nullptr)
-                    _on_unreachable_received(*id_ptr, _index, pkt.info());
+                    _on_unreachable_received(_index, *id_ptr, pkt.info());
             }
         };
 
@@ -411,7 +411,7 @@ public:
                 auto id_ptr = _channels.locate_reader(sid);
 
                 if (id_ptr != nullptr)
-                    _on_route_received(*id_ptr, _index, pkt.is_response(), pkt.info());
+                    _on_route_received(_index, *id_ptr, pkt.is_response(), pkt.info());
             }
         };
 
@@ -484,7 +484,7 @@ public: // Set callbacks
      * Notify when connection established with the remote node.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id id, node_index_t, bool is_gateway)
+     *          void (node_index_t, node_id id, bool is_gateway)
      */
     template <typename F>
     node & on_channel_established (F && f)
@@ -497,7 +497,7 @@ public: // Set callbacks
      * Notify when the channel is destroyed with the remote node.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, node_index_t)
+     *          void (node_index_t, node_id)
      */
     template <typename F>
     node & on_channel_destroyed (F && f)
@@ -536,7 +536,7 @@ public: // Set callbacks
      * Notify when a node with identical ID is detected.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, node_index_t, socket4_addr)
+     *          void (node_index_t, node_id, socket4_addr)
      */
     template <typename F>
     node & on_duplicate_id (F && f)
@@ -549,7 +549,7 @@ public: // Set callbacks
      * On alive info received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, node_index_t, alive_info<node_id> const &)
+     *          void (node_index_t, node_id, alive_info<node_id> const &)
      */
     template <typename F>
     node & on_alive_received (F && f)
@@ -562,7 +562,7 @@ public: // Set callbacks
      * On unreachable node received
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, node_index_t, unreachable_info<node_id> const &)
+     *          void (node_index_t, node_id, unreachable_info<node_id> const &)
      */
     template <typename F>
     node & on_unreachable_received (F && f)
@@ -575,7 +575,7 @@ public: // Set callbacks
      * On intermediate route info received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, node_index_t, bool is_response, route_info<node_id> const &)
+     *          void (node_index_t, node_id, bool is_response, route_info<node_id> const &)
      */
     template <typename F>
     node & on_route_received (F && f)
@@ -814,10 +814,11 @@ public:
      */
     void set_frame_size (node_id id, std::uint16_t frame_size)
     {
-        auto sid_ptr = _channels.locate_writer(id);
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        auto psid = _channels.locate_writer(id);
 
-        if (sid_ptr != nullptr)
-            _writer_pool.set_frame_size(*sid_ptr, frame_size);
+        if (psid != nullptr)
+            _writer_pool.set_frame_size(*psid, frame_size);
     }
 
     /**
@@ -945,7 +946,7 @@ private:
 
         if (success) {
             NETTY__TRACE(MESHNET_TAG, "channel destroyed: {}", to_string(res.second));
-            _on_channel_destroyed(res.second, _index);
+            _on_channel_destroyed(_index, res.second);
 
 #if NETTY__TELEMETRY_ENABLED
             _telemetry_producer->broadcast(KEY_CHANNEL_DESTROYED
@@ -1078,12 +1079,12 @@ public: // node_interface
             Node::on_error(std::move(cb));
         }
 
-        void on_channel_established (callback_t<void (node_id, node_index_t, bool /*is_gateway*/)> cb) override
+        void on_channel_established (callback_t<void (node_index_t, node_id, bool /*is_gateway*/)> cb) override
         {
             Node::on_channel_established(std::move(cb));
         }
 
-        void on_channel_destroyed (callback_t<void (node_id, node_index_t)> cb) override
+        void on_channel_destroyed (callback_t<void (node_index_t, node_id)> cb) override
         {
             Node::on_channel_destroyed(std::move(cb));
         }
@@ -1098,24 +1099,24 @@ public: // node_interface
             Node::on_reconnection_stopped(std::move(cb));
         }
 
-        void on_duplicate_id (callback_t<void (node_id, node_index_t, socket4_addr)> cb) override
+        void on_duplicate_id (callback_t<void (node_index_t, node_id, socket4_addr)> cb) override
         {
             Node::on_duplicate_id(std::move(cb));
         }
 
-        void on_alive_received (callback_t<void (node_id, node_index_t
+        void on_alive_received (callback_t<void (node_index_t, node_id
             , alive_info<node_id> const &)> cb) override
         {
             Node::on_alive_received(std::move(cb));
         }
 
-        void on_unreachable_received (callback_t<void (node_id, node_index_t
+        void on_unreachable_received (callback_t<void (node_index_t, node_id
             , unreachable_info<node_id> const &)> cb) override
         {
             Node::on_unreachable_received(std::move(cb));
         }
 
-        void on_route_received (callback_t<void (node_id, node_index_t, bool
+        void on_route_received (callback_t<void (node_index_t, node_id, bool
             , route_info<node_id> const &)> cb) override
         {
             Node::on_route_received(std::move(cb));

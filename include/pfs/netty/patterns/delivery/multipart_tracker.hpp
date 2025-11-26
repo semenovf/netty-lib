@@ -40,10 +40,11 @@ namespace delivery {
 //   |                                                   +--- _current_index                 |
 //   +--- _first_sn                                                              _last_sn ---+
 
-template <typename MessageId>
+template <typename MessageId, typename Archive>
 class multipart_tracker
 {
     using message_id = MessageId;
+    using archive_type = Archive;
     using clock_type = std::chrono::steady_clock;
     using time_point_type = clock_type::time_point;
 
@@ -56,7 +57,7 @@ private:
     serial_number _first_sn {0}; // First value of serial number range
     serial_number _last_sn {0};  // Last value of serial number range
 
-    std::vector<char> _payload;
+    archive_type _payload;
     char const * _data {nullptr};
     std::size_t _size {0};
 
@@ -96,7 +97,7 @@ public:
      * is transmitted.
      */
     multipart_tracker (message_id msgid, int priority, std::uint32_t part_size
-        , serial_number first_sn, std::vector<char> && msg
+        , serial_number first_sn, archive_type && msg
         , std::chrono::milliseconds exp_timeout = std::chrono::milliseconds{3000})
         : _msgid(msgid)
         , _priority(priority)

@@ -230,14 +230,13 @@ public:
      * Constructs `payload` packet from deserializer with predefined header.
      * Header can be read before from the deserializer.
      */
-    template <typename Deserializer>
-    message_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    template <typename Deserializer, typename Archive>
+    message_packet (header const & h, Deserializer & in, Archive & bytes)
         : header(h)
     {
-        in >> msgid >> total_size >> part_size >> last_sn;
-
         std::uint32_t size = 0;
-        in >> size >> std::make_pair(& bytes, size);
+        in >> msgid >> total_size >> part_size >> last_sn >> size;
+        in.read(bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();
@@ -249,12 +248,11 @@ public:
     template <typename Serializer>
     void serialize (Serializer & out, char const * data, std::size_t len)
     {
+        auto size = pfs::numeric_cast<std::uint32_t>(len);
         header::serialize(out);
 
-        out << msgid << total_size << part_size << last_sn;
-
-        auto size = pfs::numeric_cast<std::uint32_t>(len);
-        out << size << std::make_pair(data, len);
+        out << msgid << total_size << part_size << last_sn << size;
+        out.write(data, len);
     }
 };
 
@@ -275,12 +273,13 @@ public:
         _h.sn = sn;
     }
 
-    template <typename Deserializer>
-    part_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    template <typename Deserializer, typename Archive>
+    part_packet (header const & h, Deserializer & in, Archive & bytes)
         : header(h)
     {
         std::uint32_t size = 0;
-        in >> size >> std::make_pair(& bytes, size);
+        in >> size;
+        in.read(bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();
@@ -294,7 +293,8 @@ public:
     {
         header::serialize(out);
         auto part_size  = pfs::numeric_cast<std::uint32_t>(len);
-        out << part_size << std::make_pair(data, len);
+        out << part_size;
+        out.write(data, len);
     }
 };
 
@@ -337,12 +337,13 @@ public:
      * Constructs `payload` packet from deserializer with predefined header.
      * Header can be read before from the deserializer.
      */
-    template <typename Deserializer>
-    report_packet (header const & h, Deserializer & in, std::vector<char> & bytes)
+    template <typename Deserializer, typename Archive>
+    report_packet (header const & h, Deserializer & in, Archive & bytes)
         : header(h)
     {
         std::uint32_t size = 0;
-        in >> size >> std::make_pair(& bytes, size);
+        in >> size;
+        in.read(bytes, size);
 
         if (!in.is_good()) {
             bytes.clear();
@@ -356,7 +357,8 @@ public:
     {
         header::serialize(out);
         auto size  = pfs::numeric_cast<std::uint32_t>(len);
-        out << size << std::make_pair(data, len);
+        out << size;
+        out.write(data, len);
     }
 };
 

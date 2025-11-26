@@ -31,16 +31,19 @@ namespace delivery {
 //   |                                                                                       |
 //   +--- _first_sn                                                              _last_sn ---+
 
-template <typename MessageId>
+template <typename MessageId, typename Archive>
 class multipart_assembler
 {
+    using archive_type = Archive;
+
+private:
     MessageId _msgid; // Serialized message ID
     std::uint32_t _part_size {0};
     serial_number _first_sn {0};
     serial_number _last_sn {0};
 
     std::vector<bool> _parts_received;
-    std::vector<char> _payload;
+    archive_type _payload;
     std::size_t _remain_parts {0};
 
     // For track progress
@@ -88,7 +91,7 @@ public:
      *
      * @return @c false if @a sn is out of bounds.
      */
-    bool acknowledge_part (serial_number sn, std::vector<char> const & part)
+    bool acknowledge_part (serial_number sn, archive_type const & part)
     {
         if (sn < _first_sn || sn > _last_sn)
             return false;
@@ -111,7 +114,8 @@ public:
         _remain_parts--;
         _received_size += part.size();
 
-        std::copy(part.begin(), part.end(), _payload.begin() + (index * _part_size));
+        //std::copy(part.begin(), part.end(), _payload.begin() + (index * _part_size));
+        _payload.copy(part.data(), part.size(), index * _part_size);
         _parts_received[index] = true;
 
         return true;
@@ -148,12 +152,12 @@ public:
         return 0;
     }
 
-    std::vector<char> const & payload () const noexcept
+    archive_type const & payload () const noexcept
     {
         return _payload;
     }
 
-    std::vector<char> take_payload () noexcept
+    archive_type take_payload () noexcept
     {
         auto result = std::move(_payload);
         return result;

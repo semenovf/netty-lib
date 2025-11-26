@@ -190,8 +190,10 @@ public:
     {
         auto pacc = locate_account(sid);
 
-        if (pacc != nullptr)
+        if (pacc != nullptr) {
             pacc->max_frame_size = frame_size;
+            NETTY__TRACE(TAG, "frame size set to {} for socket ID {}", pacc->max_frame_size, sid);
+        }
     }
 
     void add (socket_id sid)

@@ -122,8 +122,8 @@ static void matrix_set (std::size_t row, std::size_t col, bool value = true)
     }
 }
 
-auto on_channel_established = [] (std::string const & source_name, std::string const & target_name
-    , bool /*is_gateway*/)
+auto on_channel_established = [] (std::string const & source_name, meshnet_ns::node_index_t
+    , std::string const & target_name, bool /*is_gateway*/)
 {
     LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
     ++g_channels_established_counter;

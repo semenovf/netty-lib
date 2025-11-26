@@ -29,6 +29,7 @@ class node_pool_rd
 {
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
+    using archive_type = typename delivery_manager_type::archive_type;
 
 #if NETTY__TELEMETRY_ENABLED
     using shared_telemetry_producer_type = shared_telemetry_producer_t;
@@ -58,7 +59,7 @@ private:
             NETTY__TRACE(MESHNET_TAG, "Node expired: {}", to_string(id));
             _dm.pause(id);
             _on_node_expired(id);
-        }).on_data_received([this] (node_id id, int priority, std::vector<char> bytes) {
+        }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
             _dm.process_input(id, priority, std::move(bytes));
         });
     }
@@ -110,7 +111,7 @@ public: // Set callbacks
      * Notify when connection established with the remote node.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id id, bool is_gateway)
+     *          void (node_index_t, node_id peer_id, bool is_gateway)
      */
     template <typename F>
     node_pool_rd & on_channel_established (F && f)
@@ -206,7 +207,7 @@ public: // Set callbacks
      * Notify receiver when message received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, message_id, int priority, std::vector<char> msg)
+     *          void (node_id, message_id, int priority, archive_type msg)
      */
     template <typename F>
     node_pool_rd & on_message_received (F && f)
@@ -245,7 +246,7 @@ public: // Set callbacks
      * Notify receiver when report received.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id sender, int priority, std::vector<char> report)
+     *          void (node_id sender, int priority, archive_type report)
      */
     template <typename F>
     node_pool_rd & on_report_received (F && f)
@@ -332,12 +333,16 @@ public:
         return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
     }
 
-    void set_frame_size (node_id id, std::uint16_t frame_size)
+    /**
+     * Sets maximum frame size @a frame_size for exchange with node specified by
+     * identifier @a peer_id.
+     */
+    void set_frame_size (node_index_t index, node_id peer_id, std::uint16_t frame_size)
     {
-        _t.set_frame_size(id, frame_size);
+        _t.set_frame_size(index, peer_id, frame_size);
     }
 
-    bool enqueue_message (node_id id, message_id msgid, int priority, std::vector<char> msg)
+    bool enqueue_message (node_id id, message_id msgid, int priority, archive_type msg)
     {
         return _dm.enqueue_message(id, msgid, priority, std::move(msg));
     }
@@ -359,7 +364,7 @@ public:
         return _dm.enqueue_report(id, priority, data, length);
     }
 
-    bool enqueue_report (node_id id, int priority, std::vector<char> data)
+    bool enqueue_report (node_id id, int priority, archive_type data)
     {
         return _dm.enqueue_report(id, priority, std::move(data));
     }

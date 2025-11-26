@@ -47,9 +47,19 @@ TEST_CASE("simple delivery") {
 
     netty::startup_guard netty_startup;
 
+    std::atomic_int channel_established_flag {0};
     std::atomic_int route_ready_counter {0};
     std::atomic_int message_received_counter {0};
     mesh_network_t net { "A0", "A1" };
+
+    net.on_channel_established = [& channel_established_flag] (std::string const & source_name
+        , meshnet_ns::node_index_t source_index, std::string const & peer_name, bool)
+    {
+        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, peer_name);
+        std::uint16_t frame_size = 100;
+        mesh_network_t::instance()->set_frame_size(source_name, source_index, peer_name, frame_size);
+        ++channel_established_flag;
+    };
 
     net.on_route_ready = [& route_ready_counter] (std::string const &, std::string const &
         , std::vector<node_id>, std::size_t, std::size_t)
@@ -96,6 +106,7 @@ TEST_CASE("simple delivery") {
     tools::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
+    CHECK(tools::wait_atomic_counter(channel_established_flag, 2));
     CHECK(tools::wait_atomic_counter(route_ready_counter, 1));
 
     LOGD(TAG, "Send text: {} bytes", text.size());

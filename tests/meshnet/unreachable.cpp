@@ -86,8 +86,8 @@ TEST_CASE("short chain unreachable") {
 
     mesh_network_t net {"a", "A0", "C0"};
 
-    net.on_channel_established = [] (std::string const & source_name, std::string const & target_name
-        , bool /*is_gateway*/)
+    net.on_channel_established = [] (std::string const & source_name, meshnet_ns::node_index_t
+        , std::string const & target_name, bool /*is_gateway*/)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
         ++g_channels_established_counter3;
@@ -161,8 +161,8 @@ TEST_CASE("long chain unreachable") {
 
     mesh_network_t net {"a", "b", "c", "d", "A0", "C0"};
 
-    net.on_channel_established = [] (std::string const & source_name, std::string const & target_name
-        , bool /*is_gateway*/)
+    net.on_channel_established = [] (std::string const & source_name, meshnet_ns::node_index_t
+        , std::string const & target_name, bool /*is_gateway*/)
     {
         LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
         ++g_channels_established_counter6;
