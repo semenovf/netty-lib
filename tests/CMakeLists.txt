@@ -13,15 +13,16 @@
 #       2025.08.06 Added `envelope` test.
 #       2025.08.06 Added `chunk` test.
 #       2025.11.17 `chunk` renamed to `buffer`.
+#       2025.11.18 `buffer` renamed to `archive`.
 ################################################################################
 set(TESTS
     archive
-    # envelope # FIXME FIX AND UNCOMMENT
+    envelope
     inet4_addr
     reader_pool
     writer_pool)
 
-set(TESTS_QT archive reader_pool writer_pool) #buffer envelope)  # FIXME FIX AND UNCOMMENT
+set(TESTS_QT archive envelope reader_pool writer_pool)
 
 if (NOT QT_VERSION_MAJOR)
     if (Qt6_VERSION_MAJOR)

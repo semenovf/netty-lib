@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
-#include "traits/archive_traits.hpp"
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -36,7 +35,6 @@ class envelope final
     using archive_type = typename serializer_traits_type::archive_type;
     using deserializer_type = typename serializer_traits_type::deserializer_type;
     using serializer_type = typename serializer_traits_type::serializer_type;
-    using archive_traits_type = archive_traits<archive_type>;
 
 public:
     static constexpr std::size_t min_size() { return 2 + sizeof(SizeT); }

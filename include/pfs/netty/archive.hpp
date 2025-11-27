@@ -22,6 +22,7 @@ NETTY__NAMESPACE_BEGIN
  *      - must satisfy the requirements of ContiguousContainer
  *      - default constructable
  *      - move constructable
+ *      - equality operator (for test purposes only)
  *
  * This class implemented a lightweight erase from front method.
  */
@@ -72,6 +73,12 @@ public:
     container_type && container () &
     {
         return std::move(_c);
+    }
+
+    // For test purposes for now
+    bool operator == (archive const & other) const noexcept
+    {
+        return _c == other._c;
     }
 
     /**
