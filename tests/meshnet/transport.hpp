@@ -91,7 +91,6 @@ using node_t = meshnet_ns::node<
 #endif
     , priority_writer_queue_t
     , pfs::fake_mutex
-    , serializer_traits_t
     , reconnection_policy_t
     , handshake_controller_t
     , heartbeat_controller_t

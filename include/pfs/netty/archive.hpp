@@ -86,7 +86,7 @@ public:
      */
     char const * data () const noexcept
     {
-        return size() == 0 ? nullptr : data(_c) + _offset;
+        return data(_c) + _offset;
     }
 
     bool empty () const noexcept

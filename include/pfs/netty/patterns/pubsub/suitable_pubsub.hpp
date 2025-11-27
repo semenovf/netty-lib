@@ -7,7 +7,7 @@
 //      2025.08.10 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
+#include "../../serializer_traits.hpp"
 #include "../../poller_types.hpp"
 #include "../../posix/tcp_listener.hpp"
 #include "../../posix/tcp_socket.hpp"
@@ -19,14 +19,13 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace pubsub {
 
 /**
  * Suitable (cross-platform) publisher for the current platform.
  */
-template <typename Archive = std::vector<char>>
-using suitable_publisher = netty::patterns::pubsub::publisher<
+template <typename SerializerTraits = serializer_traits<>>
+using suitable_publisher = netty::pubsub::publisher<
       netty::posix::tcp_socket
     , netty::posix::tcp_listener
 #if NETTY__EPOLL_ENABLED
@@ -39,14 +38,14 @@ using suitable_publisher = netty::patterns::pubsub::publisher<
     , netty::listener_select_poller_t
     , netty::writer_select_poller_t
 #endif
-    , netty::patterns::pubsub::writer_queue<Archive>
+    , netty::pubsub::writer_queue<SerializerTraits>
     , std::recursive_mutex>;
 
 /**
  * Suitable (cross-platform) subscriber for the current platform.
  */
-template <typename Archive = std::vector<char>>
-using suitable_subscriber = netty::patterns::pubsub::subscriber<
+template <typename SerializerTraits = serializer_traits<>>
+using suitable_subscriber = subscriber<
       netty::posix::tcp_socket
 #if NETTY__EPOLL_ENABLED
     , netty::connecting_epoll_poller_t
@@ -58,8 +57,8 @@ using suitable_subscriber = netty::patterns::pubsub::subscriber<
     , netty::connecting_select_poller_t
     , netty::reader_select_poller_t
 #endif
-    , netty::patterns::pubsub::input_controller<Archive>>;
+    , input_controller<SerializerTraits>>;
 
-}} // namespace patterns::pubsub
+} // namespace pubsub
 
 NETTY__NAMESPACE_END

@@ -17,7 +17,6 @@
 ################################################################################
 set(TESTS
     archive
-    envelope
     inet4_addr
     reader_pool
     writer_pool)
@@ -54,7 +53,7 @@ foreach (target ${TESTS})
 endforeach()
 
 add_subdirectory(meshnet)
-#add_subdirectory(pubsub) # FIXME FIX AND UNCOMMENT
+add_subdirectory(pubsub)
 #add_subdirectory(telemetry) # FIXME FIX AND UNCOMMENT
 
 ####################################################################################################

@@ -17,7 +17,6 @@
 #include "../../socket_pool.hpp"
 #include "../../socket4_addr.hpp"
 #include "../../trace.hpp"
-#include "../../traits/archive_traits.hpp"
 #include "tag.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
@@ -25,7 +24,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace pubsub {
 
 //
@@ -48,7 +46,6 @@ class subscriber: public interruptable
     using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
     using input_controller_type = InputController;
     using archive_type = typename input_controller_type::archive_type;
-    using archive_traits_type = archive_traits<archive_type>;
     using socket_pool_type = netty::socket_pool<socket_type>;
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
 
@@ -250,6 +247,6 @@ private:
     }
 };
 
-}} // namespace patterns::pubsub
+} // namespace pubsub
 
 NETTY__NAMESPACE_END

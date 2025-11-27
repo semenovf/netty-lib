@@ -81,17 +81,12 @@ template <typename NodeId
     , typename WriterPoller
     , typename WriterQueue
     , typename RecursiveWriterMutex
-    , typename SerializerTraits
     , typename ReconnectionPolicy
     , typename HandshakeController
     , typename HeartbeatController
     , typename InputController>
 class node
 {
-public:
-    using archive_type = typename WriterQueue::archive_type;
-
-private:
     using node_class = node<NodeId
         , Socket
         , Listener
@@ -101,12 +96,13 @@ private:
         , WriterPoller
         , WriterQueue
         , RecursiveWriterMutex
-        , SerializerTraits
         , ReconnectionPolicy
         , HandshakeController
         , HeartbeatController
         , InputController>;
 
+    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
     using socket_type = Socket;
     using listener_type = Listener;
     using socket_pool_type = netty::socket_pool<socket_type>;
@@ -127,7 +123,6 @@ private:
 
 public:
     using socket_id = typename socket_type::socket_id;
-    using serializer_traits_type = SerializerTraits;
     using node_id = NodeId;
 
 private:

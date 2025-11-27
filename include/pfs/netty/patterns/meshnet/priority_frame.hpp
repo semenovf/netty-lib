@@ -94,7 +94,7 @@ public:
 #endif
         frame_size = (std::min)(inp.size() + empty_frame_size(), frame_size);
 
-        PFS__THROW_UNEXPECTED(frame_size > empty_frame_size(), "Fix priority_frame::pack algorithm");
+        PFS__THROW_UNEXPECTED(frame_size > empty_frame_size(), "Fix meshnet::priority_frame::pack algorithm");
 
         std::uint16_t payload_size = frame_size - empty_frame_size();
         auto crc32 = pfs::crc32_of_ptr(inp.data(), payload_size);
@@ -116,7 +116,6 @@ public:
         inp.erase_front(payload_size);
     }
 
-public:
     /**
      * Parses serialized frame with extracting of the payload.
      *
@@ -130,7 +129,7 @@ public:
     static bool parse (std::array<archive_type, PriorityCount> & pool, archive_type & inp)
     {
         // Incomplete frame
-        if (inp.size() < header_size() + footer_size())
+        if (inp.size() < empty_frame_size())
             return false;
 
         deserializer_type in {inp.data(), inp.size()};

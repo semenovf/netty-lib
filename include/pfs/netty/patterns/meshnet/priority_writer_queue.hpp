@@ -11,8 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "priority_frame.hpp"
-#include "../../namespace.hpp"
-#include "../../archive.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <array>
@@ -28,14 +26,13 @@ namespace meshnet {
 template <typename PriorityTracker, typename SerializerTraits>
 class priority_writer_queue
 {
-    using serializer_traits_type = SerializerTraits;
-    using priority_frame_type = priority_frame<PriorityTracker::SIZE, SerializerTraits>;
-    using priority_tracker_type = PriorityTracker;
-
 public:
+    using serializer_traits_type = SerializerTraits;
     using archive_type = typename serializer_traits_type::archive_type;
 
 private:
+    using priority_frame_type = priority_frame<PriorityTracker::SIZE, SerializerTraits>;
+    using priority_tracker_type = PriorityTracker;
     using chunk_queue_type = std::queue<archive_type>;
 
     static constexpr std::size_t PRIORITY_COUNT = PriorityTracker::SIZE;
@@ -49,8 +46,7 @@ private:
     priority_tracker_type _priority_tracker;
 
 public:
-    priority_writer_queue ()
-    {}
+    priority_writer_queue () {}
 
 private:
     // Result priority points to non-empty queue (after constructor or `shift` method calling).
@@ -95,9 +91,9 @@ private:
     }
 
 public:
-    void enqueue (int priority, char const * data, std::size_t len)
+    void enqueue (int priority, char const * data, std::size_t size)
     {
-        if (len == 0)
+        if (size == 0)
             return;
 
         if (priority >= PRIORITY_COUNT)
@@ -105,7 +101,7 @@ public:
 
         auto & q = _qpool.at(priority);
 
-        q.push(archive_type{data, len});
+        q.push(archive_type{data, size});
         _empty = false;
     }
 

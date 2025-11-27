@@ -30,13 +30,13 @@ namespace meshnet {
 /// Packet type
 enum class packet_enum
 {
-      handshake =  1 /// Handshake phase packet
-    , heartbeat =  2 /// Heartbeat loop packet
-    , alive     =  3 /// Alive packet (periodic)
-    , unreach   =  4 /// Node is unreachable packet
-    , route     =  5 /// Route discovery packet
-    , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message)
-    , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message).
+      handshake =  1 /// Handshake phase packet (since version 1).
+    , heartbeat =  2 /// Heartbeat loop packet (since version 1).
+    , alive     =  3 /// Alive packet (periodic) (since version 1).
+    , unreach   =  4 /// Node is unreachable packet (since version 1).
+    , route     =  5 /// Route discovery packet (since version 1).
+    , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message) (since version 1).
+    , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message) (since version 1).
 };
 
 // Used when need to specify the direction/way of the packet

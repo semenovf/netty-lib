@@ -8,7 +8,6 @@
 //      2025.08.08 `interruptable` inheritance.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
 #include "../../callback.hpp"
 #include "../../interruptable.hpp"
 #include "../../listener_pool.hpp"
@@ -16,6 +15,7 @@
 #include "../../socket4_addr.hpp"
 #include "../../trace.hpp"
 #include "../../writer_pool.hpp"
+#include "protocol.hpp"
 #include "tag.hpp"
 #include <pfs/countdown_timer.hpp>
 #include <pfs/i18n.hpp>
@@ -26,7 +26,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace pubsub {
 
 //
@@ -52,7 +51,9 @@ private:
     using listener_type = Listener;
     using socket_pool_type = netty::socket_pool<socket_type>;
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
-    using archive_type = typename WriterQueue::archive_type;
+    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using writer_mutex_type = RecursiveWriterMutex;
 
@@ -154,7 +155,13 @@ public:
 
     void broadcast_unsafe (char const * data, std::size_t size)
     {
-        _writer_pool.enqueue_broadcast(data, size);
+        archive_type ar;
+        serializer_type out {ar};
+        bool force_checksum = true;
+        data_packet pkt {force_checksum};
+        pkt.serialize(out, data, size);
+
+        _writer_pool.enqueue_broadcast(ar.data(), ar.size());
     }
 
     /**
@@ -195,6 +202,6 @@ public:
     }
 };
 
-}} // namespace patterns::pubsub
+} // namespace pubsub
 
 NETTY__NAMESPACE_END

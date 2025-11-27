@@ -33,7 +33,7 @@ namespace {
 constexpr socket_id SID = 42;
 }
 
-void pack_payload (int priority, archive_t & outp, archive_t & payload)
+static void pack_payload (int priority, archive_t & outp, archive_t & payload)
 {
     auto frame_size = priority_frame_t::empty_frame_size() + payload.size();
     priority_frame_t::pack(priority, outp, payload, frame_size);

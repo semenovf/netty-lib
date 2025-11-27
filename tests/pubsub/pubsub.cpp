@@ -7,19 +7,14 @@
 //      2025.08.08 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
-#include "tools.hpp"
+#include "../doctest.h"
+#include "../tools.hpp"
+#include "../serializer_traits.hpp"
 #include "pfs/netty/startup.hpp"
 #include "pfs/netty/patterns/pubsub/suitable_pubsub.hpp"
-#include "pfs/netty/traits/vector_archive_traits.hpp"
 #include <pfs/synchronized.hpp>
 #include <cstdint>
 #include <thread>
-
-#if NETTY__QT_ENABLED
-#   include <QByteArray>
-#   include "pfs/netty/traits/qbytearray_archive_traits.hpp"
-#endif
 
 constexpr std::uint16_t PORT1 = 4242;
 constexpr int SUBSCRIBER_LIMIT = 10;
@@ -28,11 +23,9 @@ constexpr int MESSAGE_LIMIT = 100;
 std::atomic_int g_accepted_counter {0};
 std::array<std::atomic_int, SUBSCRIBER_LIMIT> g_received_counters;
 
-template <typename Archive>
-void tests ()
-{
-    using publisher_t = netty::patterns::pubsub::suitable_publisher<Archive>;
-    using subscriber_t = netty::patterns::pubsub::suitable_subscriber<Archive>;
+TEST_CASE("basic") {
+    using publisher_t = netty::pubsub::suitable_publisher<serializer_traits_t>;
+    using subscriber_t = netty::pubsub::suitable_subscriber<serializer_traits_t>;
 
     netty::startup_guard netty_startup;
 
@@ -59,9 +52,10 @@ void tests ()
 
             REQUIRE(subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}));
 
-            subs[i].on_data_ready([i] (Archive data) {
+            subs[i].on_data_ready([i] (archive_t ar) {
+                auto const * data = ar.data();
                 REQUIRE((data[0] == 'B' && data[1] == 'E'
-                    && data[data.size() - 2] == 'E' && data[data.size() - 1] == 'D'));
+                    && data[ar.size() - 2] == 'E' && data[ar.size() - 1] == 'D'));
 
                 g_received_counters[i].fetch_add(1);
             });
@@ -90,12 +84,4 @@ void tests ()
 
     pub1.interrupt();
     pub1_thread.join();
-}
-
-TEST_CASE("all") {
-    tests<std::vector<char>>();
-
-#if NETTY__QT_ENABLED
-    tests<QByteArray>();
-#endif
 }
