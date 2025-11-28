@@ -118,7 +118,7 @@ class node
     using input_controller_type = InputController;
 
 #if NETTY__TELEMETRY_ENABLED
-    using shared_telemetry_producer_type = shared_telemetry_producer_t;
+    using shared_telemetry_producer_type = std::shared_ptr<telemetry_producer<serializer_traits_type>>;
 #endif
 
 public:

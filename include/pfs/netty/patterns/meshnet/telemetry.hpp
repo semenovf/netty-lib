@@ -7,8 +7,9 @@
 //      2025.08.13 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
-#include "../telemetry/suitable_telemetry.hpp"
+#include "../pubsub/suitable_pubsub.hpp"
+#include "../telemetry/consumer.hpp"
+#include "../telemetry/producer.hpp"
 #include "telemetry_keys.hpp"
 #include <cstdint>
 #include <memory>
@@ -18,10 +19,13 @@ NETTY__NAMESPACE_BEGIN
 
 namespace meshnet {
 
-using telemetry_producer_t = telemetry::suitable_producer_u16<std::vector<char>>;
-using telemetry_consumer_t = telemetry::suitable_consumer_u16<std::vector<char>>;
-using telemetry_visitor_interface_t = telemetry::visitor_interface_u16_t;
-using shared_telemetry_producer_t = std::shared_ptr<telemetry_producer_t>;
+template <typename SerializerTraits>
+using telemetry_producer = telemetry::producer<std::uint16_t
+    , netty::pubsub::suitable_publisher<SerializerTraits>>;
+
+template <typename SerializerTraits>
+using telemetry_consumer = telemetry::consumer<std::uint16_t
+    , netty::pubsub::suitable_subscriber<SerializerTraits>>;
 
 } // namespace meshnet
 

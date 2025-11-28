@@ -42,10 +42,10 @@ class manager
     friend DeliveryController;
 
     using controller_type = DeliveryController;
-    using serializer_traits_type = typename controller_type::serializer_traits_type;
 
 public:
     using transport_type = Transport;
+    using serializer_traits_type = typename DeliveryController::serializer_traits_type;
     using archive_type = typename serializer_traits_type::archive_type;
     using address_type = typename transport_type::address_type;
     using message_id = MessageId;

@@ -29,10 +29,11 @@ class node_pool_rd
 {
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
-    using archive_type = typename delivery_manager_type::archive_type;
+    using serializer_traits_type = typename delivery_manager_type::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
 
 #if NETTY__TELEMETRY_ENABLED
-    using shared_telemetry_producer_type = shared_telemetry_producer_t;
+    using shared_telemetry_producer_type = std::shared_ptr<telemetry_producer<serializer_traits_type>>;
 #endif
 
 public:

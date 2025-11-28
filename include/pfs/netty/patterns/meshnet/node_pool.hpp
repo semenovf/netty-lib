@@ -46,8 +46,9 @@ template <typename NodeId
     , typename RecursiveWriterMutex>
 class node_pool: public interruptable
 {
-    using archive_type = typename RoutingTable::archive_type;
-    using serializer_type = typename RoutingTable::serializer_type;
+    using serializer_traits_type = typename RoutingTable::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
     using node_interface_type = node_interface<NodeId, archive_type>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
@@ -55,7 +56,7 @@ class node_pool: public interruptable
     using writer_mutex_type = RecursiveWriterMutex;
 
 #if NETTY__TELEMETRY_ENABLED
-    using shared_telemetry_producer_type = shared_telemetry_producer_t;
+    using shared_telemetry_producer_type = std::shared_ptr<telemetry_producer<serializer_traits_type>>;
 #endif
 
 public:

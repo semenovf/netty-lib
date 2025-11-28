@@ -28,10 +28,10 @@ template <typename NodeId, typename SerializerTraits>
 class routing_table
 {
     using node_id = NodeId;
-    using serializer_traits_type = SerializerTraits;
     using route_map_type = std::unordered_multimap<node_id, std::size_t>;
 
 public:
+    using serializer_traits_type = SerializerTraits;
     using archive_type = typename serializer_traits_type::archive_type;
     using serializer_type = typename serializer_traits_type::serializer_type;
     using gateway_chain_type = std::vector<node_id>;
