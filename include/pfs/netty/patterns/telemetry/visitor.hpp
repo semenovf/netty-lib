@@ -7,13 +7,11 @@
 //      2025.08.05 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
 #include "types.hpp"
 #include <string>
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace telemetry {
 
 template <typename KeyT>
@@ -35,6 +33,6 @@ public:
     virtual void on_error (std::string const & errstr) = 0;
 };
 
-}} // namespace patterns::telemetry
+} // namespace telemetry
 
 NETTY__NAMESPACE_END

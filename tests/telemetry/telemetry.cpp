@@ -9,8 +9,12 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
 #include "../tools.hpp"
+#include "../serializer_traits.hpp"
 #include "pfs/netty/startup.hpp"
-#include "pfs/netty/patterns/telemetry/suitable_telemetry.hpp"
+#include "pfs/netty/patterns/telemetry/consumer.hpp"
+#include "pfs/netty/patterns/telemetry/producer.hpp"
+#include "pfs/netty/patterns/telemetry/visitor.hpp"
+#include "pfs/netty/patterns/pubsub/suitable_pubsub.hpp"
 #include <pfs/log.hpp>
 #include <chrono>
 #include <thread>
@@ -25,7 +29,7 @@ std::atomic_int g_received_counter {0};
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // visitor
 /////////////////////////////////////////////////////////////////////////////////////////////////
-class visitor: public netty::patterns::telemetry::visitor_interface_t
+class visitor: public netty::telemetry::visitor_interface<std::string>
 {
 public:
     void on (std::string const & key, bool value) override
@@ -35,49 +39,49 @@ public:
         CHECK_EQ(value, true);
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::int8_t value) override
+    void on (std::string const & key, netty::telemetry::int8_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "int8");
-        CHECK_EQ(value, netty::patterns::telemetry::int8_t{42});
+        CHECK_EQ(value, netty::telemetry::int8_t{42});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::int16_t value) override
+    void on (std::string const & key, netty::telemetry::int16_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "int16");
-        CHECK_EQ(value, netty::patterns::telemetry::int16_t{4242});
+        CHECK_EQ(value, netty::telemetry::int16_t{4242});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::int32_t value) override
+    void on (std::string const & key, netty::telemetry::int32_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "int32");
-        CHECK_EQ(value, netty::patterns::telemetry::int32_t{424242});
+        CHECK_EQ(value, netty::telemetry::int32_t{424242});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::int64_t value) override
+    void on (std::string const & key, netty::telemetry::int64_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "int64");
-        CHECK_EQ(value, netty::patterns::telemetry::int64_t{42424242});
+        CHECK_EQ(value, netty::telemetry::int64_t{42424242});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::float32_t value) override
+    void on (std::string const & key, netty::telemetry::float32_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "float32");
-        CHECK_EQ(value, netty::patterns::telemetry::float32_t{3.14159});
+        CHECK_EQ(value, netty::telemetry::float32_t{3.14159});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::float64_t value) override
+    void on (std::string const & key, netty::telemetry::float64_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "float64");
-        CHECK_EQ(value, netty::patterns::telemetry::float64_t{2.71828});
+        CHECK_EQ(value, netty::telemetry::float64_t{2.71828});
     }
 
-    void on (std::string const & key, netty::patterns::telemetry::string_t const & value) override
+    void on (std::string const & key, netty::telemetry::string_t const & value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, "hello");
@@ -102,7 +106,7 @@ constexpr std::uint16_t F32_KEY  = 6;
 constexpr std::uint16_t F64_KEY  = 7;
 constexpr std::uint16_t STR_KEY  = 8;
 
-class visitor_u16: public netty::patterns::telemetry::visitor_interface_u16_t
+class visitor_u16: public netty::telemetry::visitor_interface<std::uint16_t>
 {
 public:
     void on (std::uint16_t const & key, bool value) override
@@ -112,49 +116,49 @@ public:
         CHECK_EQ(value, true);
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::int8_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::int8_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, I8_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::int8_t{42});
+        CHECK_EQ(value, netty::telemetry::int8_t{42});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::int16_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::int16_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, I16_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::int16_t{4242});
+        CHECK_EQ(value, netty::telemetry::int16_t{4242});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::int32_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::int32_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, I32_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::int32_t{424242});
+        CHECK_EQ(value, netty::telemetry::int32_t{424242});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::int64_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::int64_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, I64_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::int64_t{42424242});
+        CHECK_EQ(value, netty::telemetry::int64_t{42424242});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::float32_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::float32_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, F32_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::float32_t{3.14159});
+        CHECK_EQ(value, netty::telemetry::float32_t{3.14159});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::float64_t value) override
+    void on (std::uint16_t const & key, netty::telemetry::float64_t value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, F64_KEY);
-        CHECK_EQ(value, netty::patterns::telemetry::float64_t{2.71828});
+        CHECK_EQ(value, netty::telemetry::float64_t{2.71828});
     }
 
-    void on (std::uint16_t const & key, netty::patterns::telemetry::string_t const & value) override
+    void on (std::uint16_t const & key, netty::telemetry::string_t const & value) override
     {
         ++g_received_counter;
         CHECK_EQ(key, STR_KEY);
@@ -179,17 +183,18 @@ struct consumer_traits;
 template <>
 struct producer_traits<std::string>
 {
-    using type = netty::patterns::telemetry::suitable_producer<>;
+    using type = netty::telemetry::producer<std::string
+        , netty::pubsub::suitable_publisher<serializer_traits_t>>;
 
     static void push_data_to (type & prod)
     {
         prod.push("bool", true);
-        prod.push("int8", netty::patterns::telemetry::int8_t{42});
-        prod.push("int16", netty::patterns::telemetry::int16_t{4242});
-        prod.push("int32", netty::patterns::telemetry::int32_t{424242});
-        prod.push("int64", netty::patterns::telemetry::int64_t{42424242});
-        prod.push("float32", netty::patterns::telemetry::float32_t{3.14159});
-        prod.push("float64", netty::patterns::telemetry::float64_t{2.71828});
+        prod.push("int8", netty::telemetry::int8_t{42});
+        prod.push("int16", netty::telemetry::int16_t{4242});
+        prod.push("int32", netty::telemetry::int32_t{424242});
+        prod.push("int64", netty::telemetry::int64_t{42424242});
+        prod.push("float32", netty::telemetry::float32_t{3.14159});
+        prod.push("float64", netty::telemetry::float64_t{2.71828});
         prod.push("hello", "world");
     }
 };
@@ -197,17 +202,18 @@ struct producer_traits<std::string>
 template <>
 struct producer_traits<std::uint16_t>
 {
-    using type = netty::patterns::telemetry::suitable_producer_u16<>;
+    using type = netty::telemetry::producer<std::uint16_t
+        , netty::pubsub::suitable_publisher<serializer_traits_t>>;
 
     static void push_data_to (type & prod)
     {
         prod.push(BOOL_KEY, true);
-        prod.push(I8_KEY, netty::patterns::telemetry::int8_t{42});
-        prod.push(I16_KEY, netty::patterns::telemetry::int16_t{4242});
-        prod.push(I32_KEY, netty::patterns::telemetry::int32_t{424242});
-        prod.push(I64_KEY, netty::patterns::telemetry::int64_t{42424242});
-        prod.push(F32_KEY, netty::patterns::telemetry::float32_t{3.14159});
-        prod.push(F64_KEY, netty::patterns::telemetry::float64_t{2.71828});
+        prod.push(I8_KEY, netty::telemetry::int8_t{42});
+        prod.push(I16_KEY, netty::telemetry::int16_t{4242});
+        prod.push(I32_KEY, netty::telemetry::int32_t{424242});
+        prod.push(I64_KEY, netty::telemetry::int64_t{42424242});
+        prod.push(F32_KEY, netty::telemetry::float32_t{3.14159});
+        prod.push(F64_KEY, netty::telemetry::float64_t{2.71828});
         prod.push(STR_KEY, "world");
     }
 };
@@ -215,13 +221,15 @@ struct producer_traits<std::uint16_t>
 template <>
 struct consumer_traits<std::string>
 {
-    using type = netty::patterns::telemetry::suitable_consumer<>;
+    using type = netty::telemetry::consumer<std::string
+        , netty::pubsub::suitable_subscriber<serializer_traits_t>>;
 };
 
 template <>
 struct consumer_traits<std::uint16_t>
 {
-    using type = netty::patterns::telemetry::suitable_consumer_u16<>;
+    using type = netty::telemetry::consumer<std::uint16_t
+        , netty::pubsub::suitable_subscriber<serializer_traits_t>>;
 };
 
 template <typename KeyT, typename Visitor>

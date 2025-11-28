@@ -13,7 +13,6 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace telemetry {
 
 using int8_t = std::int8_t;
@@ -39,6 +38,6 @@ template <> constexpr std::int8_t type_of<float32_t> () noexcept { return 6; }
 template <> constexpr std::int8_t type_of<float64_t> () noexcept { return 7; }
 template <> constexpr std::int8_t type_of<string_t> () noexcept  { return 8; }
 
-}} // namespace patterns::telemetry
+} // namespace telemetry
 
 NETTY__NAMESPACE_END

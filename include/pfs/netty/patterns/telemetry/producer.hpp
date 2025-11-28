@@ -7,8 +7,8 @@
 //      2025.07.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
 #include "../../socket4_addr.hpp"
+#include "serializer.hpp"
 #include "tag.hpp"
 #include "types.hpp"
 #include <pfs/log.hpp>
@@ -17,27 +17,29 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace telemetry {
 
 //
 // Serializer requirements: see pfs/netty/patterns/telemetry/serializer.hpp
 //
 
-template <typename KeyT, typename Publisher, typename Serializer
-    , typename RecursiveWriterMutex = std::recursive_mutex>
+template <typename KeyT, typename Publisher, typename RecursiveWriterMutex = std::recursive_mutex>
 class producer
 {
-    using publisher_type = Publisher;
-    using serializer_type = Serializer;
-    using writer_mutex_type = RecursiveWriterMutex;
-
 public:
+    using serializer_traits_type = typename Publisher::serializer_traits_type;
     using key_type = KeyT;
 
 private:
+    using publisher_type = Publisher;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+    using key_value_serializer_type = key_value_serializer<KeyT, serializer_type>;
+    using writer_mutex_type = RecursiveWriterMutex;
+
+private:
     publisher_type _pub;
-    serializer_type _out;
+    archive_type _ar;
 
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
@@ -78,13 +80,26 @@ public:
     void push (key_type const & key, T const & value)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};
-        _out.pack(key, value);
+        push_unsafe(key, value);
+    }
+
+    void push (key_type const & key, char const * value)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        push_unsafe(key, value);
     }
 
     template <typename T>
     void push_unsafe (key_type const & key, T const & value)
     {
-        _out.pack(key, value);
+        serializer_type out {_ar};
+        key_value_serializer_type(out, key, value);
+    }
+
+    void push_unsafe (key_type const & key, char const * value)
+    {
+        serializer_type out {_ar};
+        key_value_serializer_type(out, key, std::string(value));
     }
 
     void broadcast ()
@@ -95,8 +110,8 @@ public:
 
     void broadcast_unsafe ()
     {
-        _pub.broadcast(_out.data(), _out.size());
-        _out.clear();
+        _pub.broadcast(_ar.data(), _ar.size());
+        _ar.clear();
     }
 
     template <typename T>
@@ -109,7 +124,8 @@ public:
     template <typename T>
     void broadcast_unsafe (key_type const & key, T const & value)
     {
-        _out.pack(key, value);
+        serializer_type out {_ar};
+        key_value_serializer_type(out, key, value);
         broadcast_unsafe();
     }
 
@@ -141,6 +157,6 @@ public:
     }
 };
 
-}} // namespace patterns::telemetry
+} // namespace telemetry
 
 NETTY__NAMESPACE_END

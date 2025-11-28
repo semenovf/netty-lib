@@ -54,16 +54,16 @@ endforeach()
 
 add_subdirectory(meshnet)
 add_subdirectory(pubsub)
-#add_subdirectory(telemetry) # FIXME FIX AND UNCOMMENT
+add_subdirectory(telemetry)
 
 ####################################################################################################
 # Channel connection tests
 ####################################################################################################
-get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
-get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)
-get_target_property(_epoll_enabled netty NETTY__EPOLL_ENABLED)
-get_target_property(_enet_enabled netty NETTY__ENET_ENABLED)
-get_target_property(_udt_enabled netty NETTY__UDT_ENABLED)
+# get_target_property(_select_enabled netty NETTY__SELECT_ENABLED)
+# get_target_property(_poll_enabled netty NETTY__POLL_ENABLED)
+# get_target_property(_epoll_enabled netty NETTY__EPOLL_ENABLED)
+# get_target_property(_enet_enabled netty NETTY__ENET_ENABLED)
+# get_target_property(_udt_enabled netty NETTY__UDT_ENABLED)
 
 # FIXME
 # if (_select_enabled)

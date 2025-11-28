@@ -7,114 +7,72 @@
 //      2025.08.07 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
 #include "visitor.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/binary_istream.hpp>
-#include <pfs/binary_ostream.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace telemetry {
 
-template <typename KeyT>
+namespace details {
+
+template <typename KeyT, typename Serializer>
 struct key_serializer
 {
-    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
-
-    key_serializer (binary_ostream_type & out, KeyT const & key)
+    key_serializer (Serializer & out, KeyT const & key)
     {
         out << key;
     }
 };
 
-template <>
-struct key_serializer<std::string>
+template <typename Serializer>
+struct key_serializer<string_t, Serializer>
 {
-    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
-
-    key_serializer (binary_ostream_type & out, std::string const & key)
+    key_serializer (Serializer & out, string_t const & key)
     {
-        out << pfs::numeric_cast<uint16_t>(key.size()) << key;
+        out << pfs::numeric_cast<uint16_t>(key.size());
+        out << key;
     }
 };
 
-template <typename KeyT>
-class serializer
+template <typename ValueT, typename Serializer>
+struct value_serializer
 {
-    using binary_ostream_type = pfs::binary_ostream<pfs::endian::network, std::vector<char>>;
-    using archive_type = typename binary_ostream_type::archive_type;
-    using key_type = KeyT;
-
-private:
-    archive_type _buf;
-
-public:
-    serializer ()
+    value_serializer (Serializer & out, ValueT const & value)
     {
-        _buf.reserve(128);
-    }
-
-public:
-    template <typename T>
-    std::enable_if_t<std::is_arithmetic<T>::value, void>
-    pack (key_type const & key, T const & value)
-    {
-        binary_ostream_type out {_buf, _buf.size()};
-
-        out << type_of<T>();
-        key_serializer<key_type>(out, key);
         out << value;
     }
+};
 
-    void pack (key_type const & key, string_t const & value)
+template <typename Serializer>
+struct value_serializer<string_t, Serializer>
+{
+    value_serializer (Serializer & out, string_t const & value)
     {
-        binary_ostream_type out {_buf, _buf.size()};
-
-        out << type_of<string_t>();
-        key_serializer<key_type>(out, key);
-        out << pfs::numeric_cast<uint16_t>(value.size()) << value;
-    }
-
-    void clear () noexcept
-    {
-        _buf.clear();
-    }
-
-    char const * data () const noexcept
-    {
-        return _buf.data();
-    }
-
-    std::size_t size () const noexcept
-    {
-        return _buf.size();
+        out << pfs::numeric_cast<uint16_t>(value.size());
+        out << value;
     }
 };
 
-template <typename KeyT>
+template <typename KeyT, typename Deserializer>
 struct key_deserializer
 {
-    using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
-
-    key_deserializer (binary_istream_type & in, KeyT & key)
+    key_deserializer (Deserializer & in, KeyT & key)
     {
         in >> key;
     }
 };
 
-template <>
-struct key_deserializer<std::string>
+template <typename Deserializer>
+struct key_deserializer<string_t, Deserializer>
 {
-    using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
-
-    key_deserializer (binary_istream_type & in, std::string & key)
+    key_deserializer (Deserializer & in, string_t & key)
     {
         std::uint16_t key_size = 0;
         in >> key_size;
@@ -122,94 +80,89 @@ struct key_deserializer<std::string>
     }
 };
 
-template <typename KeyT>
-class deserializer
+template <typename ValueT, typename Deserializer>
+struct value_deserializer
 {
-    using binary_istream_type = pfs::binary_istream<pfs::endian::network>;
+    value_deserializer (Deserializer & in, ValueT & value)
+    {
+        in >> value;
+    }
+};
+
+template <typename Deserializer>
+struct value_deserializer<string_t, Deserializer>
+{
+    value_deserializer (Deserializer & in, string_t & value)
+    {
+        std::uint16_t value_size = 0;
+        in >> value_size;
+        in.read(value, value_size);
+    }
+};
+
+} // namespace details
+
+template <typename KeyT, typename Serializer>
+class key_value_serializer
+{
+public:
+    template <typename T>
+    key_value_serializer (Serializer & out, KeyT const & key, T const & value)
+    {
+        out << type_of<T>();
+        details::key_serializer<KeyT, Serializer>(out, key);
+        details::value_serializer<T, Serializer>(out, value);
+    }
+};
+
+template <typename KeyT, typename Deserializer>
+class key_value_deserializer
+{
     using key_type = KeyT;
     using visitor_type = visitor_interface<KeyT>;
 
 public:
-    deserializer (char const * data, std::size_t size, std::shared_ptr<visitor_type> vis)
+    key_value_deserializer (char const * data, std::size_t size, std::shared_ptr<visitor_type> visitor)
     {
-        binary_istream_type in {data, size};
+        Deserializer in {data, size};
 
         while (in.is_good() && in.available() > 0) {
             std::int8_t type = 0;
             key_type key;
 
             in >> type;
-            key_deserializer<key_type>(in, key);
+            details::key_deserializer<key_type, Deserializer>(in, key);
 
-            if (type == type_of<string_t>()) {
-                std::uint16_t value_size = 0;
-                std::string value;
-                in >> value_size;
-                in.read(value, value_size);
-                vis->on(key, value);
-            } else {
-                switch (type) {
-                    case type_of<bool>(): {
-                        bool value = false;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<int8_t>(): {
-                        int8_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<int16_t>(): {
-                        int16_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<int32_t>(): {
-                        int32_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<int64_t>(): {
-                        int64_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<float32_t>(): {
-                        float32_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    case type_of<float64_t>(): {
-                        float64_t value = 0;
-                        in >> value;
-                        vis->on(key, value);
-                        break;
-                    }
-
-                    default:
-                        vis->on_error(tr::f_("unsupported telemetry type: {}", type));
-                        return;
-                }
+            switch (type) {
+                case type_of<string_t>():  read_and_visit<string_t>(in, key, visitor); break;
+                case type_of<bool>():      read_and_visit<bool>(in, key, visitor); break;
+                case type_of<int8_t>():    read_and_visit<int8_t>(in, key, visitor); break;
+                case type_of<int16_t>():   read_and_visit<int16_t>(in, key, visitor); break;
+                case type_of<int32_t>():   read_and_visit<int32_t>(in, key, visitor); break;
+                case type_of<int64_t>():   read_and_visit<int64_t>(in, key, visitor); break;
+                case type_of<float32_t>(): read_and_visit<float32_t>(in, key, visitor); break;
+                case type_of<float64_t>(): read_and_visit<float64_t>(in, key, visitor); break;
+                default:
+                    visitor->on_error(tr::f_("unsupported telemetry type={} for key={}", type, key));
+                    return;
             }
         }
 
         PFS__THROW_UNEXPECTED(in.is_good(), "bad or corrupted telemetry data received");
     }
+
+private:
+    template <typename T>
+    void read_and_visit (Deserializer & in, key_type const & key, std::shared_ptr<visitor_type> & visitor)
+    {
+        T value;
+        details::value_deserializer<T, Deserializer>(in, value);
+
+        if (in.is_good())
+            visitor->on(key, value);
+    }
 };
 
-}} // namespace patterns::telemetry
+} // namespace telemetry
 
 NETTY__NAMESPACE_END
-

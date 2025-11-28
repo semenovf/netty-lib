@@ -46,12 +46,14 @@ template <typename Socket
     , typename RecursiveWriterMutex>
 class publisher: public interruptable
 {
+public:
+    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
+
 private:
     using socket_type = Socket;
     using listener_type = Listener;
     using socket_pool_type = netty::socket_pool<socket_type>;
     using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
-    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
     using archive_type = typename serializer_traits_type::archive_type;
     using serializer_type = typename serializer_traits_type::serializer_type;
     using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;

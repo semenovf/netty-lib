@@ -7,8 +7,9 @@
 //      2025.07.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../../namespace.hpp"
+#include "../../callback.hpp"
 #include "../../socket4_addr.hpp"
+#include "serializer.hpp"
 #include "visitor.hpp"
 #include "tag.hpp"
 #include <chrono>
@@ -18,14 +19,16 @@
 
 NETTY__NAMESPACE_BEGIN
 
-namespace patterns {
 namespace telemetry {
 
-template <typename KeyT, typename Subscriber, typename Deserializer>
+template <typename KeyT, typename Subscriber>
 class consumer
 {
     using subscriber_type = Subscriber;
-    using deserializer_type = Deserializer;
+    using serializer_traits_type = typename Subscriber::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using deserializer_type = typename serializer_traits_type::deserializer_type;
+    using key_value_deserializer_type = key_value_deserializer<KeyT, deserializer_type>;
     using key_type = KeyT;
     using visitor_type = visitor_interface<KeyT>;
 
@@ -40,8 +43,8 @@ private: // Callbacks
 public:
     consumer ()
     {
-        _sub.on_data_ready([this] (std::vector<char> && data) {
-            deserializer_type{data.data(), data.size(), _visitor};
+        _sub.on_data_ready([this] (archive_type data) {
+            key_value_deserializer_type{data.data(), data.size(), _visitor};
         });
     }
 
@@ -121,6 +124,6 @@ public:
     }
 };
 
-}} // namespace patterns::telemetry
+} // namespace telemetry
 
 NETTY__NAMESPACE_END

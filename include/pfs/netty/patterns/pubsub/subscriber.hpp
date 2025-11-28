@@ -50,6 +50,7 @@ class subscriber: public interruptable
     using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
 
 public:
+    using serializer_traits_type = typename input_controller_type::serializer_traits_type;
     using socket_id = typename socket_type::socket_id;
 
 private:
