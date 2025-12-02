@@ -192,8 +192,8 @@ private:
             auto msgid = mt.msgid();
             t.q.pop();
 
-            NETTY__TRACE(DELIVERY_TAG, "Message delivered to: {}; msgid={}"
-                , to_string(_addr), to_string(msgid));
+            NETTY__TRACE(DELIVERY_TAG, "message delivered to: {}; msgid={}", to_string(_addr)
+                , to_string(msgid));
 
             m->process_message_delivered(_addr, msgid);
         }
@@ -221,7 +221,7 @@ private:
 
             if (a.assembler.has_value()) {
                 if (a.assembler->msgid() != pkt->msgid) {
-                    NETTY__TRACE(DELIVERY_TAG, "Message lost from: {}: msgid={}"
+                    NETTY__TRACE(DELIVERY_TAG, "message lost from: {}: msgid={}"
                         , to_string(_addr), to_string(a.assembler->msgid()));
 
                     m->process_message_lost(_addr, a.assembler->msgid());
@@ -251,7 +251,7 @@ private:
         enqueue_ack_packet(m, priority, h->sn());
 
         if (heading_part) {
-            NETTY__TRACE(DELIVERY_TAG, "Message start receiving from: {}; msgid={}; size={} bytes"
+            NETTY__TRACE(DELIVERY_TAG, "message start receiving from: {}; msgid={}; size={} bytes"
                 , to_string(_addr), to_string(a.assembler->msgid()), a.assembler->total_size());
 
             m->process_message_receiving_begin(_addr, a.assembler->msgid()
@@ -262,7 +262,7 @@ private:
             , a.assembler->received_size(), a.assembler->total_size());
 
         if (a.assembler->is_complete()) {
-            NETTY__TRACE(DELIVERY_TAG, "Message received from: {}; msgid={}; priority={}; size={} bytes"
+            NETTY__TRACE(DELIVERY_TAG, "message received from: {}; msgid={}; priority={}; size={} bytes"
                 , to_string(_addr), to_string(a.assembler->msgid()), priority, a.assembler->payload().size());
 
             m->process_message_received(_addr, a.assembler->msgid(), priority
@@ -333,7 +333,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        NETTY__TRACE(DELIVERY_TAG, "Report received from: {}; priority={}, size={} bytes"
+                        NETTY__TRACE(DELIVERY_TAG, "report received from: {}; priority={}, size={} bytes"
                             , to_string(_addr), priority, bytes.size());
 
                         m->process_report_received(_addr, priority, std::move(bytes));
@@ -418,14 +418,14 @@ public:
     void pause () noexcept
     {
         _paused = true;
-        NETTY__TRACE(DELIVERY_TAG, "Message sending has been paused to: {}", to_string(_addr));
+        NETTY__TRACE(DELIVERY_TAG, "message sending has been paused to: {}", to_string(_addr));
     }
 
     void resume () noexcept
     {
         _paused = false;
         set_synchronized(false);
-        NETTY__TRACE(DELIVERY_TAG, "Message sending has been resumed to: {}", to_string(_addr));
+        NETTY__TRACE(DELIVERY_TAG, "message sending has been resumed to: {}", to_string(_addr));
     }
 
     /**
@@ -438,7 +438,7 @@ public:
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
 
-        NETTY__TRACE(DELIVERY_TAG, "Message enqueued to: {}; msgid={}; serial numbers range={}-{}"
+        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
             , to_string(_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
 
         return true;
@@ -454,7 +454,7 @@ public:
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
 
-        NETTY__TRACE(DELIVERY_TAG, "Message enqueued to: {}; msgid={}; serial numbers range={}-{}"
+        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
             , to_string(_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
 
         return true;

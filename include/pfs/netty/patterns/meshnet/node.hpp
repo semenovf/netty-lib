@@ -446,8 +446,7 @@ public:
             }
         };
 
-        NETTY__TRACE(MESHNET_TAG, "node constructed (id={}, gateway={})", to_string(_id)
-            , _is_gateway);
+        NETTY__TRACE(MESHNET_TAG, "node constructed: id={}, gateway={}", to_string(_id), _is_gateway);
     }
 
     node (node const &) = delete;
@@ -645,13 +644,16 @@ public:
         return _index;
     }
 
-    void add_listener (socket4_addr listener_addr, error * perr = nullptr)
+    void add_listener (socket4_addr listener_saddr, error * perr = nullptr)
     {
-        _listener_pool.add(listener_addr, perr);
+        _listener_pool.add(listener_saddr, perr);
+        NETTY__TRACE(MESHNET_TAG, "{}: listener added: {}", to_string(_id), to_string(listener_saddr));
     }
 
     bool connect_host (socket4_addr remote_saddr, bool behind_nat = false)
     {
+        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {}", to_string(_id), to_string(remote_saddr));
+
         auto rs = _connecting_pool.connect(remote_saddr);
 
         if (rs == netty::conn_status::failure)
@@ -667,6 +669,9 @@ public:
 
     bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat)
     {
+        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {} (local addr={})", to_string(_id)
+            , to_string(remote_saddr), to_string(local_addr));
+
         auto rs = _connecting_pool.connect(remote_saddr, local_addr);
 
         if (rs == netty::conn_status::failure)
@@ -682,6 +687,7 @@ public:
 
     void listen (int backlog = 100)
     {
+        NETTY__TRACE(MESHNET_TAG, "{}: listening", to_string(_id));
         _listener_pool.listen(backlog);
     }
 
@@ -909,7 +915,8 @@ private:
                 _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr);
 
             if (initial_reconnecting) {
-                NETTY__TRACE(MESHNET_TAG, "reconnecting started to: {}", to_string(h.remote_saddr));
+                NETTY__TRACE(MESHNET_TAG, "{}: reconnecting started to: {}", to_string(_id)
+                    , to_string(h.remote_saddr));
 
                 if (_on_reconnection_started)
                     _on_reconnection_started(_index, h.remote_saddr, h.local_addr);

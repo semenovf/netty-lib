@@ -465,7 +465,7 @@ private:
             if (_on_route_ready) {
                 auto gw_chain = _rtab.gateway_chain_by_index(gw_chain_index);
 
-                NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})"
+                NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={})"
                     , to_string(dest_id), gw_chain.size());
 
                 _on_route_ready(dest_id, std::move(gw_chain));
@@ -571,7 +571,7 @@ public:
 
             if (route_added) {
                 if (_on_route_ready) {
-                    NETTY__TRACE(MESHNET_TAG, "Route ready: {} (hops={})", to_string(peer_id), 0);
+                    NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={})", to_string(peer_id), 0);
                     _on_route_ready(peer_id, gateway_chain_type{});
 
                     // Force set alive flag with new route obtained

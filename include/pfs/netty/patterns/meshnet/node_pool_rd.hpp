@@ -53,11 +53,11 @@ private:
     void init ()
     {
         _t.on_node_alive([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "Node alive: {}", to_string(id));
+            NETTY__TRACE(MESHNET_TAG, "node alive: {}", to_string(id));
             _dm.resume(id);
             _on_node_alive(id);
         }).on_node_expired([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "Node expired: {}", to_string(id));
+            NETTY__TRACE(MESHNET_TAG, "node expired: {}", to_string(id));
             _dm.pause(id);
             _on_node_expired(id);
         }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
