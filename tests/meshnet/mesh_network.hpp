@@ -300,10 +300,7 @@ private:
         });
 #endif
 
-        auto index = ptr->template add_node<node_t>({listener_saddr});
-
-        int backlog = 10;
-        ptr->listen(index, backlog);
+        ptr->template add_node<node_t>({listener_saddr});
         return ptr;
     }
 
@@ -401,6 +398,7 @@ public:
             std::thread th {
                 [this, ptr] () {
                     LOGD(TAG, "{}: thread started", node_name_by_id(ptr->id()));
+                    ptr->listen();
                     ptr->run();
                     LOGD(TAG, "{}: thread finished", node_name_by_id(ptr->id()));
                 }

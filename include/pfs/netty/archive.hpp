@@ -8,9 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
+#include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -39,7 +41,8 @@ private:
 public:
     archive () = default;
 
-    archive (char const * data, std::size_t n)
+    archive (char const * data, std::size_t n, std::size_t offset = 0)
+        : _offset(offset)
     {
         append(data, n);
     }
@@ -51,34 +54,44 @@ public:
     archive (archive && other) noexcept
         : _c(std::move(other._c))
         , _offset(other._offset)
-    {}
+    {
+        other._offset = 0;
+    }
 
     archive & operator = (archive && other) noexcept
     {
         if (this != & other) {
             _c = std::move(other._c);
             _offset = other._offset;
+            other._offset = 0;
         }
 
         return *this;
     }
 
     archive (archive const & other)
-        : archive(other.data(), other.size())
+        : archive(other.data(), other.size(), other._offset)
     {}
 
     archive & operator = (archive const &) = delete;
 
+    ~archive ()  = default;
+
 public:
     container_type && container () &
     {
+        erase(_c, 0, _offset);
+        _offset = 0;
         return std::move(_c);
     }
 
     // For test purposes for now
     bool operator == (archive const & other) const noexcept
     {
-        return _c == other._c;
+        if (size() != other.size())
+            return false;
+
+        return std::memcmp(data(), other.data(), size()) == 0;
     }
 
     /**
@@ -96,6 +109,7 @@ public:
 
     std::size_t size () const noexcept
     {
+        PFS__ASSERT(size(_c) >= _offset, "");
         return size(_c) - _offset;
     }
 

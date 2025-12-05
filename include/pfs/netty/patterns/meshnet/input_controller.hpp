@@ -43,6 +43,15 @@ class input_controller
         std::array<archive_type, PriorityCount> pool;
 
     public:
+        // argument need to properly call from unordered_map::emplace prior to C++17
+        account (int) {}
+
+        account (account const&) = delete;
+        account (account &&) = delete;
+        account & operator = (account const &) = delete;
+        account & operator = (account &&) = delete;
+        ~account () = default;
+
         // Called from input_controller while process input
         void append_chunk (archive_type && chunk)
         {
@@ -89,8 +98,7 @@ public:
         if (pacc != nullptr)
             remove(sid);
 
-        account a;
-        /*auto res = */_accounts.emplace(sid, std::move(a));
+        _accounts.emplace(sid, 0);
     }
 
     void remove (socket_id sid)

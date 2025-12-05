@@ -32,6 +32,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -167,6 +168,8 @@ private:
 
     // Writer mutex to protect sending
     writer_mutex_type _writer_mtx;
+
+    std::queue<std::function<void ()>> _deferred_actions;
 
 #if NETTY__TELEMETRY_ENABLED
     shared_telemetry_producer_type _telemetry_producer;
@@ -795,6 +798,12 @@ public:
         // Remove trash
         _connecting_pool.apply_remove();
         _listener_pool.apply_remove();
+
+        while (!_deferred_actions.empty()) {
+            _deferred_actions.front()();
+            _deferred_actions.pop();
+        }
+
         _reader_pool.apply_remove();
         _writer_pool.apply_remove();
         _socket_pool.apply_remove(); // Must be last in the removing sequence
@@ -845,12 +854,14 @@ private:
     void close_socket (socket_id sid)
     {
         if (_socket_pool.locate(sid) != nullptr) {
-            _handshake_controller.cancel(sid);
-            _heartbeat_controller.remove(sid);
-            _input_controller.remove(sid);
-            _reader_pool.remove_later(sid);
-            _writer_pool.remove_later(sid);
-            _socket_pool.remove_later(sid);
+            _deferred_actions.push([this, sid]() {
+                _handshake_controller.cancel(sid);
+                _heartbeat_controller.remove(sid);
+                _input_controller.remove(sid);
+                _reader_pool.remove_later(sid);
+                _writer_pool.remove_later(sid);
+                _socket_pool.remove_later(sid);
+            });
         }
     }
 

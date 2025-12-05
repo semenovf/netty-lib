@@ -15,22 +15,22 @@
 #include <pfs/universal_id_pack.hpp>
 
 namespace {
-constexpr int PRIORITY_COUNT = 2;
+constexpr int kPRIORITY_COUNT = 2;
 }
 
 using namespace netty::meshnet;
 using node_id = pfs::universal_id;
 using socket_id = netty::posix::tcp_socket::socket_id;
 using input_controller_t = netty::meshnet::input_controller<
-      PRIORITY_COUNT
+      kPRIORITY_COUNT
     , socket_id
     , node_id
     , serializer_traits_t>;
 
-using priority_frame_t = netty::meshnet::priority_frame<PRIORITY_COUNT, serializer_traits_t>;
+using priority_frame_t = netty::meshnet::priority_frame<kPRIORITY_COUNT, serializer_traits_t>;
 
 namespace {
-constexpr socket_id SID = 42;
+constexpr socket_id kSID = 42;
 }
 
 static void pack_payload (int priority, archive_t & outp, archive_t & payload)
@@ -45,7 +45,7 @@ TEST_CASE("handshake") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     auto id = pfs::generate_uuid();
     bool is_gateway = true;
@@ -60,14 +60,14 @@ TEST_CASE("handshake") {
     handshake_rq.serialize(out);
 
     ic.on_handshake = [&] (socket_id sid, handshake_packet_t && pkt) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(pkt.id(), id);
         counter++;
     };
 
     archive_t frames;
     pack_payload(0, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
@@ -79,7 +79,7 @@ TEST_CASE("heartbeat") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     std::uint8_t health_data = 42;
     heartbeat_packet_t heartbeat {health_data};
@@ -91,14 +91,14 @@ TEST_CASE("heartbeat") {
     heartbeat.serialize(out);
 
     ic.on_heartbeat = [&] (socket_id sid, heartbeat_packet_t && pkt) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(pkt.health_data(), health_data);
         counter++;
     };
 
     archive_t frames;
     pack_payload(0, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
@@ -110,7 +110,7 @@ TEST_CASE("alive") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     auto id = pfs::generate_uuid();
     alive_info<node_id> ainfo {id};
@@ -123,14 +123,14 @@ TEST_CASE("alive") {
     alive.serialize(out);
 
     ic.on_alive = [&] (socket_id sid, alive_packet_t && pkt) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(pkt.info().id, id);
         counter++;
     };
 
     archive_t frames;
     pack_payload(0, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
@@ -142,7 +142,7 @@ TEST_CASE("unreachable") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     auto gw_id = pfs::generate_uuid();
     auto sender_id = pfs::generate_uuid();
@@ -158,7 +158,7 @@ TEST_CASE("unreachable") {
     unreach.serialize(out);
 
     ic.on_unreachable = [&] (socket_id sid, unreachable_packet_t && pkt) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(pkt.info().gw_id, gw_id);
         CHECK_EQ(pkt.info().sender_id, sender_id);
         CHECK_EQ(pkt.info().receiver_id, receiver_id);
@@ -167,7 +167,7 @@ TEST_CASE("unreachable") {
 
     archive_t frames;
     pack_payload(0, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
@@ -178,7 +178,7 @@ TEST_CASE("route") {
 
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     auto initiator_id = pfs::generate_uuid();
     auto responder_id = pfs::generate_uuid();
@@ -203,7 +203,7 @@ TEST_CASE("route") {
         route_rq.serialize(out);
 
         ic.on_route = [&] (socket_id sid, route_packet_t && pkt) {
-            REQUIRE_EQ(sid, SID);
+            REQUIRE_EQ(sid, kSID);
             CHECK_FALSE(pkt.is_response());
             CHECK_EQ(pkt.info().initiator_id, initiator_id);
             REQUIRE_EQ(pkt.info().route.size(), 2);
@@ -214,7 +214,7 @@ TEST_CASE("route") {
 
         archive_t frames;
         pack_payload(0, frames, payload);
-        ic.process_input(SID, std::move(frames));
+        ic.process_input(kSID, std::move(frames));
 
         CHECK(payload.empty());
         CHECK_EQ(counter, 3);
@@ -232,7 +232,7 @@ TEST_CASE("route") {
         route_rq.serialize(out);
 
         ic.on_route = [&] (socket_id sid, route_packet_t && pkt) {
-            REQUIRE_EQ(sid, SID);
+            REQUIRE_EQ(sid, kSID);
             CHECK(pkt.is_response());
             CHECK_EQ(pkt.info().initiator_id, initiator_id);
             CHECK_EQ(pkt.info().responder_id, responder_id);
@@ -244,7 +244,7 @@ TEST_CASE("route") {
 
         archive_t frames;
         pack_payload(0, frames, payload);
-        ic.process_input(SID, std::move(frames));
+        ic.process_input(kSID, std::move(frames));
 
         CHECK(payload.empty());
         CHECK_EQ(counter, 3);
@@ -257,7 +257,7 @@ TEST_CASE("ddata") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!',};
 
@@ -271,7 +271,7 @@ TEST_CASE("ddata") {
     ddata.serialize(out, msg_sample.data(), msg_sample.size());
 
     ic.on_ddata = [&] (socket_id sid, int priority, archive_t && msg) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(priority, 1);
 
         auto && c = msg.container();
@@ -281,7 +281,7 @@ TEST_CASE("ddata") {
 
     archive_t frames;
     pack_payload(1, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
@@ -293,7 +293,7 @@ TEST_CASE("gdata") {
     int counter = 0;
     input_controller_t ic;
 
-    ic.add(SID);
+    ic.add(kSID);
 
     std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!',};
 
@@ -309,7 +309,7 @@ TEST_CASE("gdata") {
     ddata.serialize(out, msg_sample.data(), msg_sample.size());
 
     ic.on_gdata = [&] (socket_id sid, int priority, gdata_packet_t && pkt, archive_t && msg) {
-        REQUIRE_EQ(sid, SID);
+        REQUIRE_EQ(sid, kSID);
         CHECK_EQ(priority, 1);
         CHECK_EQ(pkt.sender_id(), sender_id);
         CHECK_EQ(pkt.receiver_id(), receiver_id);
@@ -321,7 +321,7 @@ TEST_CASE("gdata") {
 
     archive_t frames;
     pack_payload(1, frames, payload);
-    ic.process_input(SID, std::move(frames));
+    ic.process_input(kSID, std::move(frames));
 
     CHECK(payload.empty());
     CHECK_EQ(counter, 3);
