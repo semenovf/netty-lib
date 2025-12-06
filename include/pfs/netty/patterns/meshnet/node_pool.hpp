@@ -905,7 +905,8 @@ private:
     }
 
     /**
-     * Forward packet to nearest nodes excluding node identified by @a sender_id.
+     * Forward special packets (route and alive) to nearest nodes excluding node identified
+     * by @a sender_id.
      *
      * @param data Serialized packet.
      */
