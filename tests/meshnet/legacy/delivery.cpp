@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-#include "../doctest.h"
-#include "../tools.hpp"
+#include "../../doctest.h"
+#include "../../tools.hpp"
 #include "mesh_network.hpp"
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/startup.hpp>

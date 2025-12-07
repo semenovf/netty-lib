@@ -7,8 +7,8 @@
 //      2025.08.12 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../doctest.h"
-#include "../serializer_traits.hpp"
+#include "../../doctest.h"
+#include "../../serializer_traits.hpp"
 #include "pfs/netty/patterns/meshnet/protocol.hpp"
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_pack.hpp>

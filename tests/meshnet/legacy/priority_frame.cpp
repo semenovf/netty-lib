@@ -7,8 +7,8 @@
 //      2025.11.19 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../doctest.h"
-#include "../serializer_traits.hpp"
+#include "../../doctest.h"
+#include "../../serializer_traits.hpp"
 #include "pfs/netty/patterns/meshnet/priority_frame.hpp"
 
 using priority_frame_t = netty::meshnet::priority_frame<1, serializer_traits_t>;

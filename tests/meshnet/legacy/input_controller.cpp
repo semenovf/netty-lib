@@ -7,8 +7,8 @@
 //      2025.11.20 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../doctest.h"
-#include "../serializer_traits.hpp"
+#include "../../doctest.h"
+#include "../../serializer_traits.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 #include "pfs/netty/patterns/meshnet/input_controller.hpp"
 #include <pfs/universal_id.hpp>

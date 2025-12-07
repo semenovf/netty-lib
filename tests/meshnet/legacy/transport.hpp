@@ -7,7 +7,7 @@
 //      2025.01.16 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../serializer_traits.hpp"
+#include "../../serializer_traits.hpp"
 #include "pfs/netty/callback.hpp"
 #include "pfs/netty/poller_types.hpp"
 #include "pfs/netty/patterns/priority_tracker.hpp"

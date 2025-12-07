@@ -7,7 +7,7 @@
 //      2025.06.14 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../doctest.h"
+#include "../../doctest.h"
 #include "pfs/netty/patterns/priority_tracker.hpp"
 
 struct distribution
