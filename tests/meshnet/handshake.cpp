@@ -56,6 +56,8 @@ TEST_CASE("handshake behind NAT") {
     };
 
     net.on_channel_destroyed = on_channel_destroyed;
+
+    net.listen_all();
     net.connect_host("A0", "B0", BEHIND_NAT);
 
     tools::signal_guard signal_guard {SIGINT, sigterm_handler};
@@ -66,7 +68,6 @@ TEST_CASE("handshake behind NAT") {
     net.join_all();
 }
 
-// FIXME SIGABRT for Qt version: tcache_thread_shutdown(): unaligned tcache chunk detected
 TEST_CASE("duplication behind NAT") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
@@ -84,6 +85,7 @@ TEST_CASE("duplication behind NAT") {
         ++id_duplication_flag;
     };
 
+    net.listen_all();
     net.connect_host("A0", "A0_dup", BEHIND_NAT);
 
     tools::signal_guard signal_guard {SIGINT, sigterm_handler};
@@ -94,7 +96,6 @@ TEST_CASE("duplication behind NAT") {
     net.join_all();
 }
 
-// FIXME SIGABRT for Qt version: tcache_thread_shutdown(): unaligned tcache chunk detected
 TEST_CASE("single link handshake") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", current_doctest_name());
@@ -113,6 +114,8 @@ TEST_CASE("single link handshake") {
     };
 
     net.on_channel_destroyed = on_channel_destroyed;
+
+    net.listen_all();
     net.connect_host("A0", "B0");
     net.connect_host("B0", "A0");
 

@@ -181,6 +181,8 @@ TEST_CASE("scheme 1") {
         net.on_node_expired = on_node_expired;
         net.on_route_ready = on_route_ready;
 
+        net.listen_all();
+
         net.connect_host("A0", "a", BEHIND_NAT);
         net.connect_host("B0", "a", BEHIND_NAT);
 
@@ -218,6 +220,8 @@ TEST_CASE("scheme 2") {
         net.on_node_alive = on_node_alive;
         net.on_node_expired = on_node_expired;
         net.on_route_ready = on_route_ready;
+
+        net.listen_all();
 
         net.connect_host("A0", "a", BEHIND_NAT);
         net.connect_host("A1", "a", BEHIND_NAT);
@@ -265,6 +269,8 @@ TEST_CASE("scheme 3") {
         net.on_node_expired = on_node_expired;
         net.on_route_ready = on_route_ready;
 
+        net.listen_all();
+
         // Connect gateways
         net.connect_host("a", "b");
         net.connect_host("b", "a");
@@ -306,6 +312,8 @@ TEST_CASE("scheme 4") {
         net.on_node_alive = on_node_alive;
         net.on_node_expired = on_node_expired;
         net.on_route_ready = on_route_ready;
+
+        net.listen_all();
 
         // Connect gateways
         net.connect_host("a", "b");
@@ -357,6 +365,8 @@ TEST_CASE("scheme 5") {
         net.on_node_alive = on_node_alive;
         net.on_node_expired = on_node_expired;
         net.on_route_ready = on_route_ready;
+
+        net.listen_all();
 
         net.connect_host("a", "b");
         net.connect_host("a", "c");

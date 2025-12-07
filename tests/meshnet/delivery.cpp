@@ -100,6 +100,7 @@ TEST_CASE("simple delivery") {
 
     auto text = tools::random_large_text();
 
+    net.listen_all();
     net.connect_host("A0", "A1");
     net.connect_host("A1", "A0");
 
@@ -153,6 +154,8 @@ TEST_CASE("delivery") {
     g_text0 = tools::random_large_text();
     g_text1 = tools::random_large_text();
     g_text2 = tools::random_large_text();
+
+    net.listen_all();
 
     // Connect gateways
     net.connect_host("a", "b");

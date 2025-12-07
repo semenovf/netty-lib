@@ -131,6 +131,8 @@ TEST_CASE("messaging") {
     constexpr bool BEHIND_NAT = true;
     g_text = tools::random_text();
 
+    net.listen_all();
+
     // Connect gateways
     net.connect_host("a", "b");
     net.connect_host("a", "c");

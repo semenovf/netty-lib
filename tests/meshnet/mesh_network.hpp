@@ -391,6 +391,14 @@ public:
 #endif
     }
 
+    void listen_all ()
+    {
+        for (auto & x: _node_pools) {
+            auto ptr = & *x.second.node_pool_ptr;
+            ptr->listen();
+        }
+    }
+
     void run_all ()
     {
         for (auto & x: _node_pools) {

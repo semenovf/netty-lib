@@ -122,6 +122,8 @@ TEST_CASE("short chain unreachable") {
     constexpr bool BEHIND_NAT = true;
     g_text3 = random_text();
 
+    net.listen_all();
+
     net.connect_host("A0", "a", BEHIND_NAT);
     net.connect_host("C0", "a", BEHIND_NAT);
 
@@ -196,6 +198,8 @@ TEST_CASE("long chain unreachable") {
 
     constexpr bool BEHIND_NAT = true;
     g_text6 = random_text();
+
+    net.listen_all();
 
     // Connect gateways
     net.connect_host("a", "b");
