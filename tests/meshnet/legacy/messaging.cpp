@@ -11,6 +11,7 @@
 #include "../../doctest.h"
 #include "../../tools.hpp"
 #include "mesh_network.hpp"
+#include <pfs/signal_guard.hpp>
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/startup.hpp>
 
@@ -169,7 +170,7 @@ TEST_CASE("messaging") {
     net.connect_host("D0", "D1");
     net.connect_host("D1", "D0");
 
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
 

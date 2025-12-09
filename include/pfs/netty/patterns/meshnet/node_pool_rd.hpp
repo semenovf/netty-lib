@@ -334,6 +334,11 @@ public:
         return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
     }
 
+    void disconnect (node_index_t index, node_id peer_id)
+    {
+        _t.disconnect(index, peer_id);
+    }
+
     /**
      * Sets maximum frame size @a frame_size for exchange with node specified by
      * identifier @a peer_id.

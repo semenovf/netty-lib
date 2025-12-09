@@ -10,6 +10,7 @@
 #include "../../doctest.h"
 #include "../../tools.hpp"
 #include "mesh_network.hpp"
+#include <pfs/signal_guard.hpp>
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/startup.hpp>
 #include <atomic>
@@ -186,7 +187,7 @@ TEST_CASE("scheme 1") {
         net.connect_host("A0", "a", BEHIND_NAT);
         net.connect_host("B0", "a", BEHIND_NAT);
 
-        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+        pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
         net.run_all();
         REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 4));
@@ -234,7 +235,7 @@ TEST_CASE("scheme 2") {
         net.connect_host("B0", "B1");
         net.connect_host("B1", "B0");
 
-        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+        pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
         net.run_all();
         REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 12));
@@ -278,7 +279,7 @@ TEST_CASE("scheme 3") {
         net.connect_host("A0", "a", BEHIND_NAT);
         net.connect_host("B0", "b", BEHIND_NAT);
 
-        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+        pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
         net.run_all();
         REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 6));
@@ -330,7 +331,7 @@ TEST_CASE("scheme 4") {
         net.connect_host("B0", "B1");
         net.connect_host("B1", "B0");
 
-        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+        pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
         net.run_all();
         REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 14));
@@ -403,7 +404,7 @@ TEST_CASE("scheme 5") {
         net.connect_host("D0", "D1");
         net.connect_host("D1", "D0");
 
-        tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+        pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
         net.run_all();
         REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 34));

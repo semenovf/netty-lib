@@ -406,7 +406,7 @@ public:
             std::thread th {
                 [this, ptr] () {
                     LOGD(TAG, "{}: thread started", node_name_by_id(ptr->id()));
-                    ptr->listen();
+                    //ptr->listen(); // REMOVE
                     ptr->run();
                     LOGD(TAG, "{}: thread finished", node_name_by_id(ptr->id()));
                 }
@@ -484,7 +484,7 @@ public: // static
     }
 };
 
-template <typename Node>
-network<Node> * network<Node>::_self {nullptr};
+template <typename NodePool>
+network<NodePool> * network<NodePool>::_self {nullptr};
 
 }} // namespace test::mesh_network

@@ -7,8 +7,8 @@
 //      2025.11.22 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../../doctest.h"
-#include "../../serializer_traits.hpp"
+#include "../doctest.h"
+#include "../serializer_traits.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 #include "pfs/netty/patterns/meshnet/heartbeat_controller.hpp"
 

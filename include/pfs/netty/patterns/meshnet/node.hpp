@@ -688,6 +688,14 @@ public:
         return true;
     }
 
+    /**
+     * Disconnected from peer node identified by @a peer_id.
+     */
+    void disconnect (node_id peer_id)
+    {
+        destroy_channel(peer_id);
+    }
+
     void listen (int backlog = 100)
     {
         NETTY__TRACE(MESHNET_TAG, "{}: listening", to_string(_id));
@@ -952,20 +960,27 @@ private:
         destroy_channel(sid);
     }
 
-    void destroy_channel (socket_id sid)
+    void destroy_channel (node_id peer_id)
     {
-        auto res = _channels.has_channel(sid);
-        auto success = (res.first && _channels.close_channel(res.second));
+        auto success = _channels.close_channel(peer_id);
 
         if (success) {
-            NETTY__TRACE(MESHNET_TAG, "channel destroyed: {}", to_string(res.second));
-            _on_channel_destroyed(_index, res.second);
+            NETTY__TRACE(MESHNET_TAG, "channel destroyed: {}", to_string(peer_id));
+            _on_channel_destroyed(_index, peer_id);
 
 #if NETTY__TELEMETRY_ENABLED
             _telemetry_producer->broadcast(KEY_CHANNEL_DESTROYED
-                , fmt::format("[{},{}]", to_string(_id), to_string(res.second)));
+                , fmt::format("[{},{}]", to_string(_id), to_string(peer_id)));
 #endif
+        }
+    }
 
+    void destroy_channel (socket_id sid)
+    {
+        auto res = _channels.has_channel(sid);
+
+        if (res.first) {
+            destroy_channel(res.second);
         } else {
             close_socket(sid);
         }
@@ -1026,6 +1041,11 @@ public: // node_interface
         bool connect_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) override
         {
             return Node::connect_host(remote_saddr, local_addr, behind_nat);
+        }
+
+        void disconnect (node_id peer_id) override
+        {
+            Node::disconnect(peer_id);
         }
 
         void listen (int backlog = 50) override

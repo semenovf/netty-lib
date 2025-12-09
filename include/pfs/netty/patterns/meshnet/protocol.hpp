@@ -67,7 +67,9 @@ enum class packet_way_enum
 class header
 {
 public:
-    static constexpr int VERSION = 1;
+    // Using function avoids 'multiple definition' error prior to C++17.
+    // static constexpr int VERSION = 1;
+    static constexpr int VERSION () { return 1;}
 
 protected:
     struct {
@@ -81,7 +83,7 @@ protected:
     header (packet_enum type, bool force_checksum) noexcept
     {
         std::memset(& _h, 0, sizeof(header));
-        _h.b0 |= (static_cast<std::uint8_t>(VERSION) << 4) & 0xF0;
+        _h.b0 |= (static_cast<std::uint8_t>(VERSION()) << 4) & 0xF0;
         _h.b0 |= static_cast<std::uint8_t>(type) & 0x0F;
         _h.b1 |= (force_checksum ? 0x01 : 0x00);
     }
@@ -93,10 +95,10 @@ public:
         in >> _h.b0;
         in >> _h.b1;
 
-        if (version() != VERSION) {
+        if (version() != VERSION()) {
             throw netty::error {
                   make_error_code(netty::errc::protocol_version_error)
-                , tr::f_("expected meshnet protocol version: {}, got: {}", VERSION, version())
+                , tr::f_("expected meshnet protocol version: {}, got: {}", VERSION(), version())
             };
         }
 
@@ -210,7 +212,7 @@ protected:
     }
 };
 
-constexpr int header::VERSION;
+// constexpr int header::VERSION;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // handshake packet

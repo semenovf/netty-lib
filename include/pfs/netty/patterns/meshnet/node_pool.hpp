@@ -489,6 +489,20 @@ public:
         return node_ptr->connect_host(remote_saddr, local_addr, behind_nat);
     }
 
+    void disconnect (node_index_t index, node_id peer_id)
+    {
+        std::unique_lock<recursive_mutex_type> locker{_writer_mtx};
+
+        auto node_ptr = locate_node(index);
+
+        if (node_ptr == nullptr) {
+            _on_error(tr::f_("unable to disconnect from: node index={}, peer id={}", index, peer_id));
+            return;
+        }
+
+        node_ptr->disconnect(peer_id);
+    }
+
     /**
      * Sets maximum frame size @a frame_size for exchange with node specified by
      * identifier @a peer_id.

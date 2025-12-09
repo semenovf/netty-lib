@@ -10,6 +10,7 @@
 #include "../../doctest.h"
 #include "../../tools.hpp"
 #include "mesh_network.hpp"
+#include <pfs/signal_guard.hpp>
 #include <pfs/synchronized.hpp>
 #include <pfs/lorem/lorem_ipsum.hpp>
 #include <pfs/netty/startup.hpp>
@@ -127,7 +128,7 @@ TEST_CASE("short chain unreachable") {
     net.connect_host("A0", "a", BEHIND_NAT);
     net.connect_host("C0", "a", BEHIND_NAT);
 
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
 
@@ -219,7 +220,7 @@ TEST_CASE("long chain unreachable") {
     net.connect_host("A0", "a", BEHIND_NAT);
     net.connect_host("C0", "c", BEHIND_NAT);
 
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
 

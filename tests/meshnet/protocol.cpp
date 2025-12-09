@@ -7,8 +7,8 @@
 //      2025.08.12 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "../../doctest.h"
-#include "../../serializer_traits.hpp"
+#include "../doctest.h"
+#include "../serializer_traits.hpp"
 #include "pfs/netty/patterns/meshnet/protocol.hpp"
 #include <pfs/universal_id.hpp>
 #include <pfs/universal_id_pack.hpp>
@@ -26,7 +26,7 @@ TEST_CASE("handshake_packet") {
 
     handshake_packet_t req_hp {id_sample, is_gateway, behind_nat, packet_way_enum::request};
 
-    CHECK_EQ(req_hp.version(), header::VERSION);
+    CHECK_EQ(req_hp.version(), header::VERSION());
 
     CHECK_EQ(req_hp.type(), packet_enum::handshake);
     CHECK_FALSE(req_hp.is_response());
@@ -52,7 +52,7 @@ TEST_CASE("handshake_packet") {
         header h {in};
         handshake_packet_t req_hp1 {h, in};
 
-        CHECK_EQ(req_hp1.version(), header::VERSION);
+        CHECK_EQ(req_hp1.version(), header::VERSION());
         CHECK_EQ(req_hp1.type(), packet_enum::handshake);
         CHECK_FALSE(req_hp1.is_response());
         CHECK_FALSE(req_hp1.has_checksum());
@@ -70,7 +70,7 @@ TEST_CASE("handshake_packet") {
         header h {in};
         handshake_packet_t rep_hp1 {h, in};
 
-        CHECK_EQ(rep_hp1.version(), header::VERSION);
+        CHECK_EQ(rep_hp1.version(), header::VERSION());
         CHECK_EQ(rep_hp1.type(), packet_enum::handshake);
         CHECK(rep_hp1.is_response());
         CHECK_FALSE(rep_hp1.has_checksum());
@@ -86,7 +86,7 @@ TEST_CASE("heartbeat_packet") {
     std::uint8_t health_data = 42;
     heartbeat_packet_t hbp {health_data};
 
-    CHECK_EQ(hbp.version(), header::VERSION);
+    CHECK_EQ(hbp.version(), header::VERSION());
 
     CHECK_EQ(hbp.type(), packet_enum::heartbeat);
     CHECK_FALSE(hbp.has_checksum());
@@ -100,7 +100,7 @@ TEST_CASE("heartbeat_packet") {
     header h {in};
     heartbeat_packet_t hbp1 {h, in};
 
-    CHECK_EQ(hbp1.version(), header::VERSION);
+    CHECK_EQ(hbp1.version(), header::VERSION());
     CHECK_EQ(hbp1.type(), packet_enum::heartbeat);
     CHECK_FALSE(hbp1.has_checksum());
     CHECK_EQ(hbp1.health_data(), health_data);
@@ -112,7 +112,7 @@ TEST_CASE("alive_packet") {
     alive_info<node_id> ainfo_sample { pfs::generate_uuid() };
     alive_packet_t ap {ainfo_sample};
 
-    CHECK_EQ(ap.version(), header::VERSION);
+    CHECK_EQ(ap.version(), header::VERSION());
 
     CHECK_EQ(ap.type(), packet_enum::alive);
     CHECK_FALSE(ap.has_checksum());
@@ -126,7 +126,7 @@ TEST_CASE("alive_packet") {
     header h {in};
     alive_packet_t ap1 {h, in};
 
-    CHECK_EQ(ap1.version(), header::VERSION);
+    CHECK_EQ(ap1.version(), header::VERSION());
     CHECK_EQ(ap1.type(), packet_enum::alive);
     CHECK_FALSE(ap1.has_checksum());
     CHECK_EQ(ap.info().id, ainfo_sample.id);
@@ -143,7 +143,7 @@ TEST_CASE("unreachable_packet") {
 
     unreachable_packet_t up {uinfo_sample};
 
-    CHECK_EQ(up.version(), header::VERSION);
+    CHECK_EQ(up.version(), header::VERSION());
 
     CHECK_EQ(up.type(), packet_enum::unreach);
     CHECK_FALSE(up.has_checksum());
@@ -157,7 +157,7 @@ TEST_CASE("unreachable_packet") {
     header h {in};
     unreachable_packet_t up1 {h, in};
 
-    CHECK_EQ(up1.version(), header::VERSION);
+    CHECK_EQ(up1.version(), header::VERSION());
     CHECK_EQ(up1.type(), packet_enum::unreach);
     CHECK_FALSE(up1.has_checksum());
     CHECK_EQ(up.info().gw_id, uinfo_sample.gw_id);
@@ -176,14 +176,14 @@ TEST_CASE("route_packet") {
 
     route_packet_t rp_req {packet_way_enum::request, rinfo_sample};
 
-    CHECK_EQ(rp_req.version(), header::VERSION);
+    CHECK_EQ(rp_req.version(), header::VERSION());
     CHECK_EQ(rp_req.type(), packet_enum::route);
     CHECK_FALSE(rp_req.has_checksum());
     CHECK_FALSE(rp_req.is_response());
 
     route_packet_t rp_rep {packet_way_enum::response, rinfo_sample};
 
-    CHECK_EQ(rp_rep.version(), header::VERSION);
+    CHECK_EQ(rp_rep.version(), header::VERSION());
     CHECK_EQ(rp_rep.type(), packet_enum::route);
     CHECK_FALSE(rp_rep.has_checksum());
     CHECK(rp_rep.is_response());
@@ -198,7 +198,7 @@ TEST_CASE("route_packet") {
         header h {in};
         route_packet_t rp1_req {h, in};
 
-        CHECK_EQ(rp1_req.version(), header::VERSION);
+        CHECK_EQ(rp1_req.version(), header::VERSION());
         CHECK_EQ(rp1_req.type(), packet_enum::route);
         CHECK_FALSE(rp1_req.has_checksum());
         CHECK_FALSE(rp1_req.is_response());
@@ -217,7 +217,7 @@ TEST_CASE("route_packet") {
         header h {in};
         route_packet_t rp1_rep {h, in};
 
-        CHECK_EQ(rp1_rep.version(), header::VERSION);
+        CHECK_EQ(rp1_rep.version(), header::VERSION());
         CHECK_EQ(rp1_rep.type(), packet_enum::route);
         CHECK_FALSE(rp1_rep.has_checksum());
         CHECK(rp1_rep.is_response());
@@ -237,7 +237,7 @@ TEST_CASE("ddata_packet") {
     bool force_checksum = true;
     ddata_packet_t ddp {force_checksum};
 
-    CHECK_EQ(ddp.version(), header::VERSION);
+    CHECK_EQ(ddp.version(), header::VERSION());
     CHECK_EQ(ddp.type(), packet_enum::ddata);
     CHECK_EQ(ddp.has_checksum(), force_checksum);
 
@@ -251,7 +251,7 @@ TEST_CASE("ddata_packet") {
     std::vector<char> msg;
     ddata_packet_t ddp1 {h, in, msg};
 
-    CHECK_EQ(ddp1.version(), header::VERSION);
+    CHECK_EQ(ddp1.version(), header::VERSION());
     CHECK_EQ(ddp1.type(), packet_enum::ddata);
     CHECK(ddp1.has_checksum());
     CHECK_EQ(msg, msg_sample);
@@ -268,7 +268,7 @@ TEST_CASE("gdata_packet") {
     bool force_checksum = true;
     gdata_packet_t gdp {sender_id_sample, received_id_sample, force_checksum};
 
-    CHECK_EQ(gdp.version(), header::VERSION);
+    CHECK_EQ(gdp.version(), header::VERSION());
     CHECK_EQ(gdp.type(), packet_enum::gdata);
     CHECK_EQ(gdp.has_checksum(), force_checksum);
 
@@ -282,7 +282,7 @@ TEST_CASE("gdata_packet") {
     std::vector<char> msg;
     gdata_packet_t gdp1 {h, in, msg};
 
-    CHECK_EQ(gdp1.version(), header::VERSION);
+    CHECK_EQ(gdp1.version(), header::VERSION());
     CHECK_EQ(gdp1.type(), packet_enum::gdata);
     CHECK(gdp1.has_checksum());
     CHECK_EQ(gdp1.sender_id(), sender_id_sample);

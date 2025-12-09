@@ -11,6 +11,7 @@
 #include "../../doctest.h"
 #include "../../tools.hpp"
 #include "mesh_network.hpp"
+#include <pfs/signal_guard.hpp>
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/startup.hpp>
 
@@ -104,7 +105,7 @@ TEST_CASE("simple delivery") {
     net.connect_host("A0", "A1");
     net.connect_host("A1", "A0");
 
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
     CHECK(tools::wait_atomic_counter(channel_established_flag, 2));
@@ -166,7 +167,7 @@ TEST_CASE("delivery") {
     net.connect_host("A0", "a", BEHIND_NAT);
     net.connect_host("C0", "c", BEHIND_NAT);
 
-    tools::signal_guard signal_guard {SIGINT, sigterm_handler};
+    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
 
     net.run_all();
     CHECK(tools::wait_matrix_count(g_route_matrix, 20));

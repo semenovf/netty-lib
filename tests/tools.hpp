@@ -56,6 +56,7 @@ bool wait_atomic_bool (std::atomic_bool & flag
     return flag.load();
 }
 
+// DEPRECATED use lorem::wait_atomic_counter
 template <typename AtomicCounter>
 bool wait_atomic_counter (AtomicCounter & counter
     , typename AtomicCounter::value_type limit
@@ -102,28 +103,6 @@ bool wait_matrix_count (SafeMatrix & safe_matrix, std::size_t limit
 
     return !(safe_matrix.rlock()->count() < limit);
 }
-
-#if _MSC_VER
-using sighandler_t = void (*) (int);
-#endif
-
-class signal_guard
-{
-    int sig {0};
-    sighandler_t old_handler;
-
-public:
-    signal_guard (int sig, sighandler_t handler)
-        : sig(sig)
-    {
-        old_handler = signal(sig, handler);
-    }
-
-    ~signal_guard ()
-    {
-        signal(sig, old_handler);
-    }
-};
 
 template <typename RouteMatrix>
 bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption)
