@@ -23,10 +23,13 @@ mesh_network::mesh_network (std::initializer_list<std::string> node_names)
     PFS__ASSERT(_self == nullptr, "");
     _self = this;
 
+    std::size_t counter = 0;
+
     for (auto const & name: node_names) {
         auto pctx = std::make_shared<context>();
         pctx->name = name;
         pctx->node_pool_ptr = create_node_pool(name);
+        pctx->index = counter++;
         auto res = _node_pools.insert({name, pctx});
         PFS__ASSERT(res.second, "");
         (void)res;
@@ -36,15 +39,7 @@ mesh_network::mesh_network (std::initializer_list<std::string> node_names)
 mesh_network::~mesh_network ()
 {
     PFS__ASSERT(_self != nullptr, "");
-
-    for (auto & x: _node_pools) {
-        if (x.second->node_thread.joinable())
-            x.second->node_thread.join();
-    }
-
-    if (_scenario_thread.joinable())
-        _scenario_thread.join();
-
+    join();
     _self = nullptr;
 }
 
@@ -74,6 +69,24 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
     ptr->on_duplicate_id([this, name] (node_id peer_id, netty::socket4_addr saddr)
     {
         this->on_duplicate_id(name, _dict.get_entry(peer_id).name, saddr);
+    });
+
+    ptr->on_node_alive([this, name] (node_id peer_id)
+    {
+        this->on_node_alive(name, _dict.get_entry(peer_id).name);
+    });
+
+    ptr->on_node_expired([this, name] (node_id peer_id)
+    {
+        this->on_node_expired(name, _dict.get_entry(peer_id).name);
+    });
+
+    ptr->on_route_ready([this, name] (node_id peer_id, std::vector<node_id> gw_chain)
+    {
+        auto peer_name = _dict.get_entry(peer_id).name;
+        this->on_route_ready(name, peer_name, std::move(gw_chain)
+            , get_context_ptr(name)->index
+            , get_context_ptr(peer_name)->index);
     });
 
     ptr->template add_node<node_t>({listener_saddr});
@@ -124,10 +137,23 @@ void mesh_network::run_all ()
     }
 
     _scenario_thread = std::thread {_scenario};
+
+    join();
 }
 
 void mesh_network::interrupt_all ()
 {
     for (auto & x: _node_pools)
         x.second->node_pool_ptr->interrupt();
+}
+
+void mesh_network::join ()
+{
+    for (auto & x: _node_pools) {
+        if (x.second->node_thread.joinable())
+            x.second->node_thread.join();
+    }
+
+    if (_scenario_thread.joinable())
+        _scenario_thread.join();
 }

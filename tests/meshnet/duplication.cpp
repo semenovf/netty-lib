@@ -12,13 +12,19 @@
 #include "mesh_network.hpp"
 #include <pfs/lorem/wait_atomic_counter.hpp>
 
+// =================================================================================================
+// Legend
+// -------------------------------------------------------------------------------------------------
+// A0, A0_dup - regular nodes (nodes)
 //
+// =================================================================================================
 // Scheme 1
-//=====================================
+// -------------------------------------------------------------------------------------------------
 // A0---A0_dup
 //
+// =================================================================================================
 // Scheme 2 (behind NAT)
-//=====================================
+// -------------------------------------------------------------------------------------------------
 // A0---A0_dup
 //
 
@@ -45,15 +51,14 @@ TEST_CASE("scheme 1") {
         ++duplication_id_counter;
     };
 
-    net.listen_all();
-    net.connect("A0", "A0_dup");
-    net.connect("A0_dup", "A0");
-
     net.set_scenario([&] () {
         CHECK(duplication_id_counter());
         net.interrupt_all();
     });
 
+    net.listen_all();
+    net.connect("A0", "A0_dup");
+    net.connect("A0_dup", "A0");
     net.run_all();
 }
 
@@ -76,13 +81,12 @@ TEST_CASE("scheme 2") {
         ++duplication_id_counter;
     };
 
-    net.listen_all();
-    net.connect("A0", "A0_dup", BEHIND_NAT);
-
     net.set_scenario([&] () {
         CHECK(duplication_id_counter());
         net.interrupt_all();
     });
 
+    net.listen_all();
+    net.connect("A0", "A0_dup", BEHIND_NAT);
     net.run_all();
 }

@@ -29,10 +29,10 @@ foreach (target ${TESTS})
     endif()
 endforeach()
 
-
 set(TESTS
     channel
-    duplication)
+    duplication
+    routing)
 
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target} ${target}.cpp mesh_network.cpp)

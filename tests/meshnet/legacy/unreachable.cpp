@@ -37,10 +37,10 @@ std::atomic_int g_channels_established_counter3 {0};
 std::atomic_int g_channels_established_counter6 {0};
 std::atomic_int g_expired_counter3 {0};
 std::atomic_int g_expired_counter6 {0};
-pfs::synchronized<bit_matrix<3>> g_route_matrix3;
-pfs::synchronized<bit_matrix<6>> g_route_matrix6;
-pfs::synchronized<bit_matrix<3>> g_message_matrix3;
-pfs::synchronized<bit_matrix<6>> g_message_matrix6;
+pfs::synchronized<pfs::bitmatrix<3>> g_route_matrix3;
+pfs::synchronized<pfs::bitmatrix<6>> g_route_matrix6;
+pfs::synchronized<pfs::bitmatrix<3>> g_message_matrix3;
+pfs::synchronized<pfs::bitmatrix<6>> g_message_matrix6;
 std::string g_text3;
 std::string g_text6;
 

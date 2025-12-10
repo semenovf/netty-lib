@@ -15,10 +15,8 @@
 #include <functional>
 #include <map>
 #include <memory>
-// #include <stdexcept>
 #include <string>
 #include <thread>
-// #include <vector>
 
 static constexpr char const * TAG = "test::meshnet";
 
@@ -30,6 +28,7 @@ private:
         std::string name;
         std::unique_ptr<node_pool_t> node_pool_ptr;
         std::thread node_thread;
+        std::size_t index {0}; // Index used in matrix to check tests results
     };
 
 private:
@@ -63,6 +62,21 @@ public:
         , netty::socket4_addr saddr)
     {};
 
+    netty::callback_t<void (std::string const &, std::string const &)>
+    on_node_alive = [] (std::string const & /*source_name*/, std::string const & /*peer_name*/)
+    {};
+
+    netty::callback_t<void (std::string const &, std::string const &)>
+    on_node_expired = [] (std::string const & /*source_name*/, std::string const & /*peer_name*/)
+    {};
+
+    netty::callback_t<void (std::string const &, std::string const &, std::vector<node_id> const &
+        , std::size_t, std::size_t)>
+    on_route_ready = [] (std::string const & /*source_name*/, std::string const & /*peer_name*/
+        , std::vector<node_id> const & /*gw_chain*/, std::size_t /*source_index*/
+        , std::size_t /*peer_index*/)
+    {};
+
 public:
     mesh_network (std::initializer_list<std::string> node_names);
     ~mesh_network ();
@@ -88,6 +102,8 @@ private:
     }
 
     std::unique_ptr<node_pool_t> create_node_pool (std::string const & name);
+
+    void join ();
 
 public: // static
     static mesh_network * instance ()

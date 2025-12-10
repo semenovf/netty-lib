@@ -5,7 +5,7 @@
 //
 // Changelog:
 //      2025.06.04 Initial version (handshake.cpp).
-//      2025.12.08 Refactored (based on legacy/handshake.cpp).
+//      2025.12.08 Refactored with new version of `mesh_network`.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
@@ -13,13 +13,20 @@
 #include "mesh_network.hpp"
 #include <pfs/lorem/wait_atomic_counter.hpp>
 
+// =================================================================================================
+// Legend
+// -------------------------------------------------------------------------------------------------
+// A0, A1 - regular nodes (nodes)
+// a - gateway node (gateway)
 //
+// =================================================================================================
 // Scheme 1
-//=====================================
+// -------------------------------------------------------------------------------------------------
 // A0---A1
 //
+// =================================================================================================
 // Scheme 2 (behind NAT)
-//=====================================
+// -------------------------------------------------------------------------------------------------
 // A0---a
 //
 
@@ -48,10 +55,6 @@ TEST_CASE("scheme 1") {
         ++channel_destroyed_counter;
     };
 
-    net.listen_all();
-    net.connect("A0", "A1");
-    net.connect("A1", "A0");
-
     net.set_scenario([&] () {
         CHECK(channel_established_counter());
         net.disconnect("A0", "A1");
@@ -59,6 +62,9 @@ TEST_CASE("scheme 1") {
         net.interrupt_all();
     });
 
+    net.listen_all();
+    net.connect("A0", "A1");
+    net.connect("A1", "A0");
     net.run_all();
 }
 
@@ -85,9 +91,6 @@ TEST_CASE("scheme 2") {
         ++channel_destroyed_counter;
     };
 
-    net.listen_all();
-    net.connect("A0", "a", BEHIND_NAT);
-
     net.set_scenario([&] () {
         CHECK(channel_established_counter());
         net.disconnect("A0", "a");
@@ -95,5 +98,7 @@ TEST_CASE("scheme 2") {
         net.interrupt_all();
     });
 
+    net.listen_all();
+    net.connect("A0", "a", BEHIND_NAT);
     net.run_all();
 }

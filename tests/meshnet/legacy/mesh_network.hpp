@@ -190,7 +190,7 @@ public:
 
         _self = this;
 
-        std::size_t index = 0; // May be used as matrix column/row index
+        std::size_t index = 0; // Can be used as matrix column/row index
 
         for (auto const & name: node_pool_names) {
             auto node_pool_ptr = create_node_pool(name);

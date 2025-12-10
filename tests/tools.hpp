@@ -7,7 +7,7 @@
 //      2025.03.11 Initial version.
 //      2025.04.07 Moved to tools.hpp.
 ////////////////////////////////////////////////////////////////////////////////
-#include "bit_matrix.hpp"
+#include <pfs/bitmatrix.hpp>
 #include <pfs/countdown_timer.hpp>
 #include <pfs/fmt.hpp>
 #include <pfs/log.hpp>
@@ -56,7 +56,7 @@ bool wait_atomic_bool (std::atomic_bool & flag
     return flag.load();
 }
 
-// DEPRECATED use lorem::wait_atomic_counter
+// TODO DEPRECATED use lorem::wait_atomic_counter
 template <typename AtomicCounter>
 bool wait_atomic_counter (AtomicCounter & counter
     , typename AtomicCounter::value_type limit
@@ -92,6 +92,7 @@ bool wait_atomic_counters (std::array<AtomicCounter, N> & counters
     return success;
 }
 
+// TODO DEPRECATED use lorem::wait_bitmatrix
 template <typename SafeMatrix>
 bool wait_matrix_count (SafeMatrix & safe_matrix, std::size_t limit
     , std::chrono::milliseconds timelimit = std::chrono::milliseconds{5000})
@@ -104,6 +105,7 @@ bool wait_matrix_count (SafeMatrix & safe_matrix, std::size_t limit
     return !(safe_matrix.rlock()->count() < limit);
 }
 
+// TODO DEPRECATED use print_route_matrix
 template <typename RouteMatrix>
 bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption)
 {
@@ -140,6 +142,29 @@ bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption
     return success;
 }
 
+template <typename RouteMatrix>
+void print_route_matrix (RouteMatrix const & m, std::vector<std::string> captions)
+{
+    fmt::print("[   ]");
+
+    for (std::size_t j = 0; j < m.columns(); j++)
+        fmt::print("[{:^3}]", captions[j]);
+
+    fmt::println("");
+
+    for (std::size_t i = 0; i < m.rows(); i++) {
+        fmt::print("[{:^3}]", captions[i]);
+
+        for (std::size_t j = 0; j < m.columns(); j++) {
+            if (m.test(i, j))
+                fmt::print("[{:^3}]", '+');
+            else
+                fmt::print("[   ]");
+        }
+
+        fmt::println("");
+    }
+}
 
 inline std::string random_text ()
 {

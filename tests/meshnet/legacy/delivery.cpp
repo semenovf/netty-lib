@@ -30,8 +30,8 @@
 using mesh_network_t = test::meshnet::network<reliable_node_pool_t>;
 
 std::atomic_int g_message_delivered_counter {0};
-pfs::synchronized<bit_matrix<5>> g_route_matrix;
-pfs::synchronized<bit_matrix<5>> g_receiver_ready_matrix;
+pfs::synchronized<pfs::bitmatrix<5>> g_route_matrix;
+pfs::synchronized<pfs::bitmatrix<5>> g_receiver_ready_matrix;
 std::string g_text0, g_text1, g_text2;
 
 static void sigterm_handler (int sig)

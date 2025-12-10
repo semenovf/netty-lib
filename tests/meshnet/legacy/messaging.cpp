@@ -46,11 +46,11 @@ using mesh_network_t = test::meshnet::network<node_pool_t>;
 #endif
 
 std::atomic_int g_channels_established_counter {0};
-pfs::synchronized<bit_matrix<12>> g_route_matrix;
-pfs::synchronized<bit_matrix<12>> g_message_matrix;
+pfs::synchronized<pfs::bitmatrix<12>> g_route_matrix;
+pfs::synchronized<pfs::bitmatrix<12>> g_message_matrix;
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-pfs::synchronized<bit_matrix<12>> g_report_matrix;
+pfs::synchronized<pfs::bitmatrix<12>> g_report_matrix;
 #endif
 
 std::string g_text;
