@@ -44,10 +44,10 @@ TEST_CASE("scheme 1") {
 
     mesh_network net { "A0", "A0_dup" };
 
-    net.on_duplicate_id = [&] (std::string const & source_name
-        , std::string const & peer_name, netty::socket4_addr saddr)
+    net.on_duplicate_id = [&] (node_pool_spec_t const & source, node_pool_spec_t const & peer
+        , netty::socket4_addr saddr)
     {
-        LOGE(TAG, "{}: Node ID duplication with: {} ({})", source_name, peer_name, to_string(saddr));
+        LOGE(TAG, "{}: Node ID duplication with: {} ({})", source.first, peer.first, to_string(saddr));
         ++duplication_id_counter;
     };
 
@@ -74,10 +74,10 @@ TEST_CASE("scheme 2") {
 
     mesh_network net { "A0", "A0_dup" };
 
-    net.on_duplicate_id = [&] (std::string const & source_name
-        , std::string const & peer_name, netty::socket4_addr saddr)
+    net.on_duplicate_id = [&] (node_pool_spec_t const & source, node_pool_spec_t const & peer
+        , netty::socket4_addr saddr)
     {
-        LOGE(TAG, "{}: Node ID duplication with: {} ({})", source_name, peer_name, to_string(saddr));
+        LOGE(TAG, "{}: Node ID duplication with: {} ({})", source.first, peer.first, to_string(saddr));
         ++duplication_id_counter;
     };
 

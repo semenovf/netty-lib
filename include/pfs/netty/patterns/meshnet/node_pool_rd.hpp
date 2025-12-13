@@ -47,7 +47,7 @@ private:
 
 private:
     callback_t<void (node_id)> _on_node_alive = [] (node_id) {};
-    callback_t<void (node_id)> _on_node_expired = [] (node_id) {};
+    callback_t<void (node_id)> _on_node_unreachable = [] (node_id) {};
 
 private:
     void init ()
@@ -56,10 +56,10 @@ private:
             NETTY__TRACE(MESHNET_TAG, "node alive: {}", to_string(id));
             _dm.resume(id);
             _on_node_alive(id);
-        }).on_node_expired([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "node expired: {}", to_string(id));
+        }).on_node_unreachable([this] (node_id id) {
+            NETTY__TRACE(MESHNET_TAG, "node unreachable: {}", to_string(id));
             _dm.pause(id);
-            _on_node_expired(id);
+            _on_node_unreachable(id);
         }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
             _dm.process_input(id, priority, std::move(bytes));
         });
@@ -167,9 +167,9 @@ public: // Set callbacks
      *          void (node_id)
      */
     template <typename F>
-    node_pool_rd & on_node_expired (F && f)
+    node_pool_rd & on_node_unreachable (F && f)
     {
-        _on_node_expired = std::forward<F>(f);
+        _on_node_unreachable = std::forward<F>(f);
         return *this;
     }
 

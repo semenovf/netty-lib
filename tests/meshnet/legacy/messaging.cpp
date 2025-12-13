@@ -15,6 +15,9 @@
 #include <pfs/synchronized.hpp>
 #include <pfs/netty/startup.hpp>
 
+// FIXME UNCOMMENT
+// #include <pfs/lorem/wait_atomic_bool.hpp>
+
 // =================================================================================================
 // Legend
 // -------------------------------------------------------------------------------------------------
@@ -60,6 +63,22 @@ static void sigterm_handler (int sig)
     MESSAGE("Force interrupt all nodes by signal: ", sig);
     mesh_network_t::instance()->interrupt_all();
 }
+
+// TODO USE THIS
+// lorem::wait_atomic_bool data_ready_flag;
+// void data_received_callback (lorem::wait_atomic_bool & flag, std::string const & sample
+//     , std::string const & receiver_name, std::string const & sender_name
+//     , int priority, archive_t bytes)
+// {
+//     LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
+//     std::string text(bytes.data(), bytes.size());
+//     REQUIRE_EQ(text, sample);
+//     flag.set();
+// }
+//
+//  net.on_data_received = std::bind(data_received_callback, std::ref(data_ready_flag)
+//       , sample_text, _1, _2, _3, _4);
+//
 
 TEST_CASE("messaging") {
 

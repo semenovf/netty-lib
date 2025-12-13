@@ -7,7 +7,6 @@
 #       2025.08.12 Initial version.
 ################################################################################
 set(TESTS
-    unreachable
     delivery
     messaging)
 

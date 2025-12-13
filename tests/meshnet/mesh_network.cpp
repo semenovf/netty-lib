@@ -58,36 +58,42 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
     ptr->on_channel_established([this, name] (meshnet_ns::node_index_t index, node_id peer_id
         , bool is_gateway)
     {
-        this->on_channel_established(name, index, _dict.get_entry(peer_id).name, is_gateway);
+        this->on_channel_established(make_spec(name), index, make_spec(peer_id), is_gateway);
     });
 
     ptr->on_channel_destroyed([this, name] (node_id peer_id)
     {
-        this->on_channel_destroyed(name, _dict.get_entry(peer_id).name);
+        this->on_channel_destroyed(make_spec(name), make_spec(peer_id));
     });
 
     ptr->on_duplicate_id([this, name] (node_id peer_id, netty::socket4_addr saddr)
     {
-        this->on_duplicate_id(name, _dict.get_entry(peer_id).name, saddr);
+        this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });
 
     ptr->on_node_alive([this, name] (node_id peer_id)
     {
-        this->on_node_alive(name, _dict.get_entry(peer_id).name);
+        this->on_node_alive(make_spec(name), make_spec(peer_id));
     });
 
-    ptr->on_node_expired([this, name] (node_id peer_id)
+    ptr->on_node_unreachable([this, name] (node_id peer_id)
     {
-        this->on_node_expired(name, _dict.get_entry(peer_id).name);
+        this->on_node_unreachable(make_spec(name), make_spec(peer_id));
     });
 
     ptr->on_route_ready([this, name] (node_id peer_id, std::vector<node_id> gw_chain)
     {
-        auto peer_name = _dict.get_entry(peer_id).name;
-        this->on_route_ready(name, peer_name, std::move(gw_chain)
-            , get_context_ptr(name)->index
-            , get_context_ptr(peer_name)->index);
+        this->on_route_ready(make_spec(name), make_spec(peer_id), std::move(gw_chain));
     });
+
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+    // TODO
+#else
+    ptr->on_data_received([this, name] (node_id sender_id, int priority, archive_t bytes)
+    {
+        this->on_data_received(make_spec(name), make_spec(sender_id), priority, std::move(bytes));
+    });
+#endif
 
     ptr->template add_node<node_t>({listener_saddr});
 
@@ -120,6 +126,36 @@ void mesh_network::disconnect (std::string const & initiator_name, std::string c
     initiator_ctx->node_pool_ptr->disconnect(index, peer_ctx->node_pool_ptr->id());
 }
 
+void mesh_network::destroy (std::string const & name)
+{
+    auto pctx = get_context_ptr(name);
+    pctx->node_pool_ptr->interrupt();
+
+    if (pctx->node_thread.joinable())
+        pctx->node_thread.join();
+
+    // Destroy node pool
+    pctx->node_pool_ptr.reset();
+}
+
+void mesh_network::send_message (std::string const & sender_name, std::string const & receiver_name
+    , std::string const & text, int priority)
+{
+    auto sender_ctx = get_context_ptr(sender_name);
+    // auto receiver_ctx = get_context_ptr(receiver_name);
+    auto receiver_id = _dict.get_entry(receiver_name).id;
+
+#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+    // TODO
+//     message_id msgid = pfs::generate_uuid();
+//
+//     sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
+//         , text.size());
+#else
+    sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+#endif
+}
+
 void mesh_network::run_all ()
 {
     for (auto & x: _node_pools) {
@@ -127,9 +163,11 @@ void mesh_network::run_all ()
 
         std::thread th {
             [this, pctx] () {
-                LOGD(TAG, "{}: thread started", pctx->name);
-                pctx->node_pool_ptr->run();
-                LOGD(TAG, "{}: thread finished", pctx->name);
+                if (pctx->node_pool_ptr) {
+                    LOGD(TAG, "{}: thread started", pctx->name);
+                    pctx->node_pool_ptr->run();
+                    LOGD(TAG, "{}: thread finished", pctx->name);
+                }
             }
         };
 
@@ -156,4 +194,19 @@ void mesh_network::join ()
 
     if (_scenario_thread.joinable())
         _scenario_thread.join();
+}
+
+void mesh_network::print_routing_records (std::string const & name)
+{
+    auto pctx = get_context_ptr(name);
+    auto routes = pctx->node_pool_ptr->dump_routing_table();
+
+    LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
+    LOGD(TAG, "│Routes for: {}", name);
+
+    for (auto const & x: routes) {
+        LOGD(TAG, "│    └──── {}", x);
+    }
+
+    LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
 }

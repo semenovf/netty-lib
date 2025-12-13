@@ -5,7 +5,7 @@
 //
 // Changelog:
 //      2025.03.11 Initial version (routing_table.cpp).
-//      2025.12.09 Refactored with new version of `mesh_network`.
+//      2025.12.10 Refactored with new version of `mesh_network`.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
@@ -15,6 +15,7 @@
 #include <pfs/lorem/wait_atomic_counter.hpp>
 #include <pfs/lorem/wait_bitmatrix.hpp>
 #include <functional>
+#include <vector>
 
 // =================================================================================================
 // Legend
@@ -35,9 +36,9 @@
 // =================================================================================================
 // Scheme 3
 // -------------------------------------------------------------------------------------------------
-//   A0---+       +---B0
-//   |    |---a---|    |
-//   A1---+       +---B1
+//  A0---+       +---B0
+//  |    |---a---|    |
+//  A1---+       +---B1
 //
 // =================================================================================================
 // Scheme 4
@@ -47,9 +48,9 @@
 // =================================================================================================
 // Scheme 5
 // -------------------------------------------------------------------------------------------------
-//   A0---+           +---B0
-//   |    |---a---b---|   |
-//   A1---+           +---B1
+//  A0---+           +---B0
+//  |    |---a---b---|   |
+//  A1---+           +---B1
 //
 // =================================================================================================
 // Scheme 6
@@ -86,48 +87,44 @@ using colorzr_t = pfs::term::colorizer;
 constexpr bool BEHIND_NAT = true;
 
 void channel_established_callback (lorem::wait_atomic_counter8 & counter
-    , std::string const & source_name, netty::meshnet::node_index_t
-    , std::string const & peer_name, bool)
+    , node_pool_spec_t const & source, netty::meshnet::node_index_t
+    , node_pool_spec_t const & peer, bool)
 {
-    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, peer_name);
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
     ++counter;
 };
 
-void channel_destroyed_callback (std::string const & source_name, std::string const & peer_name)
+void channel_destroyed_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
 {
-    LOGD(TAG, "{}: Channel destroyed with {}", source_name, peer_name);
+    LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
-void node_alive_callback (std::string const & source_name, std::string const & peer_name)
+void node_alive_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
 {
-    LOGD(TAG, "{}: Node alive: {}", source_name, peer_name);
+    LOGD(TAG, "{}: Node alive: {}", source.first, peer.first);
 };
 
-void node_expired_callback (std::string const & source_name, std::string const & peer_name)
+void node_unreachable_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
 {
-    LOGD(TAG, "{}: Node expired: {}", source_name, peer_name);
+    LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
 };
 
 template <std::size_t N>
-void route_ready_callback (lorem::wait_bitmatrix<N> & matrix
-    , std::string const & source_name
-    , std::string const & peer_name
-    , std::vector<node_id> gw_chain
-    , std::size_t source_index
-    , std::size_t peer_index)
+void route_ready_callback (lorem::wait_bitmatrix<N> & matrix, node_pool_spec_t const & source
+    , node_pool_spec_t const & peer, std::vector<node_id> gw_chain)
 {
     auto hops = gw_chain.size();
 
     LOGD(TAG, "{}: {}: {}->{} ({})"
-        , source_name
+        , source.first
         , colorzr_t{}.green().bright().textr("Route ready")
-        , source_name
-        , peer_name
+        , source.first
+        , peer.first
         , (hops == 0
             ? colorzr_t{}.green().bright().textr("direct access")
             : colorzr_t{}.green().bright().textr(fmt::format("hops={}", hops))));
 
-    matrix.set(source_index, peer_index);
+    matrix.set(source.second, peer.second);
 };
 
 // N - Number of nodes
@@ -157,20 +154,19 @@ public:
             , _1, _2, _3, _4);
         net.on_channel_destroyed = channel_destroyed_callback;
         net.on_node_alive = node_alive_callback;
-        net.on_node_expired = node_expired_callback;
-        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_matrix)
-            , _1, _2, _3, _4, _5);
+        net.on_node_unreachable = node_unreachable_callback;
+        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_matrix), _1, _2, _3);
 
         net.set_scenario([&] () {
             CHECK(channel_established_counter());
             CHECK(route_matrix());
+            tools::print_matrix(route_matrix.value(), node_list);
             net.interrupt_all();
         });
 
         net.listen_all();
         connect_scenario(net);
         net.run_all();
-        tools::print_route_matrix(route_matrix.value(), node_list);
     }
 };
 
@@ -181,7 +177,7 @@ TEST_CASE("scheme 1") {
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        scheme_tester<2, 1> tester({ "A0", "A1" }, [] (mesh_network & net)
+        scheme_tester<2, 1> tester({"A0", "A1"}, [] (mesh_network & net)
         {
             net.connect("A0", "A1");
             net.connect("A1", "A0");

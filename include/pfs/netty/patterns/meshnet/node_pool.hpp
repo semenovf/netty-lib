@@ -92,7 +92,7 @@ private:
 
     callback_t<void (node_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
-    callback_t<void (node_id)> _on_expired;
+    callback_t<void (node_id)> _on_unreachable;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, int, archive_type)> _on_data_received;
@@ -108,8 +108,8 @@ public:
         _alive_controller.on_expired([this] (node_id id) {
             _rtab.remove_routes(id);
 
-            if (_on_expired)
-                _on_expired(id);
+            if (_on_unreachable)
+                _on_unreachable(id);
         });
     }
 
@@ -128,7 +128,10 @@ public:
 
     ~node_pool ()
     {
-        clear_all_channels();
+        if (!_nodes.empty()) {
+            for (auto & x : _nodes)
+                x->clear_channels();
+        }
     }
 
 public: // Set callbacks
@@ -204,9 +207,9 @@ public: // Set callbacks
      * @details Callback @a f signature must match void (node_id id).
      */
     template <typename F>
-    node_pool & on_node_expired (F && f)
+    node_pool & on_node_unreachable (F && f)
     {
-        _on_expired = std::forward<F>(f);
+        _on_unreachable = std::forward<F>(f);
         return *this;
     }
 
@@ -227,7 +230,7 @@ public: // Set callbacks
      * Notify when message received (domestic or global)
      *
      * @details Callback @a f signature must match:
-     *          void (node_id sender, int priority, archive_type bytes)
+     *          void (node_id sender_id, int priority, archive_type bytes)
      */
     template <typename F>
     node_pool & on_data_received (F && f)
@@ -764,7 +767,7 @@ private:
         // Since there is no information on which route the packet came, we will forward it to
         // the nearest gateway/node.
         node_id gw_id;
-        auto ptr = locate_writer(uinfo.sender_id, &gw_id);
+        auto ptr = locate_writer(uinfo.sender_id, & gw_id);
 
         if (ptr != nullptr) {
             // Need an example when such situation could happen.
@@ -773,14 +776,12 @@ private:
             archive_type msg = _alive_controller.serialize_unreachable(uinfo);
             ptr->enqueue_packet(gw_id, 0, std::move(msg));
             return;
-        }
-        else {
+        } else {
             // Sender is me and there are no alternative routes
             if (uinfo.sender_id == _id) {
                 // Expire receiver
                 _alive_controller.expire(uinfo.receiver_id);
-            }
-            else {
+            } else {
                 // Stuck. Nothing can be done.
                 _on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
                     , to_string(uinfo.sender_id)
@@ -941,20 +942,6 @@ private:
             if (_alive_controller.is_alive(gwid))
                 enqueue_packet(gwid, 0, msg.data(), msg.size());
             });
-    }
-
-    /**
-     * Close all channels for all nodes (called from destructor only)
-     */
-    void clear_all_channels ()
-    {
-        PFS__ASSERT(_thread_id == std::this_thread::get_id()
-            , "clear_all_channels() must be call in the same thread where node pool has been created");
-
-        if (!_nodes.empty()) {
-            for (auto & x : _nodes)
-                x->clear_channels();
-        }
     }
 };
 

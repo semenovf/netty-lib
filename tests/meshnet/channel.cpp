@@ -42,16 +42,16 @@ TEST_CASE("scheme 1") {
 
     mesh_network net { "A0", "A1" };
 
-    net.on_channel_established = [&] (std::string const & source_name
-        , meshnet_ns::node_index_t, std::string const & peer_name, bool)
+    net.on_channel_established = [&] (node_pool_spec_t const & source, meshnet_ns::node_index_t
+        , node_pool_spec_t const & peer, bool)
     {
-        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, peer_name);
+        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
         ++channel_established_counter;
     };
 
-    net.on_channel_destroyed = [&] (std::string const & source_name, std::string const & peer_name)
+    net.on_channel_destroyed = [&] (node_pool_spec_t const & source, node_pool_spec_t const & peer)
     {
-        LOGD(TAG, "Channel destroyed {:>2} <--> {:>2}", source_name, peer_name);
+        LOGD(TAG, "Channel destroyed {:>2} <--> {:>2}", source.first, peer.first);
         ++channel_destroyed_counter;
     };
 
@@ -78,16 +78,16 @@ TEST_CASE("scheme 2") {
 
     mesh_network net { "A0", "a" };
 
-    net.on_channel_established = [&] (std::string const & source_name
-        , meshnet_ns::node_index_t, std::string const & peer_name, bool)
+    net.on_channel_established = [&] (node_pool_spec_t const & source, meshnet_ns::node_index_t
+        , node_pool_spec_t const & peer, bool)
     {
-        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, peer_name);
+        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
         ++channel_established_counter;
     };
 
-    net.on_channel_destroyed = [&] (std::string const & source_name, std::string const & peer_name)
+    net.on_channel_destroyed = [&] (node_pool_spec_t const & source, node_pool_spec_t const & peer)
     {
-        LOGD(TAG, "Channel destroyed {:>2} <--> {:>2}", source_name, peer_name);
+        LOGD(TAG, "Channel destroyed {:>2} <--> {:>2}", source.first, peer.first);
         ++channel_destroyed_counter;
     };
 

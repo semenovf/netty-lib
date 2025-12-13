@@ -139,7 +139,7 @@ public:
     netty::callback_t<void (std::string const &, std::string const &)> on_node_alive
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
-    netty::callback_t<void (std::string const &, std::string const &)> on_node_expired
+    netty::callback_t<void (std::string const &, std::string const &)> on_node_unreachable
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &, std::vector<node_id> const &
@@ -243,9 +243,9 @@ private:
             this->on_node_alive(source_name, node_name_by_id(id));
         });
 
-        ptr->on_node_expired([this, source_name] (node_id id)
+        ptr->on_node_unreachable([this, source_name] (node_id id)
         {
-            this->on_node_expired(source_name, node_name_by_id(id));
+            this->on_node_unreachable(source_name, node_name_by_id(id));
         });
 
         ptr->on_route_ready([this, source_name] (node_id target_id, std::vector<node_id> gw_chain)

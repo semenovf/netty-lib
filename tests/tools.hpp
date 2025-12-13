@@ -143,7 +143,7 @@ bool print_matrix_with_check (RouteMatrix & m, std::vector<char const *> caption
 }
 
 template <typename RouteMatrix>
-void print_route_matrix (RouteMatrix const & m, std::vector<std::string> captions)
+void print_matrix (RouteMatrix const & m, std::vector<std::string> captions)
 {
     fmt::print("[   ]");
 
