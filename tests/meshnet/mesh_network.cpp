@@ -102,8 +102,10 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
 
 void mesh_network::listen_all ()
 {
-    for (auto & x: _node_pools)
-        x.second->node_pool_ptr->listen();
+    for (auto & x : _node_pools) {
+        if (x.second->node_pool_ptr)
+            x.second->node_pool_ptr->listen();
+    }
 }
 
 void mesh_network::connect (std::string const & initiator_name, std::string const & peer_name
@@ -123,12 +125,16 @@ void mesh_network::disconnect (std::string const & initiator_name, std::string c
     auto initiator_ctx = get_context_ptr(initiator_name);
     auto peer_ctx = get_context_ptr(peer_name);
 
+    PFS__ASSERT(initiator_ctx->node_pool_ptr, "Fix disconnect() method call");
     initiator_ctx->node_pool_ptr->disconnect(index, peer_ctx->node_pool_ptr->id());
 }
 
 void mesh_network::destroy (std::string const & name)
 {
     auto pctx = get_context_ptr(name);
+
+    PFS__ASSERT(pctx->node_pool_ptr, "Fix destroy() method call");
+
     pctx->node_pool_ptr->interrupt();
 
     if (pctx->node_thread.joinable())
@@ -144,6 +150,8 @@ void mesh_network::send_message (std::string const & sender_name, std::string co
     auto sender_ctx = get_context_ptr(sender_name);
     // auto receiver_ctx = get_context_ptr(receiver_name);
     auto receiver_id = _dict.get_entry(receiver_name).id;
+
+    PFS__ASSERT(sender_ctx->node_pool_ptr, "Fix send_message() method call");
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
     // TODO
@@ -181,8 +189,10 @@ void mesh_network::run_all ()
 
 void mesh_network::interrupt_all ()
 {
-    for (auto & x: _node_pools)
-        x.second->node_pool_ptr->interrupt();
+    for (auto & x : _node_pools) {
+        if (x.second->node_pool_ptr)
+            x.second->node_pool_ptr->interrupt();
+    }
 }
 
 void mesh_network::join ()
@@ -199,14 +209,17 @@ void mesh_network::join ()
 void mesh_network::print_routing_records (std::string const & name)
 {
     auto pctx = get_context_ptr(name);
-    auto routes = pctx->node_pool_ptr->dump_routing_table();
 
-    LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
-    LOGD(TAG, "│Routes for: {}", name);
+    if (pctx->node_pool_ptr) {
+        auto routes = pctx->node_pool_ptr->dump_routing_table();
 
-    for (auto const & x: routes) {
-        LOGD(TAG, "│    └──── {}", x);
+        LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
+        LOGD(TAG, "│Routes for: {}", name);
+
+        for (auto const & x : routes) {
+            LOGD(TAG, "│    └──── {}", x);
+        }
+
+        LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
     }
-
-    LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
 }
