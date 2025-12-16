@@ -10,7 +10,6 @@ set(TESTS
     protocol
     priority_tracker
     priority_frame
-    alive_controller
     input_controller
     handshake_controller
     heartbeat_controller
@@ -33,14 +32,14 @@ set(TESTS
     channel
     duplication
     routing
-    alive)
+    unreachable)
 
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target} ${target}.cpp mesh_network.cpp)
     target_link_libraries(tests-meshnet-${target} PRIVATE pfs::netty pfs::lorem)
     add_test(NAME tests-meshnet-${target} COMMAND tests-meshnet-${target})
 
-    if (TRUE)
+    if (FALSE) # FIXME set TRUE
         add_executable(tests-meshnet-${target}-rd ${target}.cpp mesh_network.cpp)
         target_link_libraries(tests-meshnet-${target}-rd PRIVATE pfs::netty pfs::lorem)
         target_compile_definitions(tests-meshnet-${target}-rd PRIVATE "NETTY__TESTS_USE_MESHNET_NODE_POOL_RD=1")

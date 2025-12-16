@@ -99,11 +99,6 @@ void channel_destroyed_callback (node_pool_spec_t const & source, node_pool_spec
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
-void node_alive_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
-{
-    LOGD(TAG, "{}: Node alive: {}", source.first, peer.first);
-};
-
 void node_unreachable_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
 {
     LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
@@ -153,7 +148,6 @@ public:
             , std::ref(channel_established_counter)
             , _1, _2, _3, _4);
         net.on_channel_destroyed = channel_destroyed_callback;
-        net.on_node_alive = node_alive_callback;
         net.on_node_unreachable = node_unreachable_callback;
         net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_matrix), _1, _2, _3);
 
