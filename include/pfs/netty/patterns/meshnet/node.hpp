@@ -19,13 +19,13 @@
 #include "../../socket_pool.hpp"
 #include "../../trace.hpp"
 #include "../../writer_pool.hpp"
-#include "alive_info.hpp"
 #include "channel_map.hpp"
 #include "node_index.hpp"
 #include "node_interface.hpp"
 #include "protocol.hpp"
 #include "route_info.hpp"
 #include "tag.hpp"
+#include "unreachable_info.hpp"
 #include <pfs/i18n.hpp>
 #include <pfs/log.hpp>
 #include <pfs/optional.hpp>
@@ -184,7 +184,6 @@ private: // Callbacks
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
     callback_t<void (node_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
     callback_t<void (node_index_t, node_id, socket4_addr)> _on_duplicate_id;
-    callback_t<void (node_index_t, node_id, alive_info<node_id> const &)> _on_alive_received;
     callback_t<void (node_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (node_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
     callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
@@ -383,16 +382,6 @@ public:
             _heartbeat_controller.process(sid, pkt);
         };
 
-        _input_controller.on_alive = [this] (socket_id sid, alive_packet<node_id> && pkt)
-        {
-            if (_on_alive_received) {
-                auto id_ptr = _channels.locate_reader(sid);
-
-                if (id_ptr != nullptr)
-                    _on_alive_received(_index, *id_ptr, pkt.info());
-            }
-        };
-
         _input_controller.on_unreachable = [this] (socket_id sid, unreachable_packet<node_id> && pkt)
         {
             if (_on_unreachable_received) {
@@ -539,19 +528,6 @@ public: // Set callbacks
     node & on_duplicate_id (F && f)
     {
         _on_duplicate_id = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * On alive info received.
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_index_t, node_id, alive_info<node_id> const &)
-     */
-    template <typename F>
-    node & on_alive_received (F && f)
-    {
-        _on_alive_received = std::forward<F>(f);
         return *this;
     }
 
@@ -1135,12 +1111,6 @@ public: // node_interface
         void on_duplicate_id (callback_t<void (node_index_t, node_id, socket4_addr)> cb) override
         {
             Node::on_duplicate_id(std::move(cb));
-        }
-
-        void on_alive_received (callback_t<void (node_index_t, node_id
-            , alive_info<node_id> const &)> cb) override
-        {
-            Node::on_alive_received(std::move(cb));
         }
 
         void on_unreachable_received (callback_t<void (node_index_t, node_id

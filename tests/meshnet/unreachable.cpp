@@ -61,11 +61,18 @@ void channel_destroyed_callback (node_pool_spec_t const & source, node_pool_spec
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
+// template <std::size_t N>
+// void node_alive_callback (lorem::wait_bitmatrix<N> & matrix
+//     , node_pool_spec_t const & source, node_pool_spec_t const & peer)
+// {
+//     LOGD(TAG, "{}: Node alive: {}", source.first, peer.first);
+//     matrix.set(source.second, peer.second);
+// };
+
 template <std::size_t N>
-void node_alive_callback (lorem::wait_bitmatrix<N> & matrix
+void route_ready_callback (lorem::wait_bitmatrix<N> & matrix
     , node_pool_spec_t const & source, node_pool_spec_t const & peer)
 {
-    LOGD(TAG, "{}: Node alive: {}", source.first, peer.first);
     matrix.set(source.second, peer.second);
 };
 
@@ -73,16 +80,9 @@ template <std::size_t N>
 void node_unreachable_callback (lorem::wait_bitmatrix<N> & matrix
     , node_pool_spec_t const & source, node_pool_spec_t const & dest)
 {
-    LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
+    LOGD(TAG, "{}: Node unreachable: {}", source.first, dest.first);
     matrix.set(source.second, dest.second);
-    matrix.set(dest.second, source.second);
-};
-
-template <std::size_t N>
-void route_ready_callback (lorem::wait_bitmatrix<N> & matrix
-    , node_pool_spec_t const & source, node_pool_spec_t const & peer)
-{
-    matrix.set(source.second, peer.second);
+    // matrix.set(dest.second, source.second);
 };
 
 template <std::size_t N>
@@ -106,25 +106,19 @@ public:
         mesh_network net {std::move(node_names)};
 
         lorem::wait_atomic_counter8 channel_established_counter {C * 2};
-        lorem::wait_bitmatrix<N> route_matrix;
         lorem::wait_bitmatrix<N> alive_matrix;
 
-        set_main_diagonal(route_matrix);
         set_main_diagonal(alive_matrix);
 
         net.on_channel_established = std::bind(channel_established_callback
             , std::ref(channel_established_counter)
             , _1, _2, _3, _4);
         net.on_channel_destroyed = channel_destroyed_callback;
-        net.on_node_alive = std::bind(node_alive_callback<N>, std::ref(alive_matrix), _1, _2);
+        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(alive_matrix), _1, _2);
         net.on_node_unreachable = std::bind(node_unreachable_callback<N>, std::ref(unreachable_matrix), _1, _2);
-        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_matrix), _1, _2);
 
         net.set_scenario([&] () {
             CHECK(channel_established_counter());
-
-            CHECK(route_matrix());
-            tools::print_matrix(route_matrix.value(), node_list);
 
             CHECK(alive_matrix());
             tools::print_matrix(alive_matrix.value(), node_list);
@@ -149,10 +143,14 @@ TEST_CASE("scheme 1") { // short chain unreachable
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        lorem::wait_bitmatrix<3> expired_matrix {std::chrono::milliseconds {10000}};
-        set_main_diagonal(expired_matrix);
+        lorem::wait_bitmatrix<3> unreachable_matrix {std::chrono::milliseconds {10000}};
+        set_main_diagonal(unreachable_matrix);
+        unreachable_matrix.set(0, 1);
+        unreachable_matrix.set(1, 0);
+        unreachable_matrix.set(2, 0);
+        unreachable_matrix.set(2, 1);
 
-        scheme_tester<3, 2> tester({"a", "A0", "C0"}, expired_matrix
+        scheme_tester<3, 2> tester({"a", "A0", "C0"}, unreachable_matrix
             , [] (mesh_network & net)
         {
             net.connect("A0", "a", BEHIND_NAT);

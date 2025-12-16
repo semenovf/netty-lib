@@ -6,6 +6,7 @@
 // Changelog:
 //      2025.03.13 Initial version.
 //      2025.05.12 `node_id_rep` replaced by `std::string`.
+//      2025.12.14 Removed `alive_info` and header file renamed to `unreachable_info`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -16,17 +17,10 @@ NETTY__NAMESPACE_BEGIN
 namespace meshnet {
 
 template <typename NodeId>
-struct alive_info
-{
-    NodeId id;
-};
-
-template <typename NodeId>
 struct unreachable_info
 {
-    NodeId gw_id;       // Last gateway ID
-    NodeId sender_id;   // Sender node ID
-    NodeId receiver_id; // Unreachable node ID
+    NodeId gw_id; // gateway ID that fixed channel disconnection
+    NodeId id;    // unreachable node ID
 };
 
 } // namespace meshnet

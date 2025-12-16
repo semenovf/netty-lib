@@ -65,18 +65,19 @@ public:
         , netty::socket4_addr saddr)
     {};
 
-    netty::callback_t<void (node_pool_spec_t const &, node_pool_spec_t const &)>
-    on_node_alive = [] (node_pool_spec_t const & /*source*/, node_pool_spec_t const & /*dest*/)
-    {};
-
-    netty::callback_t<void (node_pool_spec_t const &, node_pool_spec_t const &)>
-    on_node_unreachable = [] (node_pool_spec_t const & /*source*/, node_pool_spec_t const & /*dest*/)
-    {};
-
     netty::callback_t<void (node_pool_spec_t const &, node_pool_spec_t const &
         , std::vector<node_id> const &)>
     on_route_ready = [] (node_pool_spec_t const & /*source*/, node_pool_spec_t const & /*peer*/
         , std::vector<node_id> const & /*gw_chain*/)
+    {};
+
+    netty::callback_t<void (node_pool_spec_t const &, node_pool_spec_t const &, node_pool_spec_t const &)>
+    on_route_unavailable = [] (node_pool_spec_t const & /*source*/, node_pool_spec_t const & /*gw*/
+        ,node_pool_spec_t const & /*dest*/)
+    {};
+
+    netty::callback_t<void (node_pool_spec_t const &, node_pool_spec_t const &)>
+    on_node_unreachable = [] (node_pool_spec_t const & /*source*/, node_pool_spec_t const & /*dest*/)
     {};
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD

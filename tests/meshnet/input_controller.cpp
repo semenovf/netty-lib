@@ -104,38 +104,6 @@ TEST_CASE("heartbeat") {
     CHECK_EQ(counter, 3);
 }
 
-TEST_CASE("alive") {
-    using alive_packet_t = alive_packet<node_id>;
-
-    int counter = 0;
-    input_controller_t ic;
-
-    ic.add(kSID);
-
-    auto id = pfs::generate_uuid();
-    alive_info<node_id> ainfo {id};
-    alive_packet_t alive {std::move(ainfo)};
-
-    archive_t payload;
-    serializer_traits_t::serializer_type out {payload};
-    alive.serialize(out);
-    alive.serialize(out);
-    alive.serialize(out);
-
-    ic.on_alive = [&] (socket_id sid, alive_packet_t && pkt) {
-        REQUIRE_EQ(sid, kSID);
-        CHECK_EQ(pkt.info().id, id);
-        counter++;
-    };
-
-    archive_t frames;
-    pack_payload(0, frames, payload);
-    ic.process_input(kSID, std::move(frames));
-
-    CHECK(payload.empty());
-    CHECK_EQ(counter, 3);
-}
-
 TEST_CASE("unreachable") {
     using unreachable_packet_t = unreachable_packet<node_id>;
 
@@ -145,10 +113,8 @@ TEST_CASE("unreachable") {
     ic.add(kSID);
 
     auto gw_id = pfs::generate_uuid();
-    auto sender_id = pfs::generate_uuid();
-    auto receiver_id = pfs::generate_uuid();
 
-    unreachable_info<node_id> uinfo {gw_id, sender_id, receiver_id};
+    unreachable_info<node_id> uinfo {gw_id};
     unreachable_packet_t unreach {std::move(uinfo)};
 
     archive_t payload;
@@ -160,8 +126,6 @@ TEST_CASE("unreachable") {
     ic.on_unreachable = [&] (socket_id sid, unreachable_packet_t && pkt) {
         REQUIRE_EQ(sid, kSID);
         CHECK_EQ(pkt.info().gw_id, gw_id);
-        CHECK_EQ(pkt.info().sender_id, sender_id);
-        CHECK_EQ(pkt.info().receiver_id, receiver_id);
         counter++;
     };
 

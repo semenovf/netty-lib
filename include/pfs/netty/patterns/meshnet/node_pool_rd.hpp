@@ -52,17 +52,20 @@ private:
 private:
     void init ()
     {
-        _t.on_node_alive([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "node alive: {}", to_string(id));
-            _dm.resume(id);
-            _on_node_alive(id);
-        }).on_node_unreachable([this] (node_id id) {
+        _t.on_node_unreachable([this] (node_id id) {
             NETTY__TRACE(MESHNET_TAG, "node unreachable: {}", to_string(id));
             _dm.pause(id);
             _on_node_unreachable(id);
         }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
             _dm.process_input(id, priority, std::move(bytes));
-        });
+
+
+            // FIXME REMOVE
+        })/*.on_node_alive([this] (node_id id) {
+            NETTY__TRACE(MESHNET_TAG, "node alive: {}", to_string(id));
+            _dm.resume(id);
+            _on_node_alive(id);
+        })*/;
     }
 
 public:

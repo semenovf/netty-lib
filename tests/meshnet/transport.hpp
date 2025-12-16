@@ -13,7 +13,6 @@
 #include "pfs/netty/patterns/priority_tracker.hpp"
 #include "pfs/netty/patterns/delivery/manager.hpp"
 #include "pfs/netty/patterns/delivery/delivery_controller.hpp"
-#include "pfs/netty/patterns/meshnet/alive_controller.hpp"
 #include "pfs/netty/patterns/meshnet/channel_map.hpp"
 #include "pfs/netty/patterns/meshnet/dual_link_handshake.hpp"
 #include "pfs/netty/patterns/meshnet/node.hpp"
@@ -103,12 +102,9 @@ using node_t = meshnet_ns::node<
 // Choose required type here
 
 using routing_table_t = meshnet_ns::routing_table<pfs::universal_id, serializer_traits_t>;
-using alive_controller_t = meshnet_ns::alive_controller<pfs::universal_id
-    , serializer_traits_t>;
 
 using unreliable_node_pool_t = meshnet_ns::node_pool<pfs::universal_id
     , routing_table_t
-    , alive_controller_t
     , std::recursive_mutex>;
 
 #if NETTY__TESTS_USE_MESHNET_NODE_POOL_RD

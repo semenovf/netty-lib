@@ -42,7 +42,6 @@ namespace meshnet {
 
 template <typename NodeId
     , typename RoutingTable
-    , typename AliveController
     , typename RecursiveWriterMutex>
 class node_pool: public interruptable
 {
@@ -52,7 +51,6 @@ class node_pool: public interruptable
     using node_interface_type = node_interface<NodeId, archive_type>;
     using node_interface_ptr = std::unique_ptr<node_interface_type>;
     using routing_table_type = RoutingTable;
-    using alive_controller_type = AliveController;
     using recursive_mutex_type = RecursiveWriterMutex;
 
 #if NETTY__TELEMETRY_ENABLED
@@ -74,7 +72,6 @@ private:
     std::vector<node_interface_ptr> _nodes;
 
     routing_table_type _rtab;
-    alive_controller_type _alive_controller;
 
     // Writer mutex to protect sending
     recursive_mutex_type _writer_mtx;
@@ -92,9 +89,10 @@ private:
 
     callback_t<void (node_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
-    callback_t<void (node_id)> _on_unreachable;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, gateway_chain_type)> _on_route_ready;
+    callback_t<void (node_id, node_id)> _on_route_unavailable;
+    callback_t<void (node_id)> _on_node_unreachable;
     callback_t<void (node_id, int, archive_type)> _on_data_received;
 
 public:
@@ -102,16 +100,8 @@ public:
         : interruptable()
         , _id(id)
         , _is_gateway(is_gateway)
-        , _alive_controller(id)
         , _thread_id(std::this_thread::get_id())
-    {
-        _alive_controller.on_expired([this] (node_id id) {
-            _rtab.remove_routes(id);
-
-            if (_on_unreachable)
-                _on_unreachable(id);
-        });
-    }
+    {}
 
 #if NETTY__TELEMETRY_ENABLED
     node_pool (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
@@ -189,31 +179,6 @@ public: // Set callbacks
     }
 
     /**
-     * Notify when node alive status changed.
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id id)
-     */
-    template <typename F>
-    node_pool & on_node_alive (F && f)
-    {
-        _alive_controller.on_alive(std::forward<F>(f));
-        return *this;
-    }
-
-    /**
-     * Notify when node alive status changed.
-     *
-     * @details Callback @a f signature must match void (node_id id).
-     */
-    template <typename F>
-    node_pool & on_node_unreachable (F && f)
-    {
-        _on_unreachable = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
      * Notify when some route ready by request or response.
      *
      * @details Callback @a f signature must match:
@@ -223,6 +188,30 @@ public: // Set callbacks
     node_pool & on_route_ready (F && f)
     {
         _on_route_ready = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when route is unavailable.
+     *
+     * @details Callback @a f signature must match void (node_id gw_id, node_id unreachable_id).
+     */
+    template <typename F>
+    node_pool & on_route_unavailable (F && f)
+    {
+        _on_route_unavailable = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when node is unreachable (no routes found).
+     *
+     * @details Callback @a f signature must match void (node_id unreachable_id).
+     */
+    template <typename F>
+    node_pool & on_node_unreachable (F && f)
+    {
+        _on_node_unreachable = std::forward<F>(f);
         return *this;
     }
 
@@ -283,11 +272,7 @@ public:
             // Add direct route
             auto route_added = _rtab.add_sibling(peer_id);
 
-            // Add sibling node as alive
-            _alive_controller.add_sibling(peer_id);
-
-            // Start routes discovery and initiate alive exchange if channel established
-            // with gateway
+            // Channel established with gateway
             if (is_gateway) {
                 _rtab.add_gateway(peer_id);
 
@@ -314,9 +299,6 @@ public:
                 if (_on_route_ready) {
                     NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={})", to_string(peer_id), 0);
                     _on_route_ready(peer_id, gateway_chain_type{});
-
-                    // Force set alive flag with new route obtained
-                    _alive_controller.update_if(peer_id);
                 }
             }
         });
@@ -326,7 +308,18 @@ public:
                 _on_channel_destroyed(peer_id);
 
             _rtab.remove_sibling(peer_id);
-            _alive_controller.expire(peer_id);
+
+            if (_is_gateway)
+                broadcast_unreachable(peer_id);
+
+            if (_on_route_unavailable)
+                _on_route_unavailable(_id, peer_id);
+
+            // Check if there are no other routes to `peer_id` node and notify about it.
+            if (_on_node_unreachable) {
+                if (!_rtab.is_reachable(peer_id))
+                    _on_node_unreachable(peer_id);
+            }
         });
 
         if (_on_duplicate_id) {
@@ -334,10 +327,6 @@ public:
                _on_duplicate_id(id, saddr);
             });
         }
-
-        node->on_alive_received([this](node_index_t index, node_id id, alive_info<node_id> const & ainfo) {
-            process_alive_received(index, id, ainfo);
-        });
 
         node->on_unreachable_received([this] (node_index_t index, node_id id
                 , unreachable_info<node_id> const & uinfo) {
@@ -371,23 +360,11 @@ public:
                 return;
             }
 
-            // Notify sender about unreachable destination
             _on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
                 , to_string(sender_id), to_string(receiver_id)));
 
-            archive_type unreach_pkt = _alive_controller.serialize_unreachable(_id
-                , sender_id, receiver_id);
-
-            ptr = locate_writer(sender_id, & gw_id);
-
-            if (ptr != nullptr) {
-                ptr->enqueue_packet(gw_id, 0, std::move(unreach_pkt));
-                return;
-            } else {
-                // Stuck. Nothing can be done.
-                _on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
-                    , to_string(sender_id), to_string(receiver_id)));
-            }
+            // No need to notify sender about unreachable destination.
+            // The corresponding unreachable_packet must be sent at the moment the channel destroyed.
         });
 
         _nodes.push_back(std::move(node));
@@ -591,18 +568,6 @@ public:
         for (auto & x: _nodes)
             result += x->step();
 
-        // The presence of a gateway is an indication that `alive` packet needs to be sent.
-        if (_rtab.gateway_count() > 0) {
-            // Broadcast `alive` packet
-            if (_alive_controller.interval_exceeded()) {
-                _alive_controller.update_notification_time();
-                broadcast_alive();
-            }
-
-            // Check alive expiration
-            _alive_controller.check_expiration();
-        }
-
         return result;
     }
 
@@ -621,13 +586,7 @@ public:
 
     bool is_reachable (node_id id) const
     {
-        auto gwid_opt = _rtab.gateway_for(id);
-
-        // No route or it is unreachable
-        if (!gwid_opt)
-            return false;
-
-        return true;
+        return _rtab.is_reachable(id);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -743,49 +702,30 @@ private:
         return true;
     }
 
-    void process_alive_received (node_index_t /*idx*/, node_id id, alive_info<node_id> const & ainfo)
-    {
-        auto initiator_id = ainfo.id;
-        auto updated = _alive_controller.update_if(initiator_id);
-
-        if (updated && _is_gateway) {
-            // Forward packet to nearest nodes
-            archive_type msg = _alive_controller.serialize_alive(ainfo);
-            forward_packet(id, std::move(msg));
-        }
-    }
-
-    void process_unreachable_received (node_index_t /*idx*/, node_id id
+    void process_unreachable_received (node_index_t /*idx*/, node_id peer_id
         , unreachable_info<node_id> const & uinfo)
     {
-        // Receiver cannot be reached through the specified gateway.
-        // Disable all routes containing the specified gateway.
-        _rtab.remove_route(uinfo.receiver_id, uinfo.gw_id);
-
-        // Try alternative route.
-        //
-        // Since there is no information on which route the packet came, we will forward it to
-        // the nearest gateway/node.
-        node_id gw_id;
-        auto ptr = locate_writer(uinfo.sender_id, & gw_id);
-
-        if (ptr != nullptr) {
-            // Need an example when such situation could happen.
-            PFS__THROW_UNEXPECTED(gw_id != id, "Fix meshnet::node_pool algorithm");
-
-            archive_type msg = _alive_controller.serialize_unreachable(uinfo);
-            ptr->enqueue_packet(gw_id, 0, std::move(msg));
+        // Prevent cycling
+        if (_id == uinfo.gw_id)
             return;
-        } else {
-            // Sender is me and there are no alternative routes
-            if (uinfo.sender_id == _id) {
-                // Expire receiver
-                _alive_controller.expire(uinfo.receiver_id);
-            } else {
-                // Stuck. Nothing can be done.
-                _on_error(tr::f_("unable to notify sender about unreachable destination: {}->{}: no route"
-                    , to_string(uinfo.sender_id)
-                    , to_string(uinfo.receiver_id)));
+
+        // `uinfo.id` node cannot be reached through the gateway `uinfo.gw_id`.
+        // Disable all routes containing the specified subchain.
+        auto n = _rtab.remove_routes(uinfo.gw_id, uinfo.id);
+
+        if (n > 0) {
+            // Forward packet to sibling nodes excluding `peer_id`.
+            if (_is_gateway) {
+                archive_type ar = _rtab.serialize(uinfo);
+                forward_packet(peer_id, ar);
+            }
+
+            if (_on_route_unavailable)
+                _on_route_unavailable(uinfo.gw_id, uinfo.id);
+
+            if (_on_node_unreachable) {
+                if (!_rtab.is_reachable(uinfo.id))
+                    _on_node_unreachable(uinfo.id);
             }
         }
     }
@@ -807,14 +747,12 @@ private:
             if (rinfo.initiator_id == _id) {
                 if (hops == 0) {
                     new_route_added = _rtab.add_sibling(dest_id);
-                }
-                else {
+                } else {
                     auto res = _rtab.add_route(dest_id, rinfo.route);
                     gw_chain_index = res.first;
                     new_route_added = res.second;
                 }
-            }
-            else if (_is_gateway) {
+            } else if (_is_gateway) {
                 // Add route to responder to routing table and forward response.
 
                 // If there is no loop
@@ -833,14 +771,10 @@ private:
                         // NOTE. There are no known cases when this will happen, as the sibling node has
                         // already been added previously. But let it be for insurance purposes.
                         new_route_added = _rtab.add_sibling(dest_id);
-                    }
-                    else {
+                    } else {
                         auto res = _rtab.add_subroute(dest_id, _id, rinfo.route);
                         gw_chain_index = res.first;
                         new_route_added = res.second;
-
-                        // Receiving a route response is an indication that the responder is active.
-                        _alive_controller.update_if(dest_id);
                     }
 
                     // Serialize response and send to previous gateway (if index > 0)
@@ -850,18 +784,15 @@ private:
                     if (index > 0) {
                         auto addressee_id = rinfo.route[index - 1];
                         enqueue_packet(addressee_id, 0, std::move(msg));
-                    }
-                    else {
+                    } else {
                         auto addressee_id = rinfo.initiator_id;
                         enqueue_packet(addressee_id, 0, std::move(msg));
                     }
                 }
-            }
-            else {
+            } else {
                 PFS__THROW_UNEXPECTED(false, "Fix meshnet::node_pool algorithm");
             }
-        }
-        else { // Request
+        } else { // Request
             dest_id = rinfo.initiator_id;
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
@@ -871,14 +802,12 @@ private:
                 if (_is_gateway) {
                     if (hops == 0) {
                         new_route_added = _rtab.add_sibling(dest_id);
-                    }
-                    else {
+                    } else {
                         auto res = _rtab.add_route(dest_id, rinfo.route, reverse_order);
                         gw_chain_index = res.first;
                         new_route_added = res.second;
                     }
-                }
-                else {
+                } else {
                     PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::node_pool algorithm");
                     auto res = _rtab.add_route(dest_id, rinfo.route, reverse_order);
                     gw_chain_index = res.first;
@@ -912,36 +841,32 @@ private:
                     , to_string(dest_id), gw_chain.size());
 
                 _on_route_ready(dest_id, std::move(gw_chain));
-
-                // Force set alive flag with new route obtained
-                _alive_controller.update_if(dest_id);
             }
         }
     }
 
     /**
-     * Forward special packets (route and alive) to nearest nodes excluding node identified
+     * Forward special packets (route and unreachable) to nearest nodes excluding node identified
      * by @a sender_id.
      *
-     * @param data Serialized packet.
+     * @param ar Serialized packet.
      */
-    void forward_packet (node_id sender_id, archive_type const & data)
+    void forward_packet (node_id sender_id, archive_type const & ar)
     {
         for (node_index_t i = 0; i < _nodes.size(); i++)
-            _nodes[i]->enqueue_forward_packet(sender_id, 0, data.data(), data.size());
+            _nodes[i]->enqueue_forward_packet(sender_id, 0, ar.data(), ar.size());
     }
 
     /**
-     * Check _rtab.gateway_count() > 0 before call this method.
+     * Broadcasts unreachable packet (used by gateways only).
      */
-    void broadcast_alive ()
+    void broadcast_unreachable (node_id unreachable_id)
     {
-        auto msg = _alive_controller.serialize_alive();
+        unreachable_info<node_id> uinfo { _id, unreachable_id };
+        archive_type ar = _rtab.serialize(std::move(uinfo));
 
-        _rtab.foreach_gateway([this, &msg](node_id gwid) {
-            if (_alive_controller.is_alive(gwid))
-                enqueue_packet(gwid, 0, msg.data(), msg.size());
-            });
+        for (node_index_t i = 0; i < _nodes.size(); i++)
+            _nodes[i]->enqueue_broadcast_packet(0, ar.data(), ar.size());
     }
 };
 

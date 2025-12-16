@@ -8,10 +8,11 @@
 // Changelog:
 //      2025.01.17 Initial version.
 //      2025.07.04 Changed protocol versioning.
+//      2025.12.14 Removed `alive_packet`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "alive_info.hpp"
 #include "route_info.hpp"
+#include "unreachable_info.hpp"
 #include "../../error.hpp"
 #include "../../namespace.hpp"
 #include <pfs/crc32.hpp>
@@ -32,9 +33,8 @@ enum class packet_enum
 {
       handshake =  1 /// Handshake phase packet (since version 1).
     , heartbeat =  2 /// Heartbeat loop packet (since version 1).
-    , alive     =  3 /// Alive packet (periodic) (since version 1).
-    , unreach   =  4 /// Node is unreachable packet (since version 1).
-    , route     =  5 /// Route discovery packet (since version 1).
+    , route     =  3 /// Route discovery packet (since version 1).
+    , unreach   =  4 /// Route unreachable packet (since version 1).
     , ddata     = 14 /// User data packet for exchange inside domestic subnet (domestic message) (since version 1).
     , gdata     = 15 /// User data packet for exchange bitween subnets using router nodes (global message) (since version 1).
 };
@@ -322,51 +322,9 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// alive packet
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Bytes 2..9: Alive Node ID
-template <typename NodeId>
-class alive_packet: public header
-{
-    alive_info<NodeId> _ainfo;
-
-public:
-    alive_packet (alive_info<NodeId> ainfo) noexcept
-        : header(packet_enum::alive, false)
-        , _ainfo(std::move(ainfo))
-    {}
-
-    /**
-     * Constructs packet from deserializer with predefined header.
-     * Header can be read before from the deserializer.
-     */
-    template <typename Deserializer>
-    alive_packet (header const & h, Deserializer & in)
-        : header(h)
-    {
-        in >> _ainfo.id;
-    }
-
-public:
-    alive_info<NodeId> const & info () const noexcept
-    {
-        return _ainfo;
-    }
-
-    template <typename Serializer>
-    void serialize (Serializer & out)
-    {
-        header::serialize(out);
-        out << _ainfo.id;
-    }
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 // unreachable packet
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Bytes 2..9  : Node ID of the responder gateway
-// Bytes 10..17: Node ID of the sender
-// Bytes 18..25: Node ID of the receiver
+// Bytes 2..9  : Node ID of the gateway
 template <typename NodeId>
 class unreachable_packet: public header
 {
@@ -386,7 +344,7 @@ public:
     unreachable_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> _uinfo.gw_id >> _uinfo.sender_id >> _uinfo.receiver_id;
+        in >> _uinfo.gw_id >> _uinfo.id;
     }
 
 public:
@@ -399,7 +357,7 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << _uinfo.gw_id << _uinfo.sender_id << _uinfo.receiver_id;
+        out << _uinfo.gw_id << _uinfo.id;
     }
 };
 

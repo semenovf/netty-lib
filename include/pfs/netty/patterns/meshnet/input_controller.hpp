@@ -69,7 +69,6 @@ protected:
 public:
     mutable callback_t<void (socket_id, handshake_packet<node_id> &&)> on_handshake;
     mutable callback_t<void (socket_id, heartbeat_packet &&)> on_heartbeat;
-    mutable callback_t<void (socket_id, alive_packet<node_id> &&)> on_alive;
     mutable callback_t<void (socket_id, unreachable_packet<node_id> &&)> on_unreachable;
     mutable callback_t<void (socket_id, route_packet<node_id> &&)> on_route;
     mutable callback_t<void (socket_id, int /*priority*/, archive_type &&)> on_ddata;
@@ -153,17 +152,6 @@ public:
 
                         if (in.commit_transaction())
                             on_heartbeat(sid, std::move(pkt));
-                        else
-                            has_more_packets = false;
-
-                        break;
-                    }
-
-                    case packet_enum::alive: {
-                        alive_packet<node_id> pkt {h, in};
-
-                        if (in.commit_transaction())
-                            on_alive(sid, std::move(pkt));
                         else
                             has_more_packets = false;
 

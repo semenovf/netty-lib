@@ -71,19 +71,19 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
         this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });
 
-    ptr->on_node_alive([this, name] (node_id peer_id)
+    ptr->on_route_ready([this, name] (node_id peer_id, std::vector<node_id> gw_chain)
     {
-        this->on_node_alive(make_spec(name), make_spec(peer_id));
+        this->on_route_ready(make_spec(name), make_spec(peer_id), std::move(gw_chain));
+    });
+
+    ptr->on_route_unavailable([this, name] (node_id gw_id, node_id peer_id)
+    {
+        this->on_route_unavailable(make_spec(name), make_spec(gw_id), make_spec(peer_id));
     });
 
     ptr->on_node_unreachable([this, name] (node_id peer_id)
     {
         this->on_node_unreachable(make_spec(name), make_spec(peer_id));
-    });
-
-    ptr->on_route_ready([this, name] (node_id peer_id, std::vector<node_id> gw_chain)
-    {
-        this->on_route_ready(make_spec(name), make_spec(peer_id), std::move(gw_chain));
     });
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD

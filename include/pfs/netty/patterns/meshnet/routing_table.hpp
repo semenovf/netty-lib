@@ -24,6 +24,59 @@ NETTY__NAMESPACE_BEGIN
 
 namespace meshnet {
 
+//
+// A0 ---+
+//       |       B0  C0      +---D0
+// A1 ---+       |   |       |
+//       |---a---b---c---d---+---D1
+// A2 ---+       |           |
+//       |       B1          +---D2
+// A3 ---+
+//
+// Sibling nodes (std::unordered_set) for node A0
+// +----+----+----+------+
+// | A1 | A2 | A3 | ...  |
+// +----+----+----+------+
+//
+// Sibling gateways (std::vector)
+//   0
+// +---+-----+
+// | a | ... |
+// +---+-----+
+//
+// Gateway chains (std::vector)
+//   +---+
+// 0 | a |
+//   +---+---+
+// 1 | a | b |
+//   +---+---+---+
+// 2 | a | b | c |
+//   +---+---+---+---+
+// 3 | a | b | c | d |
+//   +---+---+---+---+
+//   | ...       |
+//   +---+---+---+
+//
+// Route map (std::unordered_multimap) - mapping destination node to index of route in the route
+// vector (Routes), excluding siblings.
+// +----+---+
+// | b  | 0 |
+// +----+---+
+// | c  | 1 |
+// +----+---+
+// | d  | 2 |
+// +----+---+
+// | B0 | 1 |
+// +----+---+
+// | B1 | 1 |
+// +----+---+
+// | C0 | 2 |
+// +----+---+
+// |  ...   |
+// +----+---+
+// | D2 | 3 |
+// +----+---+
+
 template <typename NodeId, typename SerializerTraits>
 class routing_table
 {
@@ -38,9 +91,9 @@ public:
 
 private:
     std::unordered_set<node_id> _sibling_nodes;
-
     std::vector<node_id> _gateways;
-    std::vector<gateway_chain_type> _routes;
+
+    std::vector<gateway_chain_type> _gateway_chains;
 
     // Used to determine the route to send message.
     route_map_type _route_map;
@@ -54,98 +107,6 @@ public:
 
     ~routing_table () = default;
 
-private:
-    std::pair<bool, std::size_t> find_route (gateway_chain_type const & r) const
-    {
-        for (std::size_t i = 0; i < _routes.size(); i++) {
-            if (r == _routes[i])
-                return std::make_pair(true, i);
-        }
-
-        return std::make_pair(false, std::size_t{0});
-    }
-
-    /**
-     * Find route for node @a id with minimim hops (number of gateways).
-     */
-    std::pair<bool, std::size_t> find_optimal_route_for (node_id id) const
-    {
-        auto min_hops = std::numeric_limits<std::size_t>::max();
-        auto res = _route_map.equal_range(id);
-
-        // Not found
-        if (res.first == res.second)
-            return std::make_pair(false, std::size_t{0});
-
-        std::size_t index = 0;
-
-        for (auto pos = res.first; pos != res.second; ++pos) {
-            auto & r = _routes[pos->second];
-            auto hops = r.size();
-
-            PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::routing_table algorithm");
-
-            if (min_hops > hops /*&& r.good()*/) { // FIXME Need the recognition of unreachable routes
-                min_hops = hops;
-                index = pos->second;
-            }
-        }
-
-        // Not found
-        if (min_hops == std::numeric_limits<std::size_t>::max())
-            return std::make_pair(false, std::size_t{0});;
-
-        // Found
-        return std::make_pair(true, index);
-    }
-
-    std::pair<std::size_t, bool>
-    add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
-    {
-        PFS__THROW_UNEXPECTED(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
-
-        auto res = find_route(gw_chain);
-
-        // Not found
-        if (!res.first) {
-            _routes.push_back(std::move(gw_chain));
-            auto index = _routes.size() - 1;
-
-            _route_map.insert({dest_id, index});
-            return std::make_pair(std::size_t{index + 1}, true);
-        }
-
-        // Check if record for destination node already exists
-        auto range = _route_map.equal_range(dest_id);
-
-        if (range.first != range.second) {
-            // Check if route to destination already exists
-            for (auto pos = range.first; pos != range.second; ++pos) {
-                auto & tmp = _routes[pos->second];
-
-                // Already exists
-                if (tmp == gw_chain)
-                    return std::make_pair(std::size_t{pos->second + 1}, false);
-            }
-        }
-
-        auto index = res.second;
-        _route_map.insert({dest_id, index});
-        return std::make_pair(std::size_t{index + 1}, true);
-    }
-
-    bool is_sibling (node_id id) const
-    {
-        return _sibling_nodes.find(id) != _sibling_nodes.end();
-    }
-
-    static gateway_chain_type reverse_gateway_chain (gateway_chain_type const & gw_chain)
-    {
-        gateway_chain_type reversed_gw_chain(gw_chain.size());
-        std::reverse_copy(gw_chain.begin(), gw_chain.end(), reversed_gw_chain.begin());
-        return reversed_gw_chain;
-    }
-
 public:
     std::size_t gateway_count () const noexcept
     {
@@ -153,7 +114,7 @@ public:
     }
 
     /**
-     * Adds new gateway node @a id.
+     * Adds new sibling gateway node @a id.
      *
      * @return @c true if gateway node added or @c false if gateway node already exists
      */
@@ -236,35 +197,39 @@ public:
         return add_route_helper(dest, gateway_chain_type(++pos, gw_chain.cend()));
     }
 
-    void remove_route (node_id dest_id, node_id gw_id)
+    bool is_reachable (node_id dest_id) const
+    {
+        return _sibling_nodes.find(dest_id) != _sibling_nodes.end()
+            || _route_map.find(dest_id) != _route_map.end();
+    }
+
+    /**
+     * Removes routes to node @a dest_id with a terminal gateway @a gw_id.
+     *
+     * @return Number of routes removed.
+     */
+    std::size_t remove_routes (node_id gw_id, node_id dest_id)
     {
         auto res = _route_map.equal_range(dest_id);
 
         // Not found
         if (res.first == res.second)
-            return;
+            return 0;
+
+        std::size_t n = 0;
 
         for (auto pos = res.first; pos != res.second; ) {
-            auto & r = _routes[pos->second];
-            auto gw_pos = std::find(r.begin(), r.end(), gw_id);
+            auto & r = _gateway_chains[pos->second];
 
-            if (gw_pos != r.end()) {
+            if (r.back() == gw_id) {
                 pos = _route_map.erase(pos);
+                n++;
             } else {
                 ++pos;
             }
         }
-    }
 
-    /**
-     * Remove all routes to node specified by @a dest_id.
-     */
-    void remove_routes (node_id dest_id)
-    {
-        if (is_sibling(dest_id))
-            remove_sibling(dest_id);
-        else
-            _route_map.erase(dest_id);
+        return n;
     }
 
     /**
@@ -304,7 +269,7 @@ public:
 
         for (auto const & x: _route_map) {
             auto index = x.second;
-            f(x.first, _routes.at(index));
+            f(x.first, _gateway_chains.at(index));
         }
     }
 
@@ -323,7 +288,7 @@ public:
         if (!res.first)
             return pfs::nullopt;
 
-        auto & gw_chain = _routes[res.second];
+        auto & gw_chain = _gateway_chains[res.second];
 
         // Return first gateway in the chain
         return gw_chain[0];
@@ -338,14 +303,14 @@ public:
         if (index == 0)
             return gateway_chain_type{};
 
-        if (index > _routes.size()) {
+        if (index > _gateway_chains.size()) {
             throw error {
                   std::make_error_code(std::errc::invalid_argument)
                 , tr::f_("gateway chain index is out of bounds")
             };
         }
 
-        return _routes[index - 1];
+        return _gateway_chains[index - 1];
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,6 +373,110 @@ public:
         route_packet<node_id> pkt {packet_way_enum::response, std::move(info)};
         pkt.serialize(out);
         return ar;
+    }
+
+    /**
+     * Serializes unreachable packet
+     */
+    archive_type serialize (unreachable_info<node_id> uinfo)
+    {
+        archive_type ar;
+        serializer_type out {ar};
+        unreachable_packet<node_id> pkt {std::move(uinfo)};
+        pkt.serialize(out);
+        return ar;
+    }
+
+private:
+    std::pair<bool, std::size_t> find_route (gateway_chain_type const & r) const
+    {
+        for (std::size_t i = 0; i < _gateway_chains.size(); i++) {
+            if (r == _gateway_chains[i])
+                return std::make_pair(true, i);
+        }
+
+        return std::make_pair(false, std::size_t{0});
+    }
+
+    /**
+     * Find route for node @a id with minimim hops (number of gateways).
+     */
+    std::pair<bool, std::size_t> find_optimal_route_for (node_id id) const
+    {
+        auto min_hops = std::numeric_limits<std::size_t>::max();
+        auto res = _route_map.equal_range(id);
+
+        // Not found
+        if (res.first == res.second)
+            return std::make_pair(false, std::size_t{0});
+
+        std::size_t index = 0;
+
+        for (auto pos = res.first; pos != res.second; ++pos) {
+            auto & r = _gateway_chains[pos->second];
+            auto hops = r.size();
+
+            PFS__THROW_UNEXPECTED(hops > 0, "Fix meshnet::routing_table algorithm");
+
+            if (min_hops > hops /*&& r.good()*/) {
+                min_hops = hops;
+                index = pos->second;
+            }
+        }
+
+        // Not found
+        if (min_hops == std::numeric_limits<std::size_t>::max())
+            return std::make_pair(false, std::size_t{0});;
+
+        // Found
+        return std::make_pair(true, index);
+    }
+
+    std::pair<std::size_t, bool>
+    add_route_helper (node_id dest_id, gateway_chain_type gw_chain)
+    {
+        PFS__THROW_UNEXPECTED(!gw_chain.empty(), "Fix meshnet::routing_table algorithm");
+
+        auto res = find_route(gw_chain);
+
+        // Not found
+        if (!res.first) {
+            _gateway_chains.push_back(std::move(gw_chain));
+            auto index = _gateway_chains.size() - 1;
+
+            _route_map.insert({dest_id, index});
+            return std::make_pair(std::size_t{index + 1}, true);
+        }
+
+        // Check if record for destination node already exists
+        auto range = _route_map.equal_range(dest_id);
+
+        if (range.first != range.second) {
+            // Check if route to destination already exists
+            for (auto pos = range.first; pos != range.second; ++pos) {
+                auto & tmp = _gateway_chains[pos->second];
+
+                // Already exists
+                if (tmp == gw_chain)
+                    return std::make_pair(std::size_t{pos->second + 1}, false);
+            }
+        }
+
+        auto index = res.second;
+        _route_map.insert({dest_id, index});
+        return std::make_pair(std::size_t{index + 1}, true);
+    }
+
+    bool is_sibling (node_id id) const
+    {
+        return _sibling_nodes.find(id) != _sibling_nodes.end();
+    }
+
+    static gateway_chain_type reverse_gateway_chain (gateway_chain_type const & gw_chain)
+    {
+        gateway_chain_type reversed_gw_chain(gw_chain.size());
+        std::reverse_copy(gw_chain.begin(), gw_chain.end(), reversed_gw_chain.begin());
+        return reversed_gw_chain;
     }
 };
 

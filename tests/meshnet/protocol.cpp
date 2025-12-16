@@ -106,39 +106,11 @@ TEST_CASE("heartbeat_packet") {
     CHECK_EQ(hbp1.health_data(), health_data);
 }
 
-TEST_CASE("alive_packet") {
-    using alive_packet_t = alive_packet<node_id>;
-
-    alive_info<node_id> ainfo_sample { pfs::generate_uuid() };
-    alive_packet_t ap {ainfo_sample};
-
-    CHECK_EQ(ap.version(), header::VERSION());
-
-    CHECK_EQ(ap.type(), packet_enum::alive);
-    CHECK_FALSE(ap.has_checksum());
-
-    // Serialization/Deserialization
-    archive_t ar;
-    serializer_traits_t::serializer_type out {ar};
-    ap.serialize(out);
-
-    serializer_traits_t::deserializer_type in {ar.data(), ar.size()};
-    header h {in};
-    alive_packet_t ap1 {h, in};
-
-    CHECK_EQ(ap1.version(), header::VERSION());
-    CHECK_EQ(ap1.type(), packet_enum::alive);
-    CHECK_FALSE(ap1.has_checksum());
-    CHECK_EQ(ap.info().id, ainfo_sample.id);
-}
-
 TEST_CASE("unreachable_packet") {
     using unreachable_packet_t = unreachable_packet<node_id>;
 
     unreachable_info<node_id> uinfo_sample {
           pfs::generate_uuid() // gw_id
-        , pfs::generate_uuid() // sender_id
-        , pfs::generate_uuid() // receiver_id
     };
 
     unreachable_packet_t up {uinfo_sample};
@@ -161,8 +133,6 @@ TEST_CASE("unreachable_packet") {
     CHECK_EQ(up1.type(), packet_enum::unreach);
     CHECK_FALSE(up1.has_checksum());
     CHECK_EQ(up.info().gw_id, uinfo_sample.gw_id);
-    CHECK_EQ(up.info().sender_id, uinfo_sample.sender_id);
-    CHECK_EQ(up.info().receiver_id, uinfo_sample.receiver_id);
 }
 
 TEST_CASE("route_packet") {
