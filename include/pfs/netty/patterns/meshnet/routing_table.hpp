@@ -25,13 +25,13 @@ NETTY__NAMESPACE_BEGIN
 namespace meshnet {
 
 //
-// A0 ---+
-//       |       B0  C0      +---D0
-// A1 ---+       |   |       |
-//       |---a---b---c---d---+---D1
-// A2 ---+       |           |
-//       |       B1          +---D2
-// A3 ---+
+// A0---+       +---B0
+//      |   b---|      +---D0
+// A1---+   |   +---B1
+//      |---a-----------d---+---D1
+// A2---+   |   +---C0            |
+//      |   c---|              +---D2
+// A3---+       +---C1
 //
 // Sibling nodes (std::unordered_set) for node A0
 // +----+----+----+------+
@@ -91,7 +91,7 @@ public:
 
 private:
     std::unordered_set<node_id> _sibling_nodes;
-    std::vector<node_id> _gateways;
+    std::vector<node_id> _sibling_gateways;
 
     std::vector<gateway_chain_type> _gateway_chains;
 
@@ -110,23 +110,23 @@ public:
 public:
     std::size_t gateway_count () const noexcept
     {
-        return _gateways.size();
+        return _sibling_gateways.size();
     }
 
     /**
-     * Adds new sibling gateway node @a id.
+     * Adds new sibling gateway node @a gwid.
      *
-     * @return @c true if gateway node added or @c false if gateway node already exists
+     * @return @c true if sibling gateway added or @c false if it is already exists.
      */
-    bool add_gateway (node_id gwid)
+    bool add_sibling_gateway (node_id gwid)
     {
         // Check if already exists
-        for (auto const & x: _gateways) {
+        for (auto const & x: _sibling_gateways) {
             if (x == gwid)
                 return false;
         }
 
-        _gateways.push_back(gwid);
+        _sibling_gateways.push_back(gwid);
         return true;
     }
 
@@ -207,40 +207,74 @@ public:
      * Removes routes to node @a dest_id with a terminal gateway @a gw_id.
      *
      * @return Number of routes removed.
+     *
+     * @example Initial state: A---a---b---c---C
+     *          1) if `b` disconnected from `c`: A---a---b-x-c---C, then gw_id=`b`, dest_id=`c`;
+     *          2) if `c` disconnected from `C`: A---a---b---c-x-C, then gw_id=`c`, dest_id=`C`.
      */
-    std::size_t remove_routes (node_id gw_id, node_id dest_id)
+    template <typename OnRouteLost, typename OnNodeUnreachable>
+    std::size_t remove_routes (node_id gw_id, node_id dest_id, OnRouteLost && on_route_lost_callback
+        , OnNodeUnreachable && on_node_unreachable_callback)
     {
-        auto res = _route_map.equal_range(dest_id);
-
-        // Not found
-        if (res.first == res.second)
+        // Lost of direct connections must be discovered by channel destroyed event.
+        // Ignore.
+        if (is_sibling(dest_id))
             return 0;
 
         std::size_t n = 0;
 
-        for (auto pos = res.first; pos != res.second; ) {
-            auto & r = _gateway_chains[pos->second];
+        // Terminal gateway is a sibling node and this node is connected to only one gateway.
+        if (is_sibling(gw_id) && _sibling_gateways.size() == 1) {
+            // Remove all routes
+            n = _route_map.size();
 
-            if (r.back() == gw_id) {
-                pos = _route_map.erase(pos);
-                n++;
-            } else {
-                ++pos;
+            for (auto const & x: _route_map) {
+                on_route_lost_callback(x.first, x.second);
+                on_node_unreachable_callback(x.first);
             }
+
+            _route_map.clear();
+        } else {
+            for (auto pos = _route_map.cbegin(); pos != _route_map.cend();) {
+
+            }
+            // for (auto const & x: _route_map) {
+            //     // on_route_lost_callback(x.first, x.second);
+            //     // on_node_unreachable_callback(x.first);
+            // }
         }
+
+
+        // auto res = _route_map.equal_range(dest_id);
+        //
+        // // Not found
+        // if (res.first == res.second)
+        //     return 0;
+        //
+        //
+        // for (auto pos = res.first; pos != res.second; ) {
+        //     auto & r = _gateway_chains[pos->second];
+        //
+        //     if (r.back() == gw_id) {
+        //         pos = _route_map.erase(pos);
+        //         n++;
+        //     } else {
+        //         ++pos;
+        //     }
+        // }
 
         return n;
     }
 
     /**
-     * Iterates over all gateways and call @a f for each gateway ID.
+     * Iterates over all sibling gateways and call @a f for each gateway ID.
      *
      * @param f Invokable object with signature void (node_id gw_id).
      */
     template <typename F>
-    void foreach_gateway (F && f) const
+    void foreach_sibling_gateway (F && f) const
     {
-        for (auto const & gw_id: _gateways)
+        for (auto const & gw_id: _sibling_gateways)
             f(gw_id);
     }
 
@@ -295,6 +329,25 @@ public:
     }
 
     /**
+     * Returns the number of gateways in the gateway chain by @a index. Zero index indicates
+     * sibling node, so result is zero.
+     */
+    std::size_t hops (size_t index)
+    {
+        if (index = 0)
+            return 0;
+
+        if (index > _gateway_chains.size()) {
+            throw error {
+                 std::make_error_code(std::errc::invalid_argument)
+               , tr::f_("gateway chain index is out of bounds")
+            };
+        }
+
+        return _gateway_chains[index - 1].size();
+    }
+
+    /**
      * Return gateway chain by index (first element of the value returned by add_route or add_subroute).
      * Zero index indicates sibling node, so result is empty chain.
      */
@@ -313,13 +366,14 @@ public:
         return _gateway_chains[index - 1];
     }
 
+public: // static
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization methods
     ////////////////////////////////////////////////////////////////////////////////////////////////
     /**
      * Serializes initial request
      */
-    archive_type serialize_request (node_id initiator_id)
+    static archive_type serialize_request (node_id initiator_id)
     {
         route_info<node_id> info;
         info.initiator_id = initiator_id;
@@ -334,7 +388,7 @@ public:
     /**
      * Serializes request to forward.
      */
-    archive_type serialize_request (node_id gw_id, route_info<node_id> const & initial_info)
+    static archive_type serialize_request (node_id gw_id, route_info<node_id> const & initial_info)
     {
         route_info<node_id> info = initial_info;
         info.route.push_back(gw_id);
@@ -349,7 +403,7 @@ public:
     /**
      * Serializes initial response
      */
-    archive_type serialize_response (node_id responder_id, route_info<node_id> const & initial_info)
+    static archive_type serialize_response (node_id responder_id, route_info<node_id> const & initial_info)
     {
         route_info<node_id> info = initial_info;
         info.responder_id = responder_id;
@@ -364,7 +418,7 @@ public:
     /**
      * Serializes response to forward.
      */
-    archive_type serialize_response (route_info<node_id> const & initial_info)
+    static archive_type serialize_response (route_info<node_id> const & initial_info)
     {
         route_info<node_id> info = initial_info;
 
@@ -378,7 +432,7 @@ public:
     /**
      * Serializes unreachable packet
      */
-    archive_type serialize (unreachable_info<node_id> uinfo)
+    static archive_type serialize (unreachable_info<node_id> uinfo)
     {
         archive_type ar;
         serializer_type out {ar};

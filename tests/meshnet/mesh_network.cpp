@@ -28,9 +28,9 @@ mesh_network::mesh_network (std::initializer_list<std::string> node_names)
     for (auto const & name: node_names) {
         auto pctx = std::make_shared<context>();
         pctx->name = name;
-        pctx->node_pool_ptr = create_node_pool(name);
+        pctx->node_ptr = create_node(name);
         pctx->index = counter++;
-        auto res = _node_pools.insert({name, pctx});
+        auto res = _nodes.insert({name, pctx});
         PFS__ASSERT(res.second, "");
         (void)res;
     }
@@ -43,19 +43,19 @@ mesh_network::~mesh_network ()
     _self = nullptr;
 }
 
-std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const & name)
+std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
 {
     auto entry = _dict.get_entry(name);
     netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, entry.port};
 
-    auto ptr = std::make_unique<node_pool_t>(entry.id, entry.is_gateway);
+    auto ptr = std::make_unique<node_t>(entry.id, entry.is_gateway);
 
     ptr->on_error([] (std::string const & errstr)
     {
         LOGE(TAG, "{}", errstr);
     });
 
-    ptr->on_channel_established([this, name] (meshnet_ns::node_index_t index, node_id peer_id
+    ptr->on_channel_established([this, name] (meshnet_ns::peer_index_t index, node_id peer_id
         , bool is_gateway)
     {
         this->on_channel_established(make_spec(name), index, make_spec(peer_id), is_gateway);
@@ -71,14 +71,14 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
         this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });
 
-    ptr->on_route_ready([this, name] (node_id peer_id, std::vector<node_id> gw_chain)
+    ptr->on_route_ready([this, name] (node_id dest_id, std::size_t route_index)
     {
-        this->on_route_ready(make_spec(name), make_spec(peer_id), std::move(gw_chain));
+        this->on_route_ready(make_spec(name), make_spec(dest_id), route_index);
     });
 
-    ptr->on_route_unavailable([this, name] (node_id gw_id, node_id peer_id)
+    ptr->on_route_lost([this, name] (node_id dest_id, std::size_t route_index)
     {
-        this->on_route_unavailable(make_spec(name), make_spec(gw_id), make_spec(peer_id));
+        this->on_route_lost(make_spec(name), make_spec(dest_id), route_index);
     });
 
     ptr->on_node_unreachable([this, name] (node_id peer_id)
@@ -95,53 +95,53 @@ std::unique_ptr<node_pool_t> mesh_network::create_node_pool (std::string const &
     });
 #endif
 
-    ptr->template add_node<node_t>({listener_saddr});
+    ptr->template add_peer<peer_t>({listener_saddr});
 
     return ptr;
 }
 
 void mesh_network::listen_all ()
 {
-    for (auto & x : _node_pools) {
-        if (x.second->node_pool_ptr)
-            x.second->node_pool_ptr->listen();
+    for (auto & x : _nodes) {
+        if (x.second->node_ptr)
+            x.second->node_ptr->listen();
     }
 }
 
 void mesh_network::connect (std::string const & initiator_name, std::string const & peer_name
     , bool behind_nat)
 {
-    netty::meshnet::node_index_t index = 1;
+    netty::meshnet::peer_index_t index = 1;
     auto initiator_ctx = get_context_ptr(initiator_name);
     auto const & peer_entry = _dict.get_entry(peer_name);
 
     netty::socket4_addr peer_saddr {netty::inet4_addr {127, 0, 0, 1}, peer_entry.port};
-    initiator_ctx->node_pool_ptr->connect_host(index, peer_saddr, behind_nat);
+    initiator_ctx->node_ptr->connect_peer(index, peer_saddr, behind_nat);
 }
 
 void mesh_network::disconnect (std::string const & initiator_name, std::string const & peer_name)
 {
-    netty::meshnet::node_index_t index = 1;
+    netty::meshnet::peer_index_t index = 1;
     auto initiator_ctx = get_context_ptr(initiator_name);
     auto peer_ctx = get_context_ptr(peer_name);
 
-    PFS__ASSERT(initiator_ctx->node_pool_ptr, "Fix disconnect() method call");
-    initiator_ctx->node_pool_ptr->disconnect(index, peer_ctx->node_pool_ptr->id());
+    PFS__ASSERT(initiator_ctx->node_ptr, "Fix disconnect() method call");
+    initiator_ctx->node_ptr->disconnect(index, peer_ctx->node_ptr->id());
 }
 
 void mesh_network::destroy (std::string const & name)
 {
     auto pctx = get_context_ptr(name);
 
-    PFS__ASSERT(pctx->node_pool_ptr, "Fix destroy() method call");
+    PFS__ASSERT(pctx->node_ptr, "Fix destroy() method call");
 
-    pctx->node_pool_ptr->interrupt();
+    pctx->node_ptr->interrupt();
 
     if (pctx->node_thread.joinable())
         pctx->node_thread.join();
 
     // Destroy node pool
-    pctx->node_pool_ptr.reset();
+    pctx->node_ptr.reset();
 }
 
 void mesh_network::send_message (std::string const & sender_name, std::string const & receiver_name
@@ -151,29 +151,29 @@ void mesh_network::send_message (std::string const & sender_name, std::string co
     // auto receiver_ctx = get_context_ptr(receiver_name);
     auto receiver_id = _dict.get_entry(receiver_name).id;
 
-    PFS__ASSERT(sender_ctx->node_pool_ptr, "Fix send_message() method call");
+    PFS__ASSERT(sender_ctx->node_ptr, "Fix send_message() method call");
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
     // TODO
 //     message_id msgid = pfs::generate_uuid();
 //
-//     sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
+//     sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
 //         , text.size());
 #else
-    sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+    sender_ctx->node_ptr->enqueue(receiver_id, priority, text.data(), text.size());
 #endif
 }
 
 void mesh_network::run_all ()
 {
-    for (auto & x: _node_pools) {
+    for (auto & x: _nodes) {
         auto pctx = x.second;
 
         std::thread th {
             [this, pctx] () {
-                if (pctx->node_pool_ptr) {
+                if (pctx->node_ptr) {
                     LOGD(TAG, "{}: thread started", pctx->name);
-                    pctx->node_pool_ptr->run();
+                    pctx->node_ptr->run();
                     LOGD(TAG, "{}: thread finished", pctx->name);
                 }
             }
@@ -189,15 +189,15 @@ void mesh_network::run_all ()
 
 void mesh_network::interrupt_all ()
 {
-    for (auto & x : _node_pools) {
-        if (x.second->node_pool_ptr)
-            x.second->node_pool_ptr->interrupt();
+    for (auto & x : _nodes) {
+        if (x.second->node_ptr)
+            x.second->node_ptr->interrupt();
     }
 }
 
 void mesh_network::join ()
 {
-    for (auto & x: _node_pools) {
+    for (auto & x: _nodes) {
         if (x.second->node_thread.joinable())
             x.second->node_thread.join();
     }
@@ -210,8 +210,8 @@ void mesh_network::print_routing_records (std::string const & name)
 {
     auto pctx = get_context_ptr(name);
 
-    if (pctx->node_pool_ptr) {
-        auto routes = pctx->node_pool_ptr->dump_routing_table();
+    if (pctx->node_ptr) {
+        auto routes = pctx->node_ptr->dump_routing_table();
 
         LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
         LOGD(TAG, "│Routes for: {}", name);

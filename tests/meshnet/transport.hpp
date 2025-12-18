@@ -15,9 +15,9 @@
 #include "pfs/netty/patterns/delivery/delivery_controller.hpp"
 #include "pfs/netty/patterns/meshnet/channel_map.hpp"
 #include "pfs/netty/patterns/meshnet/dual_link_handshake.hpp"
+#include "pfs/netty/patterns/meshnet/peer.hpp"
 #include "pfs/netty/patterns/meshnet/node.hpp"
-#include "pfs/netty/patterns/meshnet/node_pool.hpp"
-#include "pfs/netty/patterns/meshnet/node_pool_rd.hpp"
+#include "pfs/netty/patterns/meshnet/reliable_node.hpp"
 #include "pfs/netty/patterns/meshnet/infinite_reconnection_policy.hpp"
 #include "pfs/netty/patterns/meshnet/input_controller.hpp"
 #include "pfs/netty/patterns/meshnet/priority_writer_queue.hpp"
@@ -65,9 +65,9 @@ using heartbeat_controller_t = meshnet_ns::heartbeat_controller<socket_id, seria
 using reconnection_policy_t  = meshnet_ns::infinite_reconnection_policy;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// node_t
+// peer_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-using node_t = meshnet_ns::node<
+using peer_t = meshnet_ns::peer<
       node_id
     , netty::posix::tcp_socket
     , netty::posix::tcp_listener
@@ -103,22 +103,22 @@ using node_t = meshnet_ns::node<
 
 using routing_table_t = meshnet_ns::routing_table<pfs::universal_id, serializer_traits_t>;
 
-using unreliable_node_pool_t = meshnet_ns::node_pool<pfs::universal_id
+using unreliable_node_t = meshnet_ns::node<pfs::universal_id
     , routing_table_t
     , std::recursive_mutex>;
 
 #if NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
 using message_id = pfs::universal_id;
-using delivery_transport_t = unreliable_node_pool_t;
+using delivery_transport_t = unreliable_node_t;
 using delivery_controller_t = delivery_ns::delivery_controller<node_id, message_id
     , serializer_traits_t, priority_tracker_t>;
 
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id
     , delivery_controller_t, std::recursive_mutex>;
 
-using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;
-using node_pool_t = reliable_node_pool_t;
+using reliable_node_t = meshnet_ns::reliable_node<delivery_manager_t>;
+using node_t = reliable_node_t;
 #else
-using node_pool_t = unreliable_node_pool_t;
+using node_t = unreliable_node_t;
 #endif
 

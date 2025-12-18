@@ -23,7 +23,7 @@ template <typename NodeId>
 struct route_info
 {
     NodeId initiator_id;
-    NodeId responder_id; // not used when request
+    NodeId responder_id; // Used by response only
 
     std::vector<NodeId> route; // Gateways chain
 

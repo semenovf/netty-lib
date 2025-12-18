@@ -17,7 +17,7 @@
 #include "pfs/netty/patterns/meshnet/dual_link_handshake.hpp"
 #include "pfs/netty/patterns/meshnet/node.hpp"
 #include "pfs/netty/patterns/meshnet/node_pool.hpp"
-#include "pfs/netty/patterns/meshnet/node_pool_rd.hpp"
+#include "pfs/netty/patterns/meshnet/reliable_node.hpp"
 #include "pfs/netty/patterns/meshnet/infinite_reconnection_policy.hpp"
 #include "pfs/netty/patterns/meshnet/input_controller.hpp"
 #include "pfs/netty/patterns/meshnet/priority_writer_queue.hpp"
@@ -114,4 +114,4 @@ using delivery_controller_t = delivery_ns::delivery_controller<node_id, message_
 using delivery_manager_t = delivery_ns::manager<delivery_transport_t, message_id
     , delivery_controller_t, std::recursive_mutex>;
 
-using reliable_node_pool_t = meshnet_ns::node_pool_rd<delivery_manager_t>;
+using reliable_node_pool_t = meshnet_ns::reliable_node<delivery_manager_t>;

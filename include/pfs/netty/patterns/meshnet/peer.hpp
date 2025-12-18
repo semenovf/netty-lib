@@ -1,0 +1,1135 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2025 Vladislav Trifochkin
+//
+// This file is part of `netty-lib`.
+//
+// Changelog:
+//      2025.01.16 Initial version (`node.hpp`).
+//      2025.12.18 Renamed to `peer.hpp`.
+//                 `node` renamed to `peer`.
+////////////////////////////////////////////////////////////////////////////////
+#pragma once
+#include "../../namespace.hpp"
+#include "../../callback.hpp"
+#include "../../conn_status.hpp"
+#include "../../connecting_pool.hpp"
+#include "../../connection_failure_reason.hpp"
+#include "../../error.hpp"
+#include "../../socket4_addr.hpp"
+#include "../../listener_pool.hpp"
+#include "../../reader_pool.hpp"
+#include "../../socket_pool.hpp"
+#include "../../trace.hpp"
+#include "../../writer_pool.hpp"
+#include "channel_map.hpp"
+#include "peer_index.hpp"
+#include "peer_interface.hpp"
+#include "protocol.hpp"
+#include "route_info.hpp"
+#include "tag.hpp"
+#include "unreachable_info.hpp"
+#include <pfs/i18n.hpp>
+#include <pfs/log.hpp>
+#include <pfs/optional.hpp>
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <set>
+#include <thread>
+#include <unordered_map>
+
+#if NETTY__TELEMETRY_ENABLED
+#   include "telemetry.hpp"
+#endif
+
+NETTY__NAMESPACE_BEGIN
+
+namespace meshnet {
+
+/**
+ * Peer class.
+ */
+template <typename NodeId
+    , typename Socket
+    , typename Listener
+    , typename ConnectingPoller
+    , typename ListenerPoller
+    , typename ReaderPoller
+    , typename WriterPoller
+    , typename WriterQueue
+    , typename RecursiveWriterMutex
+    , typename ReconnectionPolicy
+    , typename HandshakeController
+    , typename HeartbeatController
+    , typename InputController>
+class peer
+{
+    using peer_class = peer<NodeId
+        , Socket
+        , Listener
+        , ConnectingPoller
+        , ListenerPoller
+        , ReaderPoller
+        , WriterPoller
+        , WriterQueue
+        , RecursiveWriterMutex
+        , ReconnectionPolicy
+        , HandshakeController
+        , HeartbeatController
+        , InputController>;
+
+    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
+    using archive_type = typename serializer_traits_type::archive_type;
+    using socket_type = Socket;
+    using listener_type = Listener;
+    using socket_pool_type = netty::socket_pool<socket_type>;
+    using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
+    using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
+    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
+    using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
+    using writer_mutex_type = RecursiveWriterMutex;
+    using listener_id = typename listener_type::listener_id;
+    using reconnection_policy = ReconnectionPolicy;
+    using handshake_controller_type = HandshakeController;
+    using heartbeat_controller_type = HeartbeatController;
+    using input_controller_type = InputController;
+
+#if NETTY__TELEMETRY_ENABLED
+    using shared_telemetry_producer_type = std::shared_ptr<telemetry_producer<serializer_traits_type>>;
+#endif
+
+public:
+    using socket_id = typename socket_type::socket_id;
+    using node_id = NodeId;
+
+private:
+    using channel_collection_type = channel_map<node_id, socket_id>;
+    using serializer_type = typename serializer_traits_type::serializer_type;
+
+    struct host_info
+    {
+        socket4_addr remote_saddr;
+        inet4_addr local_addr;
+        pfs::optional<reconnection_policy> reconn_policy;
+    };
+
+    using host_cache_type = std::map<socket4_addr, host_info>;
+
+private:
+    // Unique peer identifier
+    node_id _id;
+
+    channel_collection_type _channels;
+
+    listener_pool_type   _listener_pool;
+    connecting_pool_type _connecting_pool;
+    reader_pool_type     _reader_pool;
+    writer_pool_type     _writer_pool;
+    socket_pool_type     _socket_pool;
+
+    // True if the peer is a part of gateway
+    bool _is_gateway {false};
+
+    handshake_controller_type _handshake_controller;
+    heartbeat_controller_type _heartbeat_controller;
+    input_controller_type     _input_controller;
+
+    host_cache_type _hosts_cache;
+
+    // Peers for which the current peer is behind NAT
+    std::set<socket4_addr> _behind_nat;
+
+    // Make sense when peer is a part of meshnet node.
+    peer_index_t _index {INVALID_PEER_INDEX};
+
+    // Writer mutex to protect sending
+    writer_mutex_type _writer_mtx;
+
+    std::queue<std::function<void ()>> _deferred_actions;
+
+#if NETTY__TELEMETRY_ENABLED
+    shared_telemetry_producer_type _telemetry_producer;
+#endif
+
+private: // Callbacks
+    callback_t<void (std::string const &)> _on_error
+        = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
+
+    callback_t<void (peer_index_t, node_id, bool)> _on_channel_established = [] (peer_index_t, node_id, bool) {};
+    callback_t<void (peer_index_t, node_id)> _on_channel_destroyed = [] (peer_index_t, node_id) {};
+    callback_t<void (peer_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
+    callback_t<void (peer_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
+    callback_t<void (peer_index_t, node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
+    callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
+    callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
+    callback_t<void (node_id, int, node_id, node_id, archive_type)> _on_global_data_received;
+    callback_t<void (int, node_id, node_id, archive_type)> _on_forward_global_packet;
+
+public:
+#if NETTY__TELEMETRY_ENABLED
+    peer (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
+        : peer(id, is_gateway)
+    {
+        _telemetry_producer = telemetry_producer;
+    }
+#endif
+
+    peer (node_id id, bool is_gateway = false)
+        : _id(id)
+        , _is_gateway(is_gateway)
+        , _handshake_controller(id, is_gateway)
+        , _heartbeat_controller()
+        , _input_controller()
+    {
+        _channels.close_socket = [this] (socket_id sid)
+        {
+            close_socket(sid);
+        };
+
+        _listener_pool.on_failure = [this] (netty::error const & err)
+        {
+            _on_error(tr::f_("listener pool failure: {}", err.what()));
+        };
+
+        _listener_pool.on_accepted = [this] (socket_type && sock)
+        {
+            NETTY__TRACE(MESHNET_TAG, "socket accepted: #{}: {}", sock.id(), to_string(sock.saddr()));
+            _input_controller.add(sock.id());
+            _reader_pool.add(sock.id());
+            _writer_pool.add(sock.id());
+            _socket_pool.add_accepted(std::move(sock));
+        };
+
+        _connecting_pool.on_failure = [this] (netty::error const & err)
+        {
+            _on_error(tr::f_("connecting pool failure: {}", err.what()));
+        };
+
+        _connecting_pool.on_connected = [this] (socket_type && sock)
+        {
+            NETTY__TRACE(MESHNET_TAG, "socket connected: #{}: {}", sock.id(), to_string(sock.saddr()));
+
+            bool behind_nat = false;
+
+            if (_behind_nat.find(sock.saddr()) != _behind_nat.end())
+                behind_nat = true;
+
+            // Stop reconnection if needed
+            //_reconn_policies.erase(sock.saddr());
+            stop_reconnection(_hosts_cache.find(sock.saddr()));
+
+            _handshake_controller.start(sock.id(), behind_nat);
+            _input_controller.add(sock.id());
+            _reader_pool.add(sock.id());
+            _socket_pool.add_connected(std::move(sock));
+        };
+
+        _connecting_pool.on_connection_refused = [this] (netty::socket4_addr saddr
+            , netty::connection_failure_reason reason)
+        {
+            // Suppress error output if reconnection supported
+            if (!reconnection_policy::supported()) {
+                _on_error(tr::f_("connection refused for socket: {}: reason: {}"
+                    , to_string(saddr), to_string(reason)));
+            }
+
+            schedule_reconnection(saddr);
+        };
+
+        _reader_pool.on_failure = [this] (socket_id sid, netty::error const & err)
+        {
+            _on_error(tr::f_("read from socket failure: #{}: {}", sid, err.what()));
+            schedule_reconnection(sid);
+        };
+
+        _reader_pool.on_disconnected = [this] (socket_id sid)
+        {
+            NETTY__TRACE(MESHNET_TAG, "reader socket disconnected: #{}", sid);
+            schedule_reconnection(sid);
+        };
+
+        _reader_pool.on_data_ready = [this] (socket_id sid, archive_type data)
+        {
+            _input_controller.process_input(sid, std::move(data));
+        };
+
+        _reader_pool.locate_socket = [this] (socket_id sid)
+        {
+            return _socket_pool.locate(sid);
+        };
+
+        _writer_pool.on_failure = [this] (socket_id sid, netty::error const & err)
+        {
+            _on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
+            schedule_reconnection(sid);
+        };
+
+        _writer_pool.on_disconnected = [this] (socket_id sid)
+        {
+            NETTY__TRACE(MESHNET_TAG, "writer socket disconnected: #{}", sid);
+            schedule_reconnection(sid);
+        };
+
+        _writer_pool.locate_socket = [this] (socket_id sid)
+        {
+            return _socket_pool.locate(sid);
+        };
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Handshake controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        _handshake_controller.on_expired = [this] (socket_id sid)
+        {
+            NETTY__TRACE(MESHNET_TAG, "handshake expired for socket: #{}", sid);
+            schedule_reconnection(sid);
+        };
+
+        _handshake_controller.enqueue_packet = [this] (socket_id sid, archive_type data)
+        {
+            enqueue_private(sid, 0, std::move(data));
+        };
+
+        _handshake_controller.on_completed = [this] (node_id id, socket_id reader_sid
+            , socket_id writer_sid, bool is_gateway)
+        {
+            auto success = _channels.insert(id, reader_sid, writer_sid);
+
+            if (!success) {
+                throw netty::error {
+                    make_error_code(pfs::errc::unexpected_error)
+                    , tr::f_("attempt to add channel again: {}, perhaps both peers are configured behind NAT"
+                        , to_string(id))
+                };
+            }
+
+            _heartbeat_controller.update(writer_sid);
+
+            NETTY__TRACE(MESHNET_TAG, "channel established: {}", to_string(id));
+
+            _on_channel_established(_index, id, is_gateway);
+
+#if NETTY__TELEMETRY_ENABLED
+            _telemetry_producer->broadcast(KEY_CHANNEL_ESTABLISHED
+                , fmt::format("[{},{}]", to_string(_id), to_string(id)));
+#endif
+        };
+
+        _handshake_controller.on_duplicate_id = [this] (node_id id, socket_id sid, bool force_closing)
+        {
+            auto psock = _socket_pool.locate(sid);
+            PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::peer algorithm");
+            _on_duplicate_id(_index, id, psock->saddr());
+
+            if (force_closing)
+                destroy_channel(sid);
+        };
+
+        _handshake_controller.on_discarded = [this] (node_id id, socket_id sid)
+        {
+            NETTY__TRACE(MESHNET_TAG, "socket discarded by handshaking with: {} (sid={})", to_string(id), sid);
+            destroy_channel(sid);
+        };
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Heartbeat controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        _heartbeat_controller.enqueue_packet = [this] (socket_id sid, archive_type data)
+        {
+            enqueue_private(sid, 0, std::move(data));
+        };
+
+        _heartbeat_controller.on_expired = [this] (socket_id sid)
+        {
+            NETTY__TRACE(MESHNET_TAG, "socket heartbeat timeout exceeded: #{}", sid);
+            schedule_reconnection(sid);
+        };
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Input controller settings
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        _input_controller.on_handshake = [this] (socket_id sid, handshake_packet<node_id> && pkt)
+        {
+            _handshake_controller.process(sid, pkt);
+        };
+
+        _input_controller.on_heartbeat = [this] (socket_id sid, heartbeat_packet && pkt)
+        {
+            _heartbeat_controller.process(sid, pkt);
+        };
+
+        _input_controller.on_unreachable = [this] (socket_id sid, unreachable_packet<node_id> && pkt)
+        {
+            if (_on_unreachable_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_unreachable_received(_index, *id_ptr, pkt.info());
+            }
+        };
+
+        _input_controller.on_route = [this] (socket_id sid, route_packet<node_id> && pkt)
+        {
+            if (_on_route_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_route_received(_index, *id_ptr, pkt.is_response(), pkt.info());
+            }
+        };
+
+        _input_controller.on_ddata = [this] (socket_id sid, int priority, archive_type && bytes)
+        {
+            if (_on_domestic_data_received) {
+                auto id_ptr = _channels.locate_reader(sid);
+
+                if (id_ptr != nullptr)
+                    _on_domestic_data_received(*id_ptr, priority, std::move(bytes));
+            }
+        };
+
+        _input_controller.on_gdata = [this] (socket_id sid, int priority, gdata_packet<node_id> && pkt
+            , archive_type && bytes)
+        {
+            if (pkt.receiver_id() == _id) {
+                if (_on_global_data_received) {
+                    auto id_ptr = _channels.locate_reader(sid);
+
+                    if (id_ptr != nullptr) {
+                        _on_global_data_received(*id_ptr, priority, pkt.sender_id()
+                            , pkt.receiver_id(), std::move(bytes));
+                    }
+                }
+            } else {
+                // Need to forward the message if the peer is a gateway, or discard
+                // the message otherwise.
+                if (_is_gateway) {
+                    if (_on_forward_global_packet) {
+                        archive_type ar;
+                        serializer_type out {ar};
+                        pkt.serialize(out, bytes.data(), bytes.size());
+                        _on_forward_global_packet(priority, pkt.sender_id(), pkt.receiver_id(), std::move(ar));
+                    }
+                }
+            }
+        };
+
+        NETTY__TRACE(MESHNET_TAG, "peer constructed: id={}, gateway={}", to_string(_id), _is_gateway);
+    }
+
+    peer (peer const &) = delete;
+    peer (peer &&) = delete;
+    peer & operator = (peer const &) = delete;
+    peer & operator = (peer &&) = delete;
+
+    ~peer ()
+    {
+        clear_channels();
+        NETTY__TRACE(MESHNET_TAG, "peer destroyed: {}", to_string(_id));
+    }
+
+public: // Set callbacks
+    /**
+     * Sets error callback.
+     *
+     * @details Callback @a f signature must match:
+     *          void (std::string const &)
+     */
+    template <typename F>
+    peer & on_error (F && f)
+    {
+        _on_error = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when connection established with the remote peer.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t, node_id id, bool is_gateway)
+     */
+    template <typename F>
+    peer & on_channel_established (F && f)
+    {
+        _on_channel_established = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when the channel is destroyed with the remote peer.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t, node_id)
+     */
+    template <typename F>
+    peer & on_channel_destroyed (F && f)
+    {
+        _on_channel_destroyed = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when reconnection to remote peer started.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     */
+    template <typename F>
+    peer & on_reconnection_started (F && f)
+    {
+        _on_reconnection_started = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when reconnection to remote peer stopped.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     */
+    template <typename F>
+    peer & on_reconnection_stopped (F && f)
+    {
+        _on_reconnection_stopped = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * Notify when a peer with identical ID is detected.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t, node_id, socket4_addr)
+     */
+    template <typename F>
+    peer & on_duplicate_id (F && f)
+    {
+        _on_duplicate_id = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On unreachable peer received
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t, node_id, unreachable_info<node_id> const &)
+     */
+    template <typename F>
+    peer & on_unreachable_received (F && f)
+    {
+        _on_unreachable_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On intermediate route info received.
+     *
+     * @details Callback @a f signature must match:
+     *          void (peer_index_t, node_id, bool is_response, route_info<node_id> const &)
+     */
+    template <typename F>
+    peer & on_route_received (F && f)
+    {
+        _on_route_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On domestic message received.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, int priority, archive_type bytes/)
+     */
+    template <typename F>
+    peer & on_domestic_data_received (F && f)
+    {
+        _on_domestic_data_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On global (intersubnet) message received
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id last_transmitter, int priority, node_id sender
+     *              , node_id receiver, archive_type data)
+     */
+    template <typename F>
+    peer & on_global_data_received (F && f)
+    {
+        _on_global_data_received = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * On global (intersubnet) message received
+     *
+     * @details Callback @a f signature must match:
+     *          void (int priority, node_id sender, node_id receiver, archive_type data)
+     */
+    template <typename F>
+    peer & on_forward_global_packet (F && f)
+    {
+        _on_forward_global_packet = std::forward<F>(f);
+        return *this;
+    }
+
+public:
+    node_id id () const noexcept
+    {
+        return _id;
+    }
+
+    bool is_gateway () const noexcept
+    {
+        return _is_gateway;
+    }
+
+    /**
+     * Sets the peer index.
+     *
+     * @details Make sense when used inside node.
+     */
+    void set_index (peer_index_t index) noexcept
+    {
+        _index = index;
+    }
+
+    peer_index_t index () const noexcept
+    {
+        return _index;
+    }
+
+    void add_listener (socket4_addr listener_saddr, error * perr = nullptr)
+    {
+        _listener_pool.add(listener_saddr, perr);
+        NETTY__TRACE(MESHNET_TAG, "{}: listener added: {}", to_string(_id), to_string(listener_saddr));
+    }
+
+    bool connect (socket4_addr remote_saddr, bool behind_nat = false)
+    {
+        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {}", to_string(_id), to_string(remote_saddr));
+
+        auto rs = _connecting_pool.connect(remote_saddr);
+
+        if (rs == netty::conn_status::failure)
+            return false;
+
+        if (behind_nat)
+            _behind_nat.insert(remote_saddr);
+
+        cache_host(remote_saddr, inet4_addr{});
+
+        return true;
+    }
+
+    bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat)
+    {
+        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {} (local addr={})", to_string(_id)
+            , to_string(remote_saddr), to_string(local_addr));
+
+        auto rs = _connecting_pool.connect(remote_saddr, local_addr);
+
+        if (rs == netty::conn_status::failure)
+            return false;
+
+        if (behind_nat)
+            _behind_nat.insert(remote_saddr);
+
+        cache_host(remote_saddr, local_addr);
+
+        return true;
+    }
+
+    /**
+     * Disconnected from peer identified by @a peer_id.
+     */
+    void disconnect (node_id peer_id)
+    {
+        destroy_channel(peer_id);
+    }
+
+    void listen (int backlog = 100)
+    {
+        NETTY__TRACE(MESHNET_TAG, "{}: listening", to_string(_id));
+        _listener_pool.listen(backlog);
+    }
+
+    bool enqueue (node_id id, int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        auto sid_ptr = _channels.locate_writer(id);
+
+        if (sid_ptr != nullptr) {
+            archive_type ar;
+            serializer_type out {ar};
+            ddata_packet pkt;
+            pkt.serialize(out, data, len);
+            enqueue_private(*sid_ptr, priority, std::move(ar));
+            return true;
+        }
+
+        _on_error(tr::f_("channel for send message not found: {}", to_string(id)));
+        return false;
+    }
+
+    bool enqueue (node_id id, int priority, archive_type const & data)
+    {
+        return enqueue(id, priority, data.data(), data.size());
+    }
+
+    /**
+     * Enqueue serialized packet to send.
+     */
+    bool enqueue_packet (node_id id, int priority, archive_type data)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        auto sid_ptr = _channels.locate_writer(id);
+
+        if (sid_ptr != nullptr) {
+            enqueue_private(*sid_ptr, priority, std::move(data));
+            return true;
+        }
+
+        _on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
+        return false;
+    }
+
+    /**
+     * Enqueue serialized packet to send.
+     */
+    bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        auto sid_ptr = _channels.locate_writer(id);
+
+        if (sid_ptr != nullptr) {
+            enqueue_private(*sid_ptr, priority, data, len);
+            return true;
+        }
+
+        _on_error(tr::f_("channel for send packet not found: {}", to_string(id)));
+        return false;
+    }
+
+    /**
+     * Enqueue serialized packet to broadcast send.
+     */
+    void enqueue_broadcast_packet (int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        _channels.for_each_writer([this, priority, data, len] (node_id, socket_id sid) {
+            enqueue_private(sid, priority, data, len);
+        });
+    }
+
+    /**
+     * Enqueue serialized packet to forward it excluding sender.
+     */
+    void enqueue_forward_packet (node_id sender_id, int priority, char const * data, std::size_t len)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+
+        _channels.for_each_writer([this, sender_id, priority, data, len] (node_id id, socket_id sid) {
+            if (id != sender_id)
+                enqueue_private(sid, priority, data, len);
+        });
+    }
+
+    /**
+     * @return Number of events occurred.
+     */
+    unsigned int step ()
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        unsigned int result = 0;
+
+        result += _listener_pool.step();
+        result += _connecting_pool.step();
+        result += _writer_pool.step();
+        result += _reader_pool.step();
+
+        result += _handshake_controller.step();
+        result += _heartbeat_controller.step();
+
+        // Remove trash
+        _connecting_pool.apply_remove();
+        _listener_pool.apply_remove();
+
+        while (!_deferred_actions.empty()) {
+            _deferred_actions.front()();
+            _deferred_actions.pop();
+        }
+
+        _reader_pool.apply_remove();
+        _writer_pool.apply_remove();
+        _socket_pool.apply_remove(); // Must be last in the removing sequence
+
+        return result;
+    }
+
+    /**
+     * Checks if this channel has direct writer to specified peer by @a id.
+     */
+    bool has_writer (node_id id) const
+    {
+        return _channels.locate_writer(id) != nullptr;
+    }
+
+    /**
+     * Sets frame size for exchange with peer specified by identifier @a id.
+     */
+    void set_frame_size (node_id id, std::uint16_t frame_size)
+    {
+        std::unique_lock<writer_mutex_type> locker{_writer_mtx};
+        auto psid = _channels.locate_writer(id);
+
+        if (psid != nullptr)
+            _writer_pool.set_frame_size(*psid, frame_size);
+    }
+
+    /**
+     * Close all channels and clear channel collection.
+     */
+    void clear_channels ()
+    {
+        _channels.clear();
+    }
+
+public: // static
+    static constexpr int input_priority_count () noexcept
+    {
+        return input_controller_type::priority_count();
+    }
+
+    static constexpr int output_priority_count () noexcept
+    {
+        return writer_pool_type::priority_count();
+    }
+
+private:
+    void close_socket (socket_id sid)
+    {
+        if (_socket_pool.locate(sid) != nullptr) {
+            _deferred_actions.push([this, sid]() {
+                _handshake_controller.cancel(sid);
+                _heartbeat_controller.remove(sid);
+                _input_controller.remove(sid);
+                _reader_pool.remove_later(sid);
+                _writer_pool.remove_later(sid);
+                _socket_pool.remove_later(sid);
+            });
+        }
+    }
+
+    void stop_reconnection (typename host_cache_type::iterator pos)
+    {
+        PFS__THROW_UNEXPECTED(pos != _hosts_cache.end(), "Fix meshnet::peer algorithm");
+
+        auto & h = pos->second; // host_info instance
+
+        if (h.reconn_policy.has_value()) {
+            h.reconn_policy.reset();
+
+            NETTY__TRACE(MESHNET_TAG, "reconnecting stopped to: {}", to_string(h.remote_saddr));
+
+            if (_on_reconnection_stopped)
+                _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr);
+       }
+    }
+
+    void cache_host (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
+    {
+        auto pos = _hosts_cache.find(remote_saddr);
+
+        if (pos == _hosts_cache.end()) {
+            _hosts_cache.insert({remote_saddr, host_info{remote_saddr, local_addr}});
+        } else {
+            auto & h = pos->second; // host_info instance
+            h.reconn_policy.reset();
+        }
+    }
+
+    void schedule_reconnection (socket4_addr saddr)
+    {
+        if (!reconnection_policy::supported())
+            return;
+
+        auto reconnecting = true;
+
+        auto pos = _hosts_cache.find(saddr);
+
+        PFS__THROW_UNEXPECTED(pos != _hosts_cache.end(), "Fix meshnet::peer algorithm");
+
+        auto & h = pos->second; // host_info instance
+
+        if (!h.reconn_policy.has_value()) {
+            h.reconn_policy = reconnection_policy{_is_gateway};
+        } else {
+            if (!h.reconn_policy->required()) {
+                reconnecting = false;
+                stop_reconnection(pos);
+            }
+        }
+
+        if (reconnecting) {
+            bool initial_reconnecting = h.reconn_policy->attempts() == 0;
+
+            auto reconn_timeout = h.reconn_policy->fetch_timeout();
+
+            if (h.local_addr != inet4_addr{})
+                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr, h.local_addr);
+            else
+                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr);
+
+            if (initial_reconnecting) {
+                NETTY__TRACE(MESHNET_TAG, "{}: reconnecting started to: {}", to_string(_id)
+                    , to_string(h.remote_saddr));
+
+                if (_on_reconnection_started)
+                    _on_reconnection_started(_index, h.remote_saddr, h.local_addr);
+            }
+        }
+    }
+
+    void schedule_reconnection (socket_id sid)
+    {
+        if (reconnection_policy::supported()) {
+            bool is_accepted = false;
+            auto psock = _socket_pool.locate(sid, & is_accepted);
+
+            if (psock != nullptr) {
+                auto reconnecting = !is_accepted;
+
+                if (reconnecting)
+                    schedule_reconnection(psock->saddr());
+            }
+        }
+
+        destroy_channel(sid);
+    }
+
+    void destroy_channel (node_id peer_id)
+    {
+        auto success = _channels.close_channel(peer_id);
+
+        if (success) {
+            NETTY__TRACE(MESHNET_TAG, "channel destroyed: {}", to_string(peer_id));
+            _on_channel_destroyed(_index, peer_id);
+
+#if NETTY__TELEMETRY_ENABLED
+            _telemetry_producer->broadcast(KEY_CHANNEL_DESTROYED
+                , fmt::format("[{},{}]", to_string(_id), to_string(peer_id)));
+#endif
+        }
+    }
+
+    void destroy_channel (socket_id sid)
+    {
+        auto res = _channels.has_channel(sid);
+
+        if (res.first) {
+            destroy_channel(res.second);
+        } else {
+            close_socket(sid);
+        }
+    }
+
+public: // Below methods are for internal use only
+    void enqueue_private (socket_id sid, int priority, char const * data, std::size_t len)
+    {
+        _writer_pool.enqueue(sid, priority, data, len);
+    }
+
+    void enqueue_private (socket_id sid, int priority, archive_type && data)
+    {
+        _writer_pool.enqueue(sid, priority, std::move(data));
+    }
+
+public: // peer_interface
+    template <class Peer>
+    class peer_interface_impl: public peer_interface<node_id, archive_type>, protected Peer
+    {
+        using archive_type = typename Peer::archive_type;
+        using node_id = typename Peer::node_id;
+
+    public:
+        template <typename ...Args>
+        peer_interface_impl (Args &&... args)
+            : Peer(std::forward<Args>(args)...)
+        {}
+
+        virtual ~peer_interface_impl () {}
+
+    public:
+        node_id id () const noexcept override
+        {
+            return Peer::id();
+        }
+
+        void set_index (peer_index_t index) noexcept override
+        {
+            Peer::set_index(index);
+        }
+
+        peer_index_t index () const noexcept override
+        {
+            return Peer::index();
+        }
+
+        void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr) override
+        {
+            Peer::add_listener(listener_addr, perr);
+        }
+
+        bool connect (netty::socket4_addr remote_saddr, bool behind_nat) override
+        {
+            return Peer::connect(remote_saddr, behind_nat);
+        }
+
+        bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) override
+        {
+            return Peer::connect(remote_saddr, local_addr, behind_nat);
+        }
+
+        void disconnect (node_id peer_id) override
+        {
+            Peer::disconnect(peer_id);
+        }
+
+        void listen (int backlog = 50) override
+        {
+            Peer::listen(backlog);
+        }
+
+        void enqueue (node_id id, int priority, char const * data, std::size_t len) override
+        {
+            Peer::enqueue(id, priority, data, len);
+        }
+
+        void enqueue (node_id id, int priority, archive_type data) override
+        {
+            Peer::enqueue(id, priority, std::move(data));
+        }
+
+        bool has_writer (node_id id) const override
+        {
+            return Peer::has_writer(id);
+        }
+
+        void set_frame_size (node_id id, std::uint16_t frame_size) override
+        {
+            Peer::set_frame_size(id, frame_size);
+        }
+
+        unsigned int step () override
+        {
+            return Peer::step();
+        }
+
+        void clear_channels () override
+        {
+            Peer::clear_channels();
+        }
+
+        bool enqueue_packet (node_id id, int priority, archive_type data) override
+        {
+            return Peer::enqueue_packet(id, priority, std::move(data));
+        }
+
+        bool enqueue_packet (node_id id, int priority, char const * data, std::size_t len) override
+        {
+            return Peer::enqueue_packet(id, priority, data, len);
+        }
+
+        void enqueue_broadcast_packet (int priority, char const * data, std::size_t len) override
+        {
+            Peer::enqueue_broadcast_packet(priority, data, len);
+        }
+
+        void enqueue_forward_packet (node_id sender_id, int priority, char const * data
+            , std::size_t len) override
+        {
+            Peer::enqueue_forward_packet(sender_id, priority, data, len);
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Callback assign methods
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        void on_error (callback_t<void (std::string const &)> cb) override
+        {
+            Peer::on_error(std::move(cb));
+        }
+
+        void on_channel_established (callback_t<void (peer_index_t, node_id, bool /*is_gateway*/)> cb) override
+        {
+            Peer::on_channel_established(std::move(cb));
+        }
+
+        void on_channel_destroyed (callback_t<void (peer_index_t, node_id)> cb) override
+        {
+            Peer::on_channel_destroyed(std::move(cb));
+        }
+
+        void on_reconnection_started (callback_t<void (peer_index_t, socket4_addr, inet4_addr)> cb) override
+        {
+            Peer::on_reconnection_started(std::move(cb));
+        }
+
+        void on_reconnection_stopped (callback_t<void (peer_index_t, socket4_addr, inet4_addr)> cb) override
+        {
+            Peer::on_reconnection_stopped(std::move(cb));
+        }
+
+        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)> cb) override
+        {
+            Peer::on_duplicate_id(std::move(cb));
+        }
+
+        void on_unreachable_received (callback_t<void (peer_index_t, node_id
+            , unreachable_info<node_id> const &)> cb) override
+        {
+            Peer::on_unreachable_received(std::move(cb));
+        }
+
+        void on_route_received (callback_t<void (peer_index_t, node_id, bool
+            , route_info<node_id> const &)> cb) override
+        {
+            Peer::on_route_received(std::move(cb));
+        }
+
+        void on_domestic_data_received (callback_t<void (node_id, int, archive_type)> cb) override
+        {
+            Peer::on_domestic_data_received(std::move(cb));
+        }
+
+        void on_global_data_received (callback_t<void (node_id /*last transmitter node*/
+            , int /*priority*/, node_id /*sender ID*/, node_id /*receiver ID*/
+            , archive_type)> cb) override
+        {
+            Peer::on_global_data_received(std::move(cb));
+        }
+
+        void on_forward_global_packet (callback_t<void (int /*priority*/, node_id /*sender ID*/
+            , node_id /*receiver ID*/, archive_type)> cb) override
+        {
+            Peer::on_forward_global_packet(std::move(cb));
+        }
+    };
+
+    template <typename ...Args>
+    static std::unique_ptr<peer_interface<node_id, archive_type>>
+    make_interface (Args &&... args)
+    {
+        return std::unique_ptr<peer_interface<node_id, archive_type>>(
+            new peer_interface_impl<peer_class>(std::forward<Args>(args)...));
+    }
+};
+
+} // namespace meshnet
+
+NETTY__NAMESPACE_END

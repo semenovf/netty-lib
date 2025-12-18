@@ -87,26 +87,26 @@ using colorzr_t = pfs::term::colorizer;
 constexpr bool BEHIND_NAT = true;
 
 void channel_established_callback (lorem::wait_atomic_counter8 & counter
-    , node_pool_spec_t const & source, netty::meshnet::node_index_t
-    , node_pool_spec_t const & peer, bool)
+    , node_spec_t const & source, netty::meshnet::peer_index_t
+    , node_spec_t const & peer, bool)
 {
     LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
     ++counter;
 };
 
-void channel_destroyed_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
+void channel_destroyed_callback (node_spec_t const & source, node_spec_t const & peer)
 {
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
-void node_unreachable_callback (node_pool_spec_t const & source, node_pool_spec_t const & peer)
+void node_unreachable_callback (node_spec_t const & source, node_spec_t const & peer)
 {
     LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
 };
 
 template <std::size_t N>
-void route_ready_callback (lorem::wait_bitmatrix<N> & matrix, node_pool_spec_t const & source
-    , node_pool_spec_t const & peer, std::vector<node_id> gw_chain)
+void route_ready_callback (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
+    , node_spec_t const & peer, std::vector<node_id> gw_chain)
 {
     auto hops = gw_chain.size();
 

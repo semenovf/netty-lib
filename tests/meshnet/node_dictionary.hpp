@@ -47,6 +47,7 @@ public:
             , { "b", "01JQN2NGY47H3R81Y9SG0F0B00"_uuid, GATEWAY_FLAG, 4220 }
             , { "c", "01JQN2NGY47H3R81Y9SG0F0C00"_uuid, GATEWAY_FLAG, 4230 }
             , { "d", "01JQN2NGY47H3R81Y9SG0F0D00"_uuid, GATEWAY_FLAG, 4240 }
+            , { "e", "01JQN2NGY47H3R81Y9SG0F0E00"_uuid, GATEWAY_FLAG, 4250 }
 
             // Regular nodes
             , { "A0", "01JQC29M6RC2EVS1ZST11P0VA0"_uuid, REGULAR_NODE_FLAG, 4211 }

@@ -117,18 +117,18 @@ private:
 protected:
     struct context
     {
-        std::unique_ptr<NodePool> node_pool_ptr;
+        std::unique_ptr<NodePool> node_ptr;
         std::size_t index {0}; // Index used in matrix to check tests results
     };
 
 protected:
     std::unique_ptr<node_dictionary> _dict;
-    std::map<std::string, context> _node_pools;
+    std::map<std::string, context> _nodes;
     std::map<NodePool *, std::thread> _threads;
 
 public:
-    netty::callback_t<void (std::string const &, meshnet_ns::node_index_t, std::string const &, bool)> on_channel_established
-        = [] (std::string const & /*source_name*/, meshnet_ns::node_index_t, std::string const & /*target_name*/, bool /*is_gateway*/) {};
+    netty::callback_t<void (std::string const &, meshnet_ns::peer_index_t, std::string const &, bool)> on_channel_established
+        = [] (std::string const & /*source_name*/, meshnet_ns::peer_index_t, std::string const & /*target_name*/, bool /*is_gateway*/) {};
 
     netty::callback_t<void (std::string const &, std::string const &)> on_channel_destroyed
         = [] (std::string const & /*source_name*/, std::string const & /*target_name*/) {};
@@ -193,9 +193,9 @@ public:
         std::size_t index = 0; // Can be used as matrix column/row index
 
         for (auto const & name: node_pool_names) {
-            auto node_pool_ptr = create_node_pool(name);
-            PFS__ASSERT(node_pool_ptr != nullptr, "");
-            _node_pools.insert({name, context{std::move(node_pool_ptr), index++}});
+            auto node_ptr = create_node_pool(name);
+            PFS__ASSERT(node_ptr != nullptr, "");
+            _nodes.insert({name, context{std::move(node_ptr), index++}});
         }
     }
 
@@ -222,7 +222,7 @@ private:
             LOGE(TAG, "{}", errstr);
         });
 
-        ptr->on_channel_established([this, source_name] (meshnet_ns::node_index_t index, node_id id
+        ptr->on_channel_established([this, source_name] (meshnet_ns::peer_index_t index, node_id id
             , bool is_gateway)
         {
             this->on_channel_established(source_name, index, node_name_by_id(id), is_gateway);
@@ -307,8 +307,8 @@ private:
 protected:
     context const * locate_by_name (std::string const & name) const
     {
-        auto pos = _node_pools.find(name);
-        PFS__THROW_UNEXPECTED(pos != _node_pools.end(), fmt::format("Unable to locate node: {}", name));
+        auto pos = _nodes.find(name);
+        PFS__THROW_UNEXPECTED(pos != _nodes.end(), fmt::format("Unable to locate node: {}", name));
         return & pos->second;
     }
 
@@ -316,7 +316,7 @@ protected:
     {
         context * ptr = nullptr;
 
-        for (auto & x: _node_pools) {
+        for (auto & x: _nodes) {
             if (x.second.node_ptr->id() == id) {
                 ptr = & x.second;
                 break;
@@ -346,20 +346,20 @@ public:
     void connect_host (std::string const & initiator_name, std::string const & target_name
         , bool behind_nat = false)
     {
-        meshnet_ns::node_index_t index = 1;
+        meshnet_ns::peer_index_t index = 1;
         auto initiator_ctx = locate_by_name(initiator_name);
         auto target_entry_ptr = _dict->locate_by_name(target_name);
 
         netty::socket4_addr target_saddr {netty::inet4_addr {127, 0, 0, 1}, target_entry_ptr->port};
-        initiator_ctx->node_pool_ptr->connect_host(index, target_saddr, behind_nat);
+        initiator_ctx->node_ptr->connect_host(index, target_saddr, behind_nat);
     }
 
-    void set_frame_size (std::string const & source_name, meshnet_ns::node_index_t source_index
+    void set_frame_size (std::string const & source_name, meshnet_ns::peer_index_t source_index
         , std::string const & peer_name, std::uint16_t frame_size)
     {
         auto source_ctx = locate_by_name(source_name);
         auto peer_id = node_id_by_name(peer_name);
-        source_ctx->node_pool_ptr->set_frame_size(source_index, peer_id, frame_size);
+        source_ctx->node_ptr->set_frame_size(source_index, peer_id, frame_size);
     }
 
     void send_message (std::string const & src, std::string const & dest, std::string const & text
@@ -371,10 +371,10 @@ public:
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
         message_id msgid = pfs::generate_uuid();
 
-        sender_ctx->node_pool_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
+        sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
             , text.size());
 #else
-        sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+        sender_ctx->node_ptr->enqueue(receiver_id, priority, text.data(), text.size());
 #endif
     }
 
@@ -385,24 +385,24 @@ public:
         auto receiver_id = node_id_by_name(dest);
 
 #ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-        sender_ctx->node_pool_ptr->enqueue_report(receiver_id, priority, text.data(), text.size());
+        sender_ctx->node_ptr->enqueue_report(receiver_id, priority, text.data(), text.size());
 #else
-        sender_ctx->node_pool_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+        sender_ctx->node_ptr->enqueue(receiver_id, priority, text.data(), text.size());
 #endif
     }
 
     void listen_all ()
     {
-        for (auto & x: _node_pools) {
-            auto ptr = & *x.second.node_pool_ptr;
+        for (auto & x: _nodes) {
+            auto ptr = & *x.second.node_ptr;
             ptr->listen();
         }
     }
 
     void run_all ()
     {
-        for (auto & x: _node_pools) {
-            auto ptr = & *x.second.node_pool_ptr;
+        for (auto & x: _nodes) {
+            auto ptr = & *x.second.node_ptr;
             std::thread th {
                 [this, ptr] () {
                     LOGD(TAG, "{}: thread started", node_name_by_id(ptr->id()));
@@ -425,8 +425,8 @@ public:
 
         PFS__ASSERT(ctx_ptr != nullptr, "");
 
-        ctx_ptr->node_pool_ptr->interrupt();
-        auto ptr = & *ctx_ptr->node_pool_ptr;
+        ctx_ptr->node_ptr->interrupt();
+        auto ptr = & *ctx_ptr->node_ptr;
 
         auto pos = _threads.find(ptr);
 
@@ -435,7 +435,7 @@ public:
         pos->second.join();
 
         _threads.erase(pos);
-        _node_pools.erase(name);
+        _nodes.erase(name);
     }
 
     void print_routing_table (std::string const & name)
@@ -443,7 +443,7 @@ public:
         auto ptr = locate_by_name(name);
         PFS__ASSERT(ptr != nullptr, "");
 
-        auto routes = ptr->node_pool_ptr->dump_routing_table();
+        auto routes = ptr->node_ptr->dump_routing_table();
 
         LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
         LOGD(TAG, "│Routes for: {}", name);
@@ -459,13 +459,13 @@ public:
     {
         auto ptr = locate_by_name(name);
         PFS__ASSERT(ptr != nullptr, "");
-        ptr->node_pool_ptr->interrupt();
+        ptr->node_ptr->interrupt();
     }
 
     void interrupt_all ()
     {
-        for (auto & x: _node_pools)
-            x.second.node_pool_ptr->interrupt();
+        for (auto & x: _nodes)
+            x.second.node_ptr->interrupt();
     }
 
     void join_all ()

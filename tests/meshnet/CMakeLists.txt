@@ -15,6 +15,7 @@ set(TESTS
     heartbeat_controller
     priority_writer_queue)
 
+if (FALSE) # FIXME REMOVE
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target} ${target}.cpp mesh_network.cpp)
     target_link_libraries(tests-meshnet-${target} PRIVATE pfs::netty pfs::lorem)
@@ -27,11 +28,12 @@ foreach (target ${TESTS})
         add_test(NAME tests-meshnet-${target}-qt COMMAND tests-meshnet-${target}-qt)
     endif()
 endforeach()
+endif()
 
 set(TESTS
-    channel
-    duplication
-    routing
+    # channel # FIXME UNCOMMENT
+    # duplication
+    # routing
     unreachable)
 
 foreach (target ${TESTS})

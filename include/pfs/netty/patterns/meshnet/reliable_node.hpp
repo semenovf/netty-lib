@@ -4,7 +4,9 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2025.05.06 Initial version.
+//      2025.05.06 Initial version (`reliable_node.cpp`).
+//      2025.12.18 Renamed to `reliable_node.hpp`.
+//                 `reliable_node` renamed to `reliable_node`.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
@@ -25,7 +27,7 @@ namespace meshnet {
  * Node pool with reliable delivery support
  */
 template <typename DeliveryManager>
-class node_pool_rd
+class reliable_node
 {
     using delivery_manager_type = DeliveryManager;
     using transport_type = typename DeliveryManager::transport_type;
@@ -70,7 +72,7 @@ private:
 
 public:
 #if NETTY__TELEMETRY_ENABLED
-    node_pool_rd (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
+    reliable_node (node_id id, bool is_gateway, shared_telemetry_producer_type telemetry_producer)
         : _t(id, is_gateway, telemetry_producer)
         , _dm(_t)
     {
@@ -78,19 +80,19 @@ public:
     }
 #endif
 
-    node_pool_rd (node_id id, bool is_gateway = false)
+    reliable_node (node_id id, bool is_gateway = false)
         : _t(id, is_gateway)
         , _dm(_t)
     {
         init();
     }
 
-    node_pool_rd (node_pool_rd const &) = delete;
-    node_pool_rd (node_pool_rd &&) = delete;
-    node_pool_rd & operator = (node_pool_rd const &) = delete;
-    node_pool_rd & operator = (node_pool_rd &&) = delete;
+    reliable_node (reliable_node const &) = delete;
+    reliable_node (reliable_node &&) = delete;
+    reliable_node & operator = (reliable_node const &) = delete;
+    reliable_node & operator = (reliable_node &&) = delete;
 
-    ~node_pool_rd () = default;
+    ~reliable_node () = default;
 
 public: // Set callbacks
     /**
@@ -100,7 +102,7 @@ public: // Set callbacks
      *          void (std::string const &)
      */
     template <typename F>
-    node_pool_rd & on_error (F && f)
+    reliable_node & on_error (F && f)
     {
         _t.on_error(f);
         _dm.on_error(std::forward<F>(f));
@@ -115,10 +117,10 @@ public: // Set callbacks
      * Notify when connection established with the remote node.
      *
      * @details Callback @a f signature must match:
-     *          void (node_index_t, node_id peer_id, bool is_gateway)
+     *          void (peer_index_t, node_id peer_id, bool is_gateway)
      */
     template <typename F>
-    node_pool_rd & on_channel_established (F && f)
+    reliable_node & on_channel_established (F && f)
     {
         _t.on_channel_established(std::forward<F>(f));
         return *this;
@@ -131,7 +133,7 @@ public: // Set callbacks
      *          void (node_id id)
      */
     template <typename F>
-    node_pool_rd & on_channel_destroyed (F && f)
+    reliable_node & on_channel_destroyed (F && f)
     {
         _t.on_channel_destroyed(std::forward<F>(f));
         return *this;
@@ -144,7 +146,7 @@ public: // Set callbacks
      *          void (node_id, socket4_addr)
      */
     template <typename F>
-    node_pool_rd & on_duplicate_id (F && f)
+    reliable_node & on_duplicate_id (F && f)
     {
         _t.on_duplicate_id(std::forward<F>(f));
         return *this;
@@ -157,7 +159,7 @@ public: // Set callbacks
      *          void (node_id)
      */
     template <typename F>
-    node_pool_rd & on_node_alive (F && f)
+    reliable_node & on_node_alive (F && f)
     {
         _on_node_alive = std::forward<F>(f);
         return *this;
@@ -170,7 +172,7 @@ public: // Set callbacks
      *          void (node_id)
      */
     template <typename F>
-    node_pool_rd & on_node_unreachable (F && f)
+    reliable_node & on_node_unreachable (F && f)
     {
         _on_node_unreachable = std::forward<F>(f);
         return *this;
@@ -183,7 +185,7 @@ public: // Set callbacks
      *          void (node_id dest, gateway_chain_type gw_chain)
      */
     template <typename F>
-    node_pool_rd & on_route_ready (F && f)
+    reliable_node & on_route_ready (F && f)
     {
         _t.on_route_ready(std::forward<F>(f));
         return *this;
@@ -201,7 +203,7 @@ public: // Set callbacks
      *          void (node_id)
      */
     template <typename F>
-    node_pool_rd & on_receiver_ready (F && f)
+    reliable_node & on_receiver_ready (F && f)
     {
         _dm.on_receiver_ready(std::forward<F>(f));
         return *this;
@@ -214,7 +216,7 @@ public: // Set callbacks
      *          void (node_id, message_id, int priority, archive_type msg)
      */
     template <typename F>
-    node_pool_rd & on_message_received (F && f)
+    reliable_node & on_message_received (F && f)
     {
         _dm.on_message_received(std::forward<F>(f));
         return *this;
@@ -227,7 +229,7 @@ public: // Set callbacks
      *          void (node_id, message_id)
      */
     template <typename F>
-    node_pool_rd & on_message_delivered (F && f)
+    reliable_node & on_message_delivered (F && f)
     {
         _dm.on_message_delivered(std::forward<F>(f));
         return *this;
@@ -240,7 +242,7 @@ public: // Set callbacks
      *          void (node_id, message_id)
      */
     template <typename F>
-    node_pool_rd & on_message_lost (F && f)
+    reliable_node & on_message_lost (F && f)
     {
         _dm.on_message_lost(std::forward<F>(f));
         return *this;
@@ -253,7 +255,7 @@ public: // Set callbacks
      *          void (node_id sender, int priority, archive_type report)
      */
     template <typename F>
-    node_pool_rd & on_report_received (F && f)
+    reliable_node & on_report_received (F && f)
     {
         _dm.on_report_received(std::forward<F>(f));
         return *this;
@@ -266,7 +268,7 @@ public: // Set callbacks
      *          void (node_id, message_id, std::size_t total_size)
      */
     template <typename F>
-    node_pool_rd & on_message_receiving_begin (F && f)
+    reliable_node & on_message_receiving_begin (F && f)
     {
         _dm.on_message_receiving_begin(std::forward<F>(f));
         return *this;
@@ -279,7 +281,7 @@ public: // Set callbacks
      *          void (node_id, message_id, std::size_t received_size, std::size_t total_size)
      */
     template <typename F>
-    node_pool_rd & on_message_receiving_progress (F && f)
+    reliable_node & on_message_receiving_progress (F && f)
     {
         _dm.on_message_receiving_progress(std::forward<F>(f));
         return *this;
@@ -302,7 +304,7 @@ public:
     }
 
     template <typename Node>
-    node_index_t add_node (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_node (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
         return _t.template add_node<Node>(listener_saddrs, perr);
     }
@@ -311,7 +313,7 @@ public:
      * Adds new node to the node pool with specified listeners.
      */
     template <typename Node>
-    node_index_t add_node (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_node (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
         return _t.template add_node<Node>(listener_saddrs, perr);
     }
@@ -321,23 +323,23 @@ public:
         _t.listen(backlog);
     }
 
-    void listen (node_index_t index, int backlog)
+    void listen (peer_index_t index, int backlog)
     {
         _t.listen(index, backlog);
     }
 
-    bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
+    bool connect_host (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
     {
         return _t.connect_host(index, remote_saddr, behind_nat);
     }
 
-    bool connect_host (node_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
+    bool connect_host (peer_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
         , bool behind_nat = false)
     {
         return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
     }
 
-    void disconnect (node_index_t index, node_id peer_id)
+    void disconnect (peer_index_t index, node_id peer_id)
     {
         _t.disconnect(index, peer_id);
     }
@@ -346,7 +348,7 @@ public:
      * Sets maximum frame size @a frame_size for exchange with node specified by
      * identifier @a peer_id.
      */
-    void set_frame_size (node_index_t index, node_id peer_id, std::uint16_t frame_size)
+    void set_frame_size (peer_index_t index, node_id peer_id, std::uint16_t frame_size)
     {
         _t.set_frame_size(index, peer_id, frame_size);
     }
