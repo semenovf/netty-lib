@@ -30,8 +30,12 @@
 // A0---a
 //
 
+#define TEST_SCHEME_1_ENABLED 1
+#define TEST_SCHEME_2_ENABLED 1
+
 constexpr bool BEHIND_NAT = true;
 
+#if TEST_SCHEME_1_ENABLED
 TEST_CASE("scheme 1") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
@@ -67,7 +71,9 @@ TEST_CASE("scheme 1") {
     net.connect("A1", "A0");
     net.run_all();
 }
+#endif
 
+#if TEST_SCHEME_2_ENABLED
 TEST_CASE("scheme 2") {
     LOGD(TAG, "==========================================");
     LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
@@ -102,3 +108,4 @@ TEST_CASE("scheme 2") {
     net.connect("A0", "a", BEHIND_NAT);
     net.run_all();
 }
+#endif

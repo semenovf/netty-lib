@@ -14,6 +14,7 @@
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -199,8 +200,8 @@ public:
 
     bool is_reachable (node_id dest_id) const
     {
-        return _sibling_nodes.find(dest_id) != _sibling_nodes.end()
-            || _route_map.find(dest_id) != _route_map.end();
+        return !(_sibling_nodes.find(dest_id) == _sibling_nodes.end()
+            && _route_map.find(dest_id) == _route_map.end());
     }
 
     /**
@@ -212,56 +213,48 @@ public:
      *          1) if `b` disconnected from `c`: A---a---b-x-c---C, then gw_id=`b`, dest_id=`c`;
      *          2) if `c` disconnected from `C`: A---a---b---c-x-C, then gw_id=`c`, dest_id=`C`.
      */
-    template <typename OnRouteLost, typename OnNodeUnreachable>
-    std::size_t remove_routes (node_id gw_id, node_id dest_id, OnRouteLost && on_route_lost_callback
-        , OnNodeUnreachable && on_node_unreachable_callback)
+    template <typename OnRouteLostCb, typename OnNodeUnreachableCb>
+    std::size_t remove_routes (node_id gw_id, node_id dest_id
+        , OnRouteLostCb && on_route_lost_cb
+        , OnNodeUnreachableCb && on_node_unreachable_cb)
     {
-        // Lost of direct connections must be discovered by channel destroyed event.
-        // Ignore.
-        if (is_sibling(dest_id))
-            return 0;
-
         std::size_t n = 0;
+        std::set<node_id> candidate_unreachable_nodes;
 
-        // Terminal gateway is a sibling node and this node is connected to only one gateway.
-        if (is_sibling(gw_id) && _sibling_gateways.size() == 1) {
-            // Remove all routes
-            n = _route_map.size();
+        // Called from channel destroyed callback (see node::_on_channel_destroyed)
+        if (gw_id == node_id{}) {
+            PFS__THROW_UNEXPECTED(is_sibling(dest_id), "Fix meshnet::routing_table algorithm");
 
-            for (auto const & x: _route_map) {
-                on_route_lost_callback(x.first, x.second);
-                on_node_unreachable_callback(x.first);
-            }
+            remove_sibling(dest_id);
+            on_route_lost_cb(dest_id, 0);
+            candidate_unreachable_nodes.insert(dest_id);
 
-            _route_map.clear();
-        } else {
-            for (auto pos = _route_map.cbegin(); pos != _route_map.cend();) {
-
-            }
-            // for (auto const & x: _route_map) {
-            //     // on_route_lost_callback(x.first, x.second);
-            //     // on_node_unreachable_callback(x.first);
-            // }
+            ++n;
         }
 
+        for (auto pos = _route_map.cbegin(); pos != _route_map.cend();) {
+            auto const & route = _gateway_chains[pos->second];
+            auto found = dest_id == pos->first
+                ? true // `dest_id` is a terminal node of the route.
+                // Check if `dest_id` is a gateway in the chain.
+                : std::find(route.cbegin(), route.cend(), dest_id) != route.cend();
 
-        // auto res = _route_map.equal_range(dest_id);
-        //
-        // // Not found
-        // if (res.first == res.second)
-        //     return 0;
-        //
-        //
-        // for (auto pos = res.first; pos != res.second; ) {
-        //     auto & r = _gateway_chains[pos->second];
-        //
-        //     if (r.back() == gw_id) {
-        //         pos = _route_map.erase(pos);
-        //         n++;
-        //     } else {
-        //         ++pos;
-        //     }
-        // }
+            if (found) {
+                auto id = pos->first;
+                auto index = pos->second;
+                pos = _route_map.erase(pos);
+                on_route_lost_cb(id, index + 1);
+                candidate_unreachable_nodes.insert(id);
+                ++n;
+            } else {
+                ++pos;
+            }
+        }
+
+        for (auto const & x: candidate_unreachable_nodes) {
+            if (!is_reachable(x))
+                on_node_unreachable_cb(x);
+        }
 
         return n;
     }
@@ -322,7 +315,7 @@ public:
         if (!res.first)
             return pfs::nullopt;
 
-        auto & gw_chain = _gateway_chains[res.second];
+        auto & gw_chain = _gateway_chains.at(res.second);
 
         // Return first gateway in the chain
         return gw_chain[0];
@@ -332,9 +325,9 @@ public:
      * Returns the number of gateways in the gateway chain by @a index. Zero index indicates
      * sibling node, so result is zero.
      */
-    std::size_t hops (size_t index)
+    std::size_t hops (std::size_t index)
     {
-        if (index = 0)
+        if (index == 0)
             return 0;
 
         if (index > _gateway_chains.size()) {

@@ -70,8 +70,8 @@ private:
     // True if the node is a gateway
     bool _is_gateway {false};
 
-    // There will rarely be more than dozens peers, so vector is a optimal choice
-    std::vector<peer_interface_ptr> _peers;
+    // There will rarely be more than dozens endpoints, so vector is a optimal choice
+    std::vector<peer_interface_ptr> _endpoints;
 
     routing_table_type _rtab;
 
@@ -120,8 +120,8 @@ public:
 
     ~node ()
     {
-        if (!_peers.empty()) {
-            for (auto & x : _peers)
+        if (!_endpoints.empty()) {
+            for (auto & x : _endpoints)
                 x->clear_channels();
         }
     }
@@ -245,33 +245,33 @@ public:
     }
 
     /**
-     * Adds new peer to the node with specified listeners.
+     * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer, typename ListenerIt>
-    peer_index_t add_peer (ListenerIt first, ListenerIt last, error * perr = nullptr)
+    peer_index_t add (ListenerIt first, ListenerIt last, error * perr = nullptr)
     {
         PFS__ASSERT(_thread_id == std::this_thread::get_id(), "Peer must be added before run() call");
 
 #if NETTY__TELEMETRY_ENABLED
-        auto peer = Peer::template make_interface(_id, _is_gateway, _telemetry_producer);
+        auto ep = Peer::template make_interface(_id, _is_gateway, _telemetry_producer);
 #else
-        auto peer = Peer::template make_interface(_id, _is_gateway);
+        auto ep = Peer::template make_interface(_id, _is_gateway);
 #endif
         error err;
 
         for (ListenerIt pos = first; pos != last; ++pos) {
-            peer->add_listener(*pos, & err);
+            ep->add_listener(*pos, & err);
 
             if (err)
                 pfs::throw_or(perr, std::move(err));
         }
 
         //
-        // Assign peer callbacks
+        // Assign endpoint callbacks
         //
-        peer->on_error(_on_error);
+        ep->on_error(_on_error);
 
-        peer->on_channel_established([this] (peer_index_t index, node_id peer_id, bool is_gateway) {
+        ep->on_channel_established([this] (peer_index_t index, node_id peer_id, bool is_gateway) {
             _on_channel_established(index, peer_id, is_gateway);
 
             // Add direct route
@@ -308,52 +308,64 @@ public:
             }
         });
 
-        peer->on_channel_destroyed([this] (peer_index_t index, node_id peer_id) {
+        ep->on_channel_destroyed([this] (peer_index_t index, node_id peer_id) {
             if (_on_channel_destroyed)
                 _on_channel_destroyed(peer_id);
 
-            _rtab.remove_sibling(peer_id);
+            auto n = _rtab.remove_routes(node_id{}, peer_id
+                , [this] (node_id dest_id, std::size_t gw_chain_index) {
+                    if (_on_route_lost)
+                        _on_route_lost(dest_id, gw_chain_index);
+                }
+                , [this] (node_id dest_id) {
+                    if (_on_node_unreachable)
+                        _on_node_unreachable(dest_id);
+                }
+            );
 
-            if (_is_gateway)
-                broadcast_unreachable(peer_id);
-
-            if (_on_route_lost)
-                _on_route_lost(peer_id, 0);
-
-            // Check if there are no other routes to `peer_id` node and notify about it.
-            if (_on_node_unreachable) {
-                if (!_rtab.is_reachable(peer_id))
-                    _on_node_unreachable(peer_id);
+            if (n > 0) {
+                if (_is_gateway)
+                    broadcast_unreachable(peer_id);
             }
+
+            // FIXME REMOVE
+            // if (_on_route_lost)
+            //     _on_route_lost(peer_id, 0);
+            //
+            // // Check if there are no other routes to `peer_id` node and notify about it.
+            // if (_on_node_unreachable) {
+            //     if (!_rtab.is_reachable(peer_id))
+            //         _on_node_unreachable(peer_id);
+            // }
         });
 
         if (_on_duplicate_id) {
-            peer->on_duplicate_id([this] (peer_index_t, node_id id, socket4_addr saddr) {
+            ep->on_duplicate_id([this] (peer_index_t, node_id id, socket4_addr saddr) {
                _on_duplicate_id(id, saddr);
             });
         }
 
-        peer->on_unreachable_received([this] (peer_index_t index, node_id id
+        ep->on_unreachable_received([this] (peer_index_t index, node_id id
                 , unreachable_info<node_id> const & uinfo) {
             process_unreachable_received(index, id, uinfo);
         });
 
-        peer->on_route_received([this] (peer_index_t index, node_id id
+        ep->on_route_received([this] (peer_index_t index, node_id id
                 , bool is_response, route_info<node_id> const & rinfo) {
             process_route_received(index, id, is_response, rinfo);
         });
 
         if (_on_data_received) {
-            peer->on_domestic_data_received(_on_data_received);
+            ep->on_domestic_data_received(_on_data_received);
 
-            peer->on_global_data_received([this] (node_id /*id*/, int priority
+            ep->on_global_data_received([this] (node_id /*id*/, int priority
                     , node_id sender_id, node_id receiver_id, archive_type bytes) {
                 PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node algorithm");
                 _on_data_received(sender_id, priority, std::move(bytes));
             });
         }
 
-        peer->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
+        ep->on_forward_global_packet([this] (int priority, node_id sender_id, node_id receiver_id
                 , archive_type packet) {
             PFS__THROW_UNEXPECTED(_id != receiver_id && _is_gateway, "Fix meshnet::node algorithm");
 
@@ -372,29 +384,29 @@ public:
             // The corresponding unreachable_packet must be sent at the moment the channel destroyed.
         });
 
-        _peers.push_back(std::move(peer));
+        _endpoints.push_back(std::move(ep));
 
-        peer_index_t index = static_cast<peer_index_t>(_peers.size());
-        _peers.back()->set_index(index);
+        peer_index_t index = static_cast<peer_index_t>(_endpoints.size());
+        _endpoints.back()->set_index(index);
         return index;
     }
 
     /**
-     * Adds new peer to the node with specified listeners.
+     * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add_peer (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
-        return add_peer<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
+        return add<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
     }
 
     /**
-     * Adds new peer to the node with specified listeners.
+     * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add_peer (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
-        return add_peer<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
+        return add<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
     }
 
     /**
@@ -406,7 +418,7 @@ public:
     {
         std::unique_lock<recursive_mutex_type> locker{_writer_mtx};
 
-        for (auto & x: _peers)
+        for (auto & x: _endpoints)
             x->listen(backlog);
     }
 
@@ -423,12 +435,12 @@ public:
         PFS__ASSERT(_thread_id == std::this_thread::get_id()
             , "connect_host() must be call in the same thread where node has been created");
 
-        auto peer_ptr = locate_peer(index);
+        auto ep = locate_endpoint(index);
 
-        if (peer_ptr == nullptr)
+        if (ep == nullptr)
             return false;
 
-        return peer_ptr->connect(remote_saddr, behind_nat);
+        return ep->connect(remote_saddr, behind_nat);
     }
 
     /**
@@ -446,26 +458,26 @@ public:
         PFS__ASSERT(_thread_id == std::this_thread::get_id()
             , "connect_peer() must be call in the same thread where node has been created");
 
-        auto peer_ptr = locate_peer(index);
+        auto ep = locate_endpoint(index);
 
-        if (peer_ptr == nullptr)
+        if (ep == nullptr)
             return false;
 
-        return peer_ptr->connect(remote_saddr, local_addr, behind_nat);
+        return ep->connect(remote_saddr, local_addr, behind_nat);
     }
 
     void disconnect (peer_index_t index, node_id peer_id)
     {
         std::unique_lock<recursive_mutex_type> locker{_writer_mtx};
 
-        auto peer_ptr = locate_peer(index);
+        auto ep = locate_endpoint(index);
 
-        if (peer_ptr == nullptr) {
+        if (ep == nullptr) {
             _on_error(tr::f_("unable to disconnect from: peer index={}, peer id={}", index, peer_id));
             return;
         }
 
-        peer_ptr->disconnect(peer_id);
+        ep->disconnect(peer_id);
     }
 
     /**
@@ -476,14 +488,14 @@ public:
     {
         std::unique_lock<recursive_mutex_type> locker{_writer_mtx};
 
-        auto peer_ptr = locate_peer(index);
+        auto ep = locate_endpoint(index);
 
-        if (peer_ptr == nullptr) {
+        if (ep == nullptr) {
             _on_error(tr::f_("unable to set frame size: peer index={}, peer id={}", index, peer_id));
             return;
         }
 
-        peer_ptr->set_frame_size(peer_id, frame_size);
+        ep->set_frame_size(peer_id, frame_size);
     }
 
     /**
@@ -550,7 +562,7 @@ public:
 
         unsigned int result = 0;
 
-        for (auto & x: _peers)
+        for (auto & x: _endpoints)
             result += x->step();
 
         return result;
@@ -612,22 +624,32 @@ public:
     }
 
 private:
-    peer_interface_type * locate_peer (node_id id)
+    peer_interface_type * locate_endpoint (node_id id)
     {
-        if (_peers[0]->id() == id)
-            return &*_peers[0];
+        if (_endpoints[0]->id() == id)
+            return &*_endpoints[0];
 
-        for (int i = 1; i < _peers.size(); i++) {
-            if (_peers[i]->id() == id)
-                return &*_peers[i];
+        for (int i = 1; i < _endpoints.size(); i++) {
+            if (_endpoints[i]->id() == id)
+                return &*_endpoints[i];
         }
 
         return nullptr;
     }
 
+    peer_interface_type * locate_endpoint (peer_index_t index)
+    {
+        if (index < 1 || index > _endpoints.size()) {
+            _on_error(tr::f_("peer index is out of bounds: {}", index));
+            return nullptr;
+        }
+
+        return &*_endpoints[index - 1];
+    }
+
     peer_interface_type * locate_writer (node_id id, node_id * gw_id = nullptr)
     {
-        if (_peers.empty())
+        if (_endpoints.empty())
             return nullptr;
 
         auto gw_id_opt = _rtab.gateway_for(id);
@@ -639,26 +661,16 @@ private:
         if (gw_id != nullptr)
             *gw_id = *gw_id_opt;
 
-        if (_peers[0]->has_writer(*gw_id_opt))
-            return &*_peers[0];
+        if (_endpoints[0]->has_writer(*gw_id_opt))
+            return &*_endpoints[0];
 
-        for (int i = 1; i < _peers.size(); i++) {
-            if (_peers[i]->has_writer(*gw_id_opt)) {
-                return &*_peers[i];
+        for (int i = 1; i < _endpoints.size(); i++) {
+            if (_endpoints[i]->has_writer(*gw_id_opt)) {
+                return &*_endpoints[i];
             }
         }
 
         return nullptr;
-    }
-
-    peer_interface_type * locate_node (peer_index_t index)
-    {
-        if (index < 1 || index > _peers.size()) {
-            _on_error(tr::f_("peer index is out of bounds: {}", index));
-            return nullptr;
-        }
-
-        return &*_peers[index - 1];
     }
 
     bool enqueue_packet (node_id id, int priority, archive_type data)
@@ -707,24 +719,12 @@ private:
             }
         );
 
-        // NETTY__TRACE(MESHNET_TAG, "-- UNREACH (n={}): {}: uinfo({}-->{})", n, _id
-        //     , uinfo.gw_id, uinfo.id);
-
         if (n > 0) {
             // Forward packet to sibling nodes excluding `peer_id`.
             if (_is_gateway) {
                 archive_type ar = _rtab.serialize(uinfo);
                 forward_packet(peer_id, ar);
             }
-
-            // FIXME
-            // if (_on_route_lost)
-            //     _on_route_lost(uinfo.gw_id, uinfo.id);
-            //
-            // if (_on_node_unreachable) {
-            //     if (!_rtab.is_reachable(uinfo.id))
-            //         _on_node_unreachable(uinfo.id);
-            // }
         }
     }
 
@@ -833,8 +833,8 @@ private:
             PFS__THROW_UNEXPECTED(_id != dest_id, "Fix meshnet::node algorithm");
 
             if (_on_route_ready) {
-                NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={})"
-                    , to_string(dest_id), _rtab.hops(gw_chain_index));
+                NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={}, gw_chain_index={})"
+                    , to_string(dest_id), _rtab.hops(gw_chain_index), gw_chain_index);
 
                 _on_route_ready(dest_id, gw_chain_index);
             }
@@ -849,8 +849,8 @@ private:
      */
     void forward_packet (node_id sender_id, archive_type const & ar)
     {
-        for (peer_index_t i = 0; i < _peers.size(); i++)
-            _peers[i]->enqueue_forward_packet(sender_id, 0, ar.data(), ar.size());
+        for (peer_index_t i = 0; i < _endpoints.size(); i++)
+            _endpoints[i]->enqueue_forward_packet(sender_id, 0, ar.data(), ar.size());
     }
 
     /**
@@ -861,8 +861,8 @@ private:
         unreachable_info<node_id> uinfo { _id, unreachable_id };
         archive_type ar = _rtab.serialize(std::move(uinfo));
 
-        for (peer_index_t i = 0; i < _peers.size(); i++)
-            _peers[i]->enqueue_broadcast_packet(0, ar.data(), ar.size());
+        for (peer_index_t i = 0; i < _endpoints.size(); i++)
+            _endpoints[i]->enqueue_broadcast_packet(0, ar.data(), ar.size());
     }
 };
 

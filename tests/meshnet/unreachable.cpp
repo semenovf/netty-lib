@@ -12,7 +12,6 @@
 #include "../tools.hpp"
 #include "mesh_network.hpp"
 #include <pfs/lorem/wait_atomic_counter.hpp>
-#include <pfs/lorem/wait_bitmatrix.hpp>
 #include <functional>
 #include <vector>
 
@@ -23,12 +22,17 @@
 // a, b, c, d - gateway nodes (gateways)
 //
 // =================================================================================================
-// Scheme 2
+// Scheme 1
 // -------------------------------------------------------------------------------------------------
-//  A0---a---C0
+//  A0---a---B0
 //
 // =================================================================================================
 // Scheme 2
+// -------------------------------------------------------------------------------------------------
+//  A0---a---e---b---B0
+//
+// =================================================================================================
+// Scheme 3
 // -------------------------------------------------------------------------------------------------
 //           b---B0
 //           |
@@ -37,27 +41,30 @@
 //           d---D0
 //
 // =================================================================================================
-// Scheme 3
+// Scheme 4
 // -------------------------------------------------------------------------------------------------
 //       +---b---+
 //       |       |
-//  A0---a-------c---C0
+//  A0---a---e---c---C0
 //       |       |
 //       +---d---+
 //
 
-#define ITERATION_COUNT 1;
+#define ITERATION_COUNT 5;
 
-#define TEST_SCHEME_1_ENABLED 0
+#define TEST_SCHEME_1_ENABLED 1
 #define TEST_SCHEME_2_ENABLED 1
+#define TEST_SCHEME_3_ENABLED 1
+#define TEST_SCHEME_4_ENABLED 1
 
 #define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
 #define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
 
 using namespace std::placeholders;
 constexpr bool BEHIND_NAT = true;
+constexpr std::chrono::seconds BITMATRIX_TIME_LIMIT {2};
 
-void channel_established_callback (lorem::wait_atomic_counter8 & counter
+void channel_established_cb (lorem::wait_atomic_counter8 & counter
     , node_spec_t const & source, netty::meshnet::peer_index_t
     , node_spec_t const & peer, bool)
 {
@@ -65,32 +72,26 @@ void channel_established_callback (lorem::wait_atomic_counter8 & counter
     ++counter;
 };
 
-void channel_destroyed_callback (node_spec_t const & source, node_spec_t const & peer)
+void channel_destroyed_cb (node_spec_t const & source, node_spec_t const & peer)
 {
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
 template <std::size_t N>
-void route_ready_callback (lorem::wait_bitmatrix<N> & matrix
-    , node_spec_t const & source, node_spec_t const & peer)
+void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
+    , node_spec_t const & peer)
 {
+    LOGD(TAG, "{}: Route ready to: {}", source.first, peer.first);
     matrix.set(source.second, peer.second);
 };
 
 template <std::size_t N>
-void node_unreachable_callback (lorem::wait_bitmatrix<N> & matrix
+void node_unreachable_cb (lorem::wait_bitmatrix<N> & matrix
     , node_spec_t const & source, node_spec_t const & dest)
 {
     LOGD(TAG, "{}: Node unreachable: {}", source.first, dest.first);
-    matrix.set(source.second, dest.second);
+    matrix.set(source.second, dest.second, false);
 };
-
-template <std::size_t N>
-static void set_main_diagonal (lorem::wait_bitmatrix<N> & matrix)
-{
-    for (std::size_t i = 0; i < N; i++)
-        matrix.set(i, i);
-}
 
 // N - number of nodes
 // C - number of expected direct links
@@ -98,42 +99,48 @@ template <std::size_t N, std::size_t C>
 class scheme_tester
 {
 public:
-    scheme_tester (std::initializer_list<std::string> node_names
-        , std::string const & node_to_destroy
-        , lorem::wait_bitmatrix<N> & unreachable_matrix
-        , std::function<void (mesh_network & net)> connect_scenario)
+    scheme_tester (std::string const & node_to_destroy
+        , lorem::wait_bitmatrix<N> const & unreachable_matrix_sample
+        , std::function<void (mesh_network & net)> connect_scenario_cb)
     {
-        std::vector<std::string> node_list {node_names};
-        mesh_network net {std::move(node_names)};
+        auto pnet = mesh_network::instance();
 
         lorem::wait_atomic_counter8 channel_established_counter {C * 2};
         lorem::wait_bitmatrix<N> route_ready_matrix;
+        lorem::wait_bitmatrix<N> unreachable_matrix;
 
-        set_main_diagonal(route_ready_matrix);
+        pnet->set_main_diagonal(route_ready_matrix);
+        pnet->set_all(unreachable_matrix);
+        pnet->set_main_diagonal(unreachable_matrix, false);
+        pnet->set_row(unreachable_matrix, node_to_destroy, false);
 
-        net.on_channel_established = std::bind(channel_established_callback
+        pnet->on_channel_established = std::bind(channel_established_cb
             , std::ref(channel_established_counter)
             , _1, _2, _3, _4);
-        net.on_channel_destroyed = channel_destroyed_callback;
-        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_ready_matrix), _1, _2);
-        net.on_node_unreachable = std::bind(node_unreachable_callback<N>, std::ref(unreachable_matrix), _1, _2);
+        pnet->on_channel_destroyed = channel_destroyed_cb;
+        pnet->on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_ready_matrix), _1, _2);
+        pnet->on_node_unreachable = std::bind(node_unreachable_cb<N>
+            , std::ref(unreachable_matrix), _1, _2);
 
-        net.set_scenario([&] () {
+        pnet->set_scenario([&] () {
             CHECK(channel_established_counter());
 
             CHECK(route_ready_matrix());
-            tools::print_matrix(route_ready_matrix.value(), node_list);
+            tools::print_matrix(route_ready_matrix.value(), pnet->node_names());
 
-            net.destroy(node_to_destroy);
-            CHECK(unreachable_matrix());
-            tools::print_matrix(unreachable_matrix.value(), node_list);
+            pnet->destroy(node_to_destroy);
 
-            net.interrupt_all();
+            CHECK(unreachable_matrix.wait_eq(unreachable_matrix_sample));
+
+            tools::print_matrix(unreachable_matrix.value(), pnet->node_names());
+            tools::print_matrix(unreachable_matrix_sample.value(), pnet->node_names());
+
+            pnet->interrupt_all();
         });
 
-        net.listen_all();
-        connect_scenario(net);
-        net.run_all();
+        pnet->listen_all();
+        connect_scenario_cb(*pnet);
+        pnet->run_all();
     }
 };
 
@@ -147,19 +154,21 @@ TEST_CASE("scheme 1") {
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        lorem::wait_bitmatrix<N> unreachable_matrix {std::chrono::milliseconds {10000}};
-        set_main_diagonal(unreachable_matrix);
-        unreachable_matrix.set(0, 1);
-        unreachable_matrix.set(1, 0);
-        unreachable_matrix.set(2, 0);
-        unreachable_matrix.set(2, 1);
+        mesh_network net {"a", "A0", "B0"};
 
-        scheme_tester<N, C> tester({"a", "A0", "C0"}, "C0", unreachable_matrix
+        lorem::wait_bitmatrix<N> unreachable_matrix {BITMATRIX_TIME_LIMIT};
+        net.set_all(unreachable_matrix);
+        net.set_main_diagonal(unreachable_matrix, false);
+        net.set_row(unreachable_matrix, "B0", false);
+        net.set(unreachable_matrix, "a", "B0", false);
+        net.set(unreachable_matrix, "A0", "B0", false);
+
+        scheme_tester<N, C> tester("B0", unreachable_matrix
             , [] (mesh_network & net)
-        {
-            net.connect("A0", "a", BEHIND_NAT);
-            net.connect("C0", "a", BEHIND_NAT);
-        });
+            {
+                net.connect("A0", "a", BEHIND_NAT);
+                net.connect("B0", "a", BEHIND_NAT);
+            });
 
         END_TEST_MESSAGE
     }
@@ -168,6 +177,51 @@ TEST_CASE("scheme 1") {
 
 #if TEST_SCHEME_2_ENABLED
 TEST_CASE("scheme 2") {
+    static constexpr std::size_t N = 5;
+    static constexpr std::size_t C = 4;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"a", "e", "b", "A0", "B0"};
+
+        lorem::wait_bitmatrix<N> unreachable_matrix {BITMATRIX_TIME_LIMIT};
+        net.set_all(unreachable_matrix);
+        net.set_main_diagonal(unreachable_matrix, false);
+        net.set_row(unreachable_matrix, "e", false);
+        net.set(unreachable_matrix, "a", "e", false);
+        net.set(unreachable_matrix, "a", "b", false);
+        net.set(unreachable_matrix, "a", "B0", false);
+        net.set(unreachable_matrix, "A0", "e", false);
+        net.set(unreachable_matrix, "A0", "b", false);
+        net.set(unreachable_matrix, "A0", "B0", false);
+        net.set(unreachable_matrix, "b", "e", false);
+        net.set(unreachable_matrix, "b", "a", false);
+        net.set(unreachable_matrix, "b", "A0", false);
+        net.set(unreachable_matrix, "B0", "e", false);
+        net.set(unreachable_matrix, "B0", "a", false);
+        net.set(unreachable_matrix, "B0", "A0", false);
+
+        scheme_tester<N, C> tester("e", unreachable_matrix, [] (mesh_network & net)
+        {
+            net.connect("a", "e");
+            net.connect("e", "a");
+            net.connect("b", "e");
+            net.connect("e", "b");
+
+            net.connect("A0", "a", BEHIND_NAT);
+            net.connect("B0", "b", BEHIND_NAT);
+        });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif
+
+#if TEST_SCHEME_3_ENABLED
+TEST_CASE("scheme 3") {
     static constexpr std::size_t N = 9;
     static constexpr std::size_t C = 8;
 
@@ -176,22 +230,25 @@ TEST_CASE("scheme 2") {
     while (iteration_count-- > 0) {
         START_TEST_MESSAGE
 
-        lorem::wait_bitmatrix<N> unreachable_matrix {std::chrono::milliseconds {10000}};
-        set_main_diagonal(unreachable_matrix);
-        // unreachable_matrix.set(0, 1);
-        // unreachable_matrix.set(1, 0);
-        // unreachable_matrix.set(2, 0);
-        // unreachable_matrix.set(2, 1);
+        mesh_network net {"a", "b", "c", "d", "e", "A0", "B0", "C0", "D0"};
 
-        scheme_tester<N, C> tester({"a", "b", "c", "d", "e", "A0", "B0", "C0", "D0", }, "e"
-            , unreachable_matrix, [] (mesh_network & net)
+        lorem::wait_bitmatrix<N> unreachable_matrix {BITMATRIX_TIME_LIMIT};
+
+        net.set(unreachable_matrix, "a", "A0");
+        net.set(unreachable_matrix, "A0", "a");
+        net.set(unreachable_matrix, "b", "B0");
+        net.set(unreachable_matrix, "B0", "b");
+        net.set(unreachable_matrix, "c", "C0");
+        net.set(unreachable_matrix, "C0", "c");
+        net.set(unreachable_matrix, "d", "D0");
+        net.set(unreachable_matrix, "D0", "d");
+
+        scheme_tester<N, C> tester("e", unreachable_matrix, [] (mesh_network & net)
         {
-            // Connect gateways
             net.connect("a", "e");
             net.connect("b", "e");
             net.connect("c", "e");
             net.connect("d", "e");
-
             net.connect("e", "a");
             net.connect("e", "b");
             net.connect("e", "c");
@@ -201,6 +258,53 @@ TEST_CASE("scheme 2") {
             net.connect("B0", "b", BEHIND_NAT);
             net.connect("C0", "c", BEHIND_NAT);
             net.connect("D0", "d", BEHIND_NAT);
+        });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif
+
+#if TEST_SCHEME_4_ENABLED
+TEST_CASE("scheme 4") {
+    static constexpr std::size_t N = 7;
+    static constexpr std::size_t C = 8;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"a", "b", "c", "d", "e", "A0", "C0"};
+
+        lorem::wait_bitmatrix<N> unreachable_matrix {BITMATRIX_TIME_LIMIT};
+        net.set_all(unreachable_matrix);
+        net.set_main_diagonal(unreachable_matrix, false);
+        net.set_row(unreachable_matrix, "e", false);
+        net.set(unreachable_matrix, "a", "e", false);
+        net.set(unreachable_matrix, "b", "e", false);
+        net.set(unreachable_matrix, "c", "e", false);
+        net.set(unreachable_matrix, "d", "e", false);
+        net.set(unreachable_matrix, "A0", "e", false);
+        net.set(unreachable_matrix, "C0", "e", false);
+
+        scheme_tester<N, C> tester("e", unreachable_matrix, [] (mesh_network & net)
+        {
+            net.connect("a", "b");
+            net.connect("a", "d");
+            net.connect("a", "e");
+            net.connect("b", "a");
+            net.connect("b", "c");
+            net.connect("c", "b");
+            net.connect("c", "d");
+            net.connect("c", "e");
+            net.connect("d", "a");
+            net.connect("d", "c");
+            net.connect("e", "a");
+            net.connect("e", "c");
+
+            net.connect("A0", "a", BEHIND_NAT);
+            net.connect("C0", "c", BEHIND_NAT);
         });
 
         END_TEST_MESSAGE

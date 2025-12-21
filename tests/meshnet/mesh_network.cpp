@@ -19,13 +19,14 @@ static void sigterm_handler (int sig)
 
 mesh_network::mesh_network (std::initializer_list<std::string> node_names)
     : _sigint_guard(SIGINT, sigterm_handler)
+    , _node_names(std::move(node_names))
 {
     PFS__ASSERT(_self == nullptr, "");
     _self = this;
 
     std::size_t counter = 0;
 
-    for (auto const & name: node_names) {
+    for (auto const & name: _node_names) {
         auto pctx = std::make_shared<context>();
         pctx->name = name;
         pctx->node_ptr = create_node(name);
@@ -50,9 +51,9 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
 
     auto ptr = std::make_unique<node_t>(entry.id, entry.is_gateway);
 
-    ptr->on_error([] (std::string const & errstr)
+    ptr->on_error([name] (std::string const & errstr)
     {
-        LOGE(TAG, "{}", errstr);
+        LOGE(TAG, "{}: {}", name, errstr);
     });
 
     ptr->on_channel_established([this, name] (meshnet_ns::peer_index_t index, node_id peer_id
@@ -95,7 +96,7 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
     });
 #endif
 
-    ptr->template add_peer<peer_t>({listener_saddr});
+    ptr->template add<peer_t>({listener_saddr});
 
     return ptr;
 }

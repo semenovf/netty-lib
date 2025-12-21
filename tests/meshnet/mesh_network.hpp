@@ -12,6 +12,7 @@
 #include <pfs/assert.hpp>
 #include <pfs/log.hpp>
 #include <pfs/signal_guard.hpp>
+#include <pfs/lorem/wait_bitmatrix.hpp>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -38,6 +39,7 @@ private:
 
 private:
     node_dictionary _dict;
+    std::vector<std::string> _node_names;
     std::map<std::string, std::shared_ptr<context>> _nodes;
     std::thread _scenario_thread;
     std::function<void ()> _scenario;
@@ -93,6 +95,11 @@ public:
     ~mesh_network ();
 
 public:
+    std::vector<std::string> const & node_names () const noexcept
+    {
+        return _node_names;
+    }
+
     template <typename Scenario>
     void set_scenario (Scenario && sc)
     {
@@ -111,6 +118,40 @@ public:
     void run_all ();
     void interrupt_all ();
     void print_routing_records (std::string const & name);
+
+    template <std::size_t N>
+    inline void set (lorem::wait_bitmatrix<N> & m, std::string const & source_name
+        , std::string const & target_name, bool value = true)
+    {
+        auto source_ctx = get_context_ptr(source_name);
+        auto target_ctx = get_context_ptr(target_name);
+
+        m.set(source_ctx->index, target_ctx->index, value);
+    }
+
+    template <std::size_t N>
+    inline void set_row (lorem::wait_bitmatrix<N> & m, std::string const & name, bool value = true)
+    {
+        auto pctx = get_context_ptr(name);
+
+        for (std::size_t i = 0; i < N; i++)
+            m.set(pctx->index, i, value);
+    }
+
+    template <std::size_t N>
+    static void set_main_diagonal (lorem::wait_bitmatrix<N> & matrix, bool value = true)
+    {
+        for (std::size_t i = 0; i < N; i++)
+            matrix.set(i, i, value);
+    }
+
+    template <std::size_t N>
+    static void set_all (lorem::wait_bitmatrix<N> & matrix, bool value = true)
+    {
+        for (std::size_t i = 0; i < N; i++)
+            for (std::size_t j = 0; j < N; j++)
+                matrix.set(i, j, value);
+    }
 
 private:
     std::shared_ptr<context> get_context_ptr (std::string const & name) const

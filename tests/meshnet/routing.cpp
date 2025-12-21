@@ -86,7 +86,7 @@ using colorzr_t = pfs::term::colorizer;
 
 constexpr bool BEHIND_NAT = true;
 
-void channel_established_callback (lorem::wait_atomic_counter8 & counter
+void channel_established_cb (lorem::wait_atomic_counter8 & counter
     , node_spec_t const & source, netty::meshnet::peer_index_t
     , node_spec_t const & peer, bool)
 {
@@ -94,30 +94,25 @@ void channel_established_callback (lorem::wait_atomic_counter8 & counter
     ++counter;
 };
 
-void channel_destroyed_callback (node_spec_t const & source, node_spec_t const & peer)
+void channel_destroyed_cb (node_spec_t const & source, node_spec_t const & peer)
 {
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
-void node_unreachable_callback (node_spec_t const & source, node_spec_t const & peer)
+void node_unreachable_cb (node_spec_t const & source, node_spec_t const & peer)
 {
     LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
 };
 
 template <std::size_t N>
-void route_ready_callback (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
-    , node_spec_t const & peer, std::vector<node_id> gw_chain)
+void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
+    , node_spec_t const & peer, std::size_t route_index /*std::vector<node_id> gw_chain*/)
 {
-    auto hops = gw_chain.size();
-
-    LOGD(TAG, "{}: {}: {}->{} ({})"
+    LOGD(TAG, "{}: {}: {}->{}"
         , source.first
         , colorzr_t{}.green().bright().textr("Route ready")
         , source.first
-        , peer.first
-        , (hops == 0
-            ? colorzr_t{}.green().bright().textr("direct access")
-            : colorzr_t{}.green().bright().textr(fmt::format("hops={}", hops))));
+        , peer.first);
 
     matrix.set(source.second, peer.second);
 };
@@ -144,12 +139,12 @@ public:
         lorem::wait_atomic_counter8 channel_established_counter {C * 2};
         lorem::wait_bitmatrix<N> route_matrix;
         set_main_diagonal(route_matrix);
-        net.on_channel_established = std::bind(channel_established_callback
+        net.on_channel_established = std::bind(channel_established_cb
             , std::ref(channel_established_counter)
             , _1, _2, _3, _4);
-        net.on_channel_destroyed = channel_destroyed_callback;
-        net.on_node_unreachable = node_unreachable_callback;
-        net.on_route_ready = std::bind(route_ready_callback<N>, std::ref(route_matrix), _1, _2, _3);
+        net.on_channel_destroyed = channel_destroyed_cb;
+        net.on_node_unreachable = node_unreachable_cb;
+        net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
 
         net.set_scenario([&] () {
             CHECK(channel_established_counter());
