@@ -13,13 +13,16 @@
 #include <pfs/log.hpp>
 #include <pfs/signal_guard.hpp>
 #include <pfs/lorem/wait_bitmatrix.hpp>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 static constexpr char const * TAG = "test::meshnet";
 
@@ -46,6 +49,8 @@ private:
 
     pfs::signal_guard _sigint_guard;
     netty::startup_guard _startup_guard;
+
+    std::atomic_bool _is_running {false};
 
 private:
     static mesh_network * _self;
@@ -77,17 +82,20 @@ public:
         , std::size_t /*route_index*/)
     {};
 
-    netty::callback_t<void (node_spec_t const &, node_spec_t const &)>
-    on_node_unreachable = [] (node_spec_t const & /*source*/, node_spec_t const & /*dest*/)
-    {};
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/)>
+    on_node_unreachable = [] (node_spec_t const &, node_spec_t const &) {};
 
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
     // TODO
-#else
-    netty::callback_t<void (node_spec_t const &, node_spec_t const &, int, archive_t)>
-    on_data_received = [] (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
-        , int /*priority*/, archive_t /*bytes*/)
+
+    netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
+        , std::string const & /*msgid*/, int /*priority*/, archive_t /*msg*/)>
+    on_message_received = [] (node_spec_t const & , node_spec_t const &, std::string const &, int, archive_t)
     {};
+#else
+    netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
+        , int /*priority*/, archive_t /*bytes*/)>
+    on_data_received = [] (node_spec_t const & , node_spec_t const & , int , archive_t) {};
 #endif
 
 public:
@@ -113,11 +121,16 @@ public:
     void destroy (std::string const & name);
 
     void send_message (std::string const & sender_name, std::string const & receiver_name
-        , std::string const & text, int priority = 1);
+        , std::string const & bytes, int priority = 1);
 
     void run_all ();
     void interrupt_all ();
     void print_routing_records (std::string const & name);
+
+    bool is_running () const
+    {
+        return _is_running;
+    }
 
     template <std::size_t N>
     inline void set (lorem::wait_bitmatrix<N> & m, std::string const & source_name
@@ -152,6 +165,15 @@ public:
             for (std::size_t j = 0; j < N; j++)
                 matrix.set(i, j, value);
     }
+
+    static std::vector<std::pair<std::string, std::string>>
+    shuffle_routes (std::vector<std::string> const & source_names
+        , std::vector<std::string> const dest_names);
+
+    static std::vector<std::tuple<std::string, std::string, std::string>>
+    shuffle_messages (std::vector<std::string> const & source_names
+        , std::vector<std::string> const & dest_names
+        , std::vector<std::string> const & messages);
 
 private:
     std::shared_ptr<context> get_context_ptr (std::string const & name) const

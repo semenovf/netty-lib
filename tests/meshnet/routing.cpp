@@ -99,11 +99,6 @@ void channel_destroyed_cb (node_spec_t const & source, node_spec_t const & peer)
     LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
 };
 
-void node_unreachable_cb (node_spec_t const & source, node_spec_t const & peer)
-{
-    LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
-};
-
 template <std::size_t N>
 void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
     , node_spec_t const & peer, std::size_t route_index /*std::vector<node_id> gw_chain*/)
@@ -117,18 +112,16 @@ void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & sour
     matrix.set(source.second, peer.second);
 };
 
+void node_unreachable_cb (node_spec_t const & source, node_spec_t const & peer)
+{
+    LOGD(TAG, "{}: Node unreachable: {}", source.first, peer.first);
+};
+
 // N - Number of nodes
 // C - number of expected direct links
 template <std::size_t N, std::size_t C>
 class scheme_tester
 {
-private:
-    static void set_main_diagonal (lorem::wait_bitmatrix<N> & matrix)
-    {
-        for (std::size_t i = 0; i < N; i++)
-            matrix.set(i, i);
-    }
-
 public:
     scheme_tester (std::initializer_list<std::string> node_names
         , std::function<void (mesh_network & net)> connect_scenario)
@@ -138,13 +131,13 @@ public:
 
         lorem::wait_atomic_counter8 channel_established_counter {C * 2};
         lorem::wait_bitmatrix<N> route_matrix;
-        set_main_diagonal(route_matrix);
+        net.set_main_diagonal(route_matrix);
         net.on_channel_established = std::bind(channel_established_cb
             , std::ref(channel_established_counter)
             , _1, _2, _3, _4);
         net.on_channel_destroyed = channel_destroyed_cb;
-        net.on_node_unreachable = node_unreachable_cb;
         net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
+        net.on_node_unreachable = node_unreachable_cb;
 
         net.set_scenario([&] () {
             CHECK(channel_established_counter());

@@ -48,26 +48,25 @@ private:
     delivery_manager_type _dm;
 
 private:
-    callback_t<void (node_id)> _on_node_alive = [] (node_id) {};
-    callback_t<void (node_id)> _on_node_unreachable = [] (node_id) {};
+    callback_t<void (node_id, std::size_t)> _on_route_ready;
+    callback_t<void (node_id)> _on_node_unreachable;
 
 private:
     void init ()
     {
-        _t.on_node_unreachable([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "node unreachable: {}", to_string(id));
-            _dm.pause(id);
-            _on_node_unreachable(id);
-        }).on_data_received([this] (node_id id, int priority, archive_type bytes) {
-            _dm.process_input(id, priority, std::move(bytes));
+        _t.on_route_ready([this] (node_id peer_id, std::size_t gw_chain_index) {
+            _dm.resume(peer_id);
 
+            if (_on_route_ready)
+                _on_route_ready(peer_id, gw_chain_index);
+        }).on_node_unreachable([this] (node_id peer_id) {
+            _dm.pause(peer_id);
 
-            // FIXME REMOVE
-        })/*.on_node_alive([this] (node_id id) {
-            NETTY__TRACE(MESHNET_TAG, "node alive: {}", to_string(id));
-            _dm.resume(id);
-            _on_node_alive(id);
-        })*/;
+            if (_on_node_unreachable)
+                _on_node_unreachable(peer_id);
+        }).on_data_received([this] (node_id peer_id, int priority, archive_type bytes) {
+            _dm.process_input(peer_id, priority, std::move(bytes));
+        });
     }
 
 public:
@@ -98,7 +97,8 @@ public: // Set callbacks
     /**
      * Sets error callback.
      *
-     * @details Callback @a f signature must match:
+     * @details Invoked when error occurred.
+     *          Callback @a f signature must match:
      *          void (std::string const &)
      */
     template <typename F>
@@ -153,41 +153,42 @@ public: // Set callbacks
     }
 
     /**
-     * Notify when node alive status changed.
+     * Notify when some route ready.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id)
+     *          void (node_id peer_id, std::size_t route_index)
+     *          `route_index` has a special case of zero occurs when `peer_id` is a sibling node.
      */
     template <typename F>
-    reliable_node & on_node_alive (F && f)
+    reliable_node & on_route_ready (F && f)
     {
-        _on_node_alive = std::forward<F>(f);
+        _on_route_ready = std::forward<F>(f);
         return *this;
     }
 
     /**
-     * Notify when node alive status changed.
+     * Notify when route is lost.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id)
+     *          void (node_id id, std::size_t route_index).
+     *          `route_index` has a special case of zero occurs when `id` is a sibling node.
+     */
+    template <typename F>
+    reliable_node & on_route_lost (F && f)
+    {
+        _t.on_route_lost(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
+     * Notify when node is unreachable (no routes found).
+     *
+     * @details Callback @a f signature must match void (node_id unreachable_id).
      */
     template <typename F>
     reliable_node & on_node_unreachable (F && f)
     {
         _on_node_unreachable = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
-     * Notify when some route ready by request or response.
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id dest, gateway_chain_type gw_chain)
-     */
-    template <typename F>
-    reliable_node & on_route_ready (F && f)
-    {
-        _t.on_route_ready(std::forward<F>(f));
         return *this;
     }
 
@@ -200,7 +201,7 @@ public: // Set callbacks
      * channel established).
      *
      * @details Callback @a f signature must match:
-     *          void (node_id)
+     *          void (node_id peer_id)
      */
     template <typename F>
     reliable_node & on_receiver_ready (F && f)
@@ -303,19 +304,22 @@ public:
         return _t.is_gateway();
     }
 
+    /**
+     * Adds new endpoint to the node with specified listeners.
+     */
     template <typename Node>
-    peer_index_t add_node (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
-        return _t.template add_node<Node>(listener_saddrs, perr);
+        return _t.template add<Node>(listener_saddrs, perr);
     }
 
     /**
-     * Adds new node to the node pool with specified listeners.
+     * Adds new endpoint to the node with specified listeners.
      */
     template <typename Node>
-    peer_index_t add_node (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
     {
-        return _t.template add_node<Node>(listener_saddrs, perr);
+        return _t.template add<Node>(listener_saddrs, perr);
     }
 
     void listen (int backlog = 50)
@@ -323,20 +327,15 @@ public:
         _t.listen(backlog);
     }
 
-    void listen (peer_index_t index, int backlog)
+    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
     {
-        _t.listen(index, backlog);
+        return _t.connect_peer(index, remote_saddr, behind_nat);
     }
 
-    bool connect_host (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
-    {
-        return _t.connect_host(index, remote_saddr, behind_nat);
-    }
-
-    bool connect_host (peer_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
+    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
         , bool behind_nat = false)
     {
-        return _t.connect_host(index, remote_saddr, local_addr, behind_nat);
+        return _t.connect_peer(index, remote_saddr, local_addr, behind_nat);
     }
 
     void disconnect (peer_index_t index, node_id peer_id)
@@ -409,6 +408,17 @@ public:
             if (n == 0)
                 std::this_thread::sleep_for(countdown_timer.remain());
         }
+    }
+
+    /**
+     * Dump routing records as string vector.
+     *
+     * @return Vector containing strings in format:
+     *         "<destination node>: <gateway chain>"
+     */
+    std::vector<std::string> dump_routing_records () const
+    {
+        return _t.dump_routing_records();
     }
 };
 

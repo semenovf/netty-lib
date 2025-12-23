@@ -184,8 +184,8 @@ public: // Set callbacks
      * Notify when some route ready by request or response.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id id, std::size_t route_index)
-     *          `route_index` has a special case of zero occurs when `id` is a sibling node.
+     *          void (node_id peer_id, std::size_t route_index)
+     *          `route_index` has a special case of zero occurs when `peer_id` is a sibling node.
      */
     template <typename F>
     node & on_route_ready (F && f)
@@ -327,16 +327,6 @@ public:
                 if (_is_gateway)
                     broadcast_unreachable(peer_id);
             }
-
-            // FIXME REMOVE
-            // if (_on_route_lost)
-            //     _on_route_lost(peer_id, 0);
-            //
-            // // Check if there are no other routes to `peer_id` node and notify about it.
-            // if (_on_node_unreachable) {
-            //     if (!_rtab.is_reachable(peer_id))
-            //         _on_node_unreachable(peer_id);
-            // }
         });
 
         if (_on_duplicate_id) {
@@ -607,12 +597,12 @@ public:
     }
 
     /**
-     * Dump routing table as string vector.
+     * Dump routing records as string vector.
      *
      * @return Vector containing strings in format:
      *         "<destination node>: <gateway chain>"
      */
-    std::vector<std::string> dump_routing_table () const
+    std::vector<std::string> dump_routing_records () const
     {
         std::vector<std::string> result;
 

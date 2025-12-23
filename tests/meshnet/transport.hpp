@@ -107,7 +107,7 @@ using unreliable_node_t = meshnet_ns::node<pfs::universal_id
     , routing_table_t
     , std::recursive_mutex>;
 
-#if NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+#if NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
 using message_id = pfs::universal_id;
 using delivery_transport_t = unreliable_node_t;
 using delivery_controller_t = delivery_ns::delivery_controller<node_id, message_id

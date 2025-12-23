@@ -5,6 +5,7 @@
 //
 // Changelog:
 //      2025.04.08 Initial version.
+//      2025.12.22 Refactored with new version of `mesh_network`.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
@@ -80,7 +81,37 @@ static void sigterm_handler (int sig)
 //       , sample_text, _1, _2, _3, _4);
 //
 
-TEST_CASE("messaging") {
+// void data_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & receiver
+//     , node_spec_t const & sender, int priority, archive_t bytes)
+// {
+//     LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
+//         , receiver.first, bytes.size());
+//     ++counter;
+// }
+
+//     net.on_receiver_ready = [] (std::string const & source_name, std::string const & receiver_name
+//         , std::size_t source_index, std::size_t receiver_index)
+//     {
+//         LOGD(TAG, "{}: Receiver ready: {}", source_name, receiver_name);
+//         // g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
+//     };
+//
+//     net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
+//         , std::string const & msgid)
+//     {
+//         // g_message_delivered_counter++;
+//         LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
+//     };
+//
+//     net.on_message_receiving_progress = [] (std::string const & source_name
+//         , std::string const & sender_name, std::string const & msgid
+//         , std::size_t received_size, std::size_t total_size)
+//     {
+//         LOGD(TAG, "{}: Message progress from: {}: {}: {}/{} ({} %)", source_name, sender_name, msgid
+//             , received_size, total_size, static_cast<std::size_t>(100 * (1.f * received_size)/total_size));
+//     };
+
+TEST_CASE("delivery") {
 
     netty::startup_guard netty_startup;
 

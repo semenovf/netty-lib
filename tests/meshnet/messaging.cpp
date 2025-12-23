@@ -1,0 +1,291 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2025 Vladislav Trifochkin
+//
+// This file is part of `netty-lib`.
+//
+// Changelog:
+//      2025.04.16 Initial version.
+//      2025.12.22 Refactored with new version of `mesh_network`.
+////////////////////////////////////////////////////////////////////////////////
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "../doctest.h"
+#include "../tools.hpp"
+#include "mesh_network.hpp"
+#include <pfs/term.hpp>
+#include <pfs/lorem/utils.hpp>
+#include <pfs/lorem/wait_atomic_counter.hpp>
+#include <pfs/lorem/wait_bitmatrix.hpp>
+#include <functional>
+#include <string>
+#include <vector>
+
+// =================================================================================================
+// Legend
+// -------------------------------------------------------------------------------------------------
+// A0, B0, C0, D0 - regular nodes (nodes)
+// a, b, c, d, e - gateway nodes (gateways)
+//
+// =================================================================================================
+// Scheme 1
+// -------------------------------------------------------------------------------------------------
+//  A0---A1
+//
+// =================================================================================================
+// Scheme 2
+// -------------------------------------------------------------------------------------------------
+//  A0---a---e---b---B0
+//
+// =================================================================================================
+// Scheme 3
+// -------------------------------------------------------------------------------------------------
+//           b---B0
+//           |
+//  A0---a---e---c---C0
+//           |
+//           d---D0
+//
+// =================================================================================================
+// Scheme 4
+// -------------------------------------------------------------------------------------------------
+//       +---b---+
+//       |       |
+//  A0---a---e---c---C0
+//       |       |
+//       +---d---+
+
+#define ITERATION_COUNT 5;
+
+#define TEST_SCHEME_1_ENABLED 1
+#define TEST_SCHEME_2_ENABLED 1
+#define TEST_SCHEME_3_ENABLED 1
+#define TEST_SCHEME_4_ENABLED 1
+
+#define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
+#define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
+
+using namespace std::placeholders;
+using colorzr_t = pfs::term::colorizer;
+
+constexpr bool BEHIND_NAT = true;
+
+void channel_established_cb (lorem::wait_atomic_counter8 & counter
+    , node_spec_t const & source, netty::meshnet::peer_index_t
+    , node_spec_t const & peer, bool)
+{
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
+
+    // Here can be set frame size
+    // std::uint16_t frame_size = 100;
+    // mesh_network_t::instance()->set_frame_size(source_name, source_index, peer_name, frame_size);
+
+    ++counter;
+};
+
+void channel_destroyed_cb (node_spec_t const & source, node_spec_t const & peer)
+{
+    LOGD(TAG, "{}: Channel destroyed with {}", source.first, peer.first);
+};
+
+template <std::size_t N>
+void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
+    , node_spec_t const & peer, std::size_t route_index /*std::vector<node_id> gw_chain*/)
+{
+    LOGD(TAG, "{}: {}: {}-->{}"
+        , source.first
+        , colorzr_t{}.green().bright().textr("Route ready")
+        , source.first
+        , peer.first);
+
+    matrix.set(source.second, peer.second);
+};
+
+void data_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & receiver
+    , node_spec_t const & sender, int priority, archive_t bytes)
+{
+    LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
+        , receiver.first, bytes.size());
+    ++counter;
+}
+
+// N - number of nodes
+// C - number of expected direct links
+template <std::size_t N, std::size_t C>
+class scheme_tester
+{
+    static std::vector<std::string> generate_messages ()
+    {
+        std::vector<std::string> result;
+
+        for (std::size_t i = 1; i <= 65536; i *= 2)
+            result.push_back(lorem::random_binary_data(i));
+
+        return result;
+    }
+
+public:
+    scheme_tester (std::function<void (mesh_network & net)> connect_scenario_cb)
+    {
+        auto pnet = mesh_network::instance();
+
+        auto messages = generate_messages();
+
+        lorem::wait_atomic_counter8 channel_established_counter {C * 2};
+        lorem::wait_atomic_counter32 messages_received_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
+
+        lorem::wait_bitmatrix<N> route_matrix;
+        pnet->set_main_diagonal(route_matrix);
+
+        pnet->on_channel_established = std::bind(channel_established_cb
+            , std::ref(channel_established_counter)
+            , _1, _2, _3, _4);
+        pnet->on_channel_destroyed = channel_destroyed_cb;
+        pnet->on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
+
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+        pnet->on_message_received = std::bind(data_received_cb, std::ref(messages_received_counter)
+            , _1, _2, _4, _5);
+#else
+        pnet->on_data_received = std::bind(data_received_cb, std::ref(messages_received_counter)
+            , _1, _2, _3, _4);
+#endif
+
+        pnet->set_scenario([&] () {
+            CHECK(channel_established_counter());
+            CHECK(route_matrix());
+
+            auto const & node_names = pnet->node_names();
+            auto routes = pnet->shuffle_messages(node_names, node_names, messages);
+
+            for (auto const & x: routes)
+                pnet->send_message(std::get<0>(x), std::get<1>(x), std::get<2>(x));
+
+            CHECK(messages_received_counter());
+            pnet->interrupt_all();
+        });
+
+        pnet->listen_all();
+        connect_scenario_cb(*pnet);
+        pnet->run_all();
+    }
+};
+
+#if TEST_SCHEME_1_ENABLED
+TEST_CASE("scheme 1") {
+    static constexpr std::size_t N = 2;
+    static constexpr std::size_t C = 1;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"A0", "A1"};
+
+        scheme_tester<N, C> tester([] (mesh_network & net)
+            {
+                net.connect("A0", "A1");
+                net.connect("A1", "A0");
+            });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif
+
+#if TEST_SCHEME_2_ENABLED
+TEST_CASE("scheme 2") {
+    static constexpr std::size_t N = 5;
+    static constexpr std::size_t C = 4;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"a", "b", "e", "A0", "B0"};
+
+        scheme_tester<N, C> tester([] (mesh_network & net)
+            {
+                net.connect("a", "e");
+                net.connect("e", "a");
+                net.connect("b", "e");
+                net.connect("e", "b");
+
+                net.connect("A0", "a", BEHIND_NAT);
+                net.connect("B0", "b", BEHIND_NAT);
+            });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif
+
+#if TEST_SCHEME_3_ENABLED
+TEST_CASE("scheme 3") {
+    static constexpr std::size_t N = 9;
+    static constexpr std::size_t C = 8;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"a", "b", "c", "d", "e", "A0", "B0", "C0", "D0"};
+
+        scheme_tester<N, C> tester([] (mesh_network & net)
+            {
+                net.connect("a", "e");
+                net.connect("e", "a");
+                net.connect("b", "e");
+                net.connect("e", "b");
+                net.connect("c", "e");
+                net.connect("e", "c");
+                net.connect("d", "e");
+                net.connect("e", "d");
+
+                net.connect("A0", "a", BEHIND_NAT);
+                net.connect("B0", "b", BEHIND_NAT);
+                net.connect("C0", "c", BEHIND_NAT);
+                net.connect("D0", "d", BEHIND_NAT);
+            });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif
+
+#if TEST_SCHEME_4_ENABLED
+TEST_CASE("scheme 4") {
+    static constexpr std::size_t N = 7;
+    static constexpr std::size_t C = 8;
+
+    int iteration_count = ITERATION_COUNT;
+
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
+
+        mesh_network net {"a", "b", "c", "d", "e", "A0", "C0"};
+
+        scheme_tester<N, C> tester([] (mesh_network & net)
+            {
+            net.connect("a", "b");
+            net.connect("a", "d");
+            net.connect("a", "e");
+            net.connect("b", "a");
+            net.connect("b", "c");
+            net.connect("c", "b");
+            net.connect("c", "d");
+            net.connect("c", "e");
+            net.connect("d", "a");
+            net.connect("d", "c");
+            net.connect("e", "a");
+            net.connect("e", "c");
+
+            net.connect("A0", "a", BEHIND_NAT);
+            net.connect("C0", "c", BEHIND_NAT);
+            });
+
+        END_TEST_MESSAGE
+    }
+}
+#endif

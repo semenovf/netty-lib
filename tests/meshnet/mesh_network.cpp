@@ -8,13 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "mesh_network.hpp"
 #include "pfs/netty/socket4_addr.hpp"
+#include <algorithm>
+#include <exception>
+#include <random>
 
 mesh_network * mesh_network::_self {nullptr};
 
 static void sigterm_handler (int sig)
 {
-    LOGD(TAG, "Force interrupt all nodes by signal: ", sig);
-    mesh_network::instance()->interrupt_all();
+    LOGD(TAG, "Force interrupt all nodes by signal: {}", sig);
+    if (mesh_network::instance()->is_running())
+        mesh_network::instance()->interrupt_all();
+    else
+        std::terminate();
 }
 
 mesh_network::mesh_network (std::initializer_list<std::string> node_names)
@@ -87,8 +93,43 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
         this->on_node_unreachable(make_spec(name), make_spec(peer_id));
     });
 
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
     // TODO
+        // ptr->on_receiver_ready([this, source_name] (node_id receiver_id)
+        // {
+        //     auto receiver_name = node_name_by_id(receiver_id);
+        //     this->on_receiver_ready(source_name, receiver_name, index_by_name(source_name)
+        //         , index_by_name(receiver_name));
+        // });
+
+    ptr->on_message_received([this, name] (node_id sender_id, message_id msgid, int priority
+        , archive_t msg)
+    {
+        this->on_message_received(make_spec(name), make_spec(sender_id), to_string(msgid)
+            , priority, std::move(msg));
+    });
+
+        // ptr->on_message_delivered([this, source_name] (node_id receiver_id, message_id msgid)
+        // {
+        //     auto receiver_name = node_name_by_id(receiver_id);
+        //     this->on_message_delivered(source_name, receiver_name, to_string(msgid));
+        // });
+        //
+        // ptr->on_report_received([this, source_name] (node_id sender_id, int /*priority*/, archive_type report)
+        // {
+        //     auto sender_name = node_name_by_id(sender_id);
+        //     this->on_report_received(source_name, sender_name, std::move(report)
+        //         , index_by_name(source_name), index_by_name(sender_name));
+        // });
+        //
+        // ptr->on_message_receiving_progress([this, source_name] (node_id sender_id, message_id msgid
+        //     , std::size_t received_size, std::size_t total_size)
+        // {
+        //     auto sender_name = node_name_by_id(sender_id);
+        //     this->on_message_receiving_progress(source_name, sender_name, to_string(msgid)
+        //         , received_size, total_size);
+        // });
+
 #else
     ptr->on_data_received([this, name] (node_id sender_id, int priority, archive_t bytes)
     {
@@ -146,22 +187,19 @@ void mesh_network::destroy (std::string const & name)
 }
 
 void mesh_network::send_message (std::string const & sender_name, std::string const & receiver_name
-    , std::string const & text, int priority)
+    , std::string const & bytes, int priority)
 {
     auto sender_ctx = get_context_ptr(sender_name);
-    // auto receiver_ctx = get_context_ptr(receiver_name);
     auto receiver_id = _dict.get_entry(receiver_name).id;
 
     PFS__ASSERT(sender_ctx->node_ptr, "Fix send_message() method call");
 
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-    // TODO
-//     message_id msgid = pfs::generate_uuid();
-//
-//     sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, text.data()
-//         , text.size());
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+    message_id msgid = pfs::generate_uuid();
+    sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, bytes.data()
+        , bytes.size());
 #else
-    sender_ctx->node_ptr->enqueue(receiver_id, priority, text.data(), text.size());
+    sender_ctx->node_ptr->enqueue(receiver_id, priority, bytes.data(), bytes.size());
 #endif
 }
 
@@ -184,8 +222,9 @@ void mesh_network::run_all ()
     }
 
     _scenario_thread = std::thread {_scenario};
-
+    _is_running.store(true);
     join();
+    _is_running.store(false);
 }
 
 void mesh_network::interrupt_all ()
@@ -212,7 +251,7 @@ void mesh_network::print_routing_records (std::string const & name)
     auto pctx = get_context_ptr(name);
 
     if (pctx->node_ptr) {
-        auto routes = pctx->node_ptr->dump_routing_table();
+        auto routes = pctx->node_ptr->dump_routing_records();
 
         LOGD(TAG, "┌────────────────────────────────────────────────────────────────────────────────");
         LOGD(TAG, "│Routes for: {}", name);
@@ -223,4 +262,50 @@ void mesh_network::print_routing_records (std::string const & name)
 
         LOGD(TAG, "└────────────────────────────────────────────────────────────────────────────────");
     }
+}
+
+std::vector<std::pair<std::string, std::string>>
+mesh_network::shuffle_routes (std::vector<std::string> const & source_names
+    , std::vector<std::string> const dest_names)
+{
+    std::vector<std::pair<std::string, std::string>> result;
+
+    for (auto const & x: source_names) {
+        for (auto const & y: dest_names) {
+            if (x != y)
+                result.emplace_back(x, y);
+        }
+    }
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(result.begin(), result.end(), g);
+    std::shuffle(result.begin(), result.end(), g);
+
+    return result;
+}
+
+std::vector<std::tuple<std::string, std::string, std::string>>
+mesh_network::shuffle_messages (std::vector<std::string> const & source_names
+    , std::vector<std::string> const & dest_names
+    , std::vector<std::string> const & messages)
+{
+    auto routes = shuffle_routes(source_names, dest_names);
+
+    std::vector<std::tuple<std::string, std::string, std::string>> result;
+
+    for (auto const & x: routes) {
+        for (auto const & y: messages) {
+            result.emplace_back(x.first, x.second, y);
+        }
+    }
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(result.begin(), result.end(), g);
+    std::shuffle(result.begin(), result.end(), g);
+
+    return result;
 }
