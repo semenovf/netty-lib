@@ -94,13 +94,10 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
     });
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
-    // TODO
-        // ptr->on_receiver_ready([this, source_name] (node_id receiver_id)
-        // {
-        //     auto receiver_name = node_name_by_id(receiver_id);
-        //     this->on_receiver_ready(source_name, receiver_name, index_by_name(source_name)
-        //         , index_by_name(receiver_name));
-        // });
+    ptr->on_receiver_ready([this, name] (node_id receiver_id)
+    {
+        this->on_receiver_ready(make_spec(name), make_spec(receiver_id));
+    });
 
     ptr->on_message_received([this, name] (node_id sender_id, message_id msgid, int priority
         , archive_t msg)
@@ -109,26 +106,22 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
             , priority, std::move(msg));
     });
 
-        // ptr->on_message_delivered([this, source_name] (node_id receiver_id, message_id msgid)
-        // {
-        //     auto receiver_name = node_name_by_id(receiver_id);
-        //     this->on_message_delivered(source_name, receiver_name, to_string(msgid));
-        // });
-        //
-        // ptr->on_report_received([this, source_name] (node_id sender_id, int /*priority*/, archive_type report)
-        // {
-        //     auto sender_name = node_name_by_id(sender_id);
-        //     this->on_report_received(source_name, sender_name, std::move(report)
-        //         , index_by_name(source_name), index_by_name(sender_name));
-        // });
-        //
-        // ptr->on_message_receiving_progress([this, source_name] (node_id sender_id, message_id msgid
-        //     , std::size_t received_size, std::size_t total_size)
-        // {
-        //     auto sender_name = node_name_by_id(sender_id);
-        //     this->on_message_receiving_progress(source_name, sender_name, to_string(msgid)
-        //         , received_size, total_size);
-        // });
+    ptr->on_message_delivered([this, name] (node_id receiver_id, message_id msgid)
+    {
+        this->on_message_delivered(make_spec(name), make_spec(receiver_id), to_string(msgid));
+    });
+
+    ptr->on_message_receiving_progress([this, name] (node_id sender_id, message_id msgid
+        , std::size_t received_size, std::size_t total_size)
+    {
+        this->on_message_receiving_progress(make_spec(name), make_spec(sender_id), to_string(msgid)
+            , received_size, total_size);
+    });
+
+    ptr->on_report_received([this, name] (node_id sender_id, int priority, archive_t report)
+    {
+        this->on_report_received(make_spec(name), make_spec(sender_id), priority, std::move(report));
+    });
 
 #else
     ptr->on_data_received([this, name] (node_id sender_id, int priority, archive_t bytes)
@@ -202,6 +195,18 @@ void mesh_network::send_message (std::string const & sender_name, std::string co
     sender_ctx->node_ptr->enqueue(receiver_id, priority, bytes.data(), bytes.size());
 #endif
 }
+
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+void mesh_network::send_report (std::string const & sender_name, std::string const & receiver_name
+    , std::string const & bytes, int priority)
+{
+    auto sender_ctx = get_context_ptr(sender_name);
+    auto receiver_id = _dict.get_entry(receiver_name).id;
+
+    PFS__ASSERT(sender_ctx->node_ptr, "Fix send_message() method call");
+    sender_ctx->node_ptr->enqueue_report(receiver_id, priority, bytes.data(), bytes.size());
+}
+#endif
 
 void mesh_network::run_all ()
 {

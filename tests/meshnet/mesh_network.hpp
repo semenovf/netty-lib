@@ -86,12 +86,27 @@ public:
     on_node_unreachable = [] (node_spec_t const &, node_spec_t const &) {};
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
-    // TODO
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*receiver*/)>
+    on_receiver_ready = [] (node_spec_t const &, node_spec_t const &) {};
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , std::string const & /*msgid*/, int /*priority*/, archive_t /*msg*/)>
     on_message_received = [] (node_spec_t const & , node_spec_t const &, std::string const &, int, archive_t)
     {};
+
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*receiver*/
+        , std::string const & /*msgid*/)>
+    on_message_delivered = [] (node_spec_t const &, node_spec_t const &, std::string const &) {};
+
+    netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
+        , std::string const & /*msgid*/, std::size_t /*received_size*/, std::size_t /*total_size*/)>
+    on_message_receiving_progress = [] (node_spec_t const &, node_spec_t const &
+        , std::string const &, std::size_t, std::size_t) {};
+
+    netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
+        , int /*priority*/, archive_t /*report*/)>
+    on_report_received = [] (node_spec_t const & , node_spec_t const &, int, archive_t) {};
+
 #else
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , int /*priority*/, archive_t /*bytes*/)>
@@ -122,6 +137,11 @@ public:
 
     void send_message (std::string const & sender_name, std::string const & receiver_name
         , std::string const & bytes, int priority = 1);
+
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+    void send_report (std::string const & sender_name, std::string const & receiver_name
+        , std::string const & bytes, int priority = 2);
+#endif
 
     void run_all ();
     void interrupt_all ();

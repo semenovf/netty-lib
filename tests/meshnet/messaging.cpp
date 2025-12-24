@@ -5,7 +5,7 @@
 //
 // Changelog:
 //      2025.04.16 Initial version.
-//      2025.12.22 Refactored with new version of `mesh_network`.
+//      2025.12.23 Refactored and fixed with new version of `mesh_network`.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "../doctest.h"
@@ -107,6 +107,35 @@ void data_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const
     ++counter;
 }
 
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+void receiver_ready_cb (lorem::wait_atomic_counter8 & counter, node_spec_t const & source
+    , node_spec_t const & receiver)
+{
+    LOGD(TAG, "{}: Receiver ready: {}", source.first, receiver.first);
+    ++counter;
+}
+
+void message_delivered_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*source*/
+    , node_spec_t const & /*receiver*/, std::string const &)
+{
+    ++counter;
+}
+
+void report_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*receiver*/
+    , node_spec_t const & /*sender*/, int /*priority*/, archive_t /*bytes*/)
+{
+    // LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
+    //     , receiver.first, bytes.size());
+    ++counter;
+}
+
+// Unusable, only for API check.
+void message_receiving_progress_cb (node_spec_t const &, node_spec_t const &
+    , std::string const &, std::size_t, std::size_t)
+{}
+
+#endif
+
 // N - number of nodes
 // C - number of expected direct links
 template <std::size_t N, std::size_t C>
@@ -136,30 +165,52 @@ public:
         pnet->set_main_diagonal(route_matrix);
 
         pnet->on_channel_established = std::bind(channel_established_cb
-            , std::ref(channel_established_counter)
-            , _1, _2, _3, _4);
+            , std::ref(channel_established_counter), _1, _2, _3, _4);
         pnet->on_channel_destroyed = channel_destroyed_cb;
         pnet->on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+        lorem::wait_atomic_counter8 receiver_ready_counter {N * N - N};
+        lorem::wait_atomic_counter32 message_delivered_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
+        lorem::wait_atomic_counter32 report_received_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
+
+        pnet->on_receiver_ready = std::bind(receiver_ready_cb, std::ref(receiver_ready_counter), _1, _2);
+        pnet->on_message_delivered = std::bind(message_delivered_cb, std::ref(message_delivered_counter)
+            , _1, _2, _3);
         pnet->on_message_received = std::bind(data_received_cb, std::ref(messages_received_counter)
             , _1, _2, _4, _5);
+        pnet->on_message_receiving_progress = message_receiving_progress_cb;;
+
+        pnet->on_report_received = std::bind(report_received_cb, std::ref(report_received_counter)
+            , _1, _2, _3, _4);
 #else
         pnet->on_data_received = std::bind(data_received_cb, std::ref(messages_received_counter)
             , _1, _2, _3, _4);
 #endif
 
         pnet->set_scenario([&] () {
-            CHECK(channel_established_counter());
-            CHECK(route_matrix());
+            REQUIRE(channel_established_counter());
+            REQUIRE(route_matrix());
 
             auto const & node_names = pnet->node_names();
             auto routes = pnet->shuffle_messages(node_names, node_names, messages);
 
-            for (auto const & x: routes)
+            for (auto const & x: routes) {
                 pnet->send_message(std::get<0>(x), std::get<1>(x), std::get<2>(x));
 
-            CHECK(messages_received_counter());
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+                pnet->send_report(std::get<0>(x), std::get<1>(x), std::get<2>(x));
+#endif
+            }
+
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+            REQUIRE(receiver_ready_counter());
+#endif
+            REQUIRE(messages_received_counter());
+#ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
+            REQUIRE(report_received_counter());
+            REQUIRE(message_delivered_counter());
+#endif
             pnet->interrupt_all();
         });
 
