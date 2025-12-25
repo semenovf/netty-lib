@@ -226,6 +226,8 @@ void mesh_network::run_all ()
         pctx->node_thread = std::move(th);
     }
 
+    PFS__ASSERT(_scenario, "Scenario must be set");
+
     _scenario_thread = std::thread {_scenario};
     _is_running.store(true);
     join();

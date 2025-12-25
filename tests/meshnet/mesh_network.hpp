@@ -118,6 +118,11 @@ public:
     ~mesh_network ();
 
 public:
+    std::size_t node_count () const noexcept
+    {
+        return _node_names.size();
+    }
+
     std::vector<std::string> const & node_names () const noexcept
     {
         return _node_names;

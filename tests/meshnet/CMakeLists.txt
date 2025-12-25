@@ -54,8 +54,7 @@ set(TESTS
     routing
     unreachable
     messaging
-    #delivery
-    )
+    delivery)
 
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target}-reliable ${target}.cpp mesh_network.cpp)

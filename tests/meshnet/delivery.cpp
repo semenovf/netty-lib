@@ -5,256 +5,100 @@
 //
 // Changelog:
 //      2025.04.08 Initial version.
-//      2025.12.22 Refactored with new version of `mesh_network`.
+//      2025.12.24 Refactored and fixed with new version of `mesh_network`.
 ////////////////////////////////////////////////////////////////////////////////
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-#include "../../doctest.h"
-#include "../../tools.hpp"
+#include "../doctest.h"
+#include "../tools.hpp"
 #include "mesh_network.hpp"
-#include <pfs/signal_guard.hpp>
-#include <pfs/synchronized.hpp>
-#include <pfs/netty/startup.hpp>
-
-// FIXME UNCOMMENT
-// #include <pfs/lorem/wait_atomic_bool.hpp>
+#include <pfs/term.hpp>
+#include <pfs/lorem/wait_atomic_counter.hpp>
+#include <pfs/lorem/wait_bitmatrix.hpp>
+#include <functional>
 
 // =================================================================================================
 // Legend
 // -------------------------------------------------------------------------------------------------
 // A0, A1, B0, B1, C0, C1, D0, D1 - regular nodes (nodes)
-// a, b, c, d - gateway nodes (gateways)
+// a, b, c, d, e - gateway nodes (gateways)
 //
 // =================================================================================================
-// Test scheme
+// Scheme 1
 // -------------------------------------------------------------------------------------------------
-//                     B0   B1
-//                      |   |
-//                      +---+
-//                        |
-//                 +----- b -----+
-//   A0-----+      |             |      +-----C0
-//          |----- a ----------- c -----|
-//   A1-----+      |             |      +-----C1
-//                 +----- d -----+
-//                        |
-//                      +---+
-//                      |   |
-//                     D0   D1
+//      +---c---+
+//      |       |
+// A0---a---e---b---B0
+//      |       |
+//      +---d---+
 //
 
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-using mesh_network_t = test::meshnet::network<reliable_node_pool_t>;
-#else
-using mesh_network_t = test::meshnet::network<node_pool_t>;
-#endif
+#define ITERATION_COUNT 1;
 
-std::atomic_int g_channels_established_counter {0};
-pfs::synchronized<pfs::bitmatrix<12>> g_route_matrix;
-pfs::synchronized<pfs::bitmatrix<12>> g_message_matrix;
+using namespace std::placeholders;
+using colorzr_t = pfs::term::colorizer;
 
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-pfs::synchronized<pfs::bitmatrix<12>> g_report_matrix;
-#endif
+constexpr bool BEHIND_NAT = true;
 
-std::string g_text;
-
-static void sigterm_handler (int sig)
+void channel_established_cb (lorem::wait_atomic_counter8 & counter
+    , node_spec_t const & source, netty::meshnet::peer_index_t
+    , node_spec_t const & peer, bool)
 {
-    MESSAGE("Force interrupt all nodes by signal: ", sig);
-    mesh_network_t::instance()->interrupt_all();
-}
+    LOGD(TAG, "Channel established {:>2} <--> {:>2}", source.first, peer.first);
 
-// TODO USE THIS
-// lorem::wait_atomic_bool data_ready_flag;
-// void data_received_callback (lorem::wait_atomic_bool & flag, std::string const & sample
-//     , std::string const & receiver_name, std::string const & sender_name
-//     , int priority, archive_t bytes)
-// {
-//     LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
-//     std::string text(bytes.data(), bytes.size());
-//     REQUIRE_EQ(text, sample);
-//     flag.set();
-// }
-//
-//  net.on_data_received = std::bind(data_received_callback, std::ref(data_ready_flag)
-//       , sample_text, _1, _2, _3, _4);
-//
+    // Here can be set frame size
+    // std::uint16_t frame_size = 100;
+    // mesh_network_t::instance()->set_frame_size(source_name, source_index, peer_name, frame_size);
 
-// void data_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & receiver
-//     , node_spec_t const & sender, int priority, archive_t bytes)
-// {
-//     LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
-//         , receiver.first, bytes.size());
-//     ++counter;
-// }
+    ++counter;
+};
 
-//     net.on_receiver_ready = [] (std::string const & source_name, std::string const & receiver_name
-//         , std::size_t source_index, std::size_t receiver_index)
-//     {
-//         LOGD(TAG, "{}: Receiver ready: {}", source_name, receiver_name);
-//         // g_receiver_ready_matrix.wlock()->set(source_index, receiver_index, true);
-//     };
-//
-//     net.on_message_delivered = [] (std::string const & source_name, std::string const & receiver_name
-//         , std::string const & msgid)
-//     {
-//         // g_message_delivered_counter++;
-//         LOGD(TAG, "{}: Message delivered to: {}", source_name, receiver_name);
-//     };
-//
-//     net.on_message_receiving_progress = [] (std::string const & source_name
-//         , std::string const & sender_name, std::string const & msgid
-//         , std::size_t received_size, std::size_t total_size)
-//     {
-//         LOGD(TAG, "{}: Message progress from: {}: {}: {}/{} ({} %)", source_name, sender_name, msgid
-//             , received_size, total_size, static_cast<std::size_t>(100 * (1.f * received_size)/total_size));
-//     };
+template <std::size_t N>
+void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
+    , node_spec_t const & peer, std::size_t /*route_index*/)
+{
+    matrix.set(source.second, peer.second);
+};
 
 TEST_CASE("delivery") {
+    static constexpr std::size_t N = 7;
+    mesh_network net {"a", "b", "c", "d", "e", "A0", "B0"};
 
-    netty::startup_guard netty_startup;
+    lorem::wait_atomic_counter8 channel_established_counter {static_cast<std::uint8_t>(16)};
+    lorem::wait_bitmatrix<N> route_matrix;
+    net.set_main_diagonal(route_matrix);
 
-    mesh_network_t net {
-        "a", "b", "c", "d", "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"
-    };
+    net.on_channel_established = std::bind(channel_established_cb
+        , std::ref(channel_established_counter)
+        , _1, _2, _3, _4);
 
-    net.on_channel_established = [] (std::string const & source_name, meshnet_ns::node_index_t
-        , std::string const & target_name, bool /*is_gateway*/)
-    {
-        LOGD(TAG, "Channel established {:>2} <--> {:>2}", source_name, target_name);
-        ++g_channels_established_counter;
-    };
+    net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
 
-    net.on_channel_destroyed = [] (std::string const & source_name, std::string const & target_name)
-    {
-        LOGD(TAG, "{}: Channel destroyed with {}", source_name, target_name);
-    };
+    net.set_scenario([&] {
+        REQUIRE(channel_established_counter());
+        REQUIRE(route_matrix());
+        net.interrupt_all();
+    });
 
-    net.on_route_ready = [] (std::string const & source_name, std::string const & target_name
-        , std::vector<node_id> gw_chain, std::size_t source_index, std::size_t target_index)
-    {
-        g_route_matrix.wlock()->set(source_index, target_index, true);
-    };
-
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-    net.on_message_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , std::string const & msgid, archive_t msg, std::size_t source_index
-        , std::size_t target_index)
-    {
-        LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
-
-        std::string text(msg.data(), msg.size());
-
-        REQUIRE_EQ(text, g_text);
-
-        g_message_matrix.wlock()->set(source_index, target_index, true);
-    };
-
-    net.on_report_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , archive_t msg, std::size_t source_index, std::size_t target_index)
-    {
-        LOGD(TAG, "Report received by {} from {}", receiver_name, sender_name);
-
-        std::string text(msg.data(), msg.size());
-
-        REQUIRE_EQ(text, g_text);
-
-        g_report_matrix.wlock()->set(source_index, target_index, true);
-    };
-
-#else
-    net.on_data_received = [] (std::string const & receiver_name, std::string const & sender_name
-        , int priority, archive_t bytes, std::size_t source_index, std::size_t target_index)
-    {
-        LOGD(TAG, "Message received by {} from {}", receiver_name, sender_name);
-
-        std::string text(bytes.data(), bytes.size());
-
-        REQUIRE_EQ(text, g_text);
-
-        // fmt::println(text);
-
-        g_message_matrix.wlock()->set(source_index, target_index, true);
-    };
-#endif
-
-    constexpr bool BEHIND_NAT = true;
-    g_text = tools::random_text();
-
+    // Run before connect calls
     net.listen_all();
 
     // Connect gateways
-    net.connect_host("a", "b");
-    net.connect_host("a", "c");
-    net.connect_host("a", "d");
+    net.connect("a", "c");
+    net.connect("a", "d");
+    net.connect("a", "e");
+    net.connect("b", "c");
+    net.connect("b", "d");
+    net.connect("b", "e");
+    net.connect("c", "a");
+    net.connect("c", "b");
+    net.connect("d", "a");
+    net.connect("d", "b");
+    net.connect("e", "a");
+    net.connect("e", "b");
 
-    net.connect_host("b", "a");
-    net.connect_host("b", "c");
-
-    net.connect_host("c", "a");
-    net.connect_host("c", "b");
-    net.connect_host("c", "d");
-
-    net.connect_host("d", "a");
-    net.connect_host("d", "c");
-
-    net.connect_host("A0", "a", BEHIND_NAT);
-    net.connect_host("A1", "a", BEHIND_NAT);
-
-    net.connect_host("B0", "b", BEHIND_NAT);
-    net.connect_host("B1", "b", BEHIND_NAT);
-
-    net.connect_host("C0", "c", BEHIND_NAT);
-    net.connect_host("C1", "c", BEHIND_NAT);
-
-    net.connect_host("D0", "d", BEHIND_NAT);
-    net.connect_host("D1", "d", BEHIND_NAT);
-
-    net.connect_host("A0", "A1");
-    net.connect_host("A1", "A0");
-    net.connect_host("B0", "B1");
-    net.connect_host("B1", "B0");
-    net.connect_host("C0", "C1");
-    net.connect_host("C1", "C0");
-    net.connect_host("D0", "D1");
-    net.connect_host("D1", "D0");
-
-    pfs::signal_guard signal_guard {SIGINT, sigterm_handler};
+    net.connect("A0", "a", BEHIND_NAT);
+    net.connect("B0", "b", BEHIND_NAT);
 
     net.run_all();
-
-    REQUIRE(tools::wait_atomic_counter(g_channels_established_counter, 34));
-    REQUIRE(tools::wait_matrix_count(g_route_matrix, 132));
-    CHECK(tools::print_matrix_with_check(*g_route_matrix.rlock(), {"a", "b", "c", "d"
-        , "A0", "A1", "B0", "B1", "C0", "C1", "D0", "D1"}));
-
-    net.send_message("A0", "B1", g_text);
-    net.send_message("B1", "D1", g_text);
-    net.send_message("D0", "A0", g_text);
-    net.send_message("D0", "A1", g_text);
-    net.send_message("D0", "B0", g_text);
-    net.send_message("D0", "B1", g_text);
-    net.send_message("D0", "C0", g_text);
-    net.send_message("D0", "C1", g_text);
-    net.send_message("D0", "D1", g_text);
-
-    net.send_report("A0", "B1", g_text);
-    net.send_report("B1", "D1", g_text);
-    net.send_report("D0", "A0", g_text);
-    net.send_report("D0", "A1", g_text);
-    net.send_report("D0", "B0", g_text);
-    net.send_report("D0", "B1", g_text);
-    net.send_report("D0", "C0", g_text);
-    net.send_report("D0", "C1", g_text);
-    net.send_report("D0", "D1", g_text);
-
-#ifdef NETTY__TESTS_USE_MESHNET_NODE_POOL_RD
-    REQUIRE(tools::wait_matrix_count(g_message_matrix, 9));
-    REQUIRE(tools::wait_matrix_count(g_report_matrix, 9));
-#else
-    REQUIRE(tools::wait_matrix_count(g_message_matrix, 18));
-#endif
-    net.interrupt_all();
-    net.join_all();
 }

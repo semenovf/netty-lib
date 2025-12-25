@@ -88,7 +88,7 @@ void channel_destroyed_cb (node_spec_t const & source, node_spec_t const & peer)
 
 template <std::size_t N>
 void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & source
-    , node_spec_t const & peer, std::size_t route_index /*std::vector<node_id> gw_chain*/)
+    , node_spec_t const & peer, std::size_t /*route_index*/)
 {
     LOGD(TAG, "{}: {}: {}-->{}"
         , source.first
