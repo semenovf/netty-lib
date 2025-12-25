@@ -463,7 +463,8 @@ public:
         auto ep = locate_endpoint(index);
 
         if (ep == nullptr) {
-            _on_error(tr::f_("unable to disconnect from: peer index={}, peer id={}", index, peer_id));
+            _on_error(tr::f_("unable to disconnect from: peer index={}, peer id={}", index
+                , to_string(peer_id)));
             return;
         }
 
@@ -481,7 +482,8 @@ public:
         auto ep = locate_endpoint(index);
 
         if (ep == nullptr) {
-            _on_error(tr::f_("unable to set frame size: peer index={}, peer id={}", index, peer_id));
+            _on_error(tr::f_("unable to set frame size: peer index={}, peer id={}", index
+                , to_string(peer_id)));
             return;
         }
 

@@ -26,7 +26,7 @@
 
 static constexpr char const * TAG = "test::meshnet";
 
-// Node ame + Node index in the meshnet node list
+// Node name + Node index in the meshnet node list
 using node_spec_t = std::pair<std::string, std::size_t>;
 
 class mesh_network
@@ -56,31 +56,25 @@ private:
     static mesh_network * _self;
 
 public:
-    netty::callback_t<void (node_spec_t const &, netty::meshnet::peer_index_t
-        , node_spec_t const &, bool)>
-    on_channel_established = [] (node_spec_t /*source*/, netty::meshnet::peer_index_t
-        , node_spec_t /*peer_name*/, bool /*is_gateway*/)
-    {};
+    netty::callback_t<void (node_spec_t const & /*source*/, netty::meshnet::peer_index_t
+        , node_spec_t const & /*peer*/, bool /*is_gateway*/)>
+    on_channel_established = [] (node_spec_t const &, netty::meshnet::peer_index_t
+        , node_spec_t const &, bool) {};
 
     netty::callback_t<void (node_spec_t const &, node_spec_t const &)>
-    on_channel_destroyed = [] (node_spec_t const &/*source*/, node_spec_t const & /*peer*/)
-    {};
+    on_channel_destroyed = [] (node_spec_t const &/*source*/, node_spec_t const & /*peer*/) {};
 
-    netty::callback_t<void (node_spec_t const &, node_spec_t const &
-        , netty::socket4_addr saddr)>
-    on_duplicate_id = [] (node_spec_t const & /*source*/, node_spec_t const & /*peer*/
-        , netty::socket4_addr saddr)
-    {};
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*peer*/
+        , netty::socket4_addr)>
+    on_duplicate_id = [] (node_spec_t const &, node_spec_t const &, netty::socket4_addr) {};
 
-    netty::callback_t<void (node_spec_t const &, node_spec_t const &, std::size_t)>
-    on_route_ready = [] (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
-        , std::size_t /*route_index*/)
-    {};
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
+        , std::size_t /*route_index*/)>
+    on_route_ready = [] (node_spec_t const &, node_spec_t const & , std::size_t ) {};
 
-    netty::callback_t<void (node_spec_t const &, node_spec_t const &, std::size_t)>
-    on_route_lost = [] (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
-        , std::size_t /*route_index*/)
-    {};
+    netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
+        , std::size_t /*route_index*/)>
+    on_route_lost = [] (node_spec_t const &, node_spec_t const &, std::size_t) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/)>
     on_node_unreachable = [] (node_spec_t const &, node_spec_t const &) {};
@@ -91,8 +85,7 @@ public:
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , std::string const & /*msgid*/, int /*priority*/, archive_t /*msg*/)>
-    on_message_received = [] (node_spec_t const & , node_spec_t const &, std::string const &, int, archive_t)
-    {};
+    on_message_received = [] (node_spec_t const & , node_spec_t const &, std::string const &, int, archive_t) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*receiver*/
         , std::string const & /*msgid*/)>

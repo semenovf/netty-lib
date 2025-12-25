@@ -333,7 +333,7 @@ public:
         if (index > _gateway_chains.size()) {
             throw error {
                  std::make_error_code(std::errc::invalid_argument)
-               , tr::f_("gateway chain index is out of bounds")
+               , tr::_("gateway chain index is out of bounds")
             };
         }
 
@@ -352,7 +352,7 @@ public:
         if (index > _gateway_chains.size()) {
             throw error {
                   std::make_error_code(std::errc::invalid_argument)
-                , tr::f_("gateway chain index is out of bounds")
+                , tr::_("gateway chain index is out of bounds")
             };
         }
 
