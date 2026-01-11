@@ -31,12 +31,14 @@ namespace delivery {
 
 /**
  * @param Transport Underlying transport.
- * @param MessageIdTraits Message identifier traits (identifier type definition, to_string() converter, etc).
+ * @param MessageId Message identifier.
+ * @param DeliveryController Delivery controller class (@see delivery_controller).
+ * @param RecursiveWriterMutex Recursive mutex for write operations (@see std::recursive_mutex)
  */
 template <typename Transport
     , typename MessageId
     , typename DeliveryController
-    , typename RecursiveWriterMutex>
+    , typename RecursiveWriterMutex = std::recursive_mutex>
 class manager
 {
     friend DeliveryController;
@@ -65,7 +67,7 @@ private: // Callbacks
     callback_t<void (address_type, message_id)> _on_message_delivered;
     callback_t<void (address_type, message_id)> _on_message_lost;
     callback_t<void (address_type, int, archive_type)> _on_report_received;
-    callback_t<void (address_type, message_id, std::size_t)> _on_message_receiving_begin;
+    callback_t<void (address_type, message_id, std::size_t)> _on_message_start_receiving;
     callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_receiving_progress;
 
 public:
@@ -139,26 +141,15 @@ public: // Set callbacks
     }
 
     /**
-     * @details Callback @a f signature must match:
-     *          void (address_type, int priority, archive_type report)
-     */
-    template <typename F>
-    manager & on_report_received (F && f)
-    {
-        _on_report_received = std::forward<F>(f);
-        return *this;
-    }
-
-    /**
      * Notify receiver about of starting the message receiving.
      *
      * @details Callback @a f signature must match:
      *          void (address_type, message_id, std::size_t total_size)
      */
     template <typename F>
-    manager & on_message_receiving_begin (F && f)
+    manager & on_message_start_receiving (F && f)
     {
-        _on_message_receiving_begin = std::forward<F>(f);
+        _on_message_start_receiving = std::forward<F>(f);
         return *this;
     }
 
@@ -172,6 +163,17 @@ public: // Set callbacks
     manager & on_message_receiving_progress (F && f)
     {
         _on_message_receiving_progress = std::forward<F>(f);
+        return *this;
+    }
+
+    /**
+     * @details Callback @a f signature must match:
+     *          void (address_type, int priority, archive_type report)
+     */
+    template <typename F>
+    manager & on_report_received (F && f)
+    {
+        _on_report_received = std::forward<F>(f);
         return *this;
     }
 
@@ -193,9 +195,9 @@ private:
 
         PFS__THROW_UNEXPECTED(res.second, "Fix delivery::manager algorithm");
 
-        controller_type & c = res.first->second;
+        controller_type & dc = res.first->second;
 
-        return c;
+        return dc;
     }
 
     // For:
@@ -211,7 +213,7 @@ private:
         _on_error(errstr);
     }
 
-    void process_ready (address_type sender_addr)
+    void process_peer_ready (address_type sender_addr)
     {
         if (_on_receiver_ready)
             _on_receiver_ready(sender_addr);
@@ -242,11 +244,11 @@ private:
             _on_report_received(sender_addr, priority, std::move(report));
     }
 
-    void process_message_receiving_begin (address_type sender_addr, message_id msgid
+    void process_message_start_receiving (address_type sender_addr, message_id msgid
         , std::size_t total_size)
     {
-        if (_on_message_receiving_begin)
-            _on_message_receiving_begin(sender_addr, msgid, total_size);
+        if (_on_message_start_receiving)
+            _on_message_start_receiving(sender_addr, msgid, total_size);
     }
 
     void process_message_receiving_progress (address_type sender_addr, message_id msgid
@@ -262,8 +264,8 @@ public:
         auto pos = _controllers.find(addr);
 
         if (pos != _controllers.end()) {
-            auto & c = pos->second;
-            c.pause();
+            auto & dc = pos->second;
+            dc.pause();
         }
     }
 
@@ -272,8 +274,8 @@ public:
         auto pos = _controllers.find(addr);
 
         if (pos != _controllers.end()) {
-            auto & c = pos->second;
-            c.resume();
+            auto & dc = pos->second;
+            dc.resume();
         }
     }
 
@@ -284,8 +286,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto & c = ensure_controller(addr);
-        return c.enqueue_message(msgid, priority, std::move(msg));
+        auto & dc = ensure_controller(addr);
+        return dc.enqueue_message(msgid, priority, std::move(msg));
     }
 
     bool enqueue_message (address_type addr, message_id msgid, int priority, char const * msg
@@ -302,8 +304,8 @@ public:
         if (!_transport->is_reachable(addr))
             return false;
 
-        auto & c = ensure_controller(addr);
-        return c.enqueue_static_message(msgid, priority, msg, length);
+        auto & dc = ensure_controller(addr);
+        return dc.enqueue_static_message(msgid, priority, msg, length);
     }
 
     bool enqueue_report (address_type addr, int priority, char const * data
@@ -338,8 +340,8 @@ public:
     void process_input (address_type sender_addr, int priority, archive_type data)
     {
         if (!data.empty()) {
-            auto & c = ensure_controller(sender_addr);
-            c.process_input(this, priority, std::move(data));
+            auto & dc = ensure_controller(sender_addr);
+            dc.process_input(this, priority, std::move(data));
         }
     }
 
@@ -353,10 +355,10 @@ public:
         unsigned int n = 0;
 
         for (auto & x: _controllers) {
-            auto & c = x.second;
+            auto & dc = x.second;
 
-            if (!c.paused())
-                n += c.step(this);
+            if (!dc.paused())
+                n += dc.step(this);
         }
 
         n += _transport->step();

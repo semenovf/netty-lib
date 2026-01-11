@@ -31,6 +31,7 @@ option(NETTY__ENABLE_TELEMETRY "Enable telemetry for meshnet and delivery patter
 option(NETTY__ENABLE_AGGRESSIVE_COMPILE_CHECK "Use aggressive check compile options (g++ only)" OFF)
 option(NETTY__ENABLE_TRACE "Enable trace messages output" OFF)
 option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" ON)
+option(NETTY__MESHNET_SERIAL_FIELD_SUPPORT "Add serial field to priority frame (used for debugging meshnet pattern generally)" OFF)
 
 if (NETTY__BUILD_STRICT)
     if (NOT CMAKE_CXX_STANDARD)
@@ -217,6 +218,10 @@ endif()
 if (NETTY__ENABLE_TELEMETRY)
     target_link_libraries(netty PRIVATE pfs::ionik)
     target_compile_definitions(netty PUBLIC "NETTY__TELEMETRY_ENABLED=1")
+endif()
+
+if (NETTY__MESHNET_SERIAL_FIELD_SUPPORT)
+    target_compile_definitions(netty PUBLIC "NETTY__MESHNET_SERIAL_FIELD_SUPPORT=1")
 endif()
 
 target_include_directories(netty

@@ -269,9 +269,9 @@ public: // Set callbacks
      *          void (node_id, message_id, std::size_t total_size)
      */
     template <typename F>
-    reliable_node & on_message_receiving_begin (F && f)
+    reliable_node & on_message_start_receiving (F && f)
     {
-        _dm.on_message_receiving_begin(std::forward<F>(f));
+        _dm.on_message_start_receiving(std::forward<F>(f));
         return *this;
     }
 

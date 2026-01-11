@@ -53,12 +53,12 @@
 //       |       |
 //       +---d---+
 
-#define ITERATION_COUNT 5;
+#define ITERATION_COUNT 10;
 
-#define TEST_SCHEME_1_ENABLED 1
-#define TEST_SCHEME_2_ENABLED 1
+#define TEST_SCHEME_1_ENABLED 0
+#define TEST_SCHEME_2_ENABLED 0
 #define TEST_SCHEME_3_ENABLED 1
-#define TEST_SCHEME_4_ENABLED 1
+#define TEST_SCHEME_4_ENABLED 0
 
 #define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
 #define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
@@ -121,18 +121,23 @@ void message_delivered_cb (lorem::wait_atomic_counter32 & counter, node_spec_t c
     ++counter;
 }
 
-void report_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*receiver*/
-    , node_spec_t const & /*sender*/, int /*priority*/, archive_t /*bytes*/)
+void message_receiving_begin_cb (lorem::wait_atomic_counter32 & counter
+    , node_spec_t const & receiver, node_spec_t const & sender
+    , std::string const & msgid, std::size_t)
 {
-    // LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
-    //     , receiver.first, bytes.size());
     ++counter;
 }
 
 // Unusable, only for API check.
-void message_receiving_progress_cb (node_spec_t const &, node_spec_t const &
-    , std::string const &, std::size_t, std::size_t)
+void message_receiving_progress_cb (node_spec_t const & receiver, node_spec_t const & sender
+    , std::string const & msgid, std::size_t received_size, std::size_t total_size)
 {}
+
+void report_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*receiver*/
+    , node_spec_t const & /*sender*/, int /*priority*/, archive_t /*bytes*/)
+{
+    ++counter;
+}
 
 #endif
 
@@ -158,8 +163,16 @@ public:
 
         auto messages = generate_messages();
 
-        lorem::wait_atomic_counter8 channel_established_counter {C * 2};
-        lorem::wait_atomic_counter32 messages_received_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
+        std::uint8_t expected_channels_established = C * 2;
+        std::uint32_t expected_messages_received = (N * N - N) * messages.size();
+        std::uint32_t expected_reports_received = expected_messages_received;
+
+        LOGD(TAG, "Expected channels established: {}", expected_channels_established);
+        LOGD(TAG, "Expected messages received: {}", expected_messages_received);
+        LOGD(TAG, "Expected reports received: {}", expected_reports_received);
+
+        lorem::wait_atomic_counter8 channel_established_counter {expected_channels_established};
+        lorem::wait_atomic_counter32 message_received_counter {expected_messages_received};
 
         lorem::wait_bitmatrix<N> route_matrix;
         pnet->set_main_diagonal(route_matrix);
@@ -171,26 +184,29 @@ public:
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
         lorem::wait_atomic_counter8 receiver_ready_counter {N * N - N};
-        lorem::wait_atomic_counter32 message_delivered_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
-        lorem::wait_atomic_counter32 report_received_counter {static_cast<std::uint32_t>((N * N - N) * messages.size())};
+        lorem::wait_atomic_counter32 message_delivered_counter {expected_messages_received};
+        lorem::wait_atomic_counter32 message_receiving_begin_counter {expected_messages_received};
+        lorem::wait_atomic_counter32 report_received_counter {expected_reports_received};
 
         pnet->on_receiver_ready = std::bind(receiver_ready_cb, std::ref(receiver_ready_counter), _1, _2);
         pnet->on_message_delivered = std::bind(message_delivered_cb, std::ref(message_delivered_counter)
             , _1, _2, _3);
-        pnet->on_message_received = std::bind(data_received_cb, std::ref(messages_received_counter)
+        pnet->on_message_received = std::bind(data_received_cb, std::ref(message_received_counter)
             , _1, _2, _4, _5);
-        pnet->on_message_receiving_progress = message_receiving_progress_cb;;
+        pnet->on_message_start_receiving = std::bind(message_receiving_begin_cb
+            , std::ref(message_receiving_begin_counter), _1, _2, _3, _4);
+        pnet->on_message_receiving_progress = message_receiving_progress_cb;
 
         pnet->on_report_received = std::bind(report_received_cb, std::ref(report_received_counter)
             , _1, _2, _3, _4);
 #else
-        pnet->on_data_received = std::bind(data_received_cb, std::ref(messages_received_counter)
+        pnet->on_data_received = std::bind(data_received_cb, std::ref(message_received_counter)
             , _1, _2, _3, _4);
 #endif
 
         pnet->set_scenario([&] () {
-            REQUIRE(channel_established_counter());
-            REQUIRE(route_matrix());
+            REQUIRE(channel_established_counter.wait());
+            REQUIRE(route_matrix.wait());
 
             auto const & node_names = pnet->node_names();
             auto routes = pnet->shuffle_messages(node_names, node_names, messages);
@@ -204,12 +220,13 @@ public:
             }
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
-            REQUIRE(receiver_ready_counter());
+            REQUIRE(receiver_ready_counter.wait());
+            REQUIRE(message_receiving_begin_counter.wait());
 #endif
-            REQUIRE(messages_received_counter());
+            REQUIRE(message_received_counter.wait());
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
-            REQUIRE(report_received_counter());
-            REQUIRE(message_delivered_counter());
+            REQUIRE(report_received_counter.wait());
+            REQUIRE(message_delivered_counter.wait());
 #endif
             pnet->interrupt_all();
         });

@@ -65,20 +65,6 @@ TEST_CASE("clear") {
     CHECK(ar.empty());
 }
 
-TEST_CASE("erase") {
-    {
-        archive_t ar {kABC, 3};
-        ar.erase(1, 2);
-        CHECK_EQ(ar.size(), 1);
-        CHECK_EQ(ar.data()[0], 'A');
-    }
-
-    {
-        archive_t ar {kABC, 3};
-        CHECK_THROWS_AS(ar.erase(1, 3), std::range_error);
-    }
-}
-
 TEST_CASE("erase_front") {
     {
         archive_t ar {kABC, 3};
@@ -124,7 +110,7 @@ TEST_CASE("container access") {
     archive_t ar { alphabet.data(), alphabet.size()};
 
     ar.erase_front(1);
-    auto c = ar.container();
+    auto c = ar.move_container();
 
     CHECK_EQ(c.size(), alphabet.size() - 1);
     CHECK_EQ(c[0], alphabet[1]);

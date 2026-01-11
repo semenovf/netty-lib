@@ -288,7 +288,7 @@ public:
     unsigned int step (error * perr = nullptr)
     {
         auto result = 0;
-        result += send();
+        result += do_send();
         auto n = WriterPoller::poll(std::chrono::milliseconds{0}, perr);
 
         result += n > 0 ? n : 0;
@@ -384,7 +384,7 @@ private:
     /**
      * @return Number of successful frame sendings.
      */
-    unsigned int send ()
+    unsigned int do_send ()
     {
         unsigned int result = 0;
 

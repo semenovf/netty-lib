@@ -15,6 +15,7 @@
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <vector>
 
@@ -46,9 +47,6 @@ namespace meshnet {
 // Last Byte (frame end flag): 0xED
 //
 
-// For debugging only
-#define NETTY__PF_SERIAL_FIELD_SUPPORT 0
-
 /**
  * Priority frame traits
  */
@@ -61,7 +59,7 @@ class priority_frame
     using deserializer_type = typename serializer_traits_type::deserializer_type;
 
 public:
-#if NETTY__PF_SERIAL_FIELD_SUPPORT
+#if NETTY__MESHNET_SERIAL_FIELD_SUPPORT
     static constexpr std::uint16_t header_size () { return 4 + 4; } // flag + pr + serial + size
 #else
     static constexpr std::uint16_t header_size () { return 4; } // flag + pr + size
@@ -77,7 +75,7 @@ public:
 
 public:
     /**
-     * Partially pack data into frame from the source.
+     * Packs chunk of data source into frame.
      *
      * @param priority Priority value.
      * @param outp Target to pack data.
@@ -86,12 +84,13 @@ public:
      */
     static void pack (int priority, archive_type & outp, archive_type & inp, std::size_t frame_size)
     {
+#if NETTY__MESHNET_SERIAL_FIELD_SUPPORT
+        static std::atomic_uint32_t s_serial_counter {1};
+#endif
+
         if (inp.empty())
             return;
 
-#if NETTY__PF_SERIAL_FIELD_SUPPORT
-        static std::uint32_t serial = 0;
-#endif
         frame_size = (std::min)(inp.size() + empty_frame_size(), frame_size);
 
         PFS__THROW_UNEXPECTED(frame_size > empty_frame_size(), "Fix meshnet::priority_frame::pack algorithm");
@@ -103,8 +102,8 @@ public:
         out << begin_flag();
         out << static_cast<char>(priority & 0x0F);
 
-#if NETTY__PF_SERIAL_FIELD_SUPPORT
-        ++serial;
+#if NETTY__MESHNET_SERIAL_FIELD_SUPPORT
+        auto serial = s_serial_counter.fetch_add(1);
         out << serial;
 #endif
 
@@ -124,7 +123,7 @@ public:
      *
      * @return @c true if frame is complete and parsed successfully, @c false if frame is incomplete.
      *
-     * @throw netty::error if frame is invalid or corrupted
+     * @throw netty::error if frame is invalid or corrupted.
      */
     static bool parse (std::array<archive_type, PriorityCount> & pool, archive_type & inp)
     {
@@ -158,9 +157,10 @@ public:
 
         archive_type payload;
 
-#if NETTY__PF_SERIAL_FIELD_SUPPORT
+#if NETTY__MESHNET_SERIAL_FIELD_SUPPORT
         std::uint32_t serial = 0;
         in >> serial;
+        (void)serial;
 #endif
 
         std::uint16_t payload_size = 0;

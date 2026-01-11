@@ -18,6 +18,20 @@
 
 NETTY__NAMESPACE_BEGIN
 
+template <typename Container = std::vector<char>>
+struct container_traits
+{
+    using container_type = Container;
+
+    static char const * data (container_type const & c);
+    static std::size_t size (container_type const & c);
+    static void append (container_type & c, char const * data, std::size_t n);
+    static void clear (container_type & c);
+    static void erase (container_type & c, std::size_t pos, std::size_t n);
+    static void resize (container_type & c, std::size_t n);
+    static void copy (container_type & c, char const * data, std::size_t n, std::size_t pos);
+};
+
 /**
  * @details
  * Container requirements:
@@ -31,8 +45,10 @@ NETTY__NAMESPACE_BEGIN
 template <typename Container = std::vector<char>>
 class archive
 {
+    using traits_type = container_traits<Container>;
+
 public:
-    using container_type = Container;
+    using container_type = typename traits_type::container_type;
 
 private:
     container_type _c;
@@ -41,8 +57,7 @@ private:
 public:
     archive () = default;
 
-    archive (char const * data, std::size_t n, std::size_t offset = 0)
-        : _offset(offset)
+    archive (char const * data, std::size_t n)
     {
         append(data, n);
     }
@@ -70,7 +85,7 @@ public:
     }
 
     archive (archive const & other)
-        : archive(other.data(), other.size(), other._offset)
+        : archive(other.data(), other.size())
     {}
 
     archive & operator = (archive const &) = delete;
@@ -78,9 +93,9 @@ public:
     ~archive ()  = default;
 
 public:
-    container_type && container () &
+    container_type && move_container () &
     {
-        erase(_c, 0, _offset);
+        traits_type::erase(_c, 0, _offset);
         _offset = 0;
         return std::move(_c);
     }
@@ -94,12 +109,18 @@ public:
         return std::memcmp(data(), other.data(), size()) == 0;
     }
 
+    // For test purposes for now
+    bool operator != (archive const & other) const noexcept
+    {
+        return !operator == (other);
+    }
+
     /**
      * @return @c nullptr on empty.
      */
     char const * data () const noexcept
     {
-        return data(_c) + _offset;
+        return traits_type::data(_c) + _offset;
     }
 
     bool empty () const noexcept
@@ -109,54 +130,33 @@ public:
 
     std::size_t size () const noexcept
     {
-        PFS__ASSERT(size(_c) >= _offset, "");
-        return size(_c) - _offset;
+        return traits_type::size(_c) - _offset;
     }
 
     void append (archive const & ar)
     {
-        append(_c, ar.data(), ar.size());
+        traits_type::append(_c, ar.data(), ar.size());
     }
 
     void append (container_type const & c)
     {
-        append(_c, data(c), size(c));
+        traits_type::append(_c, traits_type::data(c), traits_type::size(c));
     }
 
     void append (char const * data, std::size_t n)
     {
-        append(_c, data, n);
+        traits_type::append(_c, data, n);
     }
 
     void append (char ch)
     {
-        append(_c, & ch, 1);
+        traits_type::append(_c, & ch, 1);
     }
 
     void clear ()
     {
-        clear(_c);
+        traits_type::clear(_c);
         _offset = 0;
-    }
-
-    void erase (std::size_t pos, std::size_t n)
-    {
-        if (n == 0)
-            return;
-
-        if (pos == 0) {
-            erase_front(n);
-        } else {
-            if ((pos + n) > size()) {
-                throw std::range_error {
-                      tr::f_("range to erase is out of bounds: "
-                        "begin position: {}, number of elements to erase: {}, container size: {}"
-                        , pos, n, size())
-                };
-            }
-
-            erase(_c, pos + _offset, n);
-        }
     }
 
     void erase_front (std::size_t n)
@@ -179,7 +179,7 @@ public:
 
     void resize (std::size_t n)
     {
-        resize(_c, n);
+        traits_type::resize(_c, n + _offset);
     }
 
     /**
@@ -187,58 +187,51 @@ public:
      */
     void copy (char const * data, std::size_t n, std::size_t pos)
     {
-        copy(_c, data, n, pos);
+        traits_type::copy(_c, data, n, pos + _offset);
     }
-
-private:
-    static char const * data (container_type const & c);
-    static std::size_t size (container_type const & c);
-    static void append (container_type & c, char const * data, std::size_t n);
-    static void clear (container_type & c);
-    static void erase (container_type & c, std::size_t pos, std::size_t n);
-    static void resize (container_type & c, std::size_t n);
-    static void copy (container_type & c, char const * data, std::size_t n, std::size_t pos);
 };
 
 template <>
-inline char const * archive<std::vector<char>>::data (container_type const & c)
+inline char const * container_traits<std::vector<char>>::data (container_type const & c)
 {
     return c.data();
 }
 
 template <>
-inline std::size_t archive<std::vector<char>>::size (container_type const & c)
+inline std::size_t container_traits<std::vector<char>>::size (container_type const & c)
 {
     return c.size();
 }
 
 template <>
-inline void archive<std::vector<char>>::append (container_type & c, char const * data, std::size_t n)
+inline void container_traits<std::vector<char>>::append (container_type & c, char const * data
+    , std::size_t n)
 {
     c.insert(c.end(), data, data + n);
 }
 
 template <>
-inline void archive<std::vector<char>>::clear (container_type & c)
+inline void container_traits<std::vector<char>>::clear (container_type & c)
 {
     c.clear();
 }
 
 template <>
-inline void archive<std::vector<char>>::erase (container_type & c, std::size_t pos, std::size_t n)
+inline void container_traits<std::vector<char>>::erase (container_type & c, std::size_t pos
+    , std::size_t n)
 {
     c.erase(c.begin() + pos, c.begin() + pos + n);
 }
 
 template <>
-inline void archive<std::vector<char>>::resize (container_type & c, std::size_t n)
+inline void container_traits<std::vector<char>>::resize (container_type & c, std::size_t n)
 {
     c.resize(n);
 }
 
 template <>
-inline void archive<std::vector<char>>::copy (container_type & c, char const * data, std::size_t n
-    , std::size_t pos)
+inline void container_traits<std::vector<char>>::copy (container_type & c, char const * data
+    , std::size_t n, std::size_t pos)
 {
     std::copy(data, data + n, c.begin() + pos);
 }

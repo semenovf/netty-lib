@@ -92,6 +92,11 @@ public:
     on_message_delivered = [] (node_spec_t const &, node_spec_t const &, std::string const &) {};
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
+        , std::string const & /*msgid*/, std::size_t /*total_size*/)>
+    on_message_start_receiving = [] (node_spec_t const &, node_spec_t const &, std::string const &
+        , std::size_t) {};
+
+    netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , std::string const & /*msgid*/, std::size_t /*received_size*/, std::size_t /*total_size*/)>
     on_message_receiving_progress = [] (node_spec_t const &, node_spec_t const &
         , std::string const &, std::size_t, std::size_t) {};
@@ -186,7 +191,7 @@ public:
 
     static std::vector<std::pair<std::string, std::string>>
     shuffle_routes (std::vector<std::string> const & source_names
-        , std::vector<std::string> const dest_names);
+        , std::vector<std::string> const & dest_names);
 
     static std::vector<std::tuple<std::string, std::string, std::string>>
     shuffle_messages (std::vector<std::string> const & source_names

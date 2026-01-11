@@ -89,12 +89,14 @@ public:
     /**
      * Acknowledges message part.
      *
-     * @return @c false if @a sn is out of bounds.
+     * @return @c true if the part newly acknowledged or @c false if the part already acknowledged
+     *         before.
      */
-    bool acknowledge_part (serial_number sn, archive_type const & part)
+    /*[[nodiscard]]*/ bool acknowledge_part (serial_number sn, archive_type const & part)
     {
-        if (sn < _first_sn || sn > _last_sn)
-            return false;
+        PFS__THROW_UNEXPECTED(sn >= _first_sn && sn <= _last_sn
+            , tr::f_("Fix delivery::multipart_assembler algorithm: serial number is out of bounds: "
+                "SN({}) < {} || SN({}) > {}", sn, _first_sn, sn, _last_sn));
 
         if (part.size() > _part_size) {
             throw error {
@@ -105,20 +107,18 @@ public:
 
         std::size_t index = sn - _first_sn;
 
-        // Already received
-        if (_parts_received[index])
+        if (!_parts_received[index]) {
+            PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
+
+            _remain_parts--;
+            _received_size += part.size();
+            _payload.copy(part.data(), part.size(), index * _part_size);
+            _parts_received[index] = true;
             return true;
+        }
 
-        PFS__THROW_UNEXPECTED(_remain_parts > 0, "Fix delivery::multipart_assembler algorithm");
-
-        _remain_parts--;
-        _received_size += part.size();
-
-        //std::copy(part.begin(), part.end(), _payload.begin() + (index * _part_size));
-        _payload.copy(part.data(), part.size(), index * _part_size);
-        _parts_received[index] = true;
-
-        return true;
+        // Already received and acknowledged.
+        return false;
     }
 
     bool is_complete () const noexcept

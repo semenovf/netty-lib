@@ -126,12 +126,15 @@ public:
             return _frame;
         }
 
-        if (_empty)
+        if (_empty) {
+            PFS__THROW_UNEXPECTED(_frame.empty(), "");
             return _frame; // _frame is empty here
+        }
 
         auto priority = next_priority();
 
         if (priority < 0) {
+            PFS__THROW_UNEXPECTED(_frame.empty(), "");
             _empty = true;
             return _frame; // _frame is empty here
         }
@@ -140,12 +143,14 @@ public:
         auto & front = q.front();
 
         PFS__THROW_UNEXPECTED(_frame.empty(), "");
+        PFS__THROW_UNEXPECTED(!front.empty(), "");
 
         priority_frame_type::pack(priority, _frame, front, frame_size);
 
         // Check topmost message is processed
         if (front.empty())
             q.pop();
+
 
         return _frame;
     }
@@ -155,11 +160,10 @@ public:
         PFS__THROW_UNEXPECTED(n > 0, "");
         PFS__THROW_UNEXPECTED(n <= _frame.size(), "");
 
-        if (_frame.size() == n) {
+        if (_frame.size() == n)
             _frame.clear();
-        } else {
+        else
             _frame.erase_front(n);
-        }
     }
 
 public: // static

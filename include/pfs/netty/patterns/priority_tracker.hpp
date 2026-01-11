@@ -64,13 +64,13 @@ public:
     }
 
     /**
-     * Reset to an initial state.
+     * Reset to an initial state (unused yet).
      */
-    void reset ()
-    {
-        _current_priority = 0;
-        _current_counter = 0;
-    }
+    // void reset ()
+    // {
+    //     _current_priority = 0;
+    //     _current_counter = 0;
+    // }
 };
 
 template <>

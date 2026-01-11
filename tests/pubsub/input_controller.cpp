@@ -39,7 +39,7 @@ TEST_CASE("data") {
     input_controller_t ic;
 
     ic.on_data_ready = [&] (archive_t && msg) {
-        auto && c = msg.container();
+        auto && c = msg.move_container();
         CHECK_EQ(c, msg_sample);
         counter++;
     };

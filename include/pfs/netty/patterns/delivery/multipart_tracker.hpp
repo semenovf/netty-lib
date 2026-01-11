@@ -74,7 +74,7 @@ private:
     // NOTE 200 is better than 500 when exchanging bitween demo programs running on host and
     // virtial box machines.
     // Maybe there is some algorithm to calculate this value.
-    // Using windows size transmission may occur intermittently,
+    // Using windows size transmission may occur intermittently.
     std::size_t _window_size {200}; // Max number of parts awaiting acknowledgement
 
 public:
@@ -120,15 +120,18 @@ public:
     ~multipart_tracker () {}
 
 private:
+    std::size_t part_count () const noexcept
+    {
+        std::size_t n = _size / _part_size;
+        std::size_t mod = _size % _part_size;
+
+        return mod == 0 ? n : n + 1;
+    }
+
     void reset ()
     {
-        // part_count = 1 + size() / part_size
-        // last_sn    = first_sn + part_count - 1
-        //            = first_sn + (1 + size() / part_size) - 1
-        //            = first_sn + size() / part_size
-        _last_sn = _first_sn + _size / _part_size;
-
-        _remain_parts_count = _last_sn - _first_sn + 1;
+        _remain_parts_count = part_count();
+        _last_sn = _first_sn + _remain_parts_count - 1;
         _parts_acked.clear();
         _parts_acked.resize(_remain_parts_count, false);
 
@@ -173,12 +176,13 @@ private:
 
         std::size_t index = sn - _first_sn;
         auto part_size = _part_size;
+        auto is_last_part = index == _parts_acked.size() - 1;
 
-        // Last part, get tail part size.
-        if (index == _parts_acked.size() - 1)
+        // Last part, calculate tail part size.
+        if (is_last_part)
             part_size = _size - _part_size * index;
 
-        if (index == 0) { // First part
+        if (index == 0) { // First part (message heading)
             message_packet<message_id> pkt {sn};
             pkt.msgid = _msgid;
             pkt.total_size = pfs::numeric_cast<std::uint64_t>(_size);
@@ -267,12 +271,13 @@ public:
     template <typename Serializer>
     serial_number acquire_next_part (Serializer & out)
     {
-        // Message sending completed
+        // Message sending is completed
         if (_remain_parts_count == 0)
             return 0;
 
         auto acked_parts_count = _parts_acked.size() - _remain_parts_count;
 
+        // Check out-of-window
         if (_parts_acquired_count > acked_parts_count
                 && _parts_acquired_count - acked_parts_count > _window_size) {
             return 0;
@@ -329,6 +334,7 @@ public:
         return acquire_part<Serializer>(out, sn);
     }
 
+    // Called from delivery_controller
     void reset_to (message_id msgid, serial_number lowest_acked_sn)
     {
         if (lowest_acked_sn == 0) {

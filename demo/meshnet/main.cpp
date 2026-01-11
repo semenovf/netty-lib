@@ -249,7 +249,7 @@ void configure_node<reliable_node_pool_t> (reliable_node_pool_t & node_pool)
 #endif
     });
 
-    node_pool.on_message_receiving_begin([] (node_id id, message_id msgid, std::size_t total_size)
+    node_pool.on_message_start_receiving([] (node_id id, message_id msgid, std::size_t total_size)
     {
 #ifndef NETTY__TRACE_ENABLED
         LOGD(TAG, "Begin message receiving from: {}: msgid={}, size={}", to_string(id)

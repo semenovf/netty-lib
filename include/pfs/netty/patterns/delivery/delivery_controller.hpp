@@ -53,7 +53,7 @@ private:
     using multipart_assembler_type = multipart_assembler<message_id, archive_type>;
     using multipart_tracker_type = multipart_tracker<message_id, archive_type>;
 
-    struct assembler_item
+    struct multipart_assembler_item
     {
         // Serial number of the last message part of the last message received
         serial_number last_sn {0};
@@ -61,7 +61,7 @@ private:
         pfs::optional<multipart_assembler_type> assembler;
     };
 
-    struct tracker_item
+    struct multipart_tracker_item
     {
         // Serial number of the last message part of the last message sent
         serial_number last_sn {0};
@@ -70,13 +70,22 @@ private:
         std::queue<multipart_tracker_type> q;
     };
 
+    // Peer synchronization state
+    enum class syn_state: std::uint8_t
+    {
+          initial = 0
+        , request_received = 0b0001
+        , response_received = 0b0010
+        , complete = 0b0011
+    };
+
 private:
-    address_type _addr;
+    address_type _peer_addr;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Incoming specific members
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    std::array<assembler_item, PRIORITY_COUNT> _assemblers;
+    std::array<multipart_assembler_item, PRIORITY_COUNT> _assemblers;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Outgoing specific members
@@ -85,26 +94,21 @@ private:
     // SYN packet expiration time
     time_point_type _exp_syn;
 
-    // Serial number synchronization flag: set to true when received SYN packet response.
-    bool _synchronized {false};
+    syn_state _syn_state {syn_state::initial};
 
     std::uint32_t _part_size {0}; // Message portion size
     std::chrono::milliseconds _exp_timeout {3000}; // Expiration timeout
 
     priority_tracker_type _priority_tracker;
 
-    std::array<tracker_item, PRIORITY_COUNT> _trackers;
+    std::array<multipart_tracker_item, PRIORITY_COUNT> _trackers;
 
     bool _paused {false};
 
-private:
-    callback_t<void (std::string const &)> _on_error
-        = [] (std::string const & msg) { LOGE(DELIVERY_TAG, "{}", msg); };
-
 public:
-    delivery_controller (address_type addr, std::uint32_t part_size
+    delivery_controller (address_type peer_addr, std::uint32_t part_size
         , std::chrono::milliseconds exp_timeout)
-        : _addr(addr)
+        : _peer_addr(peer_addr)
         , _part_size(part_size)
         , _exp_timeout(exp_timeout)
     {}
@@ -121,12 +125,12 @@ private:
         serializer_type out {ar};
         ack_packet ack_pkt {sn};
         ack_pkt.serialize(out);
-        auto success = m->enqueue_private(_addr, std::move(ar), priority);
+        auto success = m->enqueue_private(_peer_addr, std::move(ar), priority);
 
         if (!success) {
             m->process_error(tr::f_("there is a problem in communication with the"
                 " receiver: {} while sending ACK packet (serial number={})"
-                ", message delivery paused.", to_string(_addr), sn));
+                ", message delivery paused.", to_string(_peer_addr), sn));
             pause();
         }
     }
@@ -139,7 +143,7 @@ private:
             if (pkt.count() != PRIORITY_COUNT) {
                 m->process_error(tr::f_("SYN request received from: {}, but priority count ({})"
                     " is incompatible with own settings: {}"
-                        , to_string(_addr), pkt.count(), PRIORITY_COUNT));
+                        , to_string(_peer_addr), pkt.count(), PRIORITY_COUNT));
                 return;
             }
 
@@ -148,7 +152,7 @@ private:
                 auto lowest_acked = pkt.at(i);
 
                 NETTY__TRACE(DELIVERY_TAG, "SYN request received from: {}; priority={}; msgid={}, lowest_acked_sn={}"
-                    , to_string(_addr), i, to_string(lowest_acked.first), lowest_acked.second);
+                    , to_string(_peer_addr), i, to_string(lowest_acked.first), lowest_acked.second);
 
                 // lowest_acked_sn == 0 when:
                 //      * sender is in initial state (just [re]started)
@@ -164,12 +168,19 @@ private:
             serializer_type out {ar};
             syn_packet<message_id> response_pkt {};
             response_pkt.serialize(out);
-            m->enqueue_private(_addr, std::move(ar), 0);
+            m->enqueue_private(_peer_addr, std::move(ar), 0);
+
+            _syn_state = static_cast<syn_state>(pfs::to_underlying(_syn_state)
+                | pfs::to_underlying(syn_state::request_received));
         } else {
-            NETTY__TRACE(DELIVERY_TAG, "SYN response received, receiver ready: {}", to_string(_addr));
-            set_synchronized(true);
-            m->process_ready(_addr);
+            NETTY__TRACE(DELIVERY_TAG, "SYN response received from: {}", to_string(_peer_addr));
+
+            _syn_state = static_cast<syn_state>(pfs::to_underlying(_syn_state)
+                | pfs::to_underlying(syn_state::response_received));
         }
+
+        if (_syn_state == syn_state::complete)
+            m->process_peer_ready(_peer_addr);
     }
 
     template <typename Manager>
@@ -191,11 +202,7 @@ private:
         if (mt.is_complete()) {
             auto msgid = mt.msgid();
             t.q.pop();
-
-            NETTY__TRACE(DELIVERY_TAG, "message delivered to: {}; msgid={}", to_string(_addr)
-                , to_string(msgid));
-
-            m->process_message_delivered(_addr, msgid);
+            m->process_message_delivered(_peer_addr, msgid);
         }
     }
 
@@ -205,26 +212,17 @@ private:
         auto heading_part = h->type() == packet_enum::message;
 
         auto & a = _assemblers.at(priority);
-
-        if (heading_part) {
-            ;
-        } else {
-            // May be message_packet loss before, ignore part.
-            // May be old message part received (see multipart_tracker::acquire_next_part), ignore part.
-            // Waiting heading part receiving
-            if (!a.assembler.has_value())
-                return;
-        }
+        bool newly_acknowledged = false;
 
         if (heading_part) {
             auto pkt = static_cast<message_packet<message_id> *>(h);
 
             if (a.assembler.has_value()) {
                 if (a.assembler->msgid() != pkt->msgid) {
-                    NETTY__TRACE(DELIVERY_TAG, "message lost from: {}: msgid={}"
-                        , to_string(_addr), to_string(a.assembler->msgid()));
+                    NETTY__TRACE(DELIVERY_TAG, "message lost from: {}; msgid={}"
+                        , to_string(_peer_addr), to_string(a.assembler->msgid()));
 
-                    m->process_message_lost(_addr, a.assembler->msgid());
+                    m->process_message_lost(_peer_addr, a.assembler->msgid());
                 } else {
                     PFS__THROW_UNEXPECTED(a.assembler->first_sn() == h->sn()
                         && a.assembler->last_sn() == pkt->last_sn
@@ -238,48 +236,44 @@ private:
             multipart_assembler_type assembler { pkt->msgid, pkt->total_size, pkt->part_size
                 , h->sn(), pkt->last_sn };
 
-            assembler.acknowledge_part(h->sn(), part);
             a.assembler = std::move(assembler);
+
+            newly_acknowledged = a.assembler->acknowledge_part(h->sn(), part);
+            enqueue_ack_packet(m, priority, h->sn());
+
+            if (newly_acknowledged)
+                m->process_message_start_receiving(_peer_addr, a.assembler->msgid(), a.assembler->total_size());
         } else {
-            auto success = a.assembler->acknowledge_part(h->sn(), part);
+            // May be message_packet loss before, ignore part.
+            // May be old message part received (see multipart_tracker::acquire_next_part), ignore part.
+            // Waiting heading part receiving.
+            if (!a.assembler.has_value())
+                return;
 
-            PFS__THROW_UNEXPECTED(success
-                , tr::f_("Fix delivery::delivery_controller algorithm: serial number is out of bounds"
-                    "priority={}; pkt->sn()={}", priority, h->sn()));
+            newly_acknowledged = a.assembler->acknowledge_part(h->sn(), part);
+            enqueue_ack_packet(m, priority, h->sn());
         }
 
-        enqueue_ack_packet(m, priority, h->sn());
-
-        if (heading_part) {
-            NETTY__TRACE(DELIVERY_TAG, "message start receiving from: {}; msgid={}; size={} bytes"
-                , to_string(_addr), to_string(a.assembler->msgid()), a.assembler->total_size());
-
-            m->process_message_receiving_begin(_addr, a.assembler->msgid()
-                , a.assembler->total_size());
+        if (newly_acknowledged) {
+            m->process_message_receiving_progress(_peer_addr, a.assembler->msgid()
+                , a.assembler->received_size(), a.assembler->total_size());
         }
-
-        m->process_message_receiving_progress(_addr, a.assembler->msgid()
-            , a.assembler->received_size(), a.assembler->total_size());
 
         if (a.assembler->is_complete()) {
-            NETTY__TRACE(DELIVERY_TAG, "message received from: {}; msgid={}; priority={}; size={} bytes"
-                , to_string(_addr), to_string(a.assembler->msgid()), priority, a.assembler->payload().size());
-
-            m->process_message_received(_addr, a.assembler->msgid(), priority
-                , a.assembler->take_payload());
+            m->process_message_received(_peer_addr, a.assembler->msgid(), priority, a.assembler->take_payload());
             a.assembler.reset();
         }
     }
 
 public:
     template <typename Manager>
-    void process_input (Manager * m, int priority, archive_type const & data)
+    void process_input (Manager * m, int priority, archive_type data)
     {
         deserializer_type in {data.data(), data.size()};
-        in.start_transaction();
 
         // Data can contain more than one packet.
         do {
+            in.start_transaction();
             header h {in};
 
             if (in.is_good()) {
@@ -333,10 +327,7 @@ public:
                         if (!in.commit_transaction())
                             break;
 
-                        NETTY__TRACE(DELIVERY_TAG, "report received from: {}; priority={}, size={} bytes"
-                            , to_string(_addr), priority, bytes.size());
-
-                        m->process_report_received(_addr, priority, std::move(bytes));
+                        m->process_report_received(_peer_addr, priority, std::move(bytes));
                         break;
                     }
 
@@ -364,11 +355,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private:
-    void set_synchronized (bool value) noexcept
-    {
-        _synchronized = value;
-    }
-
     bool syn_expired () const noexcept
     {
         return _exp_syn <= clock_type::now();
@@ -418,14 +404,14 @@ public:
     void pause () noexcept
     {
         _paused = true;
-        NETTY__TRACE(DELIVERY_TAG, "message sending has been paused to: {}", to_string(_addr));
+        NETTY__TRACE(DELIVERY_TAG, "message sending has been paused with node: {}", to_string(_peer_addr));
     }
 
     void resume () noexcept
     {
         _paused = false;
-        set_synchronized(false);
-        NETTY__TRACE(DELIVERY_TAG, "message sending has been resumed to: {}", to_string(_addr));
+        _syn_state = syn_state::initial;
+        NETTY__TRACE(DELIVERY_TAG, "message sending has been resumed with node: {}", to_string(_peer_addr));
     }
 
     /**
@@ -439,7 +425,7 @@ public:
         t.last_sn = mt.last_sn();
 
         NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
-            , to_string(_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
+            , to_string(_peer_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
 
         return true;
     }
@@ -455,7 +441,7 @@ public:
         t.last_sn = mt.last_sn();
 
         NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
-            , to_string(_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
+            , to_string(_peer_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
 
         return true;
     }
@@ -467,18 +453,18 @@ public:
 
         // Initiate synchronization if needed.
         // Send SYN packet to synchronize serial numbers.
-        if (!_synchronized) {
+        if (_syn_state != syn_state::complete) {
             if (syn_expired()) {
                 int priority = 0; // High priority
                 auto serialized_syn_packet = acquire_syn_packet();
-                auto success = m->enqueue_private(_addr, std::move(serialized_syn_packet), priority);
+                auto success = m->enqueue_private(_peer_addr, std::move(serialized_syn_packet), priority);
 
                 if (success) {
                     n++;
                 } else {
                     m->process_error(tr::f_("there is a problem in communication with the"
                         " receiver: {} while initiating synchronization, message delivery paused."
-                            , to_string(_addr)));
+                            , to_string(_peer_addr)));
                     pause();
                 }
             }
@@ -511,7 +497,7 @@ public:
                 PFS__THROW_UNEXPECTED(mt->priority() == priority
                     , "Fix delivery::delivery_controller algorithm");
 
-                auto success = m->enqueue_private(_addr, std::move(ar), mt->priority());
+                auto success = m->enqueue_private(_peer_addr, std::move(ar), mt->priority());
 
                 if (success) {
                     n++;
@@ -519,7 +505,7 @@ public:
                     m->process_error(tr::f_("there is a problem in communication with the"
                         " receiver: {} while sending message (priority={}, serial number={})"
                         ", message delivery paused."
-                        , to_string(_addr), mt->priority(), sn));
+                        , to_string(_peer_addr), mt->priority(), sn));
                     pause();
                 }
 
