@@ -238,7 +238,7 @@ TEST_CASE("ddata") {
         REQUIRE_EQ(sid, kSID);
         CHECK_EQ(priority, 1);
 
-        auto && c = msg.container();
+        auto && c = msg.move_container();
         CHECK_EQ(c, msg_sample);
         counter++;
     };
@@ -278,7 +278,7 @@ TEST_CASE("gdata") {
         CHECK_EQ(pkt.sender_id(), sender_id);
         CHECK_EQ(pkt.receiver_id(), receiver_id);
 
-        auto && c = msg.container();
+        auto && c = msg.move_container();
         CHECK_EQ(c, msg_sample);
         counter++;
     };

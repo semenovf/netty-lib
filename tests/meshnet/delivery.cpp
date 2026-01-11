@@ -75,8 +75,8 @@ TEST_CASE("delivery") {
     net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
 
     net.set_scenario([&] {
-        REQUIRE(channel_established_counter());
-        REQUIRE(route_matrix());
+        REQUIRE(channel_established_counter.wait());
+        REQUIRE(route_matrix.wait());
         net.interrupt_all();
     });
 

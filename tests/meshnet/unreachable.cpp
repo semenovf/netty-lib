@@ -123,9 +123,9 @@ public:
             , std::ref(unreachable_matrix), _1, _2);
 
         pnet->set_scenario([&] () {
-            CHECK(channel_established_counter());
+            CHECK(channel_established_counter.wait());
 
-            CHECK(route_ready_matrix());
+            CHECK(route_ready_matrix.wait());
             tools::print_matrix(route_ready_matrix.value(), pnet->node_names());
 
             pnet->destroy(node_to_destroy);

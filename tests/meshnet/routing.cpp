@@ -140,8 +140,8 @@ public:
         net.on_node_unreachable = node_unreachable_cb;
 
         net.set_scenario([&] () {
-            CHECK(channel_established_counter());
-            CHECK(route_matrix());
+            CHECK(channel_established_counter.wait());
+            CHECK(route_matrix.wait());
             tools::print_matrix(route_matrix.value(), node_list);
             net.interrupt_all();
         });

@@ -143,13 +143,13 @@ TEST_CASE("scheme 3") {
     };
 
     net.set_scenario([&] () {
-        CHECK(channel_established_counter());
+        CHECK(channel_established_counter.wait());
         net.disconnect("a", "b");
         net.disconnect("A0", "a");
         net.disconnect("A1", "a");
         net.disconnect("B0", "b");
         net.disconnect("B1", "b");
-        CHECK(channel_destroyed_counter());
+        CHECK(channel_destroyed_counter.wait());
         net.interrupt_all();
     });
 

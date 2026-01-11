@@ -52,7 +52,7 @@ TEST_CASE("scheme 1") {
     };
 
     net.set_scenario([&] () {
-        CHECK(duplication_id_counter());
+        CHECK(duplication_id_counter.wait());
         net.interrupt_all();
     });
 
@@ -82,7 +82,7 @@ TEST_CASE("scheme 2") {
     };
 
     net.set_scenario([&] () {
-        CHECK(duplication_id_counter());
+        CHECK(duplication_id_counter.wait());
         net.interrupt_all();
     });
 
