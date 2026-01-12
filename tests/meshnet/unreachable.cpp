@@ -57,9 +57,6 @@
 #define TEST_SCHEME_3_ENABLED 1
 #define TEST_SCHEME_4_ENABLED 1
 
-#define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
-#define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
-
 using namespace std::placeholders;
 constexpr bool BEHIND_NAT = true;
 constexpr std::chrono::seconds BITMATRIX_TIME_LIMIT {2};

@@ -12,7 +12,6 @@
 #include "../doctest.h"
 #include "../tools.hpp"
 #include "mesh_network.hpp"
-#include <pfs/term.hpp>
 #include <pfs/lorem/wait_atomic_counter.hpp>
 #include <pfs/lorem/wait_bitmatrix.hpp>
 #include <functional>
@@ -33,10 +32,9 @@
 //      +---d---+
 //
 
-#define ITERATION_COUNT 1;
+#define ITERATION_COUNT 5;
 
 using namespace std::placeholders;
-using colorzr_t = pfs::term::colorizer;
 
 constexpr bool BEHIND_NAT = true;
 
@@ -62,43 +60,52 @@ void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & sour
 
 TEST_CASE("delivery") {
     static constexpr std::size_t N = 7;
-    mesh_network net {"a", "b", "c", "d", "e", "A0", "B0"};
 
-    lorem::wait_atomic_counter8 channel_established_counter {static_cast<std::uint8_t>(16)};
-    lorem::wait_bitmatrix<N> route_matrix;
-    net.set_main_diagonal(route_matrix);
+    int iteration_count = ITERATION_COUNT;
 
-    net.on_channel_established = std::bind(channel_established_cb
-        , std::ref(channel_established_counter)
-        , _1, _2, _3, _4);
+    while (iteration_count-- > 0) {
+        START_TEST_MESSAGE
 
-    net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
+        mesh_network net {"a", "b", "c", "d", "e", "A0", "B0"};
 
-    net.set_scenario([&] {
-        REQUIRE(channel_established_counter.wait());
-        REQUIRE(route_matrix.wait());
-        net.interrupt_all();
-    });
+        lorem::wait_atomic_counter8 channel_established_counter {static_cast<std::uint8_t>(16)};
+        lorem::wait_bitmatrix<N> route_matrix;
+        net.set_main_diagonal(route_matrix);
 
-    // Run before connect calls
-    net.listen_all();
+        net.on_channel_established = std::bind(channel_established_cb
+            , std::ref(channel_established_counter)
+            , _1, _2, _3, _4);
 
-    // Connect gateways
-    net.connect("a", "c");
-    net.connect("a", "d");
-    net.connect("a", "e");
-    net.connect("b", "c");
-    net.connect("b", "d");
-    net.connect("b", "e");
-    net.connect("c", "a");
-    net.connect("c", "b");
-    net.connect("d", "a");
-    net.connect("d", "b");
-    net.connect("e", "a");
-    net.connect("e", "b");
+        net.on_route_ready = std::bind(route_ready_cb<N>, std::ref(route_matrix), _1, _2, _3);
 
-    net.connect("A0", "a", BEHIND_NAT);
-    net.connect("B0", "b", BEHIND_NAT);
+        net.set_scenario([&] {
+            REQUIRE(channel_established_counter.wait());
+            REQUIRE(route_matrix.wait());
+            net.interrupt_all();
+        });
 
-    net.run_all();
+        // Run before connect calls
+        net.listen_all();
+
+        // Connect gateways
+        net.connect("a", "c");
+        net.connect("a", "d");
+        net.connect("a", "e");
+        net.connect("b", "c");
+        net.connect("b", "d");
+        net.connect("b", "e");
+        net.connect("c", "a");
+        net.connect("c", "b");
+        net.connect("d", "a");
+        net.connect("d", "b");
+        net.connect("e", "a");
+        net.connect("e", "b");
+
+        net.connect("A0", "a", BEHIND_NAT);
+        net.connect("B0", "b", BEHIND_NAT);
+
+        net.run_all();
+
+        END_TEST_MESSAGE
+    }
 }

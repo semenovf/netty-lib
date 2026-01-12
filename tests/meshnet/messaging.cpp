@@ -53,15 +53,12 @@
 //       |       |
 //       +---d---+
 
-#define ITERATION_COUNT 10;
+#define ITERATION_COUNT 5;
 
-#define TEST_SCHEME_1_ENABLED 0
-#define TEST_SCHEME_2_ENABLED 0
+#define TEST_SCHEME_1_ENABLED 1
+#define TEST_SCHEME_2_ENABLED 1
 #define TEST_SCHEME_3_ENABLED 1
-#define TEST_SCHEME_4_ENABLED 0
-
-#define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
-#define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
+#define TEST_SCHEME_4_ENABLED 1
 
 using namespace std::placeholders;
 using colorzr_t = pfs::term::colorizer;

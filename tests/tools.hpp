@@ -19,6 +19,9 @@
 #include <thread>
 #include <signal.h>
 
+#define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
+#define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
+
 namespace tools {
 
 #ifdef DOCTEST_VERSION

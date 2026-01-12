@@ -31,9 +31,7 @@
 constexpr bool BEHIND_NAT = true;
 
 TEST_CASE("scheme 1") {
-    LOGD(TAG, "==========================================");
-    LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
-    LOGD(TAG, "==========================================");
+    START_TEST_MESSAGE
 
     // Why 4? -------------------------------------------
     // 1. A0--->A0_dup (request)                        |
@@ -60,12 +58,12 @@ TEST_CASE("scheme 1") {
     net.connect("A0", "A0_dup");
     net.connect("A0_dup", "A0");
     net.run_all();
+
+    END_TEST_MESSAGE
 }
 
 TEST_CASE("scheme 2") {
-    LOGD(TAG, "==========================================");
-    LOGD(TAG, "= TEST CASE: {}", tools::current_doctest_name());
-    LOGD(TAG, "==========================================");
+    START_TEST_MESSAGE
 
     // Why 2? -------------------------------------------
     // 1. A0--->A0_dup (request)                        |
@@ -89,4 +87,6 @@ TEST_CASE("scheme 2") {
     net.listen_all();
     net.connect("A0", "A0_dup", BEHIND_NAT);
     net.run_all();
+
+    END_TEST_MESSAGE
 }

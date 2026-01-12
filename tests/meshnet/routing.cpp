@@ -78,9 +78,6 @@
 #define TEST_SCHEME_5_ENABLED 1
 #define TEST_SCHEME_6_ENABLED 1
 
-#define START_TEST_MESSAGE MESSAGE("START Test: ", std::string(tools::current_doctest_name()));
-#define END_TEST_MESSAGE MESSAGE("END Test: ", std::string(tools::current_doctest_name()));
-
 using namespace std::placeholders;
 using colorzr_t = pfs::term::colorizer;
 
