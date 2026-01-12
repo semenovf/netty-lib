@@ -182,7 +182,7 @@ public:
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
         lorem::wait_atomic_counter8 receiver_ready_counter {N * N - N};
         lorem::wait_atomic_counter32 message_delivered_counter {expected_messages_received};
-        lorem::wait_atomic_counter32 message_receiving_begin_counter {expected_messages_received};
+        lorem::wait_atomic_counter32 message_receiving_begin_counter {expected_messages_received, std::chrono::seconds{15}};
         lorem::wait_atomic_counter32 report_received_counter {expected_reports_received};
 
         pnet->on_receiver_ready = std::bind(receiver_ready_cb, std::ref(receiver_ready_counter), _1, _2);
