@@ -67,8 +67,8 @@ private: // Callbacks
     callback_t<void (address_type, message_id)> _on_message_delivered;
     callback_t<void (address_type, message_id)> _on_message_lost;
     callback_t<void (address_type, int, archive_type)> _on_report_received;
-    callback_t<void (address_type, message_id, std::size_t)> _on_message_start_receiving;
-    callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_receiving_progress;
+    callback_t<void (address_type, message_id, std::size_t)> _on_message_begin;
+    callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_progress;
 
 public:
     manager (transport_type & transport)
@@ -147,9 +147,9 @@ public: // Set callbacks
      *          void (address_type, message_id, std::size_t total_size)
      */
     template <typename F>
-    manager & on_message_start_receiving (F && f)
+    manager & on_message_begin (F && f)
     {
-        _on_message_start_receiving = std::forward<F>(f);
+        _on_message_begin = std::forward<F>(f);
         return *this;
     }
 
@@ -160,9 +160,9 @@ public: // Set callbacks
      *          void (address_type, message_id, std::size_t received_size, std::size_t total_size)
      */
     template <typename F>
-    manager & on_message_receiving_progress (F && f)
+    manager & on_message_progress (F && f)
     {
-        _on_message_receiving_progress = std::forward<F>(f);
+        _on_message_progress = std::forward<F>(f);
         return *this;
     }
 
@@ -244,18 +244,18 @@ private:
             _on_report_received(sender_addr, priority, std::move(report));
     }
 
-    void process_message_start_receiving (address_type sender_addr, message_id msgid
+    void process_message_begin (address_type sender_addr, message_id msgid
         , std::size_t total_size)
     {
-        if (_on_message_start_receiving)
-            _on_message_start_receiving(sender_addr, msgid, total_size);
+        if (_on_message_begin)
+            _on_message_begin(sender_addr, msgid, total_size);
     }
 
-    void process_message_receiving_progress (address_type sender_addr, message_id msgid
+    void process_message_progress (address_type sender_addr, message_id msgid
         , std::size_t received_size, std::size_t total_size)
     {
-        if (_on_message_receiving_progress)
-            _on_message_receiving_progress(sender_addr, msgid, received_size, total_size);
+        if (_on_message_progress)
+            _on_message_progress(sender_addr, msgid, received_size, total_size);
     }
 
 public:

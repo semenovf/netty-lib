@@ -242,7 +242,7 @@ private:
             enqueue_ack_packet(m, priority, h->sn());
 
             if (newly_acknowledged)
-                m->process_message_start_receiving(_peer_addr, a.assembler->msgid(), a.assembler->total_size());
+                m->process_message_begin(_peer_addr, a.assembler->msgid(), a.assembler->total_size());
         } else {
             // May be message_packet loss before, ignore part.
             // May be old message part received (see multipart_tracker::acquire_next_part), ignore part.
@@ -255,7 +255,7 @@ private:
         }
 
         if (newly_acknowledged) {
-            m->process_message_receiving_progress(_peer_addr, a.assembler->msgid()
+            m->process_message_progress(_peer_addr, a.assembler->msgid()
                 , a.assembler->received_size(), a.assembler->total_size());
         }
 

@@ -111,17 +111,17 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
         this->on_message_delivered(make_spec(name), make_spec(receiver_id), to_string(msgid));
     });
 
-    ptr->on_message_start_receiving([this, name] (node_id sender_id, message_id msgid
+    ptr->on_message_begin([this, name] (node_id sender_id, message_id msgid
         , std::size_t total_size)
     {
-        this->on_message_start_receiving(make_spec(name), make_spec(sender_id), to_string(msgid)
+        this->on_message_begin(make_spec(name), make_spec(sender_id), to_string(msgid)
             , total_size);
     });
 
-    ptr->on_message_receiving_progress([this, name] (node_id sender_id, message_id msgid
+    ptr->on_message_progress([this, name] (node_id sender_id, message_id msgid
         , std::size_t received_size, std::size_t total_size)
     {
-        this->on_message_receiving_progress(make_spec(name), make_spec(sender_id), to_string(msgid)
+        this->on_message_progress(make_spec(name), make_spec(sender_id), to_string(msgid)
             , received_size, total_size);
     });
 

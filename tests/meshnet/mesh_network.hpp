@@ -93,12 +93,12 @@ public:
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , std::string const & /*msgid*/, std::size_t /*total_size*/)>
-    on_message_start_receiving = [] (node_spec_t const &, node_spec_t const &, std::string const &
+    on_message_begin = [] (node_spec_t const &, node_spec_t const &, std::string const &
         , std::size_t) {};
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/
         , std::string const & /*msgid*/, std::size_t /*received_size*/, std::size_t /*total_size*/)>
-    on_message_receiving_progress = [] (node_spec_t const &, node_spec_t const &
+    on_message_progress = [] (node_spec_t const &, node_spec_t const &
         , std::string const &, std::size_t, std::size_t) {};
 
     netty::callback_t<void (node_spec_t const & /*receiver*/, node_spec_t const & /*sender*/

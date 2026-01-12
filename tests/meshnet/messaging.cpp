@@ -118,7 +118,7 @@ void message_delivered_cb (lorem::wait_atomic_counter32 & counter, node_spec_t c
     ++counter;
 }
 
-void message_receiving_begin_cb (lorem::wait_atomic_counter32 & counter
+void message_begin_cb (lorem::wait_atomic_counter32 & counter
     , node_spec_t const & receiver, node_spec_t const & sender
     , std::string const & msgid, std::size_t)
 {
@@ -126,7 +126,7 @@ void message_receiving_begin_cb (lorem::wait_atomic_counter32 & counter
 }
 
 // Unusable, only for API check.
-void message_receiving_progress_cb (node_spec_t const & receiver, node_spec_t const & sender
+void message_progress_cb (node_spec_t const & receiver, node_spec_t const & sender
     , std::string const & msgid, std::size_t received_size, std::size_t total_size)
 {}
 
@@ -190,9 +190,9 @@ public:
             , _1, _2, _3);
         pnet->on_message_received = std::bind(data_received_cb, std::ref(message_received_counter)
             , _1, _2, _4, _5);
-        pnet->on_message_start_receiving = std::bind(message_receiving_begin_cb
+        pnet->on_message_begin = std::bind(message_begin_cb
             , std::ref(message_receiving_begin_counter), _1, _2, _3, _4);
-        pnet->on_message_receiving_progress = message_receiving_progress_cb;
+        pnet->on_message_progress = message_progress_cb;
 
         pnet->on_report_received = std::bind(report_received_cb, std::ref(report_received_counter)
             , _1, _2, _3, _4);
