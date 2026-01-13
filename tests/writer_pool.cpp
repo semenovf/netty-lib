@@ -10,6 +10,7 @@
 #include "doctest.h"
 #include "serializer_traits.hpp"
 #include "pfs/netty/poller_types.hpp"
+#include "pfs/netty/startup.hpp"
 #include "pfs/netty/writer_pool.hpp"
 #include "pfs/netty/posix/tcp_socket.hpp"
 
@@ -49,6 +50,7 @@ public: // static
 };
 
 TEST_CASE("basic") {
+    netty::startup_guard netty_startup;
     using writer_pool_t = netty::writer_pool<netty::posix::tcp_socket, writer_poller_t, writer_queue>;
 
     writer_pool_t pool;
@@ -57,5 +59,3 @@ TEST_CASE("basic") {
 
     // TODO
 }
-
-

@@ -109,7 +109,7 @@ endif()
 
 check_include_file("poll.h" __has_poll)
 
-if (__has_poll)
+if (MSVC OR __has_poll)
     target_sources(netty PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/connecting_poller.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/posix/listener_poller.cpp

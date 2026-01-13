@@ -306,7 +306,8 @@ public:
 
             _heartbeat_controller.update(writer_sid);
 
-            NETTY__TRACE(MESHNET_TAG, "channel established: {}", to_string(id));
+            NETTY__TRACE(MESHNET_TAG, "channel established: {} (reader_sid={}, writer_sid={})"
+                    , to_string(id), reader_sid, writer_sid);
 
             _on_channel_established(_index, id, is_gateway);
 

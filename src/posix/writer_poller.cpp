@@ -77,14 +77,18 @@ int writer_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
 template <>
 writer_poller<posix::poll_poller>::writer_poller ()
+#if _MSC_VER
+    : _rep(new posix::poll_poller(POLLWRNORM
+#else
     : _rep(new posix::poll_poller(POLLERR | POLLOUT
 
-#ifdef POLLWRNORM
+#   ifdef POLLWRNORM
         | POLLWRNORM
-#endif
+#   endif
 
-#ifdef POLLWRBAND
+#   ifdef POLLWRBAND
         | POLLWRBAND
+#   endif
 #endif
     ))
 {}
@@ -116,9 +120,13 @@ int writer_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
             // TODO Recognize disconnection (EPIPE ?)
             if (ev.revents & POLLERR) {
                 int error_val = 0;
+#if _MSC_VER
+                int len = sizeof(error_val);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(& error_val), & len);
+#else
                 socklen_t len = sizeof(error_val);
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
+#endif
                 if (rc != 0) {
                     on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
                         , tr::f_("get socket option failure: {} (socket={})"

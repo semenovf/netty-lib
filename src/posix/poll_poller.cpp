@@ -7,10 +7,14 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "netty/posix/poll_poller.hpp"
+#include <pfs/bits/compiler.h>
 #include <pfs/i18n.hpp>
 #include <algorithm>
 #include <string.h>
-#include <sys/socket.h>
+
+#if PFS__COMPILER_GCC
+#   include <sys/socket.h>
+#endif
 
 NETTY__NAMESPACE_BEGIN
 
@@ -78,17 +82,32 @@ void poll_poller::remove_listener (listener_id sock, error * perr)
 
 int poll_poller::poll (std::chrono::milliseconds millis, error * perr)
 {
+    if (events.empty())
+        return 0;
+
     if (millis < std::chrono::milliseconds{0})
         millis = std::chrono::milliseconds{0};
 
+#if _MSC_VER
+    auto n = ::WSAPoll(events.data(), events.size(), millis.count());
+#else
     auto n = ::poll(events.data(), events.size(), millis.count());
+#endif
 
     if (n < 0) {
-        if (errno == EINTR) {
+#if _MSC_VER
+        auto last_errno = WSAGetLastError();
+
+        if (last_errno == WSAEINTR) {
+#else
+        auto last_errno = errno;
+
+        if (last_errno == EINTR) {
+#endif
             // Is not a critical error, ignore it
         } else {
             pfs::throw_or(perr, make_error_code(pfs::errc::system_error)
-                , tr::f_("poll failure: {}", pfs::system_error_text()));
+                , tr::f_("poll failure: {}", pfs::system_error_text(last_errno)));
 
             return n;
         }

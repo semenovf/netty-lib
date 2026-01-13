@@ -1,10 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.23 Initial version.
+//      2026.01.13 Fixed reader_poller based on poll_poller for MSVC.
 ////////////////////////////////////////////////////////////////////////////////
 #include "../reader_poller_impl.hpp"
 
@@ -107,14 +108,18 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
 
 template <>
 reader_poller<posix::poll_poller>::reader_poller ()
+#if _MSC_VER
+    : _rep(new posix::poll_poller(POLLRDNORM | POLLRDBAND
+#else
     : _rep(new posix::poll_poller(POLLERR | POLLIN | POLLNVAL
 
-#ifdef POLLRDNORM
+#   ifdef POLLRDNORM
         | POLLRDNORM
-#endif
+#   endif
 
-#ifdef POLLRDBAND
+#   ifdef POLLRDBAND
         | POLLRDBAND
+#   endif
 #endif
     ))
 {}
@@ -141,26 +146,39 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
 
             if (ev.revents & POLLERR) {
                 int error_val = 0;
+#if _MSC_VER
+                int len = sizeof(error_val);
+                auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(& error_val), & len);
+#else
                 socklen_t len = sizeof(error_val);
                 auto rc = getsockopt(ev.fd, SOL_SOCKET, SO_ERROR, & error_val, & len);
-
+#endif
                 if (rc != 0) {
                     on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
                         , tr::f_("get socket option failure: {} (socket={})"
                             , pfs::system_error_text(), ev.fd)
                     });
+
+                    continue;
                 } else {
-                    if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
+                    if (error_val != 0) {
+                        if (error_val == EPIPE || error_val == ETIMEDOUT || error_val == EHOSTUNREACH
                             || error_val == ECONNRESET) {
-                        on_disconnected(ev.fd);
-                    } else {
-                        on_failure(ev.fd, error { make_error_code(pfs::errc::system_error)
-                            , tr::f_("get socket ({}) option failure: {} (error_val={})"
-                                , ev.fd, pfs::system_error_text(error_val), error_val)
-                        });
+                            on_disconnected(ev.fd);
+                        } else {
+                            on_failure(ev.fd, error{make_error_code(pfs::errc::system_error)
+                                , tr::f_("get socket option failure: {} (socket={}, error_val={})"
+                                    , pfs::system_error_text(error_val), ev.fd, error_val)
+                                });
+                        }
+
+                        continue;
                     }
                 }
+            }
 
+            if (ev.revents & POLLHUP) {
+                on_disconnected(ev.fd);
                 continue;
             }
 
@@ -176,7 +194,12 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 res++;
 
                 char buf[1];
+#if _MSC_VER
+                // NOTE. The socket is expected in non-blocking mode
+                auto n1 = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK);
+#else
                 auto n1 = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+#endif
 
                 if (n1 > 0) {
                     on_ready_read(ev.fd);

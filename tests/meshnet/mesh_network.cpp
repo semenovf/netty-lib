@@ -37,7 +37,7 @@ mesh_network::mesh_network (std::initializer_list<std::string> node_names)
         pctx->name = name;
         pctx->node_ptr = create_node(name);
         pctx->index = counter++;
-        auto res = _nodes.insert({name, pctx});
+        auto res = _nodes.insert({name, std::move(pctx)});
         PFS__ASSERT(res.second, "");
         (void)res;
     }
@@ -221,7 +221,7 @@ void mesh_network::run_all ()
         auto pctx = x.second;
 
         std::thread th {
-            [this, pctx] () {
+            [pctx] () {
                 if (pctx->node_ptr) {
                     LOGD(TAG, "{}: thread started", pctx->name);
                     pctx->node_ptr->run();
@@ -253,7 +253,7 @@ void mesh_network::join ()
 {
     for (auto & x: _nodes) {
         if (x.second->node_thread.joinable())
-            x.second->node_thread.join();
+             x.second->node_thread.join();
     }
 
     if (_scenario_thread.joinable())

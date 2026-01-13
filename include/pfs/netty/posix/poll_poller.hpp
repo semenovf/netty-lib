@@ -1,17 +1,23 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2019-2023 Vladislav Trifochkin
+// Copyright (c) 2019-2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2023.01.06 Initial version.
+//      2026.01.12 Added WSAPoll support.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <pfs/netty/error.hpp>
 #include <pfs/netty/namespace.hpp>
 #include <chrono>
 #include <vector>
-#include <poll.h>
+
+#if _MSC_VER
+#   include <winsock2.h>
+#else
+#   include <poll.h>
+#endif
 
 NETTY__NAMESPACE_BEGIN
 
@@ -20,7 +26,11 @@ namespace posix {
 class poll_poller
 {
 public:
+#if _MSC_VER
+    using socket_id = SOCKET;
+#else
     using socket_id = int;
+#endif
     using listener_id = socket_id;
 
 public:
