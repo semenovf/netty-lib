@@ -145,9 +145,12 @@ class scheme_tester
 {
     static std::vector<std::string> generate_messages ()
     {
+        static constexpr std::size_t MESSAGE_SIZE_BEGIN = 1;
+        static constexpr std::size_t MESSAGE_SIZE_END = 65536;
+
         std::vector<std::string> result;
 
-        for (std::size_t i = 1; i <= 65536; i *= 2)
+        for (std::size_t i = MESSAGE_SIZE_BEGIN; i <= MESSAGE_SIZE_END; i *= 2)
             result.push_back(lorem::random_binary_data(i));
 
         return result;

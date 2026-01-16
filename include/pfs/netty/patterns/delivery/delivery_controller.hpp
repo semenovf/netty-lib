@@ -357,7 +357,13 @@ public:
 private:
     bool syn_expired () const noexcept
     {
-        return _exp_syn <= clock_type::now();
+        bool exp = _exp_syn <= clock_type::now();
+
+        if (exp) {
+            NETTY__TRACE(DELIVERY_TAG, "Synchronization expired with: {}", to_string(_peer_addr));
+        }
+
+        return exp;
     }
 
     archive_type acquire_syn_packet ()
@@ -411,7 +417,7 @@ public:
     {
         _paused = false;
         _syn_state = syn_state::initial;
-        NETTY__TRACE(DELIVERY_TAG, "message sending has been resumed with node: {}", to_string(_peer_addr));
+        NETTY__TRACE(DELIVERY_TAG, "message sending has been started/resumed with node: {}", to_string(_peer_addr));
     }
 
     /**
@@ -424,8 +430,8 @@ public:
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
 
-        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
-            , to_string(_peer_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
+        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; size={}; serial numbers range={}-{}"
+            , to_string(_peer_addr), to_string(msgid), msg.size(), mt.first_sn(), mt.last_sn());
 
         return true;
     }
@@ -440,8 +446,8 @@ public:
         auto & mt = t.q.back();
         t.last_sn = mt.last_sn();
 
-        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; serial numbers range={}-{}"
-            , to_string(_peer_addr), to_string(msgid), mt.first_sn(), mt.last_sn());
+        NETTY__TRACE(DELIVERY_TAG, "message enqueued to: {}; msgid={}; size={}; serial numbers range={}-{}"
+            , to_string(_peer_addr), to_string(msgid), length, mt.first_sn(), mt.last_sn());
 
         return true;
     }
