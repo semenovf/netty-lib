@@ -60,7 +60,7 @@ private:
             if (_on_route_ready)
                 _on_route_ready(peer_id, gw_chain_index);
         }).on_node_unreachable([this] (node_id peer_id) {
-            _dm.pause(peer_id);
+            _dm.suspend(peer_id);
 
             if (_on_node_unreachable)
                 _on_node_unreachable(peer_id);
@@ -211,6 +211,32 @@ public: // Set callbacks
     }
 
     /**
+     * Notify receiver about of starting the message receiving.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, message_id, std::size_t total_size)
+     */
+    template <typename F>
+    reliable_node & on_message_begin (F && f)
+    {
+        _dm.on_message_begin(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
+     * Notify receiver about message receiving progress.
+     *
+     * @details Callback @a f signature must match:
+     *          void (node_id, message_id, std::size_t received_size, std::size_t total_size)
+     */
+    template <typename F>
+    reliable_node & on_message_progress (F && f)
+    {
+        _dm.on_message_progress(std::forward<F>(f));
+        return *this;
+    }
+
+    /**
      * Notify receiver when message received.
      *
      * @details Callback @a f signature must match:
@@ -259,32 +285,6 @@ public: // Set callbacks
     reliable_node & on_report_received (F && f)
     {
         _dm.on_report_received(std::forward<F>(f));
-        return *this;
-    }
-
-    /**
-     * Notify receiver about of starting the message receiving.
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id, message_id, std::size_t total_size)
-     */
-    template <typename F>
-    reliable_node & on_message_begin (F && f)
-    {
-        _dm.on_message_begin(std::forward<F>(f));
-        return *this;
-    }
-
-    /**
-     * Notify receiver about message receiving progress.
-     *
-     * @details Callback @a f signature must match:
-     *          void (node_id, message_id, std::size_t received_size, std::size_t total_size)
-     */
-    template <typename F>
-    reliable_node & on_message_progress (F && f)
-    {
-        _dm.on_message_progress(std::forward<F>(f));
         return *this;
     }
 

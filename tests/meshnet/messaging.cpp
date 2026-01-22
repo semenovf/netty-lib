@@ -99,21 +99,12 @@ void route_ready_cb (lorem::wait_bitmatrix<N> & matrix, node_spec_t const & sour
 void data_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & receiver
     , node_spec_t const & sender, int priority, archive_t bytes)
 {
-    LOGD(TAG, "{}: Data received: {}-->{} ({} bytes)", receiver.first, sender.first
-        , receiver.first, bytes.size());
     ++counter;
 }
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
 void receiver_ready_cb (lorem::wait_atomic_counter8 & counter, node_spec_t const & source
     , node_spec_t const & receiver)
-{
-    LOGD(TAG, "{}: Receiver ready: {}", source.first, receiver.first);
-    ++counter;
-}
-
-void message_delivered_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*source*/
-    , node_spec_t const & /*receiver*/, std::string const &)
 {
     ++counter;
 }
@@ -129,6 +120,12 @@ void message_begin_cb (lorem::wait_atomic_counter32 & counter
 void message_progress_cb (node_spec_t const & receiver, node_spec_t const & sender
     , std::string const & msgid, std::size_t received_size, std::size_t total_size)
 {}
+
+void message_delivered_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*source*/
+    , node_spec_t const & /*receiver*/, std::string const &)
+{
+    ++counter;
+}
 
 void report_received_cb (lorem::wait_atomic_counter32 & counter, node_spec_t const & /*receiver*/
     , node_spec_t const & /*sender*/, int /*priority*/, archive_t /*bytes*/)
@@ -185,7 +182,7 @@ public:
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
         lorem::wait_atomic_counter8 receiver_ready_counter {N * N - N};
         lorem::wait_atomic_counter32 message_delivered_counter {expected_messages_received};
-        lorem::wait_atomic_counter32 message_receiving_begin_counter {expected_messages_received, std::chrono::seconds{15}};
+        lorem::wait_atomic_counter32 message_begin_counter {expected_messages_received, std::chrono::seconds{15}};
         lorem::wait_atomic_counter32 report_received_counter {expected_reports_received};
 
         pnet->on_receiver_ready = std::bind(receiver_ready_cb, std::ref(receiver_ready_counter), _1, _2);
@@ -194,7 +191,7 @@ public:
         pnet->on_message_received = std::bind(data_received_cb, std::ref(message_received_counter)
             , _1, _2, _4, _5);
         pnet->on_message_begin = std::bind(message_begin_cb
-            , std::ref(message_receiving_begin_counter), _1, _2, _3, _4);
+            , std::ref(message_begin_counter), _1, _2, _3, _4);
         pnet->on_message_progress = message_progress_cb;
 
         pnet->on_report_received = std::bind(report_received_cb, std::ref(report_received_counter)
@@ -221,7 +218,7 @@ public:
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
             REQUIRE(receiver_ready_counter.wait());
-            REQUIRE(message_receiving_begin_counter.wait());
+            REQUIRE(message_begin_counter.wait());
 #endif
             REQUIRE(message_received_counter.wait());
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
@@ -335,7 +332,7 @@ TEST_CASE("scheme 4") {
         mesh_network net {"a", "b", "c", "d", "e", "A0", "C0"};
 
         scheme_tester<N, C> tester([] (mesh_network & net)
-            {
+        {
             net.connect("a", "b");
             net.connect("a", "d");
             net.connect("a", "e");
@@ -351,7 +348,7 @@ TEST_CASE("scheme 4") {
 
             net.connect("A0", "a", BEHIND_NAT);
             net.connect("C0", "c", BEHIND_NAT);
-            });
+        });
 
         END_TEST_MESSAGE
     }

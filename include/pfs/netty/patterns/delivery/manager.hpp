@@ -213,7 +213,7 @@ private:
         _on_error(errstr);
     }
 
-    void process_peer_ready (address_type sender_addr)
+    void process_receiver_ready (address_type sender_addr)
     {
         if (_on_receiver_ready)
             _on_receiver_ready(sender_addr);
@@ -259,13 +259,13 @@ private:
     }
 
 public:
-    void pause (address_type addr)
+    void suspend (address_type addr)
     {
         auto pos = _controllers.find(addr);
 
         if (pos != _controllers.end()) {
             auto & dc = pos->second;
-            dc.pause();
+            dc.suspend();
         }
     }
 
@@ -356,9 +356,7 @@ public:
 
         for (auto & x: _controllers) {
             auto & dc = x.second;
-
-            if (!dc.paused())
-                n += dc.step(this);
+            n += dc.step(this);
         }
 
         n += _transport->step();

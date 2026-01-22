@@ -26,26 +26,27 @@ namespace delivery {
 /// Packet type
 enum class packet_enum: std::uint8_t
 {
-      syn = 1
-        /// Packet used to set initial value for serial number (synchronization packet).
+      syn_rst = 1
+        /// Packet used to initiate synchronization with receiver by resetting state on both nodes
+        /// (synchronization packet).
 
-    , ack = 2
+    , syn_req = 2
+        /// Packet used to initiate synchronization with receiver (synchronization packet).
+
+    , syn_rep = 3
+        /// Packet used to set initial values for serial numbers (synchronization packet).
+
+    , ack = 4
         /// Regular message receive acknowledgement.
 
-    , message = 3
+    , message = 5
         /// Initial regular message part with acknowledgement required.
 
-    , part = 4
+    , part = 6
         /// Regular message part.
 
-    , report = 5
+    , report = 7
         /// Report (message without need acknowledgement).
-};
-
-enum class syn_way_enum: std::uint8_t
-{
-      request
-    , response
 };
 
 // Header:
@@ -123,35 +124,30 @@ protected:
 template <typename MessageId>
 class syn_packet: public header
 {
-    std::uint8_t _way;
     std::vector<std::pair<MessageId, serial_number>> _snumbers;
 
 public:
-    // Request constructor
+    // Request/reset constructor
+    syn_packet (bool is_reset = true) noexcept
+        : header(is_reset ? packet_enum::syn_rst : packet_enum::syn_req)
+    {}
+
+    // Reply constructor
     syn_packet (std::vector<std::pair<MessageId, serial_number>> snumbers) noexcept
-        : header(packet_enum::syn)
-        , _way(static_cast<std::uint8_t>(syn_way_enum::request))
+        : header(packet_enum::syn_rep)
         , _snumbers(std::move(snumbers))
     {
         PFS__TERMINATE(!_snumbers.empty(), "serial numbers vector is empty");
 
         // No matter value here for _h.sn
-        _h.sn = _snumbers[0].second;
+        _h.sn = 0;
     }
-
-    // Response constructor
-    syn_packet () noexcept
-        : header(packet_enum::syn)
-        , _way(static_cast<std::uint8_t>(syn_way_enum::response))
-    {}
 
     template <typename Deserializer>
     syn_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> _way;
-
-        if (_way == static_cast<std::uint8_t>(syn_way_enum::request)) {
+        if (type() == packet_enum::syn_rep) {
             if (!in.empty()) {
                 std::uint8_t size = 0;
                 in >> size;
@@ -165,19 +161,9 @@ public:
     }
 
 public:
-    bool is_request () const noexcept
-    {
-        return _way == static_cast<std::uint8_t>(syn_way_enum::request);
-    }
-
-    syn_way_enum way () const noexcept
-    {
-        return static_cast<syn_way_enum>(_way);
-    }
-
     std::size_t count () const noexcept
     {
-        return _snumbers.empty() ? 1 : _snumbers.size();
+        return _snumbers.size();
     }
 
     std::pair<MessageId, serial_number> at (std::size_t index) const
@@ -189,9 +175,8 @@ public:
     void serialize (Serializer & out)
     {
         header::serialize(out);
-        out << _way;
 
-        if (_way == static_cast<std::uint8_t>(syn_way_enum::request)) {
+        if (type() == packet_enum::syn_rep) {
             auto size = pfs::numeric_cast<std::uint8_t>(_snumbers.size());
             out << size;
 
