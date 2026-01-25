@@ -6,7 +6,6 @@
 # Changelog:
 #       2025.12.08 Initial version.
 ################################################################################
-
 set(TESTS
     protocol
     priority_tracker
@@ -54,8 +53,8 @@ set(TESTS
     duplication
     routing
     unreachable
-    messaging
-    delivery)
+    messaging)
+    # delivery # TODO Need to implement
 
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target}-reliable ${target}.cpp mesh_network.cpp)

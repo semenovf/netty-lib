@@ -45,8 +45,16 @@ public:
 
     /**
      * Accept a connection on a server socket.
+     *
+     * @return Accepted socket.
      */
     NETTY__EXPORT socket_type accept (error * perr = nullptr);
+
+    /**
+     * Accept a connection on a server socket.
+     *
+     * @return Accepted socket in non-blocking mode.
+     */
     NETTY__EXPORT socket_type accept_nonblocking (error * perr = nullptr);
 
     // For compatiblity with listener_pool

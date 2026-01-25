@@ -435,7 +435,7 @@ send_result inet_socket::send (char const * data, int len, error * perr)
 #if _MSC_VER
     auto n = ::send(_socket, data, len, 0);
 #else
-    auto n = ::send(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+    auto n = ::send(_socket, data, len, MSG_NOSIGNAL);
 #endif
 
     if (n < 0) {
@@ -500,7 +500,7 @@ send_result inet_socket::send_to (socket4_addr const & saddr, char const * data,
     auto n = ::sendto(_socket, data, len, 0
         , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 #else
-    auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL | MSG_DONTWAIT
+    auto n = ::sendto(_socket, data, len, MSG_NOSIGNAL
         , reinterpret_cast<sockaddr *>(& addr_in4), sizeof(addr_in4));
 #endif
 

@@ -18,6 +18,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -137,8 +138,9 @@ public:
         , bool behind_nat = false);
     void disconnect (std::string const & initiator_name, std::string const & peer_name);
     void destroy (std::string const & name);
+    bool launch (std::string const & name);
 
-    void send_message (std::string const & sender_name, std::string const & receiver_name
+    bool send_message (std::string const & sender_name, std::string const & receiver_name
         , std::string const & bytes, int priority = 1);
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE

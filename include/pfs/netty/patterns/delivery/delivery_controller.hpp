@@ -203,7 +203,7 @@ public:
     void suspend () noexcept
     {
         _suspended = true;
-        NETTY__TRACE(DELIVERY_TAG, "message sending has been suspended with node: {}", to_string(_peer_addr));
+        NETTY__TRACE(DELIVERY_TAG, "exchange has been suspended with node: {}", to_string(_peer_addr));
     }
 
     void resume () noexcept
@@ -211,7 +211,7 @@ public:
         if (_suspended) {
             _suspended = false;
             _syn_state = syn_status::resuming;
-            NETTY__TRACE(DELIVERY_TAG, "message sending has been resumed with node: {}", to_string(_peer_addr));
+            NETTY__TRACE(DELIVERY_TAG, "exchange has been resumed with node: {}", to_string(_peer_addr));
         }
     }
 
@@ -254,6 +254,9 @@ public:
         if (_suspended)
             return 0;
 
+        if (nothing_transmit())
+            return 0;
+
         unsigned int n = 0;
 
         // Initiate synchronization if needed.
@@ -278,9 +281,6 @@ public:
 
             return n;
         }
-
-        if (nothing_transmit())
-            return n;
 
         auto saved_priority = _priority_tracker.current();
         auto priority = _priority_tracker.current();
@@ -425,6 +425,9 @@ private:
     template <typename Manager>
     void enqueue_ack_packet (Manager * m, int priority, serial_number sn)
     {
+        if (_suspended)
+            return;
+
         archive_type ar;
         serializer_type out {ar};
         ack_packet ack_pkt {sn};
@@ -449,8 +452,7 @@ private:
                 break;
 
             case packet_enum::syn_req:
-                // FIXME
-                // reply_syn(m);
+                reply_syn(m);
                 break;
 
             case packet_enum::syn_rep:

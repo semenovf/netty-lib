@@ -247,10 +247,10 @@ TEST_CASE("scheme 1") {
         mesh_network net {"A0", "A1"};
 
         scheme_tester<N, C> tester([] (mesh_network & net)
-            {
-                net.connect("A0", "A1");
-                net.connect("A1", "A0");
-            });
+        {
+            net.connect("A0", "A1");
+            net.connect("A1", "A0");
+        });
 
         END_TEST_MESSAGE
     }

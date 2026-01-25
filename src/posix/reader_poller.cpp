@@ -62,11 +62,7 @@ int reader_poller<posix::select_poller>::poll (std::chrono::milliseconds millis,
                 res++;
 
                 char buf[1];
-#if _MSC_VER
                 auto n1 = ::recv(fd, buf, sizeof(buf), MSG_PEEK);
-#else
-                auto n1 = ::recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
-#endif
 
                 if (n1 > 0) {
                     on_ready_read(fd);
@@ -194,12 +190,8 @@ int reader_poller<posix::poll_poller>::poll (std::chrono::milliseconds millis, e
                 res++;
 
                 char buf[1];
-#if _MSC_VER
                 // NOTE. The socket is expected in non-blocking mode
                 auto n1 = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK);
-#else
-                auto n1 = ::recv(ev.fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
-#endif
 
                 if (n1 > 0) {
                     on_ready_read(ev.fd);

@@ -360,15 +360,16 @@ public:
             PFS__THROW_UNEXPECTED(_id != receiver_id && _is_gateway, "Fix meshnet::node algorithm");
 
             node_id gw_id;
-            auto ptr = locate_writer(receiver_id, & gw_id);
+            auto receiver_ptr = locate_writer(receiver_id, & gw_id);
 
-            if (ptr != nullptr) {
-                ptr->enqueue_packet(gw_id, priority, std::move(packet));
+            if (receiver_ptr != nullptr) {
+                receiver_ptr->enqueue_packet(gw_id, priority, std::move(packet));
                 return;
             }
 
-            _on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
-                , to_string(sender_id), to_string(receiver_id)));
+            // NOTE Code was commented to stop avalanche-like error output
+            // _on_error(tr::f_("forward packet: {}->{} failure: node unreachable"
+            //     , to_string(sender_id), to_string(receiver_id)));
 
             // No need to notify sender about unreachable destination.
             // The corresponding unreachable_packet must be sent at the moment the channel destroyed.

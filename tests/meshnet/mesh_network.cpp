@@ -186,7 +186,37 @@ void mesh_network::destroy (std::string const & name)
     pctx->node_ptr.reset();
 }
 
-void mesh_network::send_message (std::string const & sender_name, std::string const & receiver_name
+bool mesh_network::launch (std::string const & name)
+{
+    auto pctx = get_context_ptr(name);
+
+    PFS__ASSERT(pctx, "Fix launch() method call");
+
+    if (pctx->node_ptr) {
+        LOGE(TAG, "Unable to launch node {}: it is already run", name);
+        return false;
+    }
+
+    LOGD(TAG, "Launching {}", name);
+
+    pctx->node_ptr = create_node(name);
+
+    std::thread th {
+        [pctx] () {
+            if (pctx->node_ptr) {
+                LOGD(TAG, "{}: thread started", pctx->name);
+                pctx->node_ptr->run();
+                LOGD(TAG, "{}: thread finished", pctx->name);
+            }
+        }
+    };
+
+    pctx->node_thread = std::move(th);
+
+    return true;
+}
+
+bool mesh_network::send_message (std::string const & sender_name, std::string const & receiver_name
     , std::string const & bytes, int priority)
 {
     auto sender_ctx = get_context_ptr(sender_name);
@@ -196,10 +226,10 @@ void mesh_network::send_message (std::string const & sender_name, std::string co
 
 #ifdef NETTY__TESTS_USE_MESHNET_RELIABLE_NODE
     message_id msgid = pfs::generate_uuid();
-    sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, bytes.data()
+    return sender_ctx->node_ptr->enqueue_message(receiver_id, msgid, priority, bytes.data()
         , bytes.size());
 #else
-    sender_ctx->node_ptr->enqueue(receiver_id, priority, bytes.data(), bytes.size());
+    return sender_ctx->node_ptr->enqueue(receiver_id, priority, bytes.data(), bytes.size());
 #endif
 }
 
@@ -251,13 +281,14 @@ void mesh_network::interrupt_all ()
 
 void mesh_network::join ()
 {
+    // _scenario_thread must be called first for joining to prevent blocking when using destroy()
+    if (_scenario_thread.joinable())
+        _scenario_thread.join();
+
     for (auto & x: _nodes) {
         if (x.second->node_thread.joinable())
              x.second->node_thread.join();
     }
-
-    if (_scenario_thread.joinable())
-        _scenario_thread.join();
 }
 
 void mesh_network::print_routing_records (std::string const & name)
