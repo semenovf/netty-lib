@@ -48,17 +48,17 @@ private:
     delivery_manager_type _dm;
 
 private:
-    callback_t<void (node_id, std::size_t)> _on_route_ready;
+    callback_t<void (node_id, std::size_t, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id)> _on_node_unreachable;
 
 private:
     void init ()
     {
-        _t.on_route_ready([this] (node_id peer_id, std::size_t gw_chain_index) {
+        _t.on_route_ready([this] (node_id peer_id, std::size_t gw_chain_index, gateway_chain_type gw_chain) {
             _dm.resume(peer_id);
 
             if (_on_route_ready)
-                _on_route_ready(peer_id, gw_chain_index);
+                _on_route_ready(peer_id, gw_chain_index, std::move(gw_chain));
         }).on_node_unreachable([this] (node_id peer_id) {
             _dm.suspend(peer_id);
 

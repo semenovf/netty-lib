@@ -29,6 +29,7 @@ static constexpr char const * TAG = "test::meshnet";
 
 // Node name + Node index in the meshnet node list
 using node_spec_t = std::pair<std::string, std::size_t>;
+using gateway_chain_t = node_t::gateway_chain_type;
 
 class mesh_network
 {

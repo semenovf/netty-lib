@@ -78,7 +78,7 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
         this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });
 
-    ptr->on_route_ready([this, name] (node_id dest_id, std::size_t route_index)
+    ptr->on_route_ready([this, name] (node_id dest_id, std::size_t route_index, gateway_chain_t)
     {
         this->on_route_ready(make_spec(name), make_spec(dest_id), route_index);
     });

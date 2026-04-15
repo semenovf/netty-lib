@@ -92,7 +92,7 @@ private:
     callback_t<void (peer_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
     callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
-    callback_t<void (node_id, std::size_t)> _on_route_ready;
+    callback_t<void (node_id, std::size_t, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, std::size_t)> _on_route_lost;
     callback_t<void (node_id)> _on_node_unreachable;
     callback_t<void (node_id, int, archive_type)> _on_data_received;
@@ -184,7 +184,7 @@ public: // Set callbacks
      * Notify when some route ready by request or response.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id peer_id, std::size_t route_index)
+     *          void (node_id peer_id, std::size_t route_index, gateway_chain_type)
      *          `route_index` has a special case of zero occurs when `peer_id` is a sibling node.
      */
     template <typename F>
@@ -303,7 +303,7 @@ public:
             if (route_added) {
                 if (_on_route_ready) {
                     NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={})", to_string(peer_id), 0);
-                    _on_route_ready(peer_id, 0);
+                    _on_route_ready(peer_id, 0, gateway_chain_type{});
                 }
             }
         });
@@ -725,9 +725,9 @@ private:
         , route_info<node_id> const & rinfo)
     {
         bool new_route_added = false;
-        std::size_t gw_chain_index{0};
+        std::size_t gw_chain_index = 0;
         std::uint16_t hops = 0;
-        node_id dest_id{};
+        node_id dest_id {};
         bool reverse_order = true;
 
         if (is_response) {
@@ -829,7 +829,7 @@ private:
                 NETTY__TRACE(MESHNET_TAG, "route ready: {} (hops={}, gw_chain_index={})"
                     , to_string(dest_id), _rtab.hops(gw_chain_index), gw_chain_index);
 
-                _on_route_ready(dest_id, gw_chain_index);
+                _on_route_ready(dest_id, gw_chain_index, _rtab.gateway_chain_by_index(gw_chain_index));
             }
         }
     }

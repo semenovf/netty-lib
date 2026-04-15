@@ -27,39 +27,36 @@ namespace meshnet {
 
 //
 // A0---+       +---B0
-//      |   b---|      +---D0
-// A1---+   |   +---B1
+//      |   b---|           +---D0
+// A1---+   |   +---B1      |
 //      |---a-----------d---+---D1
-// A2---+   |   +---C0            |
-//      |   c---|              +---D2
+// A2---+   |   +---C0      |
+//      |   c---|           +---D2
 // A3---+       +---C1
 //
 // Sibling nodes (std::unordered_set) for node A0
-// +----+----+----+------+
-// | A1 | A2 | A3 | ...  |
-// +----+----+----+------+
+// +----+----+----+
+// | A1 | A2 | A3 |
+// +----+----+----+
 //
-// Sibling gateways (std::vector)
+// Sibling gateways (std::vector) for node A0
 //   0
-// +---+-----+
-// | a | ... |
-// +---+-----+
+// +---+
+// | a |
+// +---+
 //
-// Gateway chains (std::vector)
+// Gateway chains (std::vector) for node A0
 //   +---+
 // 0 | a |
 //   +---+---+
 // 1 | a | b |
-//   +---+---+---+
-// 2 | a | b | c |
-//   +---+---+---+---+
-// 3 | a | b | c | d |
-//   +---+---+---+---+
-//   | ...       |
-//   +---+---+---+
+//   +---+---+
+// 2 | a | c |
+//   +---+---+
+// 3 | a | d |
+//   +---+---+
 //
-// Route map (std::unordered_multimap) - mapping destination node to index of route in the route
-// vector (Routes), excluding siblings.
+// Route map (std::unordered_multimap) - mapping destination node to index of gateway chains.
 // +----+---+
 // | b  | 0 |
 // +----+---+
@@ -93,7 +90,6 @@ public:
 private:
     std::unordered_set<node_id> _sibling_nodes;
     std::vector<node_id> _sibling_gateways;
-
     std::vector<gateway_chain_type> _gateway_chains;
 
     // Used to determine the route to send message.
@@ -325,7 +321,7 @@ public:
      * Returns the number of gateways in the gateway chain by @a index. Zero index indicates
      * sibling node, so result is zero.
      */
-    std::size_t hops (std::size_t index)
+    std::size_t hops (std::size_t index) const
     {
         if (index == 0)
             return 0;
@@ -344,7 +340,7 @@ public:
      * Return gateway chain by index (first element of the value returned by add_route or add_subroute).
      * Zero index indicates sibling node, so result is empty chain.
      */
-    gateway_chain_type gateway_chain_by_index (size_t index)
+    gateway_chain_type gateway_chain_by_index (size_t index) const
     {
         if (index == 0)
             return gateway_chain_type{};
