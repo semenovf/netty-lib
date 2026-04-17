@@ -73,7 +73,7 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
         this->on_channel_destroyed(make_spec(name), make_spec(peer_id));
     });
 
-    ptr->on_duplicate_id([this, name] (node_id peer_id, netty::socket4_addr saddr)
+    ptr->on_duplicate_id([this, name] (node_id peer_id, socket4_addr_compat_t saddr)
     {
         this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });

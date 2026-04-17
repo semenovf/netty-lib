@@ -158,9 +158,9 @@ private: // Callbacks
 
     callback_t<void (peer_index_t, node_id, bool)> _on_channel_established = [] (peer_index_t, node_id, bool) {};
     callback_t<void (peer_index_t, node_id)> _on_channel_destroyed = [] (peer_index_t, node_id) {};
-    callback_t<void (peer_index_t, socket4_addr, inet4_addr)> _on_reconnection_started;
-    callback_t<void (peer_index_t, socket4_addr, inet4_addr)> _on_reconnection_stopped;
-    callback_t<void (peer_index_t, node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> _on_reconnection_started;
+    callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> _on_reconnection_stopped;
+    callback_t<void (peer_index_t, node_id, socket4_addr_compat_t)> _on_duplicate_id;
     callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
     callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
@@ -474,7 +474,7 @@ public: // Set callbacks
      * Notify when reconnection to remote peer started.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     *          void (peer_index_t index, socket4_addr_compat_t remote_addr, inet4_addr_compat_t local_addr)
      */
     template <typename F>
     peer & on_reconnection_started (F && f)
@@ -487,7 +487,7 @@ public: // Set callbacks
      * Notify when reconnection to remote peer stopped.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
+     *          void (peer_index_t index, socket4_addr_compat_t remote_addr, inet4_addr_compat_t local_addr)
      */
     template <typename F>
     peer & on_reconnection_stopped (F && f)
@@ -500,7 +500,7 @@ public: // Set callbacks
      * Notify when a peer with identical ID is detected.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t, node_id, socket4_addr)
+     *          void (peer_index_t, node_id, socket4_addr_compat_t)
      */
     template <typename F>
     peer & on_duplicate_id (F && f)
@@ -839,7 +839,7 @@ private:
             NETTY__TRACE(MESHNET_TAG, "reconnecting stopped to: {}", to_string(h.remote_saddr));
 
             if (_on_reconnection_stopped)
-                _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr);
+                _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr.to_ip4());
        }
     }
 
@@ -892,7 +892,7 @@ private:
                     , to_string(h.remote_saddr));
 
                 if (_on_reconnection_started)
-                    _on_reconnection_started(_index, h.remote_saddr, h.local_addr);
+                    _on_reconnection_started(_index, h.remote_saddr, h.local_addr.to_ip4());
             }
         }
     }
@@ -1076,17 +1076,17 @@ public: // peer_interface
             Peer::on_channel_destroyed(std::move(cb));
         }
 
-        void on_reconnection_started (callback_t<void (peer_index_t, socket4_addr, inet4_addr)> cb) override
+        void on_reconnection_started (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> cb) override
         {
             Peer::on_reconnection_started(std::move(cb));
         }
 
-        void on_reconnection_stopped (callback_t<void (peer_index_t, socket4_addr, inet4_addr)> cb) override
+        void on_reconnection_stopped (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> cb) override
         {
             Peer::on_reconnection_stopped(std::move(cb));
         }
 
-        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)> cb) override
+        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr_compat_t)> cb) override
         {
             Peer::on_duplicate_id(std::move(cb));
         }

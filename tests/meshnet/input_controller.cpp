@@ -223,7 +223,11 @@ TEST_CASE("ddata") {
 
     ic.add(kSID);
 
-    std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!',};
+#if NETTY__QT_ENABLED
+    QByteArray msg_sample {"Hello,World!"};
+#else
+    std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!'};
+#endif
 
     bool force_checksum = true;
     ddata_packet_t ddata {force_checksum};
@@ -259,7 +263,11 @@ TEST_CASE("gdata") {
 
     ic.add(kSID);
 
-    std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!',};
+#if NETTY__QT_ENABLED
+    QByteArray msg_sample {"Hello,World!"};
+#else
+    std::vector<char> msg_sample {'H', 'e', 'l', 'l', 'o', ',', 'W', 'o', 'r', 'l', 'd', '!'};
+#endif
 
     auto sender_id = pfs::generate_uuid();
     auto receiver_id = pfs::generate_uuid();

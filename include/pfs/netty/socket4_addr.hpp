@@ -44,6 +44,11 @@ public:
      * Parses IPv4 address from string view.
      */
     static NETTY__EXPORT pfs::optional<socket4_addr> parse (pfs::string_view s);
+
+    operator std::pair<std::uint32_t, std::uint16_t> () const
+    {
+        return std::make_pair(addr.to_ip4(), port);
+    }
 };
 
 inline std::string to_string (socket4_addr const & saddr)
