@@ -9,7 +9,6 @@
 #pragma once
 #include "namespace.hpp"
 #include <pfs/assert.hpp>
-#include <pfs/i18n.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -166,8 +165,9 @@ public:
 
         if (n > size()) {
             throw std::range_error {
-                tr::f_("range to erase from front is out of bounds: "
-                    "number of elements to erase: {}, container size: {}", n, size())
+                std::string("range to erase from front is out of bounds: "
+                    "number of elements to erase: ") + std::to_string(n)
+                    + ", container size: " + std::to_string(size())
             };
         }
 

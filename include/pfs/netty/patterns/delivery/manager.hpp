@@ -63,10 +63,10 @@ private: // Callbacks
         = [] (std::string const & errstr) { LOGE(TAG, "{}", errstr); };
 
     callback_t<void (address_type)> _on_receiver_ready;
-    callback_t<void (address_type, message_id, int, archive_type)> _on_message_received;
+    callback_t<void (address_type, message_id, int, typename archive_type::container_type)> _on_message_received;
     callback_t<void (address_type, message_id)> _on_message_delivered;
     callback_t<void (address_type, message_id)> _on_message_lost;
-    callback_t<void (address_type, int, archive_type)> _on_report_received;
+    callback_t<void (address_type, int, typename archive_type::container_type)> _on_report_received;
     callback_t<void (address_type, message_id, std::size_t)> _on_message_begin;
     callback_t<void (address_type, message_id, std::size_t, std::size_t)> _on_message_progress;
 
@@ -109,7 +109,7 @@ public: // Set callbacks
 
     /**
      * @details Callback @a f signature must match:
-     *          void (address_type, message_id, int priority, archive_type msg)
+     *          void (address_type, message_id, int priority, container_type msg)
      */
     template <typename F>
     manager & on_message_received (F && f)
@@ -168,7 +168,7 @@ public: // Set callbacks
 
     /**
      * @details Callback @a f signature must match:
-     *          void (address_type, int priority, archive_type report)
+     *          void (address_type, int priority, container_type report)
      */
     template <typename F>
     manager & on_report_received (F && f)
@@ -235,13 +235,13 @@ private:
         , archive_type && msg)
     {
         if (_on_message_received)
-            _on_message_received(sender_addr, msgid, priority, std::move(msg));
+            _on_message_received(sender_addr, msgid, priority, msg.move_container());
     };
 
     void process_report_received (address_type sender_addr, int priority, archive_type && report)
     {
         if (_on_report_received)
-            _on_report_received(sender_addr, priority, std::move(report));
+            _on_report_received(sender_addr, priority, report.move_container());
     }
 
     void process_message_begin (address_type sender_addr, message_id msgid

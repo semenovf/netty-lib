@@ -95,7 +95,7 @@ private:
     callback_t<void (node_id, std::size_t, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, std::size_t)> _on_route_lost;
     callback_t<void (node_id)> _on_node_unreachable;
-    callback_t<void (node_id, int, archive_type)> _on_data_received;
+    callback_t<void (node_id, int, typename archive_type::container_type)> _on_data_received;
 
 public:
     node (node_id id, bool is_gateway = false)
@@ -346,12 +346,14 @@ public:
         });
 
         if (_on_data_received) {
-            ep->on_domestic_data_received(_on_data_received);
+            ep->on_domestic_data_received([this] (node_id id, int priority, archive_type bytes) {
+                _on_data_received(id, priority, bytes.move_container());
+            });
 
             ep->on_global_data_received([this] (node_id /*id*/, int priority
                     , node_id sender_id, node_id receiver_id, archive_type bytes) {
                 PFS__THROW_UNEXPECTED(_id == receiver_id, "Fix meshnet::node algorithm");
-                _on_data_received(sender_id, priority, std::move(bytes));
+                _on_data_received(sender_id, priority, bytes.move_container());
             });
         }
 
