@@ -9,6 +9,7 @@
 #pragma once
 #include "visitor.hpp"
 #include <pfs/assert.hpp>
+#include <pfs/i18n.hpp>
 #include <pfs/numeric_cast.hpp>
 #include <cstdint>
 #include <memory>

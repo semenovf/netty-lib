@@ -17,8 +17,9 @@ using error_code = std::error_code;
 enum class errc
 {
       success = 0
-    , protocol_version_error // Protocol version does not match
-    , checksum_error // CRC does not match
+    , protocol_version_error //!< Protocol version does not match
+    , checksum_error         //!< CRC does not match
+    , ssl_error              //!< Secured socket specific error
 };
 
 class error_category : public std::error_category
@@ -37,6 +38,9 @@ public:
 
             case errc::protocol_version_error:
                 return std::string{"protocol version does not match"};
+
+            case errc::ssl_error:
+                return std::string{"secured socket error"};
 
             default: return std::string{"unknown error"};
         }

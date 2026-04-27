@@ -36,7 +36,7 @@
 // Option 4: a destroyed
 //
 
-#define ITERATION_COUNT 1; // FIXME 5;
+#define ITERATION_COUNT 5
 
 using namespace std::placeholders;
 

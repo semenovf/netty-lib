@@ -26,6 +26,7 @@ option(NETTY__ENABLE_P2P "Enabled P2P support" OFF) # FIXME DEPRECATED
 option(NETTY__ENABLE_UDT "Enable modified UDT library (reliable UDP implementation)" OFF)
 option(NETTY__UDT_PATCHED "Enable modified UDT library with patches" ON)
 option(NETTY__ENABLE_ENET "Enable ENet library (reliable UDP implementation)" OFF)
+option(NETTY__ENABLE_ENCRYPTED_SOCKETS "Enable encrypted sockets using secure network communications library" OFF)
 option(NETTY__ENABLE_UTILS "Enable utility classes: netlink monitor, enumerate network interfaces etc" ON)
 option(NETTY__ENABLE_TELEMETRY "Enable telemetry for meshnet and delivery patterns" OFF)
 option(NETTY__ENABLE_AGGRESSIVE_COMPILE_CHECK "Use aggressive check compile options (g++ only)" OFF)
@@ -234,11 +235,30 @@ target_include_directories(netty
 
 target_link_libraries(netty PUBLIC pfs::common)
 
+if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+    if (NETTY__OPENSSL3_ROOT_DIR)
+        set(OPENSSL_ROOT_DIR ${NETTY__OPENSSL3_ROOT_DIR})
+        find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto SSL)
+        message(STATUS "OpenSSL found: ${OPENSSL_FOUND}")
+        message(STATUS "OpenSSL include dirs: ${OPENSSL_INCLUDE_DIR}")
+        message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
+        target_link_libraries(netty PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(netty PRIVATE "NETTY__OPENSSL3_ENABLED=1")
+        target_sources(netty PRIVATE
+            src/ssl/openssl_handshake_pool.cpp
+            src/ssl/openssl_listener.cpp
+            src/ssl/openssl_socket.cpp)
+    else()
+        message(FATAL_ERROR "No encrypted sockets backend specified")
+    endif()
+endif()
+
 if (NETTY__ENABLE_AGGRESSIVE_COMPILE_CHECK)
     include(AggressiveCheckOpts)
     set(_is_sanitize_thread FALSE)
     aggressive_check_opts(netty ${_is_sanitize_thread})
 endif()
+
 ####################################################################################################
 
 if (NETTY__BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_LIST_DIR}/tests)

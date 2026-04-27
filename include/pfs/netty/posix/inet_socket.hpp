@@ -7,12 +7,12 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include <pfs/netty/error.hpp>
-#include <pfs/netty/exports.hpp>
-#include <pfs/netty/inet4_addr.hpp>
-#include <pfs/netty/namespace.hpp>
-#include <pfs/netty/send_result.hpp>
-#include <pfs/netty/socket4_addr.hpp>
+#include "../error.hpp"
+#include "../exports.hpp"
+#include "../inet4_addr.hpp"
+#include "../namespace.hpp"
+#include "../send_result.hpp"
+#include "../socket4_addr.hpp"
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -54,24 +54,23 @@ protected:
     /**
      * Constructs invalid POSIX socket
      */
-    inet_socket ();
+    NETTY__EXPORT inet_socket ();
 
     /**
      * Constructs POSIX socket from native socket.
      */
-    inet_socket (socket_id sock, socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT inet_socket (socket_id sock, socket4_addr const & saddr, error * perr = nullptr);
 
     inet_socket (inet_socket const &) = delete;
     inet_socket & operator = (inet_socket const &) = delete;
 
-    NETTY__EXPORT ~inet_socket ();
-
     NETTY__EXPORT inet_socket (inet_socket &&) noexcept;
     NETTY__EXPORT inet_socket & operator = (inet_socket &&) noexcept;
 
+    NETTY__EXPORT ~inet_socket ();
+
 protected:
     NETTY__EXPORT bool init (type_enum socktype, error * perr);
-    NETTY__EXPORT bool set_nonblocking (bool enable, error * perr);
 
 protected:
     static bool check_socket_descriptor (socket_id sock, error * perr);
@@ -109,6 +108,13 @@ public:
      */
     NETTY__EXPORT send_result send_to (socket4_addr const & dest, char const * data, int len
         , error * perr = nullptr);
+
+    /**
+     * Sets socket to non-blocking mode.
+     *
+     * @note There is usually no need to call this method directly.
+     */
+    NETTY__EXPORT bool set_nonblocking (bool enable, error * perr);
 };
 
 } // namespace posix

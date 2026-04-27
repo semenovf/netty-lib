@@ -6,8 +6,8 @@
 // Changelog:
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "pfs/assert.hpp"
-#include "pfs/netty/startup.hpp"
+#include "startup.hpp"
+#include <pfs/assert.hpp>
 #include <atomic>
 
 #if _MSC_VER
@@ -17,6 +17,11 @@
 
 #if NETTY__UDT_ENABLED
 #   include "udt/newlib/udt.hpp"
+#endif
+
+#if NETTY__OPENSSL3_ENABLED
+#   include <openssl/ssl.h>
+#   include <openssl/err.h>
 #endif
 
 namespace netty {
@@ -60,6 +65,19 @@ void startup ()
             }
         }
 #endif
+
+#if NETTY__OPENSSL3_ENABLED
+        OPENSSL_INIT_SETTINGS const * ssl_settings = nullptr;
+        auto rc = OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, ssl_settings);
+
+        if (rc == 0)
+            PFS__TERMINATE(false, "OpenSSL initialization failure");
+
+        // OpenSSL 3.x: SSL_library_init not required; still safe to call ERR strings
+        ERR_load_crypto_strings();
+        SSL_load_error_strings();
+        OpenSSL_add_ssl_algorithms();
+#endif
     }
 }
 
@@ -72,6 +90,16 @@ void cleanup ()
 
 #if NETTY__UDT_ENABLED
         UDT::cleanup();
+#endif
+
+#if NETTY__OPENSSL3_ENABLED
+        // In versions prior to OpenSSL 1.1.0, ERR_free_strings() releases any resources created
+        // by the above functions.
+        // ERR_free_strings();
+
+        // In versions prior to 1.1.0 EVP_cleanup() removed all ciphers and digests from the table.
+        // It no longer has any effect in OpenSSL 1.1.0.
+        // EVP_cleanup();
 #endif
     }
 }

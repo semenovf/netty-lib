@@ -7,9 +7,10 @@
 //      2023.01.06 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
 #include "exports.hpp"
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 extern "C" NETTY__EXPORT void startup ();
 extern "C" NETTY__EXPORT void cleanup ();
@@ -21,4 +22,4 @@ public:
     ~startup_guard () { cleanup(); }
 };
 
-} // namespace netty
+NETTY__NAMESPACE_END

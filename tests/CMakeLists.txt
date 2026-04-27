@@ -53,10 +53,9 @@ foreach (target ${TESTS})
 endforeach()
 
 add_subdirectory(meshnet)
-
-# FIXME UNCOMMENT
-#add_subdirectory(pubsub)
-#add_subdirectory(telemetry)
+add_subdirectory(pubsub)
+add_subdirectory(telemetry)
+add_subdirectory(ssl)
 
 ####################################################################################################
 # Channel connection tests

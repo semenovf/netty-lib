@@ -1,42 +1,57 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2023-2024 Vladislav Trifochkin
+// Copyright (c) 2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2023.01.01 Initial version.
-//      2024.05.14 Renamed to tcp_listener.
+//      2026.04.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../exports.hpp"
-#include "../error.hpp"
-#include "tcp_socket.hpp"
+#include "tls_socket.hpp"
+#include "tls_options.hpp"
+#include <memory>
 
 NETTY__NAMESPACE_BEGIN
 
-namespace posix {
+namespace ssl {
 
-/**
- * POSIX Inet TCP listener
- */
-class tcp_listener: public inet_socket
+class tls_listener
 {
+    class impl;
+
 public:
-    using listener_id = inet_socket::socket_id;
-    using socket_type = tcp_socket;
+    using listener_id = tls_socket::socket_id;
+    using socket_type = tls_socket;
+
+private:
+    std::unique_ptr<impl> _d;
 
 public:
     /**
-     * Constructs invalid (uninitialized) TCP server.
+     * Constructs invalid (uninitialized) server.
      */
-    NETTY__EXPORT tcp_listener ();
+    NETTY__EXPORT tls_listener ();
 
     /**
-     * Constructs POSIX TCP server.
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT tls_listener (tls_listener && other) noexcept;
+
+    /**
+     * Constructs server.
+     */
+    NETTY__EXPORT tls_listener (socket4_addr const & saddr, tls_options opts, error * perr = nullptr);
+
+    /**
+     */
+    NETTY__EXPORT tls_listener & operator = (tls_listener && other) noexcept;
+
+    NETTY__EXPORT ~tls_listener ();
 
 public:
+    NETTY__EXPORT operator bool () const noexcept;
+
+    NETTY__EXPORT listener_id id () const noexcept;
+
     /**
      * Bind the socket to address and listen for connections on a socket.
      *
@@ -63,8 +78,11 @@ public:
     {
         return accept_nonblocking(perr);
     }
+
+private:
+    socket_type accept (bool force_nonblocking, error * perr = nullptr);
 };
 
-} // namespace posix
+} // namespace ssl
 
 NETTY__NAMESPACE_END

@@ -7,10 +7,11 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "pfs/netty/conn_status.hpp"
-#include "pfs/netty/posix/inet_socket.hpp"
+#include "../conn_status.hpp"
+#include "inet_socket.hpp"
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
+
 namespace posix {
 
 class tcp_listener;
@@ -26,7 +27,7 @@ protected:
     /**
      * Constructs POSIX TCP accepted socket.
      */
-    tcp_socket (socket_id sock, socket4_addr const & saddr);
+    tcp_socket (socket_id sock, socket4_addr const & saddr, error * perr = nullptr);
 
 public:
     tcp_socket (tcp_socket const & s) = delete;
@@ -64,4 +65,6 @@ public:
     NETTY__EXPORT void disconnect (error * perr = nullptr);
 };
 
-}} // namespace netty::posix
+} // namespace posix
+
+NETTY__NAMESPACE_END

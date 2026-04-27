@@ -7,8 +7,9 @@
 //      2023.01.01 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "namespace.hpp"
 
-namespace netty {
+NETTY__NAMESPACE_BEGIN
 
 enum class conn_status {
       failure     = -1
@@ -18,4 +19,4 @@ enum class conn_status {
     , deferred    =  2
 };
 
-} // namespace netty
+NETTY__NAMESPACE_END

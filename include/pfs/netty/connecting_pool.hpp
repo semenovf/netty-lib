@@ -9,6 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "namespace.hpp"
+#include "callback.hpp"
+#include "conn_status.hpp"
 #include "connection_failure_reason.hpp"
 #include "error.hpp"
 #include "socket4_addr.hpp"

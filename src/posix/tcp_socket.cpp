@@ -28,8 +28,8 @@ namespace posix {
 tcp_socket::tcp_socket () : inet_socket() {}
 
 // Accepted socket
-tcp_socket::tcp_socket (socket_id sock, socket4_addr const & saddr)
-    : inet_socket(sock, saddr)
+tcp_socket::tcp_socket (socket_id sock, socket4_addr const & saddr, error * perr)
+    : inet_socket(sock, saddr, perr)
 {}
 
 tcp_socket::tcp_socket (tcp_socket && other)
