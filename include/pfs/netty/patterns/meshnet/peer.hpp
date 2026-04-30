@@ -202,7 +202,7 @@ public:
             _socket_pool.add_accepted(std::move(sock));
         };
 
-        _connecting_pool.on_failure = [this] (netty::error const & err)
+        _connecting_pool.on_failure = [this] (socket_id, netty::error const & err)
         {
             _on_error(tr::f_("connecting pool failure: {}", err.what()));
         };

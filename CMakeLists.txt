@@ -245,7 +245,9 @@ if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
         target_link_libraries(netty PUBLIC OpenSSL::SSL OpenSSL::Crypto)
         target_compile_definitions(netty PRIVATE "NETTY__OPENSSL3_ENABLED=1")
         target_sources(netty PRIVATE
-            src/ssl/openssl_handshake_pool.cpp
+            src/ssl/openssl_basic_handshake_pool.cpp
+            src/ssl/openssl_client_handshake_pool.cpp
+            src/ssl/openssl_listener_handshake_pool.cpp
             src/ssl/openssl_listener.cpp
             src/ssl/openssl_socket.cpp)
     else()

@@ -4,7 +4,7 @@
 // This file is part of `netty-lib`.
 //
 // Changelog:
-//      2026.04.26 Initial version.
+//      2026.04.30 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "tls_socket.hpp"
@@ -25,12 +25,14 @@ using reader_poller_t =
 #elif NETTY__SELECT_ENABLED
         reader_select_poller_t;
 #else
-#   error "No poller implemented"
+#   error "No reader poller implemented"
 #endif
 
-class handshake_pool: protected reader_poller_t
+class basic_handshake_pool: protected reader_poller_t
 {
+protected:
     using socket_type = tls_socket;
+    using socket_id = socket_type::socket_id;
 
     struct account
     {
@@ -39,19 +41,15 @@ class handshake_pool: protected reader_poller_t
 
 private:
     std::unordered_map<socket_id, account> _accounts;
-    std::vector<socket_id> _removed;
+    std::vector<socket_id> _removable;
 
-public:
-    NETTY__EXPORT handshake_pool ();
+protected:
+    NETTY__EXPORT basic_handshake_pool ();
 
-    handshake_pool (handshake_pool &&) noexcept = delete;
-    handshake_pool & operator = (handshake_pool &&) noexcept = delete;
-    handshake_pool (handshake_pool const &) = delete;
-    handshake_pool & operator = (handshake_pool const &) = delete;
-
-public:
-    callback_t<void (socket_id, error const &)> on_failure;
-    callback_t<void (socket_type &&)> on_accepted;
+    basic_handshake_pool (basic_handshake_pool &&) noexcept = delete;
+    basic_handshake_pool & operator = (basic_handshake_pool &&) noexcept = delete;
+    basic_handshake_pool (basic_handshake_pool const &) = delete;
+    basic_handshake_pool & operator = (basic_handshake_pool const &) = delete;
 
 public:
     NETTY__EXPORT void add (socket_type &&);
@@ -63,7 +61,7 @@ public:
      */
     NETTY__EXPORT unsigned int step (error * perr = nullptr);
 
-private:
+protected:
     account * locate_account (socket_id id);
 };
 

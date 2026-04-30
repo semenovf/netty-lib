@@ -25,12 +25,14 @@ NETTY__NAMESPACE_BEGIN
 namespace ssl {
 
 class tls_listener;
-class handshake_pool;
+class client_handshake_pool;
+class listener_handshake_pool;
 
 class tls_socket
 {
     friend class tls_listener;
-    friend class handshake_pool;
+    friend class client_handshake_pool;
+    friend class listener_handshake_pool;
 
     class impl;
 
@@ -51,8 +53,6 @@ public:
      * Constructs invalid TLS socket
      */
     NETTY__EXPORT tls_socket ();
-
-    NETTY__EXPORT tls_socket (tls_options opts, error * perr = nullptr);
 
     /**
      * For internal use only.
@@ -83,10 +83,11 @@ public:
      *         @c conn_status::success if connection established successfully or
      *         @c conn_status::in_progress if connection in progress.
      */
-    NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, error * perr = nullptr);
+    NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, tls_options opts
+        , error * perr = nullptr);
 
-//     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
-//
+    NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
+
 //     /**
 //      * Send @a data message with @a size on a socket.
 //      *

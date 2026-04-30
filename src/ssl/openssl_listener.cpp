@@ -6,12 +6,10 @@
 // Changelog:
 //      2026.04.24 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "tls_socket_impl.hpp"
+#include "openssl_socket_impl.hpp"
 #include "ssl/tls_listener.hpp"
 #include "posix/tcp_listener.hpp"
 #include <pfs/i18n.hpp>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
 // #include <atomic>
 // #include <mutex>
 //

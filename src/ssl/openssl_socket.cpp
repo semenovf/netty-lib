@@ -6,7 +6,8 @@
 // Changelog:
 //      2026.04.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "tls_socket_impl.hpp"
+#include "openssl_socket_impl.hpp"
+#include <pfs/i18n.hpp>
 
 // #if _MSC_VER
 // #   include <pfs/windows.hpp>
@@ -23,30 +24,9 @@ tls_socket::tls_socket (std::unique_ptr<tls_socket::impl> d)
     : _d(std::move(d))
 {}
 
-tls_socket::tls_socket (tls_options opts, error * perr)
-    : _d(new impl)
-{
-    _d->opts = std::move(opts);
-}
-
 tls_socket::tls_socket (tls_socket && other) noexcept = default;
 tls_socket & tls_socket::operator = (tls_socket && other) noexcept = default;
-
-tls_socket::~tls_socket ()
-{
-    if (_d) {
-        if (_d->ssl != nullptr) {
-            SSL_free(_d->ssl);
-            _d->ssl = nullptr;
-        }
-
-        // FIXME
-        // if (_d->ctx != nullptr) {
-        //     SSL_CTX_free(_d->ctx);
-        //     _d->ctx = nullptr;
-        // }
-    }
-}
+tls_socket::~tls_socket () = default;
 
 tls_socket::operator bool () const noexcept
 {
@@ -61,6 +41,132 @@ tls_socket::socket_id tls_socket::id () const noexcept
 socket4_addr tls_socket::saddr () const noexcept
 {
     return _d->saddr();
+}
+
+conn_status tls_socket::connect (socket4_addr const & remote_saddr, tls_options opts, error * perr)
+{
+    _d = std::make_unique<impl>();
+    _d->opts = std::move(opts);
+
+    auto status = _d->connect(remote_saddr, perr);
+
+    if (status == conn_status::failure)
+        return status;
+
+    SSL_METHOD const * method = TLS_client_method();
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // NOTE Below identical code as for tls_listener::listen
+
+    if (method == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("TLS_server_method call failure"));
+        return conn_status::failure;
+    }
+
+    SSL_CTX * ctx = SSL_CTX_new(method);
+
+    if (ctx == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
+        return conn_status::failure;
+    }
+
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    int encoding = _d->opts.format == encoding_format::pem
+        ? SSL_FILETYPE_PEM
+        : _d->opts.format == encoding_format::asn1
+            ? SSL_FILETYPE_ASN1
+            : SSL_FILETYPE_PEM;
+
+    if (_d->opts.cert_file) {
+        auto rc = SSL_CTX_use_certificate_file(ctx, _d->opts.cert_file->c_str(), encoding);
+
+        if (rc != 1) {
+            auto errn = ERR_get_error();
+            pfs::throw_or(perr, make_error_code(errc::ssl_error)
+                , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}: {}"
+                , *_d->opts.cert_file, ERR_error_string(errn, nullptr)));
+            return conn_status::failure;
+        }
+    }
+
+    if (_d->opts.key_file) {
+        auto rc = SSL_CTX_use_PrivateKey_file(ctx, _d->opts.key_file->c_str(), encoding);
+
+        if (rc != 1) {
+            auto errn = ERR_get_error();
+            pfs::throw_or(perr, make_error_code(errc::ssl_error)
+                , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}: {}"
+                , *_d->opts.key_file, ERR_error_string(errn, nullptr)));
+            return conn_status::failure;
+        }
+
+        // Check the consistency of a private key with the corresponding certificate loaded
+        // into context.
+        rc = SSL_CTX_check_private_key(ctx);
+
+        if (rc != 1) {
+            auto errn = ERR_get_error();
+            pfs::throw_or(perr, make_error_code(errc::ssl_error)
+                , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key)"
+                    " failure: {}: {}"
+                , *_d->opts.key_file, ERR_error_string(errn, nullptr)));
+            return conn_status::failure;
+        }
+    }
+    //
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    auto ssl = SSL_new(ctx);
+
+    if (ssl == nullptr) {
+        auto errn = ERR_get_error();
+        pfs::throw_or(perr, make_error_code(errc::ssl_error)
+            , tr::f_("creating data for connection (SSL_new) failure: {}"
+            , ERR_error_string(errn, nullptr)));
+        return conn_status::failure;
+    }
+
+    auto rc = SSL_set_fd(ssl, _d->id());
+
+    if (rc == 0) {
+        auto errn = ERR_get_error();
+        pfs::throw_or(perr, make_error_code(errc::ssl_error)
+            , tr::f_("association SSL with socket descriptor (SSL_set_fd) failure: {}"
+            , ERR_error_string(errn, nullptr)));
+        return conn_status::failure;
+    }
+
+    SSL_set_connect_state(ssl);
+
+    rc = SSL_do_handshake(ssl);
+
+    if (rc > 0) {
+        status = conn_status::connected;
+    } else {
+        auto errn = SSL_get_error(ssl, rc);
+        auto wait_required = (errn == SSL_ERROR_WANT_READ || errn == SSL_ERROR_WANT_WRITE);
+
+        if (!wait_required) {
+            auto err = error {
+                make_error_code(errc::ssl_error)
+                , tr::f_("handshake failure: {}", ERR_error_string(errn, nullptr))
+            };
+
+            return conn_status::failure;
+        }
+    }
+
+    _d->ssl = ssl;
+    _d->ctx = ctx;
+
+    return status;
+}
+
+int tls_socket::recv (char * data, int len, error * perr)
+{
+    // FIXME
+    return 0;
 }
 
 #if 0
@@ -136,24 +242,6 @@ struct socket::impl: public posix::tcp_socket
     // static std::atomic<bool> ssl_initialized;
 
     impl (): posix::tcp_socket() {}
-
-    // FIXME REMOVE
-    // bool init_openssl (error * perr)
-    // {
-    //     OPENSSL_INIT_SETTINGS const * ssl_settings = nullptr;
-    //     auto rc = OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, ssl_settings);
-    //
-    //     if (rc == 0) {
-    //         pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("OpenSSL initialization failure"));
-    //         return false;
-    //     }
-    //
-    //     OpenSSL_add_ssl_algorithms();
-    //     SSL_load_error_strings();
-    //
-    //     ssl_initialized = true;
-    //     return true;
-    // }
 
     bool create_context (error * perr)
     {

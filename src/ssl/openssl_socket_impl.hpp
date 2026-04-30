@@ -18,11 +18,25 @@ namespace ssl {
 struct tls_socket::impl: public posix::tcp_socket
 {
     SSL * ssl {nullptr};
-    // SSL_CTX * ctx {nullptr};
+    SSL_CTX * ctx {nullptr};
     tls_options opts;
 
     impl (): posix::tcp_socket() {}
     impl (posix::tcp_socket && ts): posix::tcp_socket(std::move(ts)) {}
+
+    ~impl ()
+    {
+        if (ssl != nullptr) {
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+            ssl = nullptr;
+        }
+
+        if (ctx != nullptr) {
+            SSL_CTX_free(ctx);
+            ctx = nullptr;
+        }
+    }
 };
 
 } // namespace ssl

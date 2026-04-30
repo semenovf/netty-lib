@@ -20,17 +20,20 @@
 
 namespace netty {
 
+namespace ns2 {
 template <typename Socket>
 struct dummy_handshake_pool
 {
     callback_t<void (error const &)> on_failure;
     callback_t<void (Socket &&)> on_accepted;
     void add (Socket &&) {};
+    void apply_remove () {};
     unsigned int step (error * = nullptr) { return 0; }
 };
+} // namespace ns2
 
 template <typename ListenerSocket, typename Socket, typename ListenerPoller
-    , typename HandshakePool = dummy_handshake_pool<Socket>>
+    , typename HandshakePool = ns2::dummy_handshake_pool<Socket>>
 class listener_pool: protected ListenerPoller
 {
 public:
@@ -113,6 +116,9 @@ public:
 
     void apply_remove ()
     {
+        if (_handshake_pool != nullptr)
+            _handshake_pool->apply_remove();
+
         if (!_removable.empty()) {
             for (auto id: _removable) {
                 ListenerPoller::remove(id);

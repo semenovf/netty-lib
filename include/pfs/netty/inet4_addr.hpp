@@ -31,6 +31,7 @@ class inet4_addr
 public:
     static constexpr std::uint32_t broadcast_addr_value = 0xFFFFFFFF;
     static constexpr std::uint32_t any_addr_value       = 0x00000000;
+    static constexpr std::uint32_t localhost_addr_value = 0x7F000001;
 
 private:
     std::uint32_t _addr {0};
