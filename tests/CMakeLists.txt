@@ -55,7 +55,10 @@ endforeach()
 add_subdirectory(meshnet)
 add_subdirectory(pubsub)
 add_subdirectory(telemetry)
-add_subdirectory(ssl)
+
+if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+    add_subdirectory(ssl)
+endif()
 
 ####################################################################################################
 # Channel connection tests

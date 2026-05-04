@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2021-2025 Vladislav Trifochkin
+# Copyright (c) 2021-2026 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -34,6 +34,7 @@ option(NETTY__ENABLE_TRACE "Enable trace messages output" OFF)
 option(NETTY__DISABLE_FETCH_CONTENT "Disable fetch content if sources of dependencies already exists in the working tree (checks .git subdirectory)" ON)
 option(NETTY__MESHNET_SERIAL_FIELD_SUPPORT "Add serial field to priority frame (used for debugging meshnet pattern generally)" OFF)
 
+#if (PROJECT_IS_TOP_LEVEL) # Added in version 3.21.
 if (NETTY__BUILD_STRICT)
     if (NOT CMAKE_CXX_STANDARD)
         set(CMAKE_CXX_STANDARD 14)
@@ -42,6 +43,7 @@ if (NETTY__BUILD_STRICT)
     set(CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF) # use -std=c++XX rather than -std=gnu++XX
 endif()
+#endif()
 
 add_subdirectory(3rdparty)
 add_subdirectory(2ndparty)
