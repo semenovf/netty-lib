@@ -8,11 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "openssl_socket_impl.hpp"
 #include "ssl/tls_listener.hpp"
+#include "get_ssl_error.hpp"
 #include "posix/tcp_listener.hpp"
 #include <pfs/i18n.hpp>
-// #include <atomic>
-// #include <mutex>
-//
+
 // #if _MSC_VER
 // #   include <pfs/windows.hpp>
 // #   include <wincrypt.h>
@@ -95,9 +94,9 @@ bool tls_listener::listen (int backlog, error * perr)
 
         if (rc != 1) {
             auto errn = ERR_get_error();
-            pfs::throw_or(perr, make_error_code(errc::ssl_error)
-                , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}: {}"
-                , *_d->opts.cert_file, ERR_error_string(errn, nullptr)));
+            pfs::throw_or(perr, get_ssl_error(errn
+                , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}"
+                , *_d->opts.cert_file)));
             return false;
         }
     }
@@ -107,9 +106,9 @@ bool tls_listener::listen (int backlog, error * perr)
 
         if (rc != 1) {
             auto errn = ERR_get_error();
-            pfs::throw_or(perr, make_error_code(errc::ssl_error)
-                , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}: {}"
-                , *_d->opts.key_file, ERR_error_string(errn, nullptr)));
+            pfs::throw_or(perr, get_ssl_error(errn
+                , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}"
+                , *_d->opts.key_file)));
             return false;
         }
 
@@ -119,10 +118,9 @@ bool tls_listener::listen (int backlog, error * perr)
 
         if (rc != 1) {
             auto errn = ERR_get_error();
-            pfs::throw_or(perr, make_error_code(errc::ssl_error)
-                , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key)"
-                    " failure: {}: {}"
-                , *_d->opts.key_file, ERR_error_string(errn, nullptr)));
+            pfs::throw_or(perr, get_ssl_error(errn
+                , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key) failure: {}"
+                , *_d->opts.key_file)));
             return false;
         }
     }
@@ -148,9 +146,7 @@ tls_socket tls_listener::accept (bool force_nonblocking, error * perr)
 
     if (ssl == nullptr) {
         auto errn = ERR_get_error();
-        pfs::throw_or(perr, make_error_code(errc::ssl_error)
-            , tr::f_("creating data for connection (SSL_new) failure: {}"
-            , ERR_error_string(errn, nullptr)));
+        pfs::throw_or(perr, get_ssl_error(errn, tr::_("creating data for connection (SSL_new) failure")));
         return tls_socket{};
     }
 
@@ -159,9 +155,7 @@ tls_socket tls_listener::accept (bool force_nonblocking, error * perr)
 
     if (rc == 0) {
         auto errn = ERR_get_error();
-        pfs::throw_or(perr, make_error_code(errc::ssl_error)
-            , tr::f_("association SSL with socket descriptor (SSL_set_fd) failure: {}"
-            , ERR_error_string(errn, nullptr)));
+        pfs::throw_or(perr, get_ssl_error(errn, tr::f_("association SSL with socket descriptor (SSL_set_fd) failure")));
         return tls_socket{};
     }
 

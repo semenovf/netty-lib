@@ -10,6 +10,7 @@
 #include "posix/tcp_socket.hpp"
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <sstream>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -36,6 +37,18 @@ struct tls_socket::impl: public posix::tcp_socket
             SSL_CTX_free(ctx);
             ctx = nullptr;
         }
+    }
+
+    std::string dump_cipher () const
+    {
+        std::ostringstream out;
+        char const * version = SSL_get_version(ssl);
+        out << "TLS version: " << version;
+
+        SSL_SESSION const * session = SSL_get_session(ssl);
+        SSL_CIPHER const * cipher = SSL_SESSION_get0_cipher(session);
+        out << "\nCIPHER is " << SSL_CIPHER_get_name(cipher);
+        return out.str();
     }
 };
 

@@ -33,16 +33,13 @@ class input_controller
     using serializer_traits_type = SerializerTraits;
     using archive_type = typename serializer_traits_type::archive_type;
     using deserializer_type = typename serializer_traits_type::deserializer_type;
-    using priority_frame_type = priority_frame<PriorityCount, serializer_traits_type>;
+    using frame_type = priority_frame<PriorityCount, serializer_traits_type>;
 
-    class account
+    struct account
     {
-        archive_type _raw; // Buffer to accumulate raw data
-
-    public:
+        archive_type raw; // Buffer to accumulate raw data
         std::array<archive_type, PriorityCount> pool;
 
-    public:
         // argument need to properly call from unordered_map::emplace prior to C++17
         account (int) {}
 
@@ -55,9 +52,9 @@ class input_controller
         // Called from input_controller while process input
         void append_chunk (archive_type && chunk)
         {
-            _raw.append(std::move(chunk));
+            raw.append(std::move(chunk));
 
-            while (priority_frame_type::parse(pool, _raw)) {
+            while (frame_type::parse(pool, raw)) {
                 ; // empty body
             }
         }

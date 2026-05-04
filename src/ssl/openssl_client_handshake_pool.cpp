@@ -7,7 +7,9 @@
 //      2026.04.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/client_handshake_pool.hpp"
+#include "get_ssl_error.hpp"
 #include "openssl_socket_impl.hpp"
+#include "trace.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 
@@ -25,7 +27,8 @@ client_handshake_pool::client_handshake_pool ()
 
     reader_poller_t::on_disconnected = [this] (socket_id id) {
         remove_later(id);
-        this->on_failure(id, error {make_error_code(errc::ssl_error)
+        this->on_failure(id, error {
+              make_error_code(errc::ssl_error)
             , tr::_("socket disconnected while handshaking")
         });
     };
@@ -46,6 +49,7 @@ client_handshake_pool::client_handshake_pool ()
 
         if (rc == 1) {
             remove_later(id);
+            NETTY__TRACE("SSL", "Client connected:\n{}", acc_ptr->sock._d->dump_cipher());
             this->on_connected(std::move(acc_ptr->sock));
         } else {
             auto errn = SSL_get_error(ssl, rc);
@@ -55,12 +59,7 @@ client_handshake_pool::client_handshake_pool ()
                 return;
 
             remove_later(id);
-            auto err = error {
-                  make_error_code(errc::ssl_error)
-                , tr::f_("handshake failure: {}", ERR_error_string(errn, nullptr))
-            };
-
-            this->on_failure(id, err);
+            this->on_failure(id, get_ssl_error(errn, "handshake failure"));
         }
     };
 }

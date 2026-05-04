@@ -29,26 +29,22 @@ public:
 private:
     using deserializer_type = typename serializer_traits_type::deserializer_type;
 
-    class account
+    struct account
     {
         using frame_type = frame<serializer_traits_type>;
 
-    private:
         // Buffer to accumulate raw data
-        archive_type _raw;
+        archive_type raw;
 
-    public:
         // Buffer to accumulate payloads
         archive_type ar;
 
-    public:
         void append_chunk (archive_type const & chunk)
         {
-            _raw.append(chunk);
+            raw.append(chunk);
 
-            while (frame_type::parse(ar, _raw)) {
+            while (frame_type::parse(ar, raw))
                 ; // empty body
-            }
         }
     };
 

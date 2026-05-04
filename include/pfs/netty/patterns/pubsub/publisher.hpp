@@ -99,11 +99,13 @@ public:
         _writer_pool.on_failure = [this] (socket_id sid, netty::error const & err)
         {
             _on_error(tr::f_("write to socket failure: #{}: {}", sid, err.what()));
+            close_socket(sid);
         };
 
         _writer_pool.on_disconnected = [this] (socket_id sid)
         {
             NETTY__TRACE(PUBSUB_TAG, "subscriber socket disconnected: #{}", sid);
+            close_socket(sid);
         };
 
         _writer_pool.locate_socket = [this] (socket_id sid)
@@ -200,6 +202,15 @@ public:
 
             if (n == 0)
                 std::this_thread::sleep_for(countdown_timer.remain());
+        }
+    }
+
+private:
+    void close_socket (socket_id sid)
+    {
+        if (_socket_pool.locate(sid) != nullptr) {
+            _writer_pool.remove_later(sid);
+            _socket_pool.remove_later(sid);
         }
     }
 };

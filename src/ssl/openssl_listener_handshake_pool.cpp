@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/listener_handshake_pool.hpp"
 #include "openssl_socket_impl.hpp"
+#include "get_ssl_error.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 
@@ -53,11 +54,7 @@ listener_handshake_pool::listener_handshake_pool ()
                 return;
 
             remove_later(id);
-            auto err = error {
-                  make_error_code(errc::ssl_error)
-                , tr::f_("handshake failure: {}", ERR_error_string(errn, nullptr))
-            };
-
+            auto err = get_ssl_error(errn, tr::_("handshake failure"));
             this->on_failure(id, err);
         }
     };

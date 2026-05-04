@@ -95,7 +95,6 @@ public:
      *
      * @param data Data to send.
      * @param size Data size to send.
-     * @param overflow Flag that the send buffer is overflow (@c true).
      * @param perr Pointer to structure to store error if occurred.
      */
     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);

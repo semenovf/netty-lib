@@ -7,12 +7,7 @@
 //      2026.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-// #include "../error.hpp"
-// #include "../exports.hpp"
-// #include "../conn_status.hpp"
 #include "../namespace.hpp"
-// // #include "../send_result.hpp"
-// #include "../socket4_addr.hpp"
 #include <pfs/optional.hpp>
 #include <string>
 
@@ -29,16 +24,14 @@ struct tls_options
     pfs::optional<std::string> key_file;
 
     // The ca certificate (or certificate bundle) file containing
-    // certificates to be trusted by peers; use 'SYSTEM' to
-    // leverage the system defaults.
-    // If caFile is not set peer, verification is disabled.
-    pfs::optional<std::string> ca_file;
+    // certificates to be trusted by peers
+    // pfs::optional<std::string> ca_file;
 
      // List of ciphers (rsa, etc...)
-    pfs::optional<std::string> ciphers {"DEFAULT"};
+    // pfs::optional<std::string> ciphers {"DEFAULT"};
 
     // Whether to skip validating the peer's hostname against the certificate presented
-    bool disable_hostname_validation = false;
+    // bool disable_hostname_validation = false;
 };
 
 } // namespace ssl

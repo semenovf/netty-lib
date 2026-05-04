@@ -12,7 +12,7 @@
 #include "../exports.hpp"
 #include "../conn_status.hpp"
 #include "../namespace.hpp"
-// #include "../send_result.hpp"
+#include "../send_result.hpp"
 #include "../socket4_addr.hpp"
 #include <memory>
 
@@ -88,24 +88,14 @@ public:
 
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
 
-//     /**
-//      * Send @a data message with @a size on a socket.
-//      *
-//      * @param data Data to send.
-//      * @param size Data size to send.
-//      * @param overflow Flag that the send buffer is overflow (@c true).
-//      * @param perr Pointer to structure to store error if occurred.
-//      */
-//     NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
-//
-//     NETTY__EXPORT int recv_from (char * data, int len, socket4_addr * saddr = nullptr
-//         , error * perr = nullptr);
-//
-//     /**
-//      * See send description.
-//      */
-//     NETTY__EXPORT send_result send_to (socket4_addr const & dest, char const * data, int len
-//         , error * perr = nullptr);
+    /**
+     * Send @a data message with @a size on a socket.
+     *
+     * @param data Data to send.
+     * @param size Data size to send.
+     * @param perr Pointer to structure to store error if occurred.
+     */
+    NETTY__EXPORT send_result send (char const * data, int len, error * perr = nullptr);
 };
 
 } // namespace ssl
