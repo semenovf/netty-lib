@@ -37,7 +37,7 @@
 // A1---+           +---B1
 //
 
-#define ITERATION_COUNT 5;
+#define ITERATION_COUNT 5
 
 #define TEST_SCHEME_1_ENABLED 1
 #define TEST_SCHEME_2_ENABLED 1

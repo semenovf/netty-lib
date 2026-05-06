@@ -39,7 +39,11 @@ tcp_listener::tcp_listener (socket4_addr const & saddr, int backlog, netty::erro
 }
 
 tcp_listener::tcp_listener (std::map<std::string, std::string> const & opts, error * perr)
+    : inet_socket()
 {
+    if (!init(inet_socket::type_enum::stream, perr))
+        return;
+
     inet4_addr addr {inet4_addr::any_addr_value};
     std::uint16_t port = 0;
     int backlog = 10;

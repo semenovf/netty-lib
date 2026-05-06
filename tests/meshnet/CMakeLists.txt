@@ -35,6 +35,16 @@ set(TESTS
     unreachable
     messaging)
 
+if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+    add_custom_target(copy-meshnet-cert-key ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ../ssl/cert.pem
+            ../ssl/key.pem
+            ${CMAKE_CURRENT_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        VERBATIM)
+endif()
+
 foreach (target ${TESTS})
     add_executable(tests-meshnet-${target} ${target}.cpp mesh_network.cpp)
     target_link_libraries(tests-meshnet-${target} PRIVATE pfs::netty pfs::lorem)
@@ -45,6 +55,14 @@ foreach (target ${TESTS})
         target_link_libraries(tests-meshnet-${target}-qt PRIVATE pfs::netty pfs::lorem Qt${QT_VERSION_MAJOR}::Core)
         target_compile_definitions(tests-meshnet-${target}-qt PRIVATE "NETTY__QT_ENABLED=1")
         add_test(NAME tests-meshnet-${target}-qt COMMAND tests-meshnet-${target}-qt)
+    endif()
+
+    if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+        set(ssl_target "tests-meshnet-${target}-ssl")
+        add_executable(${ssl_target} ${target}.cpp mesh_network.cpp)
+        target_link_libraries(${ssl_target} PRIVATE pfs::netty pfs::lorem)
+        target_compile_definitions(${ssl_target} PRIVATE "NETTY__TEST_ENCRYPTED_SOCKETS=1")
+        add_test(NAME ${ssl_target} COMMAND ${ssl_target})
     endif()
 endforeach()
 
@@ -71,3 +89,6 @@ foreach (target ${TESTS})
             add_test(NAME tests-meshnet-${target}-reliable-qt COMMAND tests-meshnet-${target}-reliable-qt)
     endif()
 endforeach()
+
+# Use one target to copy certificate and private key files
+add_dependencies(tests-meshnet-channel copy-telemetry-cert-key)
