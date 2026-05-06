@@ -77,9 +77,11 @@ private: // Callbacks
     callback_t<void (socket4_addr)> _on_accepted;
 
 public:
-    publisher (socket4_addr listener_saddr, int backlog = 100)
-        : interruptable()
+    template <typename ...Args>
+    publisher (Args &&... args): interruptable()
     {
+        _listener_pool.add(std::forward<Args>(args)...);
+
         _listener_pool.on_failure = [this] (netty::error const & err)
         {
             _on_error(tr::f_("listener pool failure: {}", err.what()));
@@ -113,10 +115,7 @@ public:
             return _socket_pool.locate(sid);
         };
 
-        _listener_pool.add(listener_saddr);
-        _listener_pool.listen(backlog);
-
-        NETTY__TRACE(PUBSUB_TAG, "publisher constructed and listen on: {}", to_string(listener_saddr));
+        NETTY__TRACE(PUBSUB_TAG, "publisher constructed");
     }
 
     publisher (publisher const &) = delete;
@@ -151,6 +150,11 @@ public: // Set callbacks
     }
 
 public:
+    void listen ()
+    {
+        _listener_pool.listen();
+    }
+
     void broadcast (char const * data, std::size_t size)
     {
         std::unique_lock<writer_mutex_type> locker{_writer_mtx};

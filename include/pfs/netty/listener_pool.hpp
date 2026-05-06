@@ -32,18 +32,18 @@ struct dummy_handshake_pool
 };
 } // namespace ns2
 
-template <typename ListenerSocket, typename Socket, typename ListenerPoller
+template <typename Listener, typename Socket, typename ListenerPoller
     , typename HandshakePool = ns2::dummy_handshake_pool<Socket>>
 class listener_pool: protected ListenerPoller
 {
 public:
-    using listener_socket_type = ListenerSocket;
+    using listener_type = Listener;
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
-    using listener_id = typename ListenerSocket::listener_id;
+    using listener_id = typename Listener::listener_id;
 
 private:
-    std::unordered_map<listener_id, listener_socket_type> _listeners;
+    std::unordered_map<listener_id, listener_type> _listeners;
     std::vector<listener_id> _removable;
     HandshakePool * _handshake_pool {nullptr};
 
@@ -103,7 +103,7 @@ public:
     template <typename ...Args>
     void add (Args &&... args)
     {
-        ListenerSocket listener (std::forward<Args>(args)...);
+        listener_type listener (std::forward<Args>(args)...);
 
         if (listener)
             _listeners[listener.id()] = std::move(listener);
@@ -129,12 +129,12 @@ public:
         }
     }
 
-    void listen (int backlog)
+    void listen ()
     {
         for (auto & x: _listeners) {
             error err;
             auto & listener = x.second;
-            auto success = listener.listen(backlog, & err);
+            auto success = listener.listen(& err);
 
             if (success)
                 ListenerPoller::add(listener.id(), & err);

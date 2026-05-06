@@ -245,10 +245,10 @@ public:
     }
 
     /**
-     * Adds new endpoint to the node with specified listeners.
+     * Adds new endpoint to the node with specified listeners defined by options.
      */
-    template <typename Peer, typename ListenerIt>
-    peer_index_t add (ListenerIt first, ListenerIt last, error * perr = nullptr)
+    template <typename Peer, typename ListenerOptsIt>
+    peer_index_t add_listeners (ListenerOptsIt first, ListenerOptsIt last, error * perr = nullptr)
     {
         PFS__ASSERT(_thread_id == std::this_thread::get_id(), "Peer must be added before run() call");
 
@@ -259,7 +259,7 @@ public:
 #endif
         error err;
 
-        for (ListenerIt pos = first; pos != last; ++pos) {
+        for (ListenerOptsIt pos = first; pos != last; ++pos) {
             ep->add_listener(*pos, & err);
 
             if (err)
@@ -388,31 +388,31 @@ public:
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_listeners (std::vector<std::map<std::string, std::string>> const & listener_opts_list
+        , error * perr = nullptr)
     {
-        return add<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
+        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end(), perr);
     }
 
     /**
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_listeners (std::initializer_list<std::map<std::string, std::string>> const & listener_opts_list
+        , error * perr = nullptr)
     {
-        return add<Peer>(listener_saddrs.begin(), listener_saddrs.end(), perr);
+        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end(), perr);
     }
 
     /**
      * Initiates listening on all peers in the node.
-     *
-     * @param backlog Maximum length to which the queue of pending connections may grow (see listen(2)).
      */
-    void listen (int backlog = 50)
+    void listen ()
     {
         std::unique_lock<recursive_mutex_type> locker{_writer_mtx};
 
         for (auto & x: _endpoints)
-            x->listen(backlog);
+            x->listen();
     }
 
     /**

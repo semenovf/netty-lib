@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2017-2021 Vladislav Trifochkin
+// Copyright (c) 2017-2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //

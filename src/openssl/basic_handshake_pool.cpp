@@ -7,7 +7,7 @@
 //      2026.04.30 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/basic_handshake_pool.hpp"
-#include "openssl_socket_impl.hpp"
+#include "tls_socket_impl.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 

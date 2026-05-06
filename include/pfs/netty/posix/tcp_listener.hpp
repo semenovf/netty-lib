@@ -11,6 +11,7 @@
 #include "../exports.hpp"
 #include "../error.hpp"
 #include "tcp_socket.hpp"
+#include <map>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -25,6 +26,9 @@ public:
     using listener_id = inet_socket::socket_id;
     using socket_type = tcp_socket;
 
+private:
+    int _backlog = 10;
+
 public:
     /**
      * Constructs invalid (uninitialized) TCP server.
@@ -34,7 +38,19 @@ public:
     /**
      * Constructs POSIX TCP server.
      */
-    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, error * perr = nullptr);
+    NETTY__EXPORT tcp_listener (socket4_addr const & saddr, int backlog = 10, error * perr = nullptr);
+
+    /**
+     * Constructs POSIX TCP server using option set in @a opts.
+     *
+     * @details @a opts may/must contain the following keys:
+     *          * addr - the address on which the listener will listen (any address by default);
+     *          * port - the port on which the listener will listen (zero by default);
+     *          * backlog - the maximum length to which the queue of pending connections may grow
+     *              (10 by default); value must be in range [0, SOMAXCONN]; if the option value is
+     *              zero, the actual value is set to the default value.
+     */
+    NETTY__EXPORT tcp_listener (std::map<std::string, std::string> const & opts, error * perr = nullptr);
 
 public:
     /**
@@ -42,7 +58,7 @@ public:
      *
      * @param backlog The maximum length to which the queue of pending connections may grow.
      */
-    NETTY__EXPORT bool listen (int backlog, error * perr = nullptr);
+    NETTY__EXPORT bool listen (error * perr = nullptr);
 
     /**
      * Accept a connection on a server socket.

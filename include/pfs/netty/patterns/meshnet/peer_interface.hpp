@@ -16,6 +16,7 @@
 #include "../../socket4_addr.hpp"
 #include "peer_index.hpp"
 #include <chrono>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,11 +45,11 @@ public:
     virtual void set_index (peer_index_t index) noexcept = 0;
     virtual peer_index_t index () const noexcept = 0;
 
-    virtual void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr) = 0;
+    virtual void add_listener (std::map<std::string, std::string> const & opts, error * perr = nullptr) = 0;
     virtual bool connect (netty::socket4_addr remote_saddr, bool behind_nat = false) = 0;
     virtual bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) = 0;
     virtual void disconnect (node_id peer_id) = 0;
-    virtual void listen (int backlog = 50) = 0;
+    virtual void listen () = 0;
     virtual void enqueue (node_id id, int priority, char const * data, std::size_t len) = 0;
     virtual void enqueue (node_id id, int priority, archive_type data) = 0;
     virtual bool has_writer (node_id id) const = 0;

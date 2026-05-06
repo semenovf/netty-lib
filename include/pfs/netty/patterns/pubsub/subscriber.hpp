@@ -184,9 +184,10 @@ public:
     /**
      * Connects to publisher.
      */
-    bool connect (socket4_addr remote_saddr)
+    template <typename ...Args>
+    bool connect (Args &&... args)
     {
-        auto rs = _connecting_pool.connect(remote_saddr);
+        auto rs = _connecting_pool.connect(std::forward<Args>(args)...);
 
         if (rs == netty::conn_status::failure)
             return false;

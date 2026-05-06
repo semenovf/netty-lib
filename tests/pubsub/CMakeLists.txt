@@ -20,3 +20,23 @@ foreach (target ${TESTS})
         add_test(NAME tests-pubsub-${target}-qt COMMAND tests-pubsub-${target}-qt)
     endif()
 endforeach()
+
+if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+    add_custom_target(copy-pubsub-cert-key ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ../ssl/cert.pem
+            ../ssl/key.pem
+            ${CMAKE_CURRENT_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        VERBATIM)
+
+    foreach (_name pubsub)
+        set(_target "tests-pubsub-${_name}-ssl")
+        add_executable(${_target} ${_name}.cpp)
+        target_link_libraries(${_target} PRIVATE pfs::netty pfs::lorem)
+        target_compile_definitions(${_target} PRIVATE "NETTY__TEST_ENCRYPTED_SOCKETS=1")
+        add_test(NAME ${_target} COMMAND ${_target})
+
+        add_dependencies(${_target} copy-pubsub-cert-key)
+    endforeach()
+endif()

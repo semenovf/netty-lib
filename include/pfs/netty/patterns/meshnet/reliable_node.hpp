@@ -308,23 +308,25 @@ public:
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Node>
-    peer_index_t add (std::vector<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_listeners (std::vector<std::map<std::string, std::string>> const & listener_opts_list
+        , error * perr = nullptr)
     {
-        return _t.template add<Node>(listener_saddrs, perr);
+        return _t.template add_listeners<Node>(listener_opts_list, perr);
     }
 
     /**
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Node>
-    peer_index_t add (std::initializer_list<socket4_addr> const & listener_saddrs, error * perr = nullptr)
+    peer_index_t add_listeners (std::initializer_list<std::map<std::string, std::string>> const & listener_opts_list
+        , error * perr = nullptr)
     {
-        return _t.template add<Node>(listener_saddrs, perr);
+        return _t.template add_listeners<Node>(listener_opts_list, perr);
     }
 
-    void listen (int backlog = 50)
+    void listen ()
     {
-        _t.listen(backlog);
+        _t.listen();
     }
 
     bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)

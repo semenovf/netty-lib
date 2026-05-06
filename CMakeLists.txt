@@ -245,13 +245,13 @@ if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
         message(STATUS "OpenSSL include dirs: ${OPENSSL_INCLUDE_DIR}")
         message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
         target_link_libraries(netty PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-        target_compile_definitions(netty PRIVATE "NETTY__OPENSSL3_ENABLED=1")
+        target_compile_definitions(netty PUBLIC "NETTY__OPENSSL3_ENABLED=1")
         target_sources(netty PRIVATE
-            src/ssl/openssl_basic_handshake_pool.cpp
-            src/ssl/openssl_client_handshake_pool.cpp
-            src/ssl/openssl_listener_handshake_pool.cpp
-            src/ssl/openssl_listener.cpp
-            src/ssl/openssl_socket.cpp)
+            src/openssl/basic_handshake_pool.cpp
+            src/openssl/client_handshake_pool.cpp
+            src/openssl/listener_handshake_pool.cpp
+            src/openssl/tls_listener.cpp
+            src/openssl/tls_socket.cpp)
     else()
         message(FATAL_ERROR "No encrypted sockets backend specified")
     endif()

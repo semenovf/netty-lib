@@ -77,7 +77,7 @@ public:
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
     /**
-     * Connects to the TCP server @a remote_addr.
+     * Connects to the TLS server @a remote_addr.
      *
      * @return @c conn_status::failure if error occurred while connecting,
      *         @c conn_status::success if connection established successfully or

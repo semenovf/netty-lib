@@ -137,7 +137,14 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
     });
 #endif
 
-    ptr->template add<peer_t>({listener_saddr});
+    using std::to_string;
+    std::map<std::string, std::string> listener_opts = {
+          {"addr", to_string(listener_saddr.addr)}
+        , {"port", to_string(listener_saddr.port)}
+        , {"backlog", "1000"}
+    };
+
+    ptr->template add_listeners<peer_t>({listener_opts});
 
     return ptr;
 }

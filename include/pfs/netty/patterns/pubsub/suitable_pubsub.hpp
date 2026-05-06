@@ -24,10 +24,12 @@ namespace pubsub {
 /**
  * Suitable (cross-platform) publisher for the current platform.
  */
-template <typename SerializerTraits = serializer_traits<>>
+template <typename SerializerTraits = serializer_traits<>
+    , typename Socket = netty::posix::tcp_socket
+    , typename Listener = netty::posix::tcp_listener>
 using suitable_publisher = netty::pubsub::publisher<
-      netty::posix::tcp_socket
-    , netty::posix::tcp_listener
+      Socket
+    , Listener
 #if NETTY__EPOLL_ENABLED
     , netty::listener_epoll_poller_t
     , netty::writer_epoll_poller_t
@@ -44,9 +46,10 @@ using suitable_publisher = netty::pubsub::publisher<
 /**
  * Suitable (cross-platform) subscriber for the current platform.
  */
-template <typename SerializerTraits = serializer_traits<>>
+template <typename SerializerTraits = serializer_traits<>
+    , typename Socket = netty::posix::tcp_socket>
 using suitable_subscriber = subscriber<
-      netty::posix::tcp_socket
+      Socket
 #if NETTY__EPOLL_ENABLED
     , netty::connecting_epoll_poller_t
     , netty::reader_epoll_poller_t

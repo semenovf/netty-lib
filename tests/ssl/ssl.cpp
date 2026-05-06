@@ -312,7 +312,7 @@ TEST_CASE("basic") {
 
     server srv;
     s_interruptables.push_back(& srv);
-    srv.listener_pool.listen(10);
+    srv.listener_pool.listen();
 
     std::thread client_thread([] () {
         client c;

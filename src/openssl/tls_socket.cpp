@@ -6,7 +6,7 @@
 // Changelog:
 //      2026.04.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
-#include "openssl_socket_impl.hpp"
+#include "tls_socket_impl.hpp"
 #include "get_ssl_error.hpp"
 #include <pfs/i18n.hpp>
 #include <cstdint>

@@ -16,6 +16,11 @@
 #include <cstdint>
 #include <thread>
 
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+#   include "pfs/netty/ssl/tls_listener.hpp"
+#   include "pfs/netty/ssl/tls_socket.hpp"
+#endif
+
 constexpr std::uint16_t PORT1 = 4242;
 constexpr int SUBSCRIBER_LIMIT = 10;
 constexpr int MESSAGE_LIMIT = 100;
@@ -24,13 +29,29 @@ std::atomic_int g_accepted_counter {0};
 std::array<std::atomic_int, SUBSCRIBER_LIMIT> g_received_counters;
 
 TEST_CASE("basic") {
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    using publisher_t = netty::pubsub::suitable_publisher<serializer_traits_t
+        , netty::ssl::tls_socket, netty::ssl::tls_listener>;
+    using subscriber_t = netty::pubsub::suitable_subscriber<serializer_traits_t, netty::ssl::tls_socket>;
+#else
     using publisher_t = netty::pubsub::suitable_publisher<serializer_traits_t>;
     using subscriber_t = netty::pubsub::suitable_subscriber<serializer_traits_t>;
+#endif
 
     netty::startup_guard netty_startup;
 
     std::atomic_bool pub1_ready_flag {false};
-    publisher_t pub1 {netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}};
+
+
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    netty::ssl::tls_options tls_opts;
+    tls_opts.cert_file = std::string("./cert.pem");
+    tls_opts.key_file = std::string("./key.pem");
+    publisher_t pub1{netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}, std::move(tls_opts)};
+#else
+    publisher_t pub1{netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}};
+#endif
+    pub1.listen();
     std::array<subscriber_t, SUBSCRIBER_LIMIT> subs;
 
     auto pub1_thread = std::thread {[&] () {
@@ -50,7 +71,16 @@ TEST_CASE("basic") {
         sub_threads[i] = std::thread {[&, i] () {
             CHECK(tools::wait_atomic_bool(pub1_ready_flag));
 
-            REQUIRE(subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}));
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+            netty::ssl::tls_options tls_opts;
+            tls_opts.cert_file = std::string("./cert.pem");
+            // tls_opts.key_file = "./key.pem";
+            auto success = subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}, std::move(tls_opts));
+            REQUIRE(success);
+#else
+            auto success = subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1});
+            REQUIRE(success);
+#endif
 
             subs[i].on_data_ready([i] (archive_t ar) {
                 auto const * data = ar.data();

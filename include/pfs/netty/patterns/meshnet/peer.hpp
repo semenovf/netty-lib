@@ -601,10 +601,11 @@ public:
         return _index;
     }
 
-    void add_listener (socket4_addr listener_saddr, error * perr = nullptr)
+    template <typename ...Args>
+    void add_listener (Args &&... args)
     {
-        _listener_pool.add(listener_saddr, perr);
-        NETTY__TRACE(MESHNET_TAG, "{}: listener added: {}", to_string(_id), to_string(listener_saddr));
+        _listener_pool.add(std::forward<Args>(args)...);
+        NETTY__TRACE(MESHNET_TAG, "{}: listener added", to_string(_id));
     }
 
     bool connect (socket4_addr remote_saddr, bool behind_nat = false)
@@ -650,10 +651,10 @@ public:
         destroy_channel(peer_id);
     }
 
-    void listen (int backlog = 100)
+    void listen ()
     {
         NETTY__TRACE(MESHNET_TAG, "{}: listening", to_string(_id));
-        _listener_pool.listen(backlog);
+        _listener_pool.listen();
     }
 
     bool enqueue (node_id id, int priority, char const * data, std::size_t len)
@@ -982,9 +983,9 @@ public: // peer_interface
             return Peer::index();
         }
 
-        void add_listener (netty::socket4_addr const & listener_addr, error * perr = nullptr) override
+        void add_listener (std::map<std::string, std::string> const & opts, error * perr) override
         {
-            Peer::add_listener(listener_addr, perr);
+            Peer::add_listener(opts, perr);
         }
 
         bool connect (netty::socket4_addr remote_saddr, bool behind_nat) override
@@ -1002,9 +1003,9 @@ public: // peer_interface
             Peer::disconnect(peer_id);
         }
 
-        void listen (int backlog = 50) override
+        void listen () override
         {
-            Peer::listen(backlog);
+            Peer::listen();
         }
 
         void enqueue (node_id id, int priority, char const * data, std::size_t len) override
