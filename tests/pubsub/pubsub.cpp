@@ -42,7 +42,6 @@ TEST_CASE("basic") {
 
     std::atomic_bool pub1_ready_flag {false};
 
-
 #if NETTY__TEST_ENCRYPTED_SOCKETS
     netty::ssl::tls_options tls_opts;
     tls_opts.cert_file = std::string("./cert.pem");
@@ -51,8 +50,10 @@ TEST_CASE("basic") {
 #else
     publisher_t pub1{netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}};
 #endif
-    pub1.listen();
+
     std::array<subscriber_t, SUBSCRIBER_LIMIT> subs;
+
+    pub1.listen();
 
     auto pub1_thread = std::thread {[&] () {
         pub1.on_accepted([] (netty::socket4_addr) {

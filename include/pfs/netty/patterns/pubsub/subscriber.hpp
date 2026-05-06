@@ -183,24 +183,13 @@ public: // Set callbacks
 public:
     /**
      * Connects to publisher.
+     *
+     * @details For parameter list @see connecting_pool::connect.
      */
     template <typename ...Args>
     bool connect (Args &&... args)
     {
         auto rs = _connecting_pool.connect(std::forward<Args>(args)...);
-
-        if (rs == netty::conn_status::failure)
-            return false;
-
-        return true;
-    }
-
-    /**
-     * Connects to publisher.
-     */
-    bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
-    {
-        auto rs = _connecting_pool.connect(remote_saddr, local_addr);
 
         if (rs == netty::conn_status::failure)
             return false;

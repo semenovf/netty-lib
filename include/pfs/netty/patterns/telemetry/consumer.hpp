@@ -90,19 +90,14 @@ public:
     }
 
     /**
-     * Connects to producer.
+     * Connects to publisher.
+     *
+     * @details For parameter list @see pubsub::publisher::connect.
      */
-    bool connect (socket4_addr remote_saddr)
+    template <typename ...Args>
+    bool connect (Args &&... args)
     {
-        return _sub.connect(remote_saddr);
-    }
-
-    /**
-     * Connects to producer.
-     */
-    bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr)
-    {
-        return _sub.connect(remote_saddr, local_addr);
+        return _sub.connect(std::forward<Args>(args)...);
     }
 
     void interrupt ()

@@ -19,6 +19,11 @@
 #include <chrono>
 #include <thread>
 
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+#   include "pfs/netty/ssl/tls_listener.hpp"
+#   include "pfs/netty/ssl/tls_socket.hpp"
+#endif
+
 constexpr std::uint16_t PORT1 = 4242;
 constexpr int CONSUMER_LIMIT = 1;
 constexpr int MESSAGE_LIMIT = 100;
@@ -183,8 +188,14 @@ struct consumer_traits;
 template <>
 struct producer_traits<std::string>
 {
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    using type = netty::telemetry::producer<std::string
+        , netty::pubsub::suitable_publisher<serializer_traits_t
+            , netty::ssl::tls_socket, netty::ssl::tls_listener>>;
+#else
     using type = netty::telemetry::producer<std::string
         , netty::pubsub::suitable_publisher<serializer_traits_t>>;
+#endif
 
     static void push_data_to (type & prod)
     {
@@ -202,8 +213,14 @@ struct producer_traits<std::string>
 template <>
 struct producer_traits<std::uint16_t>
 {
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    using type = netty::telemetry::producer<std::uint16_t
+        , netty::pubsub::suitable_publisher<serializer_traits_t
+            , netty::ssl::tls_socket, netty::ssl::tls_listener>>;
+#else
     using type = netty::telemetry::producer<std::uint16_t
         , netty::pubsub::suitable_publisher<serializer_traits_t>>;
+#endif
 
     static void push_data_to (type & prod)
     {
@@ -221,15 +238,25 @@ struct producer_traits<std::uint16_t>
 template <>
 struct consumer_traits<std::string>
 {
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    using type = netty::telemetry::consumer<std::string
+        , netty::pubsub::suitable_subscriber<serializer_traits_t, netty::ssl::tls_socket>>;
+#else
     using type = netty::telemetry::consumer<std::string
         , netty::pubsub::suitable_subscriber<serializer_traits_t>>;
+#endif
 };
 
 template <>
 struct consumer_traits<std::uint16_t>
 {
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    using type = netty::telemetry::consumer<std::uint16_t
+        , netty::pubsub::suitable_subscriber<serializer_traits_t, netty::ssl::tls_socket>>;
+#else
     using type = netty::telemetry::consumer<std::uint16_t
         , netty::pubsub::suitable_subscriber<serializer_traits_t>>;
+#endif
 };
 
 template <typename KeyT, typename Visitor>
@@ -244,8 +271,19 @@ void test_body ()
     g_received_counter.store(0, std::memory_order::memory_order_relaxed);
 
     std::atomic_bool prod1_ready_flag {false};
+
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    netty::ssl::tls_options tls_opts;
+    tls_opts.cert_file = std::string("./cert.pem");
+    tls_opts.key_file = std::string("./key.pem");
+    producer_t prod1 {netty::socket4_addr{netty::any_inet4_addr(), PORT1}, std::move(tls_opts)};
+#else
     producer_t prod1 {netty::socket4_addr{netty::any_inet4_addr(), PORT1}};
+#endif
+
     std::array<consumer_t, CONSUMER_LIMIT> consumers;
+
+    prod1.listen();
 
     auto prod1_thread = std::thread {[&] () {
         prod1.on_accepted([] (netty::socket4_addr) {
@@ -264,8 +302,15 @@ void test_body ()
         consumer_threads[i] = std::thread {[&, i] () {
             CHECK(tools::wait_atomic_bool(prod1_ready_flag));
 
-            REQUIRE(consumers[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}));
-
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+            netty::ssl::tls_options tls_opts;
+            tls_opts.cert_file = std::string("./cert.pem");
+            auto success = consumers[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}, std::move(tls_opts));
+            REQUIRE(success);
+#else
+            auto success = consumers[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1});
+            REQUIRE(success);
+#endif
             consumers[i].run();
         }};
     }

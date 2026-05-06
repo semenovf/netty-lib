@@ -49,8 +49,9 @@ private: // Callbacks
         = [] (std::string const & errstr) { LOGE(TELEMETRY_TAG, "{}", errstr); };
 
 public:
-    producer (socket4_addr saddr, int backlog = 100)
-        : _pub(saddr, backlog)
+    template <typename ...Args>
+    producer (Args &&... args)
+        : _pub(std::forward<Args>(args)...)
     {}
 
 public: // Set callbacks
@@ -76,6 +77,11 @@ public: // Set callbacks
     }
 
 public:
+    void listen ()
+    {
+        _pub.listen();
+    }
+
     template <typename T>
     void push (key_type const & key, T const & value)
     {
