@@ -251,7 +251,8 @@ if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
             src/openssl/client_handshake_pool.cpp
             src/openssl/listener_handshake_pool.cpp
             src/openssl/tls_listener.cpp
-            src/openssl/tls_socket.cpp)
+            src/openssl/tls_socket.cpp
+            src/openssl/tls_socket_impl.cpp)
     else()
         message(FATAL_ERROR "No encrypted sockets backend specified")
     endif()

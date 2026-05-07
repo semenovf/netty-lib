@@ -7,7 +7,6 @@
 //      2026.04.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/client_handshake_pool.hpp"
-#include "get_ssl_error.hpp"
 #include "tls_socket_impl.hpp"
 #include "trace.hpp"
 #include <pfs/assert.hpp>

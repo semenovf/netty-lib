@@ -7,6 +7,7 @@
 //      2026.04.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/tls_socket.hpp"
+#include "error.hpp"
 #include "posix/tcp_socket.hpp"
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -20,7 +21,7 @@ struct tls_socket::impl: public posix::tcp_socket
 {
     SSL * ssl {nullptr};
     SSL_CTX * ctx {nullptr};
-    tls_options opts;
+    // tls_options opts;
 
     impl (): posix::tcp_socket() {}
     impl (posix::tcp_socket && ts): posix::tcp_socket(std::move(ts)) {}
@@ -51,6 +52,24 @@ struct tls_socket::impl: public posix::tcp_socket
         return out.str();
     }
 };
+
+inline error get_ssl_error (int ssl_errn, std::string const & desc)
+{
+    if (ssl_errn == SSL_ERROR_SYSCALL)
+        return error {pfs::get_last_system_error(), desc};
+
+    return error {
+          make_error_code(errc::ssl_error)
+        , fmt::format("{}: {}", desc, ERR_error_string(ssl_errn, nullptr))
+    };
+}
+
+/**
+ * Creates context and loads certificates and private keys according to passed TLS options.
+ *
+ * @return Context or @c nullptr on error.
+ */
+SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error * perr);
 
 } // namespace ssl
 

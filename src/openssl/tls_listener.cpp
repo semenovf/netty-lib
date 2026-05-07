@@ -8,14 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/tls_listener.hpp"
 #include "tls_socket_impl.hpp"
-#include "get_ssl_error.hpp"
 #include "posix/tcp_listener.hpp"
 #include <pfs/i18n.hpp>
-
-// #if _MSC_VER
-// #   include <pfs/windows.hpp>
-// #   include <wincrypt.h>
-// #endif
 
 NETTY__NAMESPACE_BEGIN
 
@@ -114,63 +108,10 @@ bool tls_listener::listen (error * perr)
     if (!success)
         return false;
 
-    SSL_METHOD const * method = TLS_server_method();
+    SSL_CTX * ctx = create_ssl_context(true, _d->opts, perr);
 
-    if (method == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("TLS_server_method call failure"));
+    if (ctx == nullptr)
         return false;
-    }
-
-    SSL_CTX * ctx = SSL_CTX_new(method);
-
-    if (ctx == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
-        return false;
-    }
-
-    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-
-    int encoding = _d->opts.format == encoding_format::pem
-        ? SSL_FILETYPE_PEM
-        : _d->opts.format == encoding_format::asn1
-            ? SSL_FILETYPE_ASN1
-            : SSL_FILETYPE_PEM;
-
-    if (_d->opts.cert_file) {
-        auto rc = SSL_CTX_use_certificate_file(ctx, _d->opts.cert_file->c_str(), encoding);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}"
-                , *_d->opts.cert_file)));
-            return false;
-        }
-    }
-
-    if (_d->opts.key_file) {
-        auto rc = SSL_CTX_use_PrivateKey_file(ctx, _d->opts.key_file->c_str(), encoding);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}"
-                , *_d->opts.key_file)));
-            return false;
-        }
-
-        // Check the consistency of a private key with the corresponding certificate loaded
-        // into context.
-        rc = SSL_CTX_check_private_key(ctx);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key) failure: {}"
-                , *_d->opts.key_file)));
-            return false;
-        }
-    }
 
     _d->ctx = ctx;
 

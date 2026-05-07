@@ -7,14 +7,8 @@
 //      2026.04.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "tls_socket_impl.hpp"
-#include "get_ssl_error.hpp"
 #include <pfs/i18n.hpp>
 #include <cstdint>
-
-// #if _MSC_VER
-// #   include <pfs/windows.hpp>
-// #   include <wincrypt.h>
-// #endif
 
 NETTY__NAMESPACE_BEGIN
 
@@ -48,104 +42,17 @@ socket4_addr tls_socket::saddr () const noexcept
 conn_status tls_socket::connect (socket4_addr const & remote_saddr, tls_options opts, error * perr)
 {
     _d = std::make_unique<impl>();
-    _d->opts = std::move(opts);
+    // _d->opts = std::move(opts);
 
     auto status = _d->connect(remote_saddr, perr);
 
     if (status == conn_status::failure)
         return status;
 
-    SSL_METHOD const * method = TLS_client_method();
+    SSL_CTX * ctx = create_ssl_context(false, opts, perr);
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // NOTE Below identical code as for tls_listener::listen
-
-    if (method == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("TLS_server_method call failure"));
+    if (ctx == nullptr)
         return conn_status::failure;
-    }
-
-    SSL_CTX * ctx = SSL_CTX_new(method);
-
-    if (ctx == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
-        return conn_status::failure;
-    }
-
-    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-
-    long mode =
-        // Once SSL_write_ex() or SSL_write() returns successful, r bytes have been written and the
-        // next call to SSL_write_ex() or SSL_write() must only send the n-r bytes left, imitating the
-        // behaviour of write()
-          SSL_MODE_ENABLE_PARTIAL_WRITE
-
-        // Make it possible to retry SSL_write_ex() or SSL_write() with changed buffer location
-        // (the buffer contents must stay the same). This is not the default to avoid the
-        // (misconception that nonblocking SSL_write() behaves like nonblocking write().
-        | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER;
-
-    SSL_CTX_set_mode(ctx, mode);
-
-    std::uint64_t options =
-        // Disable insecure protocols
-          SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3
-
-        // When choosing a cipher, signature, (TLS 1.2) curve or (TLS 1.3) group, use the server's
-        // preferences instead of the client preferences. When not set, the SSL server will always
-        // follow the clients preferences. When set, the SSL/TLS server will choose following its
-        // own preferences.
-        | SSL_OP_SERVER_PREFERENCE
-
-        // Disable all renegotiation in (D)TLSv1.2 and earlier. Do not send HelloRequest messages,
-        // and ignore renegotiation requests via ClientHello.
-        | SSL_OP_NO_RENEGOTIATION;
-
-    SSL_CTX_set_options(ctx, options);
-
-    int encoding = _d->opts.format == encoding_format::pem
-        ? SSL_FILETYPE_PEM
-        : _d->opts.format == encoding_format::asn1
-            ? SSL_FILETYPE_ASN1
-            : SSL_FILETYPE_PEM;
-
-    if (_d->opts.cert_file) {
-        auto rc = SSL_CTX_use_certificate_file(ctx, _d->opts.cert_file->c_str(), encoding);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}"
-                , *_d->opts.cert_file)));
-            return conn_status::failure;
-        }
-    }
-
-    if (_d->opts.key_file) {
-        auto rc = SSL_CTX_use_PrivateKey_file(ctx, _d->opts.key_file->c_str(), encoding);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}"
-                , *_d->opts.key_file)));
-            return conn_status::failure;
-        }
-
-        // Check the consistency of a private key with the corresponding certificate loaded
-        // into context.
-        rc = SSL_CTX_check_private_key(ctx);
-
-        if (rc != 1) {
-            auto errn = ERR_get_error();
-            pfs::throw_or(perr, get_ssl_error(errn
-                , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key)"
-                    " failure: {}", *_d->opts.key_file)));
-            return conn_status::failure;
-        }
-    }
-    //
-    ////////////////////////////////////////////////////////////////////////////////////////////////
 
     auto ssl = SSL_new(ctx);
 
