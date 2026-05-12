@@ -143,7 +143,7 @@ public: // Set callbacks
      * Notify when a node with identical ID is detected.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, socket4_addr)
+     *          void (node_id, std::string const & host_addr)
      */
     template <typename F>
     reliable_node & on_duplicate_id (F && f)
@@ -307,19 +307,19 @@ public:
     /**
      * Adds new endpoint to the node with specified listeners.
      */
-    template <typename Node>
+    template <typename Peer>
     peer_index_t add_listeners (std::vector<listener_options> const & listener_opts_list)
     {
-        return _t.template add_listeners<Node>(listener_opts_list);
+        return _t.template add_listeners<Peer>(listener_opts_list);
     }
 
     /**
      * Adds new endpoint to the node with specified listeners.
      */
-    template <typename Node>
+    template <typename Peer>
     peer_index_t add_listeners (std::initializer_list<listener_options> const & listener_opts_list)
     {
-        return _t.template add_listeners<Node>(listener_opts_list);
+        return _t.template add_listeners<Peer>(listener_opts_list);
     }
 
     void listen ()

@@ -27,11 +27,6 @@ NETTY__NAMESPACE_BEGIN
 
 namespace meshnet {
 
-// FIXME REMOVE
-// // For compatibility we will use base types for IPv4 and socket addresses in callback signatures.
-// using inet4_addr_compat_t = std::uint32_t;
-// using socket4_addr_compat_t = std::pair<std::uint32_t, std::uint16_t>;
-
 template <typename NodeId, typename Archive>
 class peer_interface
 {
@@ -67,7 +62,7 @@ public:
     virtual void on_channel_destroyed (callback_t<void (peer_index_t, node_id)>) = 0;
     virtual void on_reconnection_started (callback_t<void (peer_index_t, connection_options const &)>) = 0;
     virtual void on_reconnection_stopped (callback_t<void (peer_index_t, connection_options const &)>) = 0;
-    virtual void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)>) = 0;
+    virtual void on_duplicate_id (callback_t<void (peer_index_t, node_id, std::string const & host_addr)>) = 0;
     virtual void on_unreachable_received (callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)>) = 0;
     virtual void on_route_received (callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)>) = 0;
     virtual void on_domestic_data_received (callback_t<void (node_id, int, archive_type)>) = 0;

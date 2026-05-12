@@ -91,7 +91,7 @@ private:
 
     callback_t<void (peer_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
-    callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (node_id, std::string const & host_addr)> _on_duplicate_id;
     callback_t<void (node_id, std::size_t, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, std::size_t)> _on_route_lost;
     callback_t<void (node_id)> _on_node_unreachable;
@@ -171,7 +171,7 @@ public: // Set callbacks
      * Notify when a node with identical ID is detected.
      *
      * @details Callback @a f signature must match:
-     *          void (node_id, socket4_addr_compat_t)
+     *          void (node_id, std::string const & host_addr)
      */
     template <typename F>
     node & on_duplicate_id (F && f)
@@ -325,8 +325,8 @@ public:
         });
 
         if (_on_duplicate_id) {
-            ep->on_duplicate_id([this] (peer_index_t, node_id id, socket4_addr saddr) {
-               _on_duplicate_id(id, saddr);
+            ep->on_duplicate_id([this] (peer_index_t, node_id id, std::string const & host_addr) {
+               _on_duplicate_id(id, host_addr);
             });
         }
 

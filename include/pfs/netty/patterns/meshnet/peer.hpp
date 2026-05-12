@@ -167,7 +167,7 @@ private: // Callbacks
                 , to_string(opts.remote_saddr));
     };
 
-    callback_t<void (peer_index_t, node_id, socket4_addr)> _on_duplicate_id;
+    callback_t<void (peer_index_t, node_id, std::string const &)> _on_duplicate_id;
     callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
     callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
@@ -328,7 +328,7 @@ public:
         {
             auto psock = _socket_pool.locate(sid);
             PFS__THROW_UNEXPECTED(psock != nullptr, "Fix meshnet::peer algorithm");
-            _on_duplicate_id(_index, id, psock->saddr());
+            _on_duplicate_id(_index, id, to_string(psock->saddr()));
 
             if (force_closing)
                 destroy_channel(sid);
@@ -481,7 +481,7 @@ public: // Set callbacks
      * Notify when reconnection to remote peer started.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t index, socket4_addr_compat_t remote_addr, inet4_addr_compat_t local_addr)
+     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
      */
     template <typename F>
     peer & on_reconnection_started (F && f)
@@ -494,7 +494,7 @@ public: // Set callbacks
      * Notify when reconnection to remote peer stopped.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t index, socket4_addr_compat_t remote_addr, inet4_addr_compat_t local_addr)
+     *          void (peer_index_t index, socket4_addr remote_addr, inet4_addr local_addr)
      */
     template <typename F>
     peer & on_reconnection_stopped (F && f)
@@ -507,7 +507,7 @@ public: // Set callbacks
      * Notify when a peer with identical ID is detected.
      *
      * @details Callback @a f signature must match:
-     *          void (peer_index_t, node_id, socket4_addr_compat_t)
+     *          void (peer_index_t, node_id, std::string const & host_addr)
      */
     template <typename F>
     peer & on_duplicate_id (F && f)
@@ -1073,7 +1073,7 @@ public: // peer_interface
             Peer::on_reconnection_stopped(std::move(cb));
         }
 
-        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)> cb) override
+        void on_duplicate_id (callback_t<void (peer_index_t, node_id, std::string const &)> cb) override
         {
             Peer::on_duplicate_id(std::move(cb));
         }

@@ -68,8 +68,8 @@ public:
     on_channel_destroyed = [] (node_spec_t const &/*source*/, node_spec_t const & /*peer*/) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*peer*/
-        , netty::socket4_addr)>
-    on_duplicate_id = [] (node_spec_t const &, node_spec_t const &, netty::socket4_addr) {};
+        , std::string const & host_addr)>
+    on_duplicate_id = [] (node_spec_t const &, node_spec_t const &, std::string const &) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
         , std::size_t /*route_index*/)>
