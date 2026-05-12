@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2021-2025 Vladislav Trifochkin
+# Copyright (c) 2021-2026 Vladislav Trifochkin
 #
 # This file is part of `netty-lib`.
 #
@@ -8,16 +8,18 @@
 #       2022.01.14 Refactored for using portable_target `ADD_TEST`.
 #       2024.04.03 Added selection of proper dependencies.
 #       2024.12.08 Removed `portable_target` dependency.
-#       2024.12.25 Added `single_channel_connection` test.
-#       2024.02.13 Added `reliable_delivery_engine` test.
-#       2025.08.06 Added `envelope` test.
-#       2025.08.06 Added `chunk` test.
+#       2024.12.25 Added `single_channel_connection` tests.
+#       2025.11.18 `buffer` renamed to `archive`.
+#       2025.08.06 Added `envelope` tests.
+#       2025.08.06 Added `chunk` tests.
 #       2025.11.17 `chunk` renamed to `buffer`.
 #       2025.11.18 `buffer` renamed to `archive`.
+#       2026.05.12 Added `socket4_addr` tests.
 ################################################################################
 set(TESTS
     archive
     inet4_addr
+    socket4_addr
     reader_pool
     writer_pool)
 

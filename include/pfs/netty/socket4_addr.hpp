@@ -45,6 +45,13 @@ public:
      */
     static NETTY__EXPORT pfs::optional<socket4_addr> parse (pfs::string_view s);
 
+    /**
+     * Split @a name into domain name and port delimited by colon and resolve domain name to IPv4
+     * address synchronously.
+     */
+    static NETTY__EXPORT std::vector<socket4_addr> resolve (std::string const & name
+        , error * perr = nullptr);
+
     operator std::pair<std::uint32_t, std::uint16_t> () const
     {
         return std::make_pair(addr.to_ip4(), port);

@@ -30,4 +30,16 @@ TEST_CASE("inet4_addr") {
     CHECK(netty::is_multicast(multicast_hi));
     CHECK_FALSE(netty::is_multicast(broadcast_global));
     CHECK_FALSE(netty::is_multicast(broadcast));
+
+    {
+        auto localhosts = netty::inet4_addr::resolve("127.0.0.1");
+        REQUIRE_FALSE(localhosts.empty());
+        CHECK_EQ(localhosts[0], netty::inet4_addr(netty::inet4_addr::localhost_addr_value));
+    }
+
+    {
+        auto localhosts = netty::inet4_addr::resolve("localhost");
+        REQUIRE_FALSE(localhosts.empty());
+        CHECK_EQ(localhosts[0], netty::inet4_addr(netty::inet4_addr::localhost_addr_value));
+    }
 }
