@@ -41,16 +41,14 @@ TEST_CASE("basic") {
     netty::startup_guard netty_startup;
 
     std::atomic_bool pub1_ready_flag {false};
+    netty::listener_options listener_opts;
+    listener_opts.saddr = netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1};
 
 #if NETTY__TEST_ENCRYPTED_SOCKETS
-    netty::ssl::tls_options tls_opts;
-    tls_opts.cert_file = std::string("./cert.pem");
-    tls_opts.key_file = std::string("./key.pem");
-    publisher_t pub1{netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}, std::move(tls_opts)};
-#else
-    publisher_t pub1{netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT1}};
+    listener_opts.tls.cert_file = std::string("./cert.pem");
+    listener_opts.tls.key_file = std::string("./key.pem");
 #endif
-
+    publisher_t pub1{listener_opts};
     std::array<subscriber_t, SUBSCRIBER_LIMIT> subs;
 
     pub1.listen();
@@ -72,16 +70,14 @@ TEST_CASE("basic") {
         sub_threads[i] = std::thread {[&, i] () {
             CHECK(tools::wait_atomic_bool(pub1_ready_flag));
 
+            netty::connection_options conn_opts;
+            conn_opts.remote_saddr = netty::socket4_addr{netty::inet4_addr::localhost_addr_value, PORT1};
+
 #if NETTY__TEST_ENCRYPTED_SOCKETS
-            netty::ssl::tls_options tls_opts;
-            tls_opts.cert_file = std::string("./cert.pem");
-            // tls_opts.key_file = "./key.pem";
-            auto success = subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}, std::move(tls_opts));
-            REQUIRE(success);
-#else
-            auto success = subs[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1});
-            REQUIRE(success);
+            conn_opts.tls.cert_file = std::string("./cert.pem");
 #endif
+            auto success = subs[i].connect(conn_opts);
+            REQUIRE(success);
 
             subs[i].on_data_ready([i] (archive_t ar) {
                 auto const * data = ar.data();

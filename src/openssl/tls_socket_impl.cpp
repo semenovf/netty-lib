@@ -9,67 +9,69 @@
 #include "tls_socket_impl.hpp"
 #include <pfs/i18n.hpp>
 
-// #if _MSC_VER
-// #   include <pfs/windows.hpp>
-// #   include <wincrypt.h>
-// #endif
+#if _MSC_VER
+#   include <pfs/windows.hpp>
+#   include <wincrypt.h>
+#endif
 
 NETTY__NAMESPACE_BEGIN
 
 namespace ssl {
 
-SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error * perr)
+#if _MSC_VER
+namespace {
+
+bool load_windows_system_certificates (SSL_CTX * ctx, error * perr)
 {
-    SSL_METHOD const * method = is_listener
-        ? TLS_server_method()
-        : TLS_client_method();
+    DWORD flags = CERT_STORE_READONLY_FLAG
+        | CERT_STORE_OPEN_EXISTING_FLAG
+        | CERT_SYSTEM_STORE_CURRENT_USER;
 
-    if (method == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::f_("{} call failure"
-            , (is_listener ? "TLS_server_method()" : "TLS_client_method()")));
-        return nullptr;
+    HCERTSTORE hstore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, 0, flags, L"Root");
+
+    if (!hstore) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::f_("CertOpenStore() call failure: {}"
+            , pfs::system_error_text()));
+        return false;
     }
 
-    SSL_CTX * ctx = SSL_CTX_new(method);
+    PCCERT_CONTEXT cert_iter = NULL;
+    X509_STORE * openssl_store = SSL_CTX_get_cert_store(ctx);
 
-    if (ctx == nullptr) {
-        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
-        return nullptr;
+    int cert_count = 0;
+
+    while ((cert_iter = CertEnumCertificatesInStore(hstore, cert_iter))) {
+        unsigned char const * encoded = cert_iter->pbCertEncoded;
+
+        X509 * cert = d2i_X509(nullptr, & encoded, cert_iter->cbCertEncoded);
+
+        if (cert != nullptr) {
+            auto success = X509_STORE_add_cert(openssl_store, cert) > 0;
+
+            if (success)
+                ++cert_count;
+
+            X509_free(cert);
+        }
     }
 
-    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    CertFreeCertificateContext(hstore);
+    CertCloseStore(hstore, 0);
 
-    //Set options for socket only
-    if (!is_listener) {
-        long mode =
-            // Once SSL_write_ex() or SSL_write() returns successful, r bytes have been written and the
-            // next call to SSL_write_ex() or SSL_write() must only send the n-r bytes left, imitating the
-            // behaviour of write()
-            SSL_MODE_ENABLE_PARTIAL_WRITE
-
-            // Make it possible to retry SSL_write_ex() or SSL_write() with changed buffer location
-            // (the buffer contents must stay the same). This is not the default to avoid the
-            // (misconception that nonblocking SSL_write() behaves like nonblocking write().
-            | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER;
-
-        SSL_CTX_set_mode(ctx, mode);
-
-        std::uint64_t options =
-            // Disable insecure protocols
-            SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3
-
-            // When choosing a cipher, signature, (TLS 1.2) curve or (TLS 1.3) group, use the server's
-            // preferences instead of the client preferences. When not set, the SSL server will always
-            // follow the clients preferences. When set, the SSL/TLS server will choose following its
-            // own preferences.
-            | SSL_OP_SERVER_PREFERENCE
-
-            // Disable all renegotiation in (D)TLSv1.2 and earlier. Do not send HelloRequest messages,
-            // and ignore renegotiation requests via ClientHello.
-            | SSL_OP_NO_RENEGOTIATION;
-
-        SSL_CTX_set_options(ctx, options);
+    if (cert_count == 0) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("no system certificates found"));
+        return false;
     }
+
+    return true;
+}
+
+} // namespace
+#endif
+
+bool load_certificates (SSL_CTX * ctx, tls_options const & opts, error * perr)
+{
+    // TODO Provide loading system certificates
 
     int encoding = opts.format == encoding_format::pem
         ? SSL_FILETYPE_PEM
@@ -85,7 +87,7 @@ SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error 
             pfs::throw_or(perr, get_ssl_error(errn
                 , tr::f_("loading certificate from file (SSL_CTX_use_certificate_file) failure: {}"
                 , *opts.cert_file)));
-            return nullptr;
+            return false;
         }
     }
 
@@ -97,7 +99,7 @@ SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error 
             pfs::throw_or(perr, get_ssl_error(errn
                 , tr::f_("adding private key (SSL_CTX_use_PrivateKey_file) failure: {}"
                 , *opts.key_file)));
-            return nullptr;
+            return false;
         }
 
         // Check the consistency of a private key with the corresponding certificate loaded
@@ -109,7 +111,7 @@ SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error 
             pfs::throw_or(perr, get_ssl_error(errn
                 , tr::f_("checking the consistency of a private key (SSL_CTX_check_private_key)"
                     " failure: {}", *opts.key_file)));
-            return nullptr;
+            return false;
         }
     }
 

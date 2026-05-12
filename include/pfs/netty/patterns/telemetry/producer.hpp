@@ -7,6 +7,7 @@
 //      2025.07.29 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include "../../listener_options.hpp"
 #include "../../socket4_addr.hpp"
 #include "serializer.hpp"
 #include "tag.hpp"
@@ -49,9 +50,8 @@ private: // Callbacks
         = [] (std::string const & errstr) { LOGE(TELEMETRY_TAG, "{}", errstr); };
 
 public:
-    template <typename ...Args>
-    producer (Args &&... args)
-        : _pub(std::forward<Args>(args)...)
+    producer (listener_options const & opts)
+        : _pub(opts)
     {}
 
 public: // Set callbacks

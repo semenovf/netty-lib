@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../conn_status.hpp"
+#include "../connection_options.hpp"
 #include "inet_socket.hpp"
 
 NETTY__NAMESPACE_BEGIN
@@ -58,6 +59,15 @@ public:
      */
     NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, inet4_addr const & local_addr
         , error * perr = nullptr);
+
+    /**
+     * Connects to the TCP server using connection option set @a opts.
+     *
+     * @return @c conn_status::failure if error occurred while connecting,
+     *         @c conn_status::success if connection established successfully or
+     *         @c conn_status::in_progress if connection in progress.
+     */
+    NETTY__EXPORT conn_status connect (connection_options const & opts, error * perr = nullptr);
 
     /**
      * Shutdown connection.

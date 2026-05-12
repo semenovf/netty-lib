@@ -25,6 +25,7 @@ using writer_poller_t = netty::writer_select_poller_t;
 class writer_queue
 {
 public:
+    using serializer_traits_type = serializer_traits_t;
     using archive_type = archive_t;
 
 private:

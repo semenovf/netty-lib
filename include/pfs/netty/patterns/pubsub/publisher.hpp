@@ -77,15 +77,15 @@ private: // Callbacks
     callback_t<void (socket4_addr)> _on_accepted;
 
 public:
-    template <typename ...Args>
-    publisher (Args &&... args): interruptable()
+    publisher (listener_options const & opts): interruptable()
     {
-        _listener_pool.add(std::forward<Args>(args)...);
-
+        // First, set failure handler
         _listener_pool.on_failure = [this] (netty::error const & err)
         {
             _on_error(tr::f_("listener pool failure: {}", err.what()));
         };
+
+        _listener_pool.add(opts);
 
         _listener_pool.on_accepted = [this] (socket_type && sock)
         {

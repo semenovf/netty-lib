@@ -7,7 +7,6 @@
 //      2026.04.23 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "../namespace.hpp"
 #include <pfs/optional.hpp>
 #include <string>
 

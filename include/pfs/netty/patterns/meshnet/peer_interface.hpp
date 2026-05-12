@@ -12,7 +12,9 @@
 #pragma once
 #include "../../namespace.hpp"
 #include "../../callback.hpp"
+#include "../../connection_options.hpp"
 #include "../../error.hpp"
+#include "../../listener_options.hpp"
 #include "../../socket4_addr.hpp"
 #include "peer_index.hpp"
 #include <chrono>
@@ -25,9 +27,10 @@ NETTY__NAMESPACE_BEGIN
 
 namespace meshnet {
 
-// For compatibility we will use base types for IPv4 and socket addresses in callback signatures.
-using inet4_addr_compat_t = std::uint32_t;
-using socket4_addr_compat_t = std::pair<std::uint32_t, std::uint16_t>;
+// FIXME REMOVE
+// // For compatibility we will use base types for IPv4 and socket addresses in callback signatures.
+// using inet4_addr_compat_t = std::uint32_t;
+// using socket4_addr_compat_t = std::pair<std::uint32_t, std::uint16_t>;
 
 template <typename NodeId, typename Archive>
 class peer_interface
@@ -45,9 +48,8 @@ public:
     virtual void set_index (peer_index_t index) noexcept = 0;
     virtual peer_index_t index () const noexcept = 0;
 
-    virtual void add_listener (std::map<std::string, std::string> const & opts, error * perr = nullptr) = 0;
-    virtual bool connect (netty::socket4_addr remote_saddr, bool behind_nat = false) = 0;
-    virtual bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) = 0;
+    virtual bool add_listener (listener_options const & opts) = 0;
+    virtual bool connect (connection_options const & opts, bool behind_nat) = 0;
     virtual void disconnect (node_id peer_id) = 0;
     virtual void listen () = 0;
     virtual void enqueue (node_id id, int priority, char const * data, std::size_t len) = 0;
@@ -63,9 +65,9 @@ public:
     virtual void on_error (callback_t<void (std::string const &)>) = 0;
     virtual void on_channel_established (callback_t<void (peer_index_t, node_id, bool /*is_gateway*/)>) = 0;
     virtual void on_channel_destroyed (callback_t<void (peer_index_t, node_id)>) = 0;
-    virtual void on_reconnection_started (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)>) = 0;
-    virtual void on_reconnection_stopped (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)>) = 0;
-    virtual void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr_compat_t)>) = 0;
+    virtual void on_reconnection_started (callback_t<void (peer_index_t, connection_options const &)>) = 0;
+    virtual void on_reconnection_stopped (callback_t<void (peer_index_t, connection_options const &)>) = 0;
+    virtual void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)>) = 0;
     virtual void on_unreachable_received (callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)>) = 0;
     virtual void on_route_received (callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)>) = 0;
     virtual void on_domestic_data_received (callback_t<void (node_id, int, archive_type)>) = 0;

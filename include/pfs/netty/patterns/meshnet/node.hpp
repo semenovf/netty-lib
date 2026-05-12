@@ -91,7 +91,7 @@ private:
 
     callback_t<void (peer_index_t, node_id, bool)> _on_channel_established;
     callback_t<void (node_id)> _on_channel_destroyed;
-    callback_t<void (node_id, socket4_addr_compat_t)> _on_duplicate_id;
+    callback_t<void (node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (node_id, std::size_t, gateway_chain_type)> _on_route_ready;
     callback_t<void (node_id, std::size_t)> _on_route_lost;
     callback_t<void (node_id)> _on_node_unreachable;
@@ -248,7 +248,7 @@ public:
      * Adds new endpoint to the node with specified listeners defined by options.
      */
     template <typename Peer, typename ListenerOptsIt>
-    peer_index_t add_listeners (ListenerOptsIt first, ListenerOptsIt last, error * perr = nullptr)
+    peer_index_t add_listeners (ListenerOptsIt first, ListenerOptsIt last)
     {
         PFS__ASSERT(_thread_id == std::this_thread::get_id(), "Peer must be added before run() call");
 
@@ -257,20 +257,15 @@ public:
 #else
         auto ep = Peer::template make_interface(_id, _is_gateway);
 #endif
-        error err;
 
-        for (ListenerOptsIt pos = first; pos != last; ++pos) {
-            ep->add_listener(*pos, & err);
+        ep->on_error(_on_error);
 
-            if (err)
-                pfs::throw_or(perr, std::move(err));
-        }
+        for (ListenerOptsIt pos = first; pos != last; ++pos)
+            ep->add_listener(*pos);
 
         //
         // Assign endpoint callbacks
         //
-        ep->on_error(_on_error);
-
         ep->on_channel_established([this] (peer_index_t index, node_id peer_id, bool is_gateway) {
             _on_channel_established(index, peer_id, is_gateway);
 
@@ -330,7 +325,7 @@ public:
         });
 
         if (_on_duplicate_id) {
-            ep->on_duplicate_id([this] (peer_index_t, node_id id, socket4_addr_compat_t saddr) {
+            ep->on_duplicate_id([this] (peer_index_t, node_id id, socket4_addr saddr) {
                _on_duplicate_id(id, saddr);
             });
         }
@@ -388,20 +383,18 @@ public:
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add_listeners (std::vector<std::map<std::string, std::string>> const & listener_opts_list
-        , error * perr = nullptr)
+    peer_index_t add_listeners (std::vector<listener_options> const & listener_opts_list)
     {
-        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end(), perr);
+        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end());
     }
 
     /**
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Peer>
-    peer_index_t add_listeners (std::initializer_list<std::map<std::string, std::string>> const & listener_opts_list
-        , error * perr = nullptr)
+    peer_index_t add_listeners (std::initializer_list<listener_options> const & listener_opts_list)
     {
-        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end(), perr);
+        return add_listeners<Peer>(listener_opts_list.begin(), listener_opts_list.end());
     }
 
     /**
@@ -419,11 +412,12 @@ public:
      * Initiates a connection to a peer.
      *
      * @param index Peer index.
-     * @param remote_saddr Remote node socket address.
-     * @param behind_nat Remote host is behind NAT.
+     * @param opts Connection options.
+     * @param behind_nat A flag that determines whether the remote node is behind NAT (@c true)
+     *        or not (@c false).
      * @return @c true if connection start successfully.
      */
-    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
+    bool connect_peer (peer_index_t index, connection_options const & opts, bool behind_nat)
     {
         PFS__ASSERT(_thread_id == std::this_thread::get_id()
             , "connect_host() must be call in the same thread where node has been created");
@@ -433,30 +427,7 @@ public:
         if (ep == nullptr)
             return false;
 
-        return ep->connect(remote_saddr, behind_nat);
-    }
-
-    /**
-     * Initiates a connection to a peer.
-     *
-     * @param index Node index in the pool.
-     * @param remote_saddr Remote node socket address.
-     * @param local_addr Local address to bind.
-     * @param behind_nat Remote host is behind NAT.
-     * @return @c true if connection start successfully.
-     */
-    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
-        , bool behind_nat = false)
-    {
-        PFS__ASSERT(_thread_id == std::this_thread::get_id()
-            , "connect_peer() must be call in the same thread where node has been created");
-
-        auto ep = locate_endpoint(index);
-
-        if (ep == nullptr)
-            return false;
-
-        return ep->connect(remote_saddr, local_addr, behind_nat);
+        return ep->connect(opts, behind_nat);
     }
 
     void disconnect (peer_index_t index, node_id peer_id)

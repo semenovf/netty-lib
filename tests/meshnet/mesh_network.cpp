@@ -53,7 +53,7 @@ mesh_network::~mesh_network ()
 std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
 {
     auto entry = _dict.get_entry(name);
-    netty::socket4_addr listener_saddr {netty::inet4_addr {127, 0, 0, 1}, entry.port};
+    netty::socket4_addr listener_saddr {netty::inet4_addr::localhost_addr_value, entry.port};
 
     auto ptr = std::make_unique<node_t>(entry.id, entry.is_gateway);
 
@@ -73,7 +73,7 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
         this->on_channel_destroyed(make_spec(name), make_spec(peer_id));
     });
 
-    ptr->on_duplicate_id([this, name] (node_id peer_id, socket4_addr_compat_t saddr)
+    ptr->on_duplicate_id([this, name] (node_id peer_id, netty::socket4_addr saddr)
     {
         this->on_duplicate_id(make_spec(name), make_spec(peer_id), saddr);
     });
@@ -137,12 +137,14 @@ std::unique_ptr<node_t> mesh_network::create_node (std::string const & name)
     });
 #endif
 
-    using std::to_string;
-    std::map<std::string, std::string> listener_opts = {
-          {"addr", to_string(listener_saddr.addr)}
-        , {"port", to_string(listener_saddr.port)}
-        , {"backlog", "1000"}
-    };
+    netty::listener_options listener_opts;
+    listener_opts.saddr = listener_saddr;
+    listener_opts.backlog = 100;
+
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    listener_opts.tls.cert_file = std::string("./cert.pem");
+    listener_opts.tls.key_file = std::string("./key.pem");
+#endif
 
     ptr->template add_listeners<peer_t>({listener_opts});
 
@@ -164,8 +166,14 @@ void mesh_network::connect (std::string const & initiator_name, std::string cons
     auto initiator_ctx = get_context_ptr(initiator_name);
     auto const & peer_entry = _dict.get_entry(peer_name);
 
-    netty::socket4_addr peer_saddr {netty::inet4_addr {127, 0, 0, 1}, peer_entry.port};
-    initiator_ctx->node_ptr->connect_peer(index, peer_saddr, behind_nat);
+    netty::connection_options opts;
+    opts.remote_saddr = netty::socket4_addr {netty::inet4_addr::localhost_addr_value, peer_entry.port};
+
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+    opts.tls.cert_file = std::string("./cert.pem");
+#endif
+
+    initiator_ctx->node_ptr->connect_peer(index, opts, behind_nat);
 }
 
 void mesh_network::disconnect (std::string const & initiator_name, std::string const & peer_name)

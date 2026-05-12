@@ -308,20 +308,18 @@ public:
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Node>
-    peer_index_t add_listeners (std::vector<std::map<std::string, std::string>> const & listener_opts_list
-        , error * perr = nullptr)
+    peer_index_t add_listeners (std::vector<listener_options> const & listener_opts_list)
     {
-        return _t.template add_listeners<Node>(listener_opts_list, perr);
+        return _t.template add_listeners<Node>(listener_opts_list);
     }
 
     /**
      * Adds new endpoint to the node with specified listeners.
      */
     template <typename Node>
-    peer_index_t add_listeners (std::initializer_list<std::map<std::string, std::string>> const & listener_opts_list
-        , error * perr = nullptr)
+    peer_index_t add_listeners (std::initializer_list<listener_options> const & listener_opts_list)
     {
-        return _t.template add_listeners<Node>(listener_opts_list, perr);
+        return _t.template add_listeners<Node>(listener_opts_list);
     }
 
     void listen ()
@@ -329,15 +327,9 @@ public:
         _t.listen();
     }
 
-    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, bool behind_nat = false)
+    bool connect_peer (peer_index_t index, connection_options const & opts, bool behind_nat)
     {
-        return _t.connect_peer(index, remote_saddr, behind_nat);
-    }
-
-    bool connect_peer (peer_index_t index, netty::socket4_addr remote_saddr, netty::inet4_addr local_addr
-        , bool behind_nat = false)
-    {
-        return _t.connect_peer(index, remote_saddr, local_addr, behind_nat);
+        return _t.connect_peer(index, opts, behind_nat);
     }
 
     void disconnect (peer_index_t index, node_id peer_id)

@@ -46,6 +46,7 @@ class writer_pool: protected WriterPoller
 public:
     using socket_type = Socket;
     using socket_id = typename Socket::socket_id;
+    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
 
     static constexpr std::uint16_t default_frame_size ()
     {

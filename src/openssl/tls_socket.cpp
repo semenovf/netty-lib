@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "tls_socket_impl.hpp"
 #include <pfs/i18n.hpp>
+#include <pfs/integer.hpp>
 #include <cstdint>
 
 NETTY__NAMESPACE_BEGIN
@@ -39,19 +40,71 @@ socket4_addr tls_socket::saddr () const noexcept
     return _d->saddr();
 }
 
-conn_status tls_socket::connect (socket4_addr const & remote_saddr, tls_options opts, error * perr)
+conn_status tls_socket::connect (connection_options const & opts, error * perr)
 {
     _d = std::make_unique<impl>();
-    // _d->opts = std::move(opts);
 
-    auto status = _d->connect(remote_saddr, perr);
+    auto status = _d->connect(opts, perr);
 
     if (status == conn_status::failure)
         return status;
 
-    SSL_CTX * ctx = create_ssl_context(false, opts, perr);
+    SSL_METHOD const * method = TLS_client_method();
 
-    if (ctx == nullptr)
+    if (method == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("TLS_client_method() call failure"));
+        return conn_status::failure;
+    }
+
+    SSL_CTX * ctx = SSL_CTX_new(method);
+
+    if (ctx == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
+        return conn_status::failure;
+    }
+
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    long mode =
+        // Once SSL_write_ex() or SSL_write() returns successful, r bytes have been written and the
+        // next call to SSL_write_ex() or SSL_write() must only send the n-r bytes left, imitating the
+        // behaviour of write()
+        SSL_MODE_ENABLE_PARTIAL_WRITE
+
+        // Make it possible to retry SSL_write_ex() or SSL_write() with changed buffer location
+        // (the buffer contents must stay the same). This is not the default to avoid the
+        // (misconception that nonblocking SSL_write() behaves like nonblocking write().
+        | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER;
+
+    SSL_CTX_set_mode(ctx, mode);
+
+    std::uint64_t options =
+        // Disable insecure protocols
+        SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3
+
+        // When choosing a cipher, signature, (TLS 1.2) curve or (TLS 1.3) group, use the server's
+        // preferences instead of the client preferences. When not set, the SSL server will always
+        // follow the clients preferences. When set, the SSL/TLS server will choose following its
+        // own preferences.
+        | SSL_OP_SERVER_PREFERENCE
+
+        // Disable all renegotiation in (D)TLSv1.2 and earlier. Do not send HelloRequest messages,
+        // and ignore renegotiation requests via ClientHello.
+        | SSL_OP_NO_RENEGOTIATION
+
+        // There are SSL/TLS implementations that never send the required close_notify alert
+        // message but simply close the underlying transport (e.g. a TCP connection) instead.
+        // This will ordinarily result in an error being generated.
+        // If compatibility with such peers is desired, the option SSL_OP_IGNORE_UNEXPECTED_EOF
+        // can be set.
+        // NOTE This option fixed SIGPIPE while tls_socket::impl::cleanup()
+        | SSL_OP_IGNORE_UNEXPECTED_EOF;
+
+    SSL_CTX_set_options(ctx, options);
+
+    auto success = load_certificates(ctx, opts.tls, perr);
+
+    if (!success)
         return conn_status::failure;
 
     auto ssl = SSL_new(ctx);
@@ -102,8 +155,11 @@ int tls_socket::recv (char * data, int len, error * perr)
 
         if (errn == SSL_ERROR_WANT_READ || errn == SSL_ERROR_WANT_WRITE) {
             return 0;
+        } else if (errn == SSL_ERROR_ZERO_RETURN) {
+            // FIXME
+            return 0;
         } else {
-            pfs::throw_or(perr, get_ssl_error(errn, tr::_("send (SSL_write_ex2) failure")));
+            pfs::throw_or(perr, get_ssl_error(errn, tr::_("send (SSL_read_ex) failure")));
             return -1;
         }
     }

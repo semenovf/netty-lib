@@ -271,16 +271,15 @@ void test_body ()
     g_received_counter.store(0, std::memory_order::memory_order_relaxed);
 
     std::atomic_bool prod1_ready_flag {false};
+    netty::listener_options listener_opts;
+    listener_opts.saddr = netty::socket4_addr{netty::any_inet4_addr(), PORT1};
 
 #if NETTY__TEST_ENCRYPTED_SOCKETS
-    netty::ssl::tls_options tls_opts;
-    tls_opts.cert_file = std::string("./cert.pem");
-    tls_opts.key_file = std::string("./key.pem");
-    producer_t prod1 {netty::socket4_addr{netty::any_inet4_addr(), PORT1}, std::move(tls_opts)};
-#else
-    producer_t prod1 {netty::socket4_addr{netty::any_inet4_addr(), PORT1}};
+    listener_opts.tls.cert_file = std::string("./cert.pem");
+    listener_opts.tls.key_file = std::string("./key.pem");
 #endif
 
+    producer_t prod1 {listener_opts};
     std::array<consumer_t, CONSUMER_LIMIT> consumers;
 
     prod1.listen();
@@ -302,15 +301,14 @@ void test_body ()
         consumer_threads[i] = std::thread {[&, i] () {
             CHECK(tools::wait_atomic_bool(prod1_ready_flag));
 
+            netty::connection_options conn_opts;
+            conn_opts.remote_saddr = netty::socket4_addr{netty::inet4_addr::localhost_addr_value, PORT1};
+
 #if NETTY__TEST_ENCRYPTED_SOCKETS
-            netty::ssl::tls_options tls_opts;
-            tls_opts.cert_file = std::string("./cert.pem");
-            auto success = consumers[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1}, std::move(tls_opts));
-            REQUIRE(success);
-#else
-            auto success = consumers[i].connect(netty::socket4_addr{netty::inet4_addr{127,0,0,1}, PORT1});
-            REQUIRE(success);
+            conn_opts.tls.cert_file = std::string("./cert.pem");
 #endif
+            auto success = consumers[i].connect(conn_opts);
+            REQUIRE(success);
             consumers[i].run();
         }};
     }

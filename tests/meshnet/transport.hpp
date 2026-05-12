@@ -31,6 +31,13 @@
 #include <pfs/universal_id_hash.hpp>
 #include <pfs/universal_id_pack.hpp>
 
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+#   include "pfs/netty/ssl/client_handshake_pool.hpp"
+#   include "pfs/netty/ssl/listener_handshake_pool.hpp"
+#   include "pfs/netty/ssl/tls_listener.hpp"
+#   include "pfs/netty/ssl/tls_socket.hpp"
+#endif
+
 namespace delivery_ns = netty::delivery;
 namespace meshnet_ns = netty::meshnet;
 
@@ -67,28 +74,48 @@ using reconnection_policy_t  = meshnet_ns::infinite_reconnection_policy;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // peer_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+#if NETTY__EPOLL_ENABLED
+using connecting_poller_t = netty::connecting_epoll_poller_t;
+using listener_poller_t = netty::listener_epoll_poller_t;
+using reader_poller_t = netty::reader_epoll_poller_t;
+using writer_poller_t = netty::writer_epoll_poller_t;
+#elif NETTY__POLL_ENABLED
+using connecting_poller_t = netty::connecting_poll_poller_t;
+using listener_poller_t = netty::listener_poll_poller_t;
+using reader_poller_t = netty::reader_poll_poller_t;
+using writer_poller_t = netty::writer_poll_poller_t;
+#elif NETTY__SELECT_ENABLED
+using connecting_poller_t = netty::connecting_select_poller_t;
+using listener_poller_t = netty::listener_select_poller_t;
+using reader_poller_t = netty::reader_select_poller_t;
+using writer_poller_t = netty::writer_select_poller_t;
+#else
+#   error "No any poller available"
+#endif
+
+#if NETTY__TEST_ENCRYPTED_SOCKETS
+using socket_t = netty::ssl::tls_socket;
+using listener_t = netty::ssl::tls_listener;
+using client_handshake_pool_t = netty::ssl::client_handshake_pool;
+using listener_handshake_pool_t = netty::ssl::listener_handshake_pool;
+using connecting_pool_t = netty::connecting_pool<socket_t, connecting_poller_t, client_handshake_pool_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, listener_poller_t, listener_handshake_pool_t>;
+#else
+using socket_t = netty::posix::tcp_socket;
+using listener_t = netty::posix::tcp_listener;
+using connecting_pool_t = netty::connecting_pool<socket_t, connecting_poller_t>;
+using listener_pool_t = netty::listener_pool<listener_t, socket_t, listener_poller_t>;
+#endif
+
+using reader_pool_t = netty::reader_pool<socket_t, reader_poller_t, archive_t>;
+using writer_pool_t = netty::writer_pool<socket_t, writer_poller_t, priority_writer_queue_t>;
+
 using peer_t = meshnet_ns::peer<
       node_id
-    , netty::posix::tcp_socket
-    , netty::posix::tcp_listener
-
-#if NETTY__EPOLL_ENABLED
-    , netty::connecting_epoll_poller_t
-    , netty::listener_epoll_poller_t
-    , netty::reader_epoll_poller_t
-    , netty::writer_epoll_poller_t
-#elif NETTY__POLL_ENABLED
-    , netty::connecting_poll_poller_t
-    , netty::listener_poll_poller_t
-    , netty::reader_poll_poller_t
-    , netty::writer_poll_poller_t
-#elif NETTY__SELECT_ENABLED
-    , netty::connecting_select_poller_t
-    , netty::listener_select_poller_t
-    , netty::reader_select_poller_t
-    , netty::writer_select_poller_t
-#endif
-    , priority_writer_queue_t
+    , connecting_pool_t
+    , listener_pool_t
+    , reader_pool_t
+    , writer_pool_t
     , pfs::fake_mutex
     , reconnection_policy_t
     , handshake_controller_t

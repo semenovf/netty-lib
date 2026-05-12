@@ -7,8 +7,8 @@
 //      2026.04.26 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #include "ssl/tls_socket.hpp"
-#include "error.hpp"
 #include "posix/tcp_socket.hpp"
+#include <pfs/optional.hpp>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <sstream>
@@ -21,14 +21,51 @@ struct tls_socket::impl: public posix::tcp_socket
 {
     SSL * ssl {nullptr};
     SSL_CTX * ctx {nullptr};
-    // tls_options opts;
 
     impl (): posix::tcp_socket() {}
     impl (posix::tcp_socket && ts): posix::tcp_socket(std::move(ts)) {}
 
+    impl (impl && other) noexcept: posix::tcp_socket(std::move(other))
+    {
+        ssl = other.ssl;
+        ctx = other.ctx;
+        other.ssl = nullptr;
+        other.ctx = nullptr;
+    }
+
+    impl & operator = (impl && other) noexcept
+    {
+        if (this != & other) {
+            cleanup();
+            ssl = other.ssl;
+            ctx = other.ctx;
+            other.ssl = nullptr;
+            other.ctx = nullptr;
+        }
+
+        return *this;
+    }
+
     ~impl ()
     {
+        cleanup();
+    }
+
+    void cleanup ()
+    {
         if (ssl != nullptr) {
+            // It is acceptable for an application to call SSL_shutdown() once (such that it returns 0)
+            // and then close the underlying connection without waiting for the peer's response.
+            // This allows for a more rapid shutdown process if the application does not wish to
+            // wait for the peer.
+            // The fast shutdown approach can only be used if there is no intention to reuse the
+            // underlying connection (e.g. a TCP connection) for further communication;
+            // in this case, the full shutdown process must be performed to ensure synchronisation
+            // SSL_shutdown() can be modified to set the connection to the "shutdown" state without
+            // actually sending a close_notify alert message; see SSL_CTX_set_quiet_shutdown(3).
+            // When "quiet shutdown" is enabled, SSL_shutdown() will always succeed and return 1
+            // immediately.
+            SSL_set_quiet_shutdown(ssl, 1);
             SSL_shutdown(ssl);
             SSL_free(ssl);
             ssl = nullptr;
@@ -65,11 +102,11 @@ inline error get_ssl_error (int ssl_errn, std::string const & desc)
 }
 
 /**
- * Creates context and loads certificates and private keys according to passed TLS options.
+ * Loads certificates and private keys.
  *
- * @return Context or @c nullptr on error.
+ * @return @c true on success or @c false otherwise.
  */
-SSL_CTX * create_ssl_context (bool is_listener, tls_options const & opts, error * perr);
+bool load_certificates (SSL_CTX * ctx, tls_options const & opts, error * perr);
 
 } // namespace ssl
 

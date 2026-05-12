@@ -10,8 +10,8 @@
 #pragma once
 #include "../exports.hpp"
 #include "../error.hpp"
+#include "../listener_options.hpp"
 #include "tcp_socket.hpp"
-#include <map>
 
 NETTY__NAMESPACE_BEGIN
 
@@ -41,16 +41,9 @@ public:
     NETTY__EXPORT tcp_listener (socket4_addr const & saddr, int backlog = 10, error * perr = nullptr);
 
     /**
-     * Constructs POSIX TCP server using option set in @a opts.
-     *
-     * @details @a opts may/must contain the following keys:
-     *          * addr - the address on which the listener will listen (any address by default);
-     *          * port - the port on which the listener will listen (zero by default);
-     *          * backlog - the maximum length to which the queue of pending connections may grow
-     *              (10 by default); value must be in range [0, SOMAXCONN]; if the option value is
-     *              zero, the actual value is set to the default value.
+     * Constructs POSIX TCP listener using listener option set @a opts.
      */
-    NETTY__EXPORT tcp_listener (std::map<std::string, std::string> const & opts, error * perr = nullptr);
+    NETTY__EXPORT tcp_listener (listener_options const & opts, error * perr = nullptr);
 
 public:
     /**

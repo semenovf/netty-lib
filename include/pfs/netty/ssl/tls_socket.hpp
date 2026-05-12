@@ -7,14 +7,16 @@
 //      2026.04.21 Initial version.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "tls_options.hpp"
+#include "../connection_options.hpp"
 #include "../error.hpp"
 #include "../exports.hpp"
+#include "../conn_status.hpp"
 #include "../conn_status.hpp"
 #include "../namespace.hpp"
 #include "../send_result.hpp"
 #include "../socket4_addr.hpp"
 #include <memory>
+#include <string>
 
 #if _MSC_VER
 #   include <winsock2.h>
@@ -77,14 +79,13 @@ public:
     NETTY__EXPORT socket4_addr saddr () const noexcept;
 
     /**
-     * Connects to the TLS server @a remote_addr.
+     * Connects to the TLS server using connection option set @a opts.
      *
      * @return @c conn_status::failure if error occurred while connecting,
      *         @c conn_status::success if connection established successfully or
      *         @c conn_status::in_progress if connection in progress.
      */
-    NETTY__EXPORT conn_status connect (socket4_addr const & remote_saddr, tls_options opts
-        , error * perr = nullptr);
+    NETTY__EXPORT conn_status connect (connection_options const & opts, error * perr = nullptr);
 
     NETTY__EXPORT int recv (char * data, int len, error * perr = nullptr);
 

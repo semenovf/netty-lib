@@ -12,6 +12,8 @@
 #include "namespace.hpp"
 #include "callback.hpp"
 #include "error.hpp"
+#include "listener_options.hpp"
+#include <pfs/assert.hpp>
 #include <pfs/i18n.hpp>
 #include <pfs/optional.hpp>
 #include <chrono>
@@ -100,13 +102,20 @@ public:
     }
 
 public:
-    template <typename ...Args>
-    void add (Args &&... args)
+    bool add (listener_options const & opts)
     {
-        listener_type listener (std::forward<Args>(args)...);
+        error err;
+        listener_type listener(opts, & err);
 
-        if (listener)
-            _listeners[listener.id()] = std::move(listener);
+        if (err) {
+            on_failure(err);
+            return false;
+        }
+
+        PFS__THROW_UNEXPECTED(listener, "Fix listener constructor");
+
+        _listeners[listener.id()] = std::move(listener);
+        return true;
     }
 
     void remove_later (socket_id id)

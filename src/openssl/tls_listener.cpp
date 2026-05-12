@@ -18,11 +18,34 @@ namespace ssl {
 struct tls_listener::impl: public posix::tcp_listener
 {
     SSL_CTX * ctx {nullptr};
-    tls_options opts;
 
-    using posix::tcp_listener::tcp_listener;
+    impl (): posix::tcp_listener() {}
+    impl (posix::tcp_listener && tl) noexcept: posix::tcp_listener(std::move(tl)) {}
+    impl (listener_options const & opts, error * perr): posix::tcp_listener(opts, perr) {}
+
+    impl (impl && other) noexcept: posix::tcp_listener(std::move(other))
+    {
+        ctx = other.ctx;
+        other.ctx = nullptr;
+    }
+
+    impl & operator = (impl && other) noexcept
+    {
+        if (this != & other) {
+            cleanup();
+            ctx = other.ctx;
+            other.ctx = nullptr;
+        }
+
+        return *this;
+    }
 
     ~impl ()
+    {
+        cleanup();
+    }
+
+    void cleanup ()
     {
         if (ctx != nullptr) {
             SSL_CTX_free(ctx);
@@ -34,57 +57,31 @@ struct tls_listener::impl: public posix::tcp_listener
 tls_listener::tls_listener () = default;
 tls_listener::tls_listener (tls_listener &&) noexcept = default;
 
-tls_listener::tls_listener (socket4_addr const & saddr, tls_options opts, int backlog, error * perr)
-    : _d(new impl(saddr, backlog, perr))
-{
-    _d->opts = std::move(opts);
-}
-
-    /**
-     * Constructs TLS listener using option set in @a opts.
-     *
-     * @details @a opts may/must contain the following keys:
-     *          * enc_format - encoding format, "pem" | "asn1" (default is "pem");
-     *          * cert_file - certificate file path (mandatory for now);
-     *          * key_file - private key file path (mandatory for now);
-     */
-tls_listener::tls_listener (std::map<std::string, std::string> const & opts, error * perr)
+tls_listener::tls_listener (listener_options const & opts, error * perr)
     : _d(new impl(opts, perr))
 {
-    tls_options tls_opts;
-    tls_opts.format = encoding_format::pem;
+    SSL_METHOD const * method = TLS_server_method();
 
-    for (auto const & o: opts) {
-        if (o.first == "enc_format") {
-            if (o.second == "pem")
-                tls_opts.format = encoding_format::pem;
-            else if (o.second == "asn1")
-                tls_opts.format = encoding_format::asn1;
-            else {
-                pfs::throw_or(perr, std::make_error_code(std::errc::invalid_argument)
-                    , tr::f_("bad value for encoding format: {}", o.second));
-                return;
-            }
-        } else if (o.first == "cert_file") {
-            tls_opts.cert_file = o.second;
-        } else if (o.first == "key_file") {
-            tls_opts.key_file = o.second;
-        }
-    }
-
-    if (tls_opts.cert_file) {
-        pfs::throw_or(perr, std::make_error_code(std::errc::invalid_argument)
-            , tr::_("certificate file path is mandatory"));
+    if (method == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("TLS_server_method() call failure"));
         return;
     }
 
-    if (tls_opts.key_file) {
-        pfs::throw_or(perr, std::make_error_code(std::errc::invalid_argument)
-            , tr::_("private key file path is mandatory"));
+    SSL_CTX * ctx = SSL_CTX_new(method);
+
+    if (ctx == nullptr) {
+        pfs::throw_or(perr, make_error_code(errc::ssl_error), tr::_("SSL_CTX_new call failure"));
         return;
     }
 
-    _d->opts = std::move(tls_opts);
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    auto success = load_certificates(ctx, opts.tls, perr);
+
+    if (!success)
+        return;
+
+    _d->ctx = ctx;
 }
 
 tls_listener::~tls_listener () = default;
@@ -103,19 +100,7 @@ tls_listener::listener_id tls_listener::id () const noexcept
 
 bool tls_listener::listen (error * perr)
 {
-    auto success = _d->listen(perr);
-
-    if (!success)
-        return false;
-
-    SSL_CTX * ctx = create_ssl_context(true, _d->opts, perr);
-
-    if (ctx == nullptr)
-        return false;
-
-    _d->ctx = ctx;
-
-    return true;
+    return _d->listen(perr);
 }
 
 tls_socket tls_listener::accept (bool force_nonblocking, error * perr)

@@ -12,6 +12,7 @@
 #include "callback.hpp"
 #include "conn_status.hpp"
 #include "connection_failure_reason.hpp"
+#include "connection_options.hpp"
 #include "error.hpp"
 #include "socket4_addr.hpp"
 #include <pfs/i18n.hpp>
@@ -154,12 +155,11 @@ public:
         }
     }
 
-    template <typename ...Args>
-    netty::conn_status connect (Args &&... args)
+    netty::conn_status connect (connection_options const & opts)
     {
         Socket sock;
         error err;
-        auto status = sock.connect(std::forward<Args>(args)..., & err);
+        auto status = sock.connect(opts, & err);
 
         switch (status) {
             case netty::conn_status::connected:
@@ -193,18 +193,15 @@ public:
         return status;
     }
 
-    template <typename ...Args>
-    netty::conn_status connect_timeout (std::chrono::milliseconds timeout, Args &&... args)
+    netty::conn_status connect_timeout (connection_options const & opts, std::chrono::milliseconds timeout)
     {
         if (timeout <= std::chrono::milliseconds{0})
-            return connect(std::forward<Args>(args)...);
+            return connect(opts);
 
-        auto func = [this, args...] () {
-            this->connect(args...);
-        };
+        auto func = [this, opts] () { this->connect(opts); };
 
         _deferred_connections.insert(deferred_connection_item {
-            std::chrono::steady_clock::now() + timeout
+              std::chrono::steady_clock::now() + timeout
             , std::move(func)
         });
 

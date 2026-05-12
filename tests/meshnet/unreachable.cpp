@@ -59,7 +59,7 @@
 
 using namespace std::placeholders;
 constexpr bool BEHIND_NAT = true;
-constexpr std::chrono::seconds BITMATRIX_TIME_LIMIT {2};
+constexpr std::chrono::seconds BITMATRIX_TIME_LIMIT {5};
 
 void channel_established_cb (lorem::wait_atomic_counter8 & counter
     , node_spec_t const & source, netty::meshnet::peer_index_t

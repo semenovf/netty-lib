@@ -101,6 +101,14 @@ conn_status tcp_socket::connect (socket4_addr const & remote_saddr, error * perr
     return connect(remote_saddr, any_inet4_addr(), perr);
 }
 
+conn_status tcp_socket::connect (connection_options const & opts, error * perr)
+{
+    if (opts.local_addr)
+        return connect (opts.remote_saddr, *opts.local_addr, perr);
+
+    return connect (opts.remote_saddr, any_inet4_addr(), perr);
+}
+
 void tcp_socket::disconnect (error * perr)
 {
     if (_socket > 0) {

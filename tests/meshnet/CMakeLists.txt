@@ -84,9 +84,21 @@ foreach (target ${TESTS})
         add_executable(tests-meshnet-${target}-reliable-qt ${target}.cpp mesh_network.cpp)
         target_link_libraries(tests-meshnet-${target}-reliable-qt PRIVATE pfs::netty pfs::lorem Qt${QT_VERSION_MAJOR}::Core)
         target_compile_definitions(tests-meshnet-${target}-reliable-qt
-            PRIVATE "NETTY__QT_ENABLED=1"
-                    "NETTY__TESTS_USE_MESHNET_RELIABLE_NODE=1")
+            PRIVATE
+                "NETTY__QT_ENABLED=1"
+                "NETTY__TESTS_USE_MESHNET_RELIABLE_NODE=1")
             add_test(NAME tests-meshnet-${target}-reliable-qt COMMAND tests-meshnet-${target}-reliable-qt)
+    endif()
+
+    if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+        set(ssl_target "tests-meshnet-${target}-reliable-ssl")
+        add_executable(${ssl_target} ${target}.cpp mesh_network.cpp)
+        target_link_libraries(${ssl_target} PRIVATE pfs::netty pfs::lorem)
+        target_compile_definitions(${ssl_target}
+            PRIVATE
+                "NETTY__TEST_ENCRYPTED_SOCKETS=1"
+                "NETTY__TESTS_USE_MESHNET_RELIABLE_NODE=1")
+        add_test(NAME ${ssl_target} COMMAND ${ssl_target})
     endif()
 endforeach()
 

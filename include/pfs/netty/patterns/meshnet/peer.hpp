@@ -32,6 +32,7 @@
 #include <pfs/log.hpp>
 #include <pfs/optional.hpp>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -51,13 +52,10 @@ namespace meshnet {
  * Peer class.
  */
 template <typename NodeId
-    , typename Socket
-    , typename Listener
-    , typename ConnectingPoller
-    , typename ListenerPoller
-    , typename ReaderPoller
-    , typename WriterPoller
-    , typename WriterQueue
+    , typename ConnectingPool
+    , typename ListenerPool
+    , typename ReaderPool
+    , typename WriterPool
     , typename RecursiveWriterMutex
     , typename ReconnectionPolicy
     , typename HandshakeController
@@ -66,28 +64,27 @@ template <typename NodeId
 class peer
 {
     using peer_class = peer<NodeId
-        , Socket
-        , Listener
-        , ConnectingPoller
-        , ListenerPoller
-        , ReaderPoller
-        , WriterPoller
-        , WriterQueue
+        , ConnectingPool
+        , ListenerPool
+        , ReaderPool
+        , WriterPool
         , RecursiveWriterMutex
         , ReconnectionPolicy
         , HandshakeController
         , HeartbeatController
         , InputController>;
 
-    using serializer_traits_type = typename WriterQueue::serializer_traits_type;
+    using connecting_pool_type = ConnectingPool;
+    using listener_pool_type = ListenerPool;
+    using reader_pool_type = ReaderPool;
+    using writer_pool_type = WriterPool;
+
+    using serializer_traits_type = typename writer_pool_type::serializer_traits_type;
     using archive_type = typename serializer_traits_type::archive_type;
-    using socket_type = Socket;
-    using listener_type = Listener;
+
+    using socket_type = typename connecting_pool_type::socket_type;
+    using listener_type = typename listener_pool_type::listener_type;
     using socket_pool_type = netty::socket_pool<socket_type>;
-    using connecting_pool_type = netty::connecting_pool<socket_type, ConnectingPoller>;
-    using listener_pool_type = netty::listener_pool<listener_type, socket_type, ListenerPoller>;
-    using reader_pool_type = netty::reader_pool<socket_type, ReaderPoller, archive_type>;
-    using writer_pool_type = netty::writer_pool<socket_type, WriterPoller, WriterQueue>;
     using writer_mutex_type = RecursiveWriterMutex;
     using listener_id = typename listener_type::listener_id;
     using reconnection_policy = ReconnectionPolicy;
@@ -109,8 +106,7 @@ private:
 
     struct host_info
     {
-        socket4_addr remote_saddr;
-        inet4_addr local_addr;
+        connection_options conn_opts;
         pfs::optional<reconnection_policy> reconn_policy;
     };
 
@@ -158,9 +154,20 @@ private: // Callbacks
 
     callback_t<void (peer_index_t, node_id, bool)> _on_channel_established = [] (peer_index_t, node_id, bool) {};
     callback_t<void (peer_index_t, node_id)> _on_channel_destroyed = [] (peer_index_t, node_id) {};
-    callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> _on_reconnection_started;
-    callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> _on_reconnection_stopped;
-    callback_t<void (peer_index_t, node_id, socket4_addr_compat_t)> _on_duplicate_id;
+
+    callback_t<void (peer_index_t, connection_options const &)> _on_reconnection_started
+        = [this] (peer_index_t, connection_options const & opts) {
+            NETTY__TRACE(MESHNET_TAG, "{}: reconnection started to: {}", to_string(_id)
+                , to_string(opts.remote_saddr));
+    };
+
+    callback_t<void (peer_index_t, connection_options const &)> _on_reconnection_stopped
+        = [this] (peer_index_t, connection_options const & opts) {
+            NETTY__TRACE(MESHNET_TAG, "{}: reconnection stopped to: {}", to_string(_id)
+                , to_string(opts.remote_saddr));
+    };
+
+    callback_t<void (peer_index_t, node_id, socket4_addr)> _on_duplicate_id;
     callback_t<void (peer_index_t, node_id, unreachable_info<node_id> const &)> _on_unreachable_received;
     callback_t<void (peer_index_t, node_id, bool, route_info<node_id> const &)> _on_route_received;
     callback_t<void (node_id, int, archive_type)> _on_domestic_data_received;
@@ -601,44 +608,42 @@ public:
         return _index;
     }
 
-    template <typename ...Args>
-    void add_listener (Args &&... args)
+    bool add_listener (listener_options const & opts)
     {
-        _listener_pool.add(std::forward<Args>(args)...);
-        NETTY__TRACE(MESHNET_TAG, "{}: listener added", to_string(_id));
+        auto success = _listener_pool.add(opts);
+
+        if (success) {
+            NETTY__TRACE(MESHNET_TAG, "{}: listener added", to_string(_id));
+        }
+
+        return success;
     }
 
-    bool connect (socket4_addr remote_saddr, bool behind_nat = false)
+    /**
+     * Initiates a connection to a peer.
+     *
+     * @param opts Connection options.
+     * @param behind_nat A flag that determines whether the remote node is behind NAT (@c true)
+     *        or not (@c false).
+     *
+     * @return @c true if connection start successfully.
+     */
+    bool connect (connection_options const & opts, bool behind_nat)
     {
-        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {}", to_string(_id), to_string(remote_saddr));
+        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {}", to_string(_id), to_string(opts.remote_saddr));
 
-        auto rs = _connecting_pool.connect(remote_saddr);
+        auto rc = _connecting_pool.connect(opts);
 
-        if (rs == netty::conn_status::failure)
+        if (rc == netty::conn_status::failure)
             return false;
 
         if (behind_nat)
-            _behind_nat.insert(remote_saddr);
+            _behind_nat.insert(opts.remote_saddr);
 
-        cache_host(remote_saddr, inet4_addr{});
-
-        return true;
-    }
-
-    bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat)
-    {
-        NETTY__TRACE(MESHNET_TAG, "{}: connecting to: {} (local addr={})", to_string(_id)
-            , to_string(remote_saddr), to_string(local_addr));
-
-        auto rs = _connecting_pool.connect(remote_saddr, local_addr);
-
-        if (rs == netty::conn_status::failure)
-            return false;
-
-        if (behind_nat)
-            _behind_nat.insert(remote_saddr);
-
-        cache_host(remote_saddr, local_addr);
+        if (opts.local_addr)
+            cache_host(opts.remote_saddr, *opts.local_addr);
+        else
+            cache_host(opts.remote_saddr, inet4_addr{});
 
         return true;
     }
@@ -836,11 +841,7 @@ private:
 
         if (h.reconn_policy.has_value()) {
             h.reconn_policy.reset();
-
-            NETTY__TRACE(MESHNET_TAG, "reconnecting stopped to: {}", to_string(h.remote_saddr));
-
-            if (_on_reconnection_stopped)
-                _on_reconnection_stopped(_index, h.remote_saddr, h.local_addr.to_ip4());
+            _on_reconnection_stopped(_index, h.conn_opts);
        }
     }
 
@@ -862,7 +863,6 @@ private:
             return;
 
         auto reconnecting = true;
-
         auto pos = _hosts_cache.find(saddr);
 
         PFS__THROW_UNEXPECTED(pos != _hosts_cache.end(), "Fix meshnet::peer algorithm");
@@ -880,21 +880,12 @@ private:
 
         if (reconnecting) {
             bool initial_reconnecting = h.reconn_policy->attempts() == 0;
-
             auto reconn_timeout = h.reconn_policy->fetch_timeout();
 
-            if (h.local_addr != inet4_addr{})
-                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr, h.local_addr);
-            else
-                _connecting_pool.connect_timeout(reconn_timeout, h.remote_saddr);
+            _connecting_pool.connect_timeout(h.conn_opts, reconn_timeout);
 
-            if (initial_reconnecting) {
-                NETTY__TRACE(MESHNET_TAG, "{}: reconnecting started to: {}", to_string(_id)
-                    , to_string(h.remote_saddr));
-
-                if (_on_reconnection_started)
-                    _on_reconnection_started(_index, h.remote_saddr, h.local_addr.to_ip4());
-            }
+            if (initial_reconnecting)
+                _on_reconnection_started(_index, h.conn_opts);
         }
     }
 
@@ -983,19 +974,14 @@ public: // peer_interface
             return Peer::index();
         }
 
-        void add_listener (std::map<std::string, std::string> const & opts, error * perr) override
+        bool add_listener (listener_options const & opts) override
         {
-            Peer::add_listener(opts, perr);
+            return Peer::add_listener(opts);
         }
 
-        bool connect (netty::socket4_addr remote_saddr, bool behind_nat) override
+        bool connect (connection_options const & opts, bool behind_nat) override
         {
-            return Peer::connect(remote_saddr, behind_nat);
-        }
-
-        bool connect (netty::socket4_addr remote_saddr, netty::inet4_addr local_addr, bool behind_nat) override
-        {
-            return Peer::connect(remote_saddr, local_addr, behind_nat);
+            return Peer::connect(opts, behind_nat);
         }
 
         void disconnect (node_id peer_id) override
@@ -1077,17 +1063,17 @@ public: // peer_interface
             Peer::on_channel_destroyed(std::move(cb));
         }
 
-        void on_reconnection_started (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> cb) override
+        void on_reconnection_started (callback_t<void (peer_index_t, connection_options const &)> cb) override
         {
             Peer::on_reconnection_started(std::move(cb));
         }
 
-        void on_reconnection_stopped (callback_t<void (peer_index_t, socket4_addr_compat_t, inet4_addr_compat_t)> cb) override
+        void on_reconnection_stopped (callback_t<void (peer_index_t, connection_options const &)> cb) override
         {
             Peer::on_reconnection_stopped(std::move(cb));
         }
 
-        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr_compat_t)> cb) override
+        void on_duplicate_id (callback_t<void (peer_index_t, node_id, socket4_addr)> cb) override
         {
             Peer::on_duplicate_id(std::move(cb));
         }

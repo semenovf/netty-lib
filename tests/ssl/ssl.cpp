@@ -72,16 +72,17 @@ struct server: public netty::interruptable
         : netty::interruptable()
         , listener_pool(handshake_pool)
     {
-        netty::ssl::tls_options opts;
-        opts.cert_file = std::string("./cert.pem");
-        opts.key_file = std::string("./key.pem");
-
-        listener_t listener {netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT}, std::move(opts)};
+        netty::listener_options opts;
+        opts.saddr = netty::socket4_addr{netty::inet4_addr::any_addr_value, PORT};
+        opts.tls.cert_file = std::string("./cert.pem");
+        opts.tls.key_file = std::string("./key.pem");
 
         listener_pool.on_failure = [] (netty::error const & err) {
             FAIL_CHECK("Listener pool failure: ", std::string(err.what()));
             quit();
         };
+
+        listener_pool.add(opts);
 
         listener_pool.on_accepted = [this] (socket_t && sock) {
             MESSAGE("Socket accepted: ", sock.id());
@@ -138,8 +139,6 @@ struct server: public netty::interruptable
 
             writer_pool.enqueue(sid, text.c_str(), text.size());
         };
-
-        listener_pool.add(std::move(listener));
     }
 
     unsigned int step_unsafe ()
@@ -262,11 +261,12 @@ struct client: public netty::interruptable
 
     bool connect (netty::socket4_addr remote_saddr)
     {
-        netty::ssl::tls_options opts;
-        opts.cert_file = std::string("./cert.pem");
-        opts.key_file  = std::string("./key.pem");
+        netty::connection_options opts;
+        opts.remote_saddr =remote_saddr;
+        opts.tls.cert_file = std::string("./cert.pem");
+        opts.tls.key_file  = std::string("./key.pem");
 
-        auto rs = conn_pool.connect(remote_saddr, std::move(opts));
+        auto rs = conn_pool.connect(opts);
 
         if (rs == netty::conn_status::failure)
             return false;

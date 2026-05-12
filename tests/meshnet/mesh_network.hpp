@@ -30,8 +30,7 @@ static constexpr char const * TAG = "test::meshnet";
 // Node name + Node index in the meshnet node list
 using node_spec_t = std::pair<std::string, std::size_t>;
 using gateway_chain_t = node_t::gateway_chain_type;
-
-using socket4_addr_compat_t = std::pair<std::uint32_t, std::uint16_t>;
+using connection_options_t = netty::connection_options;
 
 class mesh_network
 {
@@ -69,8 +68,8 @@ public:
     on_channel_destroyed = [] (node_spec_t const &/*source*/, node_spec_t const & /*peer*/) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*peer*/
-        , socket4_addr_compat_t)>
-    on_duplicate_id = [] (node_spec_t const &, node_spec_t const &, socket4_addr_compat_t) {};
+        , netty::socket4_addr)>
+    on_duplicate_id = [] (node_spec_t const &, node_spec_t const &, netty::socket4_addr) {};
 
     netty::callback_t<void (node_spec_t const & /*source*/, node_spec_t const & /*dest*/
         , std::size_t /*route_index*/)>
