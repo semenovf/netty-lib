@@ -60,6 +60,7 @@ else()
 endif()
 
 add_library(pfs::netty ALIAS netty)
+set_property(TARGET netty PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 if (NETTY__ENABLE_TRACE)
     target_compile_definitions(netty PUBLIC "NETTY__TRACE_ENABLED=1")
