@@ -1,13 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2025 Vladislav Trifochkin
+// Copyright (c) 2025-2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
 // Changelog:
 //      2025.03.04 Initial version.
+//      2026.07.16 Added session_id `sid` field to `route_info` struct.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "../../namespace.hpp"
+#include "session_id.hpp"
 #include <pfs/optional.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -22,9 +24,9 @@ namespace meshnet {
 template <typename NodeId>
 struct route_info
 {
+    session_id_t session_id;
     NodeId initiator_id;
     NodeId responder_id; // Used by response only
-
     std::vector<NodeId> route; // Gateways chain
 
 public:

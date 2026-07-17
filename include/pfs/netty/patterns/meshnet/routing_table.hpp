@@ -362,9 +362,10 @@ public: // static
     /**
      * Serializes initial request
      */
-    static archive_type serialize_request (node_id initiator_id)
+    static archive_type serialize_request (session_id_t session_id, node_id initiator_id)
     {
         route_info<node_id> info;
+        info.session_id = session_id;
         info.initiator_id = initiator_id;
 
         archive_type ar;

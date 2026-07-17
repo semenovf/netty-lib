@@ -55,6 +55,7 @@ foreach (target ${TESTS})
 endforeach()
 
 add_subdirectory(meshnet)
+
 add_subdirectory(pubsub)
 add_subdirectory(telemetry)
 

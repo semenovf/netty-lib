@@ -19,6 +19,7 @@
 #include "peer_index.hpp"
 #include "peer_interface.hpp"
 #include "route_info.hpp"
+#include "session_id.hpp"
 #include "tag.hpp"
 #include <pfs/assert.hpp>
 #include <pfs/countdown_timer.hpp>
@@ -66,6 +67,7 @@ public:
 
 private:
     node_id _id;
+    session_id_t _session_id;
 
     // True if the node is a gateway
     bool _is_gateway {false};
@@ -101,6 +103,7 @@ public:
     node (node_id id, bool is_gateway = false)
         : interruptable()
         , _id(id)
+        , _session_id(generate_session_id())
         , _is_gateway(is_gateway)
         , _thread_id(std::this_thread::get_id())
     {}
@@ -276,7 +279,7 @@ public:
             if (is_gateway) {
                 _rtab.add_sibling_gateway(peer_id);
 
-                archive_type msg = _rtab.serialize_request(_id);
+                archive_type msg = _rtab.serialize_request(_session_id, _id);
                 this->enqueue_packet(peer_id, 0, std::move(msg));
 
                 // Send available routes to connected gateway on behalf of destination (according to
@@ -287,6 +290,7 @@ public:
                     _rtab.foreach_sibling_node([this, peer_id] (node_id initiator_id) {
                         if (initiator_id != peer_id) {
                             route_info<node_id> rinfo;
+                            rinfo.session_id = _session_id; // Use own session ID here
                             rinfo.initiator_id = initiator_id;
                             archive_type msg1 = _rtab.serialize_request(_id, rinfo);
                             this->enqueue_packet(peer_id, 0, std::move(msg1));
@@ -705,6 +709,15 @@ private:
 
         if (is_response) {
             dest_id = rinfo.responder_id;
+
+            // Node ID duplication detected, ignore route
+            if (dest_id == _id && rinfo.session_id != _session_id) {
+                // TODO Unable to obtain host address to pass here--+
+                if (_on_duplicate_id) //       v--------------------+
+                    _on_duplicate_id(dest_id, "");
+                return;
+            }
+
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // Initiator node received response - add route to the routing table.
@@ -758,6 +771,15 @@ private:
             }
         } else { // Request
             dest_id = rinfo.initiator_id;
+
+            // Node ID duplication detected, ignore route
+            if (dest_id == _id && rinfo.session_id != _session_id) {
+                // TODO Unable to obtain host address to pass here--+
+                if (_on_duplicate_id) //       v--------------------+
+                    _on_duplicate_id(dest_id, "");
+                return;
+            }
+
             hops = pfs::numeric_cast<std::uint16_t>(rinfo.route.size());
 
             // If there is no loop

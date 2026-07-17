@@ -304,11 +304,17 @@ public:
             auto success = _channels.insert(id, reader_sid, writer_sid);
 
             if (!success) {
-                throw netty::error {
-                    make_error_code(pfs::errc::unexpected_error)
-                    , tr::f_("attempt to add channel again: {}, perhaps both peers are configured behind NAT"
-                        , to_string(id))
-                };
+                // Not need to throw exception, only error notification
+                // throw netty::error {
+                //     make_error_code(pfs::errc::unexpected_error)
+                //     , tr::f_("attempt to add channel again: {}, perhaps both peers are configured behind NAT"
+                //         " or node ID duplication has been detected"
+                //         , to_string(id))
+                // };
+
+                _on_error(tr::f_("attempt to add channel again: {}, perhaps both peers are configured behind NAT"
+                    " or node ID duplication has been detected", to_string(id)));
+                return;
             }
 
             _heartbeat_controller.update(writer_sid);

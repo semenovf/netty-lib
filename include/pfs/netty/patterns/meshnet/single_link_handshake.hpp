@@ -29,9 +29,6 @@ public:
     {}
 
 private:
-    // TODO Methods process_behind_nat() and process_exclusive() can be merged into one method
-    // if algorithm will be successfully tested.
-
     void process_behind_nat (socket_id sid, handshake_packet<node_id> const & pkt)
     {
         // Check Node ID duplication.

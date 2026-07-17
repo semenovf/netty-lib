@@ -144,13 +144,15 @@ TEST_CASE("route") {
 
     ic.add(kSID);
 
+    auto session_id = netty::meshnet::generate_session_id();
     auto initiator_id = pfs::generate_uuid();
     auto responder_id = pfs::generate_uuid();
     auto gw1_id = pfs::generate_uuid();
     auto gw2_id = pfs::generate_uuid();
 
     route_info<node_id> rinfo {
-          initiator_id
+          session_id
+        , initiator_id
         , responder_id // for response only
         , std::vector<node_id> { gw1_id, gw2_id } // route (gateways)
     };
@@ -169,6 +171,7 @@ TEST_CASE("route") {
         ic.on_route = [&] (socket_id sid, route_packet_t && pkt) {
             REQUIRE_EQ(sid, kSID);
             CHECK_FALSE(pkt.is_response());
+            CHECK_EQ(pkt.info().session_id, session_id);
             CHECK_EQ(pkt.info().initiator_id, initiator_id);
             REQUIRE_EQ(pkt.info().route.size(), 2);
             CHECK_EQ(pkt.info().route[0], gw1_id);
@@ -198,6 +201,7 @@ TEST_CASE("route") {
         ic.on_route = [&] (socket_id sid, route_packet_t && pkt) {
             REQUIRE_EQ(sid, kSID);
             CHECK(pkt.is_response());
+            CHECK_EQ(pkt.info().session_id, session_id);
             CHECK_EQ(pkt.info().initiator_id, initiator_id);
             CHECK_EQ(pkt.info().responder_id, responder_id);
             REQUIRE_EQ(pkt.info().route.size(), 2);

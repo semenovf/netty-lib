@@ -110,7 +110,7 @@ TEST_CASE("unreachable_packet") {
     using unreachable_packet_t = unreachable_packet<node_id>;
 
     unreachable_info<node_id> uinfo_sample {
-          pfs::generate_uuid() // gw_id
+        pfs::generate_uuid() // gw_id
     };
 
     unreachable_packet_t up {uinfo_sample};
@@ -139,7 +139,8 @@ TEST_CASE("route_packet") {
     using route_packet_t = route_packet<node_id>;
 
     route_info<node_id> rinfo_sample {
-          pfs::generate_uuid() // initiator_id
+          netty::meshnet::generate_session_id()
+        , pfs::generate_uuid() // initiator_id
         , pfs::generate_uuid() // responder_id, for response only
         , std::vector<node_id> { pfs::generate_uuid(), pfs::generate_uuid() } // route
     };
@@ -172,6 +173,7 @@ TEST_CASE("route_packet") {
         CHECK_EQ(rp1_req.type(), packet_enum::route);
         CHECK_FALSE(rp1_req.has_checksum());
         CHECK_FALSE(rp1_req.is_response());
+        CHECK_EQ(rp1_req.info().session_id, rinfo_sample.session_id);
         CHECK_EQ(rp1_req.info().initiator_id, rinfo_sample.initiator_id);
         REQUIRE_EQ(rp1_req.info().route.size(), 2);
         REQUIRE_EQ(rp1_req.info().route[0], rinfo_sample.route[0]);
@@ -191,6 +193,7 @@ TEST_CASE("route_packet") {
         CHECK_EQ(rp1_rep.type(), packet_enum::route);
         CHECK_FALSE(rp1_rep.has_checksum());
         CHECK(rp1_rep.is_response());
+        CHECK_EQ(rp1_rep.info().session_id, rinfo_sample.session_id);
         CHECK_EQ(rp1_rep.info().initiator_id, rinfo_sample.initiator_id);
         CHECK_EQ(rp1_rep.info().responder_id, rinfo_sample.responder_id);
         REQUIRE_EQ(rp1_rep.info().route.size(), 2);

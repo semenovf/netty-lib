@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2025 Vladislav Trifochkin
+// Copyright (c) 2025-2026 Vladislav Trifochkin
 //
 // This file is part of `netty-lib`.
 //
@@ -9,6 +9,7 @@
 //      2025.01.17 Initial version.
 //      2025.07.04 Changed protocol versioning.
 //      2025.12.14 Removed `alive_packet`.
+//      2026.07.16 Fixed `route_packet` (added `initiator_saddr` field to `route_info` struct).
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "route_info.hpp"
@@ -384,7 +385,7 @@ public:
     route_packet (header const & h, Deserializer & in)
         : header(h)
     {
-        in >> _rinfo.initiator_id;
+        in >> _rinfo.session_id >> _rinfo.initiator_id;
 
         if (is_response())
             in >> _rinfo.responder_id;
@@ -415,7 +416,7 @@ public:
     {
         header::serialize(out);
 
-        out << _rinfo.initiator_id;
+        out << _rinfo.session_id << _rinfo.initiator_id;
 
         if (is_response())
             out << _rinfo.responder_id;

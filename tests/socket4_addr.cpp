@@ -27,4 +27,3 @@ TEST_CASE("inet4_addr") {
         CHECK_EQ(localhosts[0].port, 4242);
     }
 }
-

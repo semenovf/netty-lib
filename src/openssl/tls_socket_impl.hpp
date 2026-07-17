@@ -54,6 +54,8 @@ struct tls_socket::impl: public posix::tcp_socket
     void cleanup ()
     {
         if (ssl != nullptr) {
+            auto already_sent_shutdown = SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN;
+
             // It is acceptable for an application to call SSL_shutdown() once (such that it returns 0)
             // and then close the underlying connection without waiting for the peer's response.
             // This allows for a more rapid shutdown process if the application does not wish to
@@ -65,8 +67,11 @@ struct tls_socket::impl: public posix::tcp_socket
             // actually sending a close_notify alert message; see SSL_CTX_set_quiet_shutdown(3).
             // When "quiet shutdown" is enabled, SSL_shutdown() will always succeed and return 1
             // immediately.
-            SSL_set_quiet_shutdown(ssl, 1);
-            SSL_shutdown(ssl);
+            if (!already_sent_shutdown) {
+                // SSL_set_quiet_shutdown(ssl, 1);
+                SSL_shutdown(ssl);
+            }
+
             SSL_free(ssl);
             ssl = nullptr;
         }

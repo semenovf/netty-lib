@@ -102,5 +102,7 @@ foreach (target ${TESTS})
     endif()
 endforeach()
 
-# Use one target to copy certificate and private key files
-add_dependencies(tests-meshnet-channel copy-telemetry-cert-key)
+if (NETTY__ENABLE_ENCRYPTED_SOCKETS)
+    # Use one target to copy certificate and private key files
+    add_dependencies(tests-meshnet-channel copy-telemetry-cert-key)
+endif()
