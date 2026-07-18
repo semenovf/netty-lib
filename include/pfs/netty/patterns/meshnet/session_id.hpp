@@ -9,6 +9,7 @@
 #pragma once
 #include "../../namespace.hpp"
 #include <pfs/universal_id.hpp>
+#include <pfs/universal_id_pack.hpp>
 
 NETTY__NAMESPACE_BEGIN
 
